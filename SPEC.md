@@ -27,4 +27,4 @@ Every ticket ships with tests. ACP is tested against a fake ACP agent in-repo pl
 
 ## Legal
 
-FSL-1.1-ALv2, Veracium LLC. TRADEMARK.md governs the name. Nothing NAIC-related, ever. Repo stays private until Legion flips it public at launch.
+MIT, copyright Kristopher Prince, who is credited as the author in LICENSE.md and every package.json. TRADEMARK.md governs the name. Nothing NAIC-related, ever. Repo stays private until Legion flips it public at launch.

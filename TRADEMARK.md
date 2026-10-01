@@ -1,6 +1,6 @@
 # Trademark
 
-"Quarterdeck" and the Quarterdeck logo are trademarks of Veracium LLC.
+"Quarterdeck" and the Quarterdeck logo belong to Kristopher Prince.
 
 The code in this repository is licensed under LICENSE.md. The name and logo are not. You may fork, modify and run this software under that license, but you may not call your fork, product or service "Quarterdeck" or use the logo, except to say that it is derived from or compatible with Quarterdeck.
 
