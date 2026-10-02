@@ -10,11 +10,11 @@ export const MACHINE_ONLY = '';
 export const REPO_TIGHTEN_ONLY_KEYS: Readonly<
   Partial<Record<RuleName, readonly string[]>>
 > = {
-  lifecycle: ['mergeGate'],
+  lifecycle: ['mergeGate', 'autoEndSettleSeconds'],
 };
 
 export const TIGHTEN_ONLY_NOTICE =
-  'A project’s repo layer can only tighten permissions and mergeGate: its permissions may only deny or ask, and its mergeGate flags can only turn a gate on. Everything else in the repo layer overrides the machine layer.';
+  'A project’s repo layer can only tighten permissions, mergeGate and autoEndSettleSeconds: its permissions may only deny or ask, its mergeGate flags can only turn a gate on, and it can only lengthen the settle time. Everything else in the repo layer overrides the machine layer.';
 
 export const REPO_NOT_MERGED_NOTICE =
   'It is not merged: it is decided on its own and the stricter answer wins.';

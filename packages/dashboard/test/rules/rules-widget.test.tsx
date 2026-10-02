@@ -154,7 +154,7 @@ describe('rules widget', () => {
     expect(reads).toEqual([null]);
     const text = container.textContent ?? '';
     expect(text).toContain(
-      'A project’s repo layer can only tighten permissions and mergeGate',
+      'A project’s repo layer can only tighten permissions, mergeGate and autoEndSettleSeconds',
     );
     expect(textOf(container, '[aria-label="Machine layer"] code')).toBe(
       `${HOME}/rules.local.charter.md`,

@@ -116,6 +116,25 @@ describe('valueSources', () => {
     expect(sources['mergeGate.autoMerge']).toBe('machine');
   });
 
+  it('credits the repo layer for the settle time only when it lengthens it', () => {
+    const shorter = ruleView(
+      'lifecycle',
+      { repo: '{ "autoEndSettleSeconds": 30 }' },
+      REPO,
+    );
+    const draft = '{ "autoEndSettleSeconds": 60 }';
+    expect(sourcesOf(shorter, draft)['autoEndSettleSeconds']).toBe('machine');
+    expect(checkDraft(shorter, draft).effective).toMatchObject({
+      autoEndSettleSeconds: 60,
+    });
+    const longer = ruleView(
+      'lifecycle',
+      { repo: '{ "autoEndSettleSeconds": 600 }' },
+      REPO,
+    );
+    expect(sourcesOf(longer, draft)['autoEndSettleSeconds']).toBe('repo');
+  });
+
   it('marks the values the repo layer can only tighten', () => {
     const rule = ruleView('lifecycle');
     const check = checkDraft(rule, '{}');
@@ -123,6 +142,7 @@ describe('valueSources', () => {
       .filter(({ tightenOnly }) => tightenOnly)
       .map(({ key }) => key);
     expect(tight).toEqual([
+      'autoEndSettleSeconds',
       'mergeGate.requireReviewerApproval',
       'mergeGate.requireChecksPassing',
       'mergeGate.requireCopilotReview',
