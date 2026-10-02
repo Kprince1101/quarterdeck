@@ -57,6 +57,11 @@ const SCHEMA_SCRIPT = [
   'process.stdout.write(JSON.stringify({ path: schema.STREAM_PATH, type: message.type }));',
 ].join('\n');
 
+const REPLAY_COMMAND_SCRIPT = [
+  "const { replayCommand } = await import('@quarterdeck/server/replay-command');",
+  "process.stdout.write(replayCommand({ round: 3, through: 7, project: 'deck' }));",
+].join('\n');
+
 describe('@quarterdeck/server package entry', () => {
   let home = '';
 
@@ -111,7 +116,7 @@ describe('@quarterdeck/server package entry', () => {
 
     expect(result.stderr).toBe('');
     expect(JSON.parse(result.stdout)).toEqual({
-      count: 33,
+      count: 34,
       start: 'function',
     });
   });
@@ -131,6 +136,22 @@ describe('@quarterdeck/server package entry', () => {
         path: '/ws',
         type: 'event',
       });
+    },
+    TIMEOUT,
+  );
+
+  it(
+    'exposes the replay command on its own subpath',
+    () => {
+      const result = spawnSync(
+        process.execPath,
+        ['--input-type=module', '--eval', REPLAY_COMMAND_SCRIPT],
+        { cwd: ROOT, encoding: 'utf8' },
+      );
+
+      expect(result.stderr).toBe('');
+      expect(result.status).toBe(0);
+      expect(result.stdout).toBe('npx quarterdeck replay 3 7 --project deck');
     },
     TIMEOUT,
   );
