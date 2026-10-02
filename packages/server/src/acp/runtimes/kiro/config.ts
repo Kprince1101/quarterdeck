@@ -9,8 +9,9 @@ export const KIRO_AGENT_PREFIX = 'quarterdeck-';
 export const defaultKiroAgentsDir = (): string =>
   join(homedir(), '.kiro', 'agents');
 
-export const defaultKiroProcessDir = (): string =>
-  join(quarterdeckHome(), 'kiro');
+export const defaultKiroProcessDir = (
+  home: string = quarterdeckHome(),
+): string => join(home, 'kiro');
 
 export type KiroMcpServer =
   | { command: string; args: string[]; env: Record<string, string> }

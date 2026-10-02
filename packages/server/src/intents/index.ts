@@ -1,6 +1,24 @@
 export { BOARD_INTENTS, type BoardIntentName } from './board.js';
 export { CREW_INTENTS, type CrewIntentName } from './crew.js';
 export {
+  DATA_INTENTS,
+  DATA_PAGE_SIZE,
+  MAX_DATA_PAGE_SIZE,
+  dataPageSchema,
+  dataPathKindSchema,
+  dataPathSchema,
+  dataPathScopeSchema,
+  dataSummarySchema,
+  tableCountSchema,
+  type DataIntentName,
+  type DataPage,
+  type DataPathEntry,
+  type DataPathKind,
+  type DataPathScope,
+  type DataSummary,
+  type TableCount,
+} from './data.js';
+export {
   MAX_TEXT_LENGTH,
   MAX_TITLE_LENGTH,
   idSchema,

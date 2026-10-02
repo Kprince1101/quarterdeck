@@ -19,6 +19,9 @@ const userTag = (): string => String(process.getuid?.() ?? 'user');
 const fits = (path: string): boolean =>
   Buffer.byteLength(path) <= SOCKET_PATH_MAX;
 
+export const busSocketDir = (home: string = quarterdeckHome()): string =>
+  join(home, 'sock');
+
 export const busSocketPath = (
   projectId: string,
   options: SocketPathOptions = {},
@@ -31,7 +34,7 @@ export const busSocketPath = (
     return `\\\\.\\pipe\\quarterdeck-bus-${hash}`;
   const name = `${hash}.sock`;
   const candidates = [
-    join(options.home ?? quarterdeckHome(), 'sock', name),
+    join(busSocketDir(options.home), name),
     join(options.tmp ?? tmpdir(), `quarterdeck-${userTag()}`, name),
   ];
   const path = candidates.find(fits);

@@ -11,6 +11,7 @@ describe('widget registry', () => {
   it('discovers every *.widget.tsx file', () => {
     expect([...WIDGETS.keys()]).toEqual(
       expect.arrayContaining([
+        'data',
         'driver',
         'events',
         'notebook',
@@ -19,6 +20,7 @@ describe('widget registry', () => {
       ]),
     );
     expect(WIDGETS.get('events')?.title).toBe('Events');
+    expect(WIDGETS.get('data')?.title).toBe('Data');
   });
 
   it('keys definitions by type', () => {

@@ -124,4 +124,74 @@ describe('dashboard on a live server', () => {
     },
     TIMEOUT,
   );
+
+  it(
+    'reads counts, rows and paths from the server in the Data widget',
+    async () => {
+      const { all, render, textOf } = await import('./page.js');
+      const { App } = await import('../../src/app.js');
+      const { flushSync } = await import('react-dom');
+      const press = (element: PageElement) => {
+        flushSync(() => {
+          (element as unknown as HappyElement).click();
+        });
+      };
+      const served = await deck.serve();
+      const { container, unmount } = render(
+        <App
+          stream={{
+            url: served.url,
+            WebSocket: WsSocket as unknown as typeof WebSocket,
+          }}
+          intents={deck.client}
+        />,
+      );
+      await vi.waitFor(() => {
+        expect(textOf(container, '[role="status"]')).toBe('Live');
+      });
+      await deck.client.layout.save({
+        project: deck.project,
+        name: DASHBOARD_LAYOUT,
+        spec: {
+          columns: 12,
+          rows: 12,
+          items: [
+            {
+              id: 'data-1',
+              widget: 'data',
+              x: 0,
+              y: 0,
+              w: 12,
+              h: 12,
+              hidden: false,
+            },
+          ],
+        },
+      });
+      const notebook = () =>
+        all(container, '.qd-data-tables button').find(
+          (button) => button.querySelector('span')?.textContent === 'notebook',
+        );
+      await vi.waitFor(() => {
+        expect(notebook()?.querySelector('.qd-data-count')?.textContent).toBe(
+          '1',
+        );
+        expect(textOf(container, '.qd-data-paths code')).toContain(
+          `${deck.project}/pg`,
+        );
+      });
+
+      const button = notebook();
+      if (button === undefined) throw new Error('no notebook button');
+      press(button);
+      await vi.waitFor(() => {
+        expect(textOf(container, '.qd-data-range')).toBe('1–1 of 1');
+        expect(container.querySelector('.qd-data-rows')?.textContent).toContain(
+          'hi',
+        );
+      });
+      unmount();
+    },
+    TIMEOUT,
+  );
 });
