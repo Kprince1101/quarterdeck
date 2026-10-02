@@ -111,7 +111,7 @@ describe('@quarterdeck/server package entry', () => {
 
     expect(result.stderr).toBe('');
     expect(JSON.parse(result.stdout)).toEqual({
-      count: 31,
+      count: 32,
       start: 'function',
     });
   });
