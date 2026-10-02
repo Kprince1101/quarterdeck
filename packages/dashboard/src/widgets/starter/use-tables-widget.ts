@@ -9,7 +9,7 @@ export interface TableCount {
   rows: number;
 }
 
-export const useTablesPanel = (): { counts: TableCount[] } => {
+export const useTablesWidget = (): { counts: TableCount[] } => {
   const { tables } = useDeck().stream;
   return {
     counts: STREAM_TABLES.map((table) => ({
