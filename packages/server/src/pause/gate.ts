@@ -1,4 +1,10 @@
 import {
+  AGENT_KILLED_EVENT,
+  AGENT_RETIRED_EVENT,
+  FINISHED_AGENT_STATUSES,
+  type AgentStatus,
+} from '../agents/index.js';
+import {
   quarterdeckHome,
   type PublishInput,
   type Store,
@@ -17,6 +23,11 @@ export const UNPAUSE_KINDS: readonly string[] = [
   'pause.set',
   'pause.all',
   'agent.resume',
+];
+
+export const FINISH_KINDS: readonly string[] = [
+  AGENT_KILLED_EVENT,
+  AGENT_RETIRED_EVENT,
 ];
 
 export const ARCHIVE_KIND = 'project.archive';
@@ -105,6 +116,15 @@ export const startPauseGate = async (
   const scopesOf = (subject: PauseSubject) =>
     pausedScopes(store.db, store.projectId, home, subject.agentId);
 
+  const isFinished = async ({ agentId }: PauseSubject): Promise<boolean> => {
+    if (agentId === undefined) return false;
+    const { rows } = await store.db.query<{ status: AgentStatus }>(
+      'select status from agents where id = $1 and project_id = $2',
+      [agentId, store.projectId],
+    );
+    return rows.some(({ status }) => FINISHED_AGENT_STATUSES.includes(status));
+  };
+
   const take = (entry: Held): boolean => {
     const index = queue.indexOf(entry);
     if (index === -1) return false;
@@ -145,6 +165,10 @@ export const startPauseGate = async (
     }
     for (const entry of queue.slice()) {
       if (!queue.includes(entry)) continue;
+      if (await isFinished(entry.subject)) {
+        if (take(entry)) await dropped(entry, 'finished');
+        continue;
+      }
       const scopes = await scopesOf(entry.subject);
       if (scopes.length > 0 || !take(entry)) continue;
       await publishAbout(entry, PAUSE_EVENTS.replayed);
@@ -215,8 +239,11 @@ export const startPauseGate = async (
   };
 
   const onEvent = (event: StoreEvent): void => {
-    if (UNPAUSE_KINDS.includes(event.kind) || event.kind === ARCHIVE_KIND)
-      replay().catch(report);
+    const recheck =
+      UNPAUSE_KINDS.includes(event.kind) ||
+      FINISH_KINDS.includes(event.kind) ||
+      event.kind === ARCHIVE_KIND;
+    if (recheck) replay().catch(report);
   };
   const subscription = await store.subscribe(onEvent, { onError: report });
 

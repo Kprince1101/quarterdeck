@@ -202,6 +202,30 @@ export const expireCard = async (
   return outcome;
 };
 
+export const expireOverdueCards = (
+  store: Pick<BusStore, 'db' | 'projectId'>,
+  reason: string,
+): Promise<string[]> =>
+  store.db.transaction(async (tx) => {
+    const { rows } = await tx.query<CardLinks & { id: string }>(
+      `with expired as (
+         update cards set status = 'expired'
+         where project_id = $1 and status = 'open' and expires_at <= now()
+         returning id, agent_id, ticket_id, created_at
+       )
+       select id, agent_id, ticket_id from expired order by created_at, id`,
+      [store.projectId],
+    );
+    for (const card of rows) {
+      await publishEvent(
+        tx,
+        store.projectId,
+        cardEvent('card.expired', card.id, card, { reason }),
+      );
+    }
+    return rows.map((card) => card.id);
+  });
+
 const isCardNotice = (payload: string, cardId: string): boolean => {
   try {
     const notice = JSON.parse(payload) as { table?: unknown; id?: unknown };

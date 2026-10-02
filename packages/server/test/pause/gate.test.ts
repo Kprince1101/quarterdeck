@@ -12,6 +12,7 @@ import {
   it,
   vi,
 } from 'vitest';
+import { killAgent } from '../../src/agents/index.js';
 import {
   MAX_LABEL_LENGTH,
   PAUSE_EVENTS,
@@ -320,6 +321,36 @@ describe('pause gate', () => {
       }),
     ).rejects.toMatchObject({ reason: 'aborted' });
     expect(await events()).toEqual([]);
+  });
+
+  it('drops held work for an agent that is killed while paused', async () => {
+    const agentId = await insertAgent('paused');
+    const run = vi.fn(() => Promise.resolve('ran'));
+    const held = gate.hold(
+      { operation: 'driver.turn', label: 'turn: QD9', agentId },
+      run,
+    );
+    await heldCount(1);
+
+    await killAgent(
+      store,
+      { sessions: { open: () => Promise.resolve(''), close: async () => {} } },
+      agentId,
+    );
+
+    await expect(held).rejects.toMatchObject({
+      name: 'PauseDroppedError',
+      reason: 'finished',
+    });
+    await settle(async () => {
+      expect((await events())[1]).toMatchObject({
+        kind: PAUSE_EVENTS.dropped,
+        agentId,
+        payload: { reason: 'finished', heldEventId: expect.any(Number) },
+      });
+    });
+    expect(gate.held()).toEqual([]);
+    expect(run).not.toHaveBeenCalled();
   });
 
   it('drops held work on close and holds nothing after', async () => {

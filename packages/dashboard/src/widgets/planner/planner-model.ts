@@ -32,6 +32,7 @@ export const STATUS_LABELS: Record<TicketStatus, string> = {
   in_progress: 'Approved, in progress',
   in_review: 'Approved, in review',
   bounced: 'Approved, bounced',
+  blocked: 'Blocked',
   done: 'Done',
   cancelled: 'Cancelled',
   rejected: 'Rejected',

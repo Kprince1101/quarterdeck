@@ -1,18 +1,29 @@
 import type { Store } from '../store/index.js';
 import { AGENT_COLUMNS, type Agent } from './agent.js';
 import { assertDiscardApproved } from './discard.js';
-import { findAgent, firstRow, markRetired, recordEvent } from './rows.js';
+import { sweepAgentProcess } from './processes.js';
+import {
+  findAgent,
+  firstRow,
+  intentPayload,
+  markRetired,
+  recordEvent,
+} from './rows.js';
 import type { SessionHost } from './sessions.js';
 import { WORKPLACE_EVENTS, detachWorktree } from './workplace.js';
 import type { WorktreeHost } from './worktrees.js';
 
+export const AGENT_RETIRED_EVENT = 'agent.retired';
+
 export interface RetireOptions {
   discardCardId?: string;
+  intentId?: string;
 }
 
 export interface RetireHosts {
   sessions: SessionHost;
   worktrees: Pick<WorktreeHost, 'remove'>;
+  killGraceMs?: number;
 }
 
 const detachSession = (
@@ -70,6 +81,12 @@ export const retireAgent = async (
   const agent = await findAgent(store, agentId);
   if (agent.status === 'retired') return agent;
   const closed = await closeSession(store, hosts.sessions, agent);
+  await sweepAgentProcess(store, closed, 'retire', hosts.killGraceMs);
   const cleared = await removeWorktree(store, hosts.worktrees, closed, options);
-  return markRetired(store, cleared, 'agent.retired', {});
+  return markRetired(
+    store,
+    cleared,
+    AGENT_RETIRED_EVENT,
+    intentPayload(options.intentId),
+  );
 };

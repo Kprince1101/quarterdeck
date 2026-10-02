@@ -8,7 +8,7 @@ The `quarterdeck` command. `npx quarterdeck <command>`, or `node packages/cli/di
 quarterdeck up [--port <port>]
 ```
 
-Starts the server on `127.0.0.1` (port 4317 by default, `0` picks a free one), creates `~/.quarterdeck/` if it is missing, and prints the URL. The same port serves the HTTP intents API under `/api/` and the dashboard everywhere else. The dashboard is the built bundle in `@quarterdeck/dashboard`'s `dist/`; until that exists, a placeholder page says the server is running. Ctrl+C (or `SIGTERM`) closes the server and every open project store, then exits 0. A port that is already in use is an error that says so.
+Starts the server on `127.0.0.1` (port 4317 by default, `0` picks a free one), creates `~/.quarterdeck/` if it is missing, and prints the URL. The same port serves the HTTP intents API under `/api/` and the dashboard everywhere else. The dashboard is the built bundle in `@quarterdeck/dashboard`'s `dist/`; until that exists, a placeholder page says the server is running. At startup it opens every project in `~/.quarterdeck/` and recovers it from the last run (see [lifecycle](../server/src/lifecycle/README.md#recovery)): agent processes left running are reaped, overdue cards expire and work a pause was holding is dropped. Ctrl+C (or `SIGTERM`) closes every ACP client the server started, which stops each agent's process group, then the server and every open project store, then exits 0. A port that is already in use is an error that says so.
 
 `DATABASE_URL` switches the store to an external Postgres, as it does for the server.
 

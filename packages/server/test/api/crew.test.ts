@@ -100,14 +100,46 @@ describe('crew intents are recorded or applied', { timeout: TIMEOUT }, () => {
     },
   );
 
+  it.each(['idle', 'working', 'killed', 'ended'])(
+    'agent.reset queues for an %s agent so its next launch is fresh',
+    async (status) => {
+      const agentId = await insertAgent(status);
+      const res = await t.send('agent.reset', { project, agentId });
+      expect(res.status).toBe(202);
+      expect(await intentRow(store, res.body.id)).toMatchObject({
+        kind: 'agent.reset',
+        status: 'pending',
+      });
+    },
+  );
+
+  it('refuses agent.reset for a retired agent', async () => {
+    const agentId = await insertAgent('retired');
+    const res = await t.send('agent.reset', { project, agentId });
+    expect(res).toMatchObject({
+      status: 409,
+      body: { error: `agent ${agentId} is already retired` },
+    });
+  });
+
   it.each([
-    ['agent.pause', {}],
     ['agent.kill', {}],
     ['agent.message', { text: 'hi' }],
   ])('%s refuses an agent that has ended', async (name, extra) => {
     const agentId = await insertAgent('ended');
     const res = await t.send(name, { project, agentId, ...extra });
     expect(res.status).toBe(409);
+  });
+
+  it('refuses agent.pause for an agent that has ended and changes nothing', async () => {
+    const agentId = await insertAgent('ended');
+    const res = await t.send('agent.pause', { project, agentId });
+    expect(res.status).toBe(409);
+    const { rows } = await store.db.query<{ status: string }>(
+      'select status from agents where id = $1',
+      [agentId],
+    );
+    expect(rows).toEqual([{ status: 'ended' }]);
   });
 
   it('refuses lifecycle intents for an agent that is gone and writes nothing', async () => {

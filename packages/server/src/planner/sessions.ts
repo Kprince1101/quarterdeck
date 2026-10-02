@@ -1,6 +1,10 @@
 import type { AuthMethod } from '@agentclientprotocol/sdk';
 import type { Runtime } from '@quarterdeck/rules';
-import type { Agent, SessionHost } from '../agents/index.js';
+import {
+  trackAgentProcess,
+  type Agent,
+  type SessionHost,
+} from '../agents/index.js';
 import type { AcpClient } from '../acp/client/index.js';
 import {
   createPermissionPolicy,
@@ -82,6 +86,7 @@ const connectOnce = async (
         repoDir: site.repoPath,
         cardHuman: site.cardHuman,
       }),
+      onEvent: trackAgentProcess(site.store, agent.id),
     },
   );
   connected.client = client;

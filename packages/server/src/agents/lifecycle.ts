@@ -3,6 +3,7 @@ import { assertLaunchBudget } from '../budget/index.js';
 import type { Store } from '../store/index.js';
 import type { Agent } from './agent.js';
 import { insertAgent, openSession, type BirthRequest } from './birth.js';
+import { killAgent, resetAgent, type ControlOptions } from './kill-reset.js';
 import { liveAgentNames, pickAgentName, withNameLock } from './names.js';
 import { retireAgent, type RetireOptions } from './retire.js';
 import type { SessionHost } from './sessions.js';
@@ -16,6 +17,7 @@ export interface AgentLifecycleOptions {
   budget: () => Promise<BudgetWindow>;
   random?: () => number;
   now?: () => Date;
+  killGraceMs?: number;
 }
 
 export interface AgentLifecycle {
@@ -24,6 +26,16 @@ export interface AgentLifecycle {
     store: Store,
     agentId: string,
     options?: RetireOptions,
+  ) => Promise<Agent>;
+  kill: (
+    store: Store,
+    agentId: string,
+    options?: ControlOptions,
+  ) => Promise<Agent>;
+  reset: (
+    store: Store,
+    agentId: string,
+    options?: ControlOptions,
   ) => Promise<Agent>;
 }
 
@@ -57,5 +69,17 @@ export const createAgentLifecycle = (
     retireOptions?: RetireOptions,
   ): Promise<Agent> => retireAgent(store, options, agentId, retireOptions);
 
-  return { birth, retire };
+  const kill = (
+    store: Store,
+    agentId: string,
+    controlOptions?: ControlOptions,
+  ): Promise<Agent> => killAgent(store, options, agentId, controlOptions);
+
+  const reset = (
+    store: Store,
+    agentId: string,
+    controlOptions?: ControlOptions,
+  ): Promise<Agent> => resetAgent(store, options, agentId, controlOptions);
+
+  return { birth, retire, kill, reset };
 };

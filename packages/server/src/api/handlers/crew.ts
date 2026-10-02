@@ -1,3 +1,4 @@
+import { FINISHED_AGENT_STATUSES } from '../../agents/index.js';
 import type { CrewIntentName } from '../../intents/index.js';
 import type {
   IntentHandler,
@@ -11,8 +12,8 @@ import { PAUSE_HANDLERS } from './pause.js';
 type AgentIntentName = Extract<CrewIntentName, `agent.${string}`>;
 type RoundIntentName = Extract<CrewIntentName, 'round.end' | 'round.kill'>;
 
-const FINISHED_AGENT_STATUSES = new Set(['ended', 'killed', 'retired']);
-const RETIRED_AGENT_STATUSES = new Set(['retired']);
+const FINISHED_AGENTS: ReadonlySet<string> = new Set(FINISHED_AGENT_STATUSES);
+const RETIRED_AGENTS: ReadonlySet<string> = new Set(['retired']);
 
 const requireAgentNotIn =
   (refused: ReadonlySet<string>) =>
@@ -29,9 +30,9 @@ const requireAgentNotIn =
     }
   };
 
-const requireLiveAgent = requireAgentNotIn(FINISHED_AGENT_STATUSES);
+const requireLiveAgent = requireAgentNotIn(FINISHED_AGENTS);
 
-const requireUnretiredAgent = requireAgentNotIn(RETIRED_AGENT_STATUSES);
+const requireUnretiredAgent = requireAgentNotIn(RETIRED_AGENTS);
 
 const requireOpenRound =
   (roundId: string): ProjectCheck =>
@@ -58,6 +59,12 @@ const queueForRound: IntentHandler<RoundIntentName> = (ctx, input, name) =>
 const queueForAgent: IntentHandler<AgentIntentName> = (ctx, input, name) =>
   queueInProject(ctx, name, input, requireLiveAgent(input.agentId));
 
+const queueForUnretiredAgent: IntentHandler<AgentIntentName> = (
+  ctx,
+  input,
+  name,
+) => queueInProject(ctx, name, input, requireUnretiredAgent(input.agentId));
+
 export const CREW_HANDLERS: IntentHandlers<CrewIntentName> = {
   'round.start': queue,
   'round.end': queueForRound,
@@ -65,8 +72,8 @@ export const CREW_HANDLERS: IntentHandlers<CrewIntentName> = {
   ...PAUSE_HANDLERS,
   'agent.end': queueForAgent,
   'agent.kill': queueForAgent,
-  'agent.retire': (ctx, input, name) =>
-    queueInProject(ctx, name, input, requireUnretiredAgent(input.agentId)),
+  'agent.retire': queueForUnretiredAgent,
+  'agent.reset': queueForUnretiredAgent,
   'agent.message': queueForAgent,
   'planner.message': queue,
   'planner.new': queue,

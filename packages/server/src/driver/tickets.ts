@@ -6,6 +6,7 @@ export const ACTIVE_TICKET_STATUSES: readonly string[] = [
   'in_progress',
   'in_review',
   'bounced',
+  'blocked',
 ];
 
 export const APPROVED_TICKET_STATUS = 'open';
