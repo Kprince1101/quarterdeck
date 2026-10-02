@@ -37,6 +37,7 @@ export const testIo = (homeDir: string, answers?: string[]): TestIo => {
     err: (line) => errors.push(line),
     homeDir,
     cwd: homeDir,
+    env: process.env,
     prompter: prompter || undefined,
     untilStopped: () => stopped,
     stop: () => stop(),

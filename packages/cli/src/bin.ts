@@ -19,6 +19,7 @@ process.exitCode = await main(process.argv.slice(2), {
   err: (line) => process.stderr.write(`${line}\n`),
   homeDir: homedir(),
   cwd: process.cwd(),
+  env: process.env,
   prompter: prompter(),
   untilStopped,
 });

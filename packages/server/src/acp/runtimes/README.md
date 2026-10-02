@@ -59,7 +59,7 @@ Kiro's client-to-agent extension requests (`_kiro.dev/commands/execute`, `_kiro.
 
 ### Sign-in
 
-Sign-in stays with `kiro-cli login`. When Kiro is not signed in, `session/new` fails with auth required, which `isAuthRequiredError` recognises. Quarterdeck surfaces that to the dashboard and never calls `authenticate` on its own.
+Sign-in stays with `kiro-cli login`. When Kiro is not signed in, `session/new` fails with auth required, which `isAuthRequiredError` recognises. Quarterdeck raises a sign-in card naming `kiro-cli login`, resumes once the person answers, and never calls `authenticate` on its own (see [../../signin/README.md](../../signin/README.md)).
 
 ### Live smoke
 
@@ -126,7 +126,7 @@ Quarterdeck does not merge an unknown administrator policy under its own, becaus
 
 ### Sign-in
 
-Sign-in stays with Gemini CLI. When it has no usable credentials, `session/new` fails with auth required, which `isAuthRequiredError` recognises. The methods it offers (Google sign-in, Gemini API key, Vertex AI) are in `client.agent.authMethods`. Quarterdeck surfaces that to the dashboard and never calls `authenticate` on its own.
+Sign-in stays with Gemini CLI. When it has no usable credentials, `session/new` fails with auth required, which `isAuthRequiredError` recognises. The methods it offers (Google sign-in, Gemini API key, Vertex AI) are in `client.agent.authMethods`. Quarterdeck raises a sign-in card telling the person to run `gemini` and pick one, resumes once they answer, and never calls `authenticate` on its own (see [../../signin/README.md](../../signin/README.md)).
 
 ### Live test
 
@@ -150,7 +150,7 @@ QUARTERDECK_LIVE=1 npx vitest run packages/server/test/acp/gemini.test.ts
 
 `npx --yes @agentclientprotocol/claude-agent-acp@0.85.0` (`CLAUDE_AGENT_ACP_VERSION`), started through `launchAcpClient`. The version is pinned so that an upgrade is a deliberate change. On Windows the command goes through `cmd.exe /d /s /c`, because `npx` there is a `.cmd` shim and Node only starts those through a shell.
 
-The version probe is `npx --yes --offline @agentclientprotocol/claude-agent-acp@0.85.0 --cli --version` (`claudeVersionCommand()`). It runs from the same folder and env as the agent. `--cli` makes claude-agent-acp pass `--version` to the Claude Code binary it bundles, so the `agent_version` event reports the CLI the agent really runs, not a standalone `claude` on `PATH`. `--offline` keeps the probe from starting the download itself. On the very first launch the `before_spawn` probe therefore reports `version: null`, and the `after_spawn` probe, which runs once npx has fetched the package, reports the version. claude-agent-acp's own version is `client.agent.agentInfo.version`.
+The version probe is `npx --yes --offline @agentclientprotocol/claude-agent-acp@0.85.0 --cli --version` (`claudeVersionCommand()`). It runs from the same folder and env as the agent. `--cli` makes claude-agent-acp pass `--version` to the Claude Code binary it bundles, so the `agent_version` event reports the CLI the agent really runs, not a standalone `claude` on `PATH`. `--offline` keeps the probe from starting the download itself. On the very first launch the `before_spawn` probe therefore reports `version: null`, and the `after_spawn` probe, which runs once npx has fetched the package, reports the version. claude-agent-acp's own version is `client.agent.agentInfo.version`. `claudeCliCommand(args)` builds the same offline `--cli` command for any other Claude Code arguments; `quarterdeck doctor` uses it for `auth status --json`.
 
 ### The worktree is never the process directory
 
@@ -186,7 +186,7 @@ The project and local files sit in the agent's own worktree, so an agent could g
 
 ### Sign-in
 
-Sign-in stays with Claude Code. When it is not signed in, `session/new` fails with auth required, and so does `session/prompt` if the login lapses mid-session. `isAuthRequiredError` recognises both. Quarterdeck surfaces that to the dashboard and never calls `authenticate` on its own.
+Sign-in stays with Claude Code. When it is not signed in, `session/new` fails with auth required, and so does `session/prompt` if the login lapses mid-session. `isAuthRequiredError` recognises both. Quarterdeck raises a sign-in card with the command claude-agent-acp advertises as a terminal auth method (`npx --yes @agentclientprotocol/claude-agent-acp@0.85.0 --cli auth login --claudeai`, or `claude auth login` when none is advertised), resumes the session once the person answers (re-sending the prompt in the same session), and never calls `authenticate` on its own (see [../../signin/README.md](../../signin/README.md)).
 
 ### Live smoke
 

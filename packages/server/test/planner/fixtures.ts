@@ -27,9 +27,11 @@ export interface FakeRuntime {
   adapters: PlannerAdapters;
   launches: RuntimeLaunch[];
   clients: AcpClient[];
+  options: FakeAgentOptions;
 }
 
-export const fakeRuntime = (options: FakeAgentOptions = {}): FakeRuntime => {
+export const fakeRuntime = (initial: FakeAgentOptions = {}): FakeRuntime => {
+  const options = { ...initial };
   const launches: RuntimeLaunch[] = [];
   const clients: AcpClient[] = [];
   const adapter = defineRuntimeAdapter({
@@ -53,6 +55,7 @@ export const fakeRuntime = (options: FakeAgentOptions = {}): FakeRuntime => {
     adapters: { kiro: { connect }, claude: { connect }, gemini: { connect } },
     launches,
     clients,
+    options,
   };
 };
 
