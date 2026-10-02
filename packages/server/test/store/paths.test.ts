@@ -5,7 +5,7 @@ import {
   assertProjectSlug,
   projectDataDir,
   quarterdeckHome,
-} from '../../store/index.js';
+} from '../../src/store/index.js';
 
 describe('store paths', () => {
   it('keeps one Postgres data dir per project under ~/.quarterdeck', () => {

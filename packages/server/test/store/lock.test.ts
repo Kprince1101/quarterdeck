@@ -10,7 +10,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { IN_MEMORY, openStore } from '../../store/index.js';
+import { IN_MEMORY, openStore } from '../../src/store/index.js';
 
 const TIMEOUT = 30_000;
 

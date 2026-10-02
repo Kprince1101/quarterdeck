@@ -5,6 +5,19 @@
   "type": "module",
   "license": "MIT",
   "author": "Kristopher Prince",
+  "exports": {
+    ".": {
+      "@quarterdeck/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').cpSync('src/store/migrations', 'dist/store/migrations', { recursive: true })\""
+  },
   "engines": {
     "node": ">=22"
   },
