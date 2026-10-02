@@ -13,12 +13,16 @@ import {
 } from 'vitest';
 import type { Naming } from '@quarterdeck/rules';
 import {
+  BIRTH_CANCELLED_EVENT,
+  BirthCancelledError,
   DISCARD_WORKTREE_CARD,
   NamesExhaustedError,
   WorktreeDirtyError,
   attachWorktree,
   createAgentLifecycle,
+  type Agent,
   type AgentLifecycle,
+  type SessionHost,
 } from '../../src/agents/index.js';
 import {
   ARCHIVE_RETIRED_EVENT,
@@ -45,6 +49,39 @@ const PAIR: Naming = { theme: 'birds', names: ['crane', 'heron'] };
 const LAUNCH = { operation: 'launch', label: 'assign: QD9' } as const;
 const settle = (check: () => unknown) => vi.waitFor(check, { timeout: 10_000 });
 
+interface Latch {
+  reached: Promise<void>;
+  release: () => void;
+  pass: () => Promise<void>;
+}
+
+const latch = (): Latch => {
+  let reach = () => {};
+  let release = () => {};
+  const reached = new Promise<void>((resolve) => {
+    reach = resolve;
+  });
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return {
+    reached,
+    release,
+    pass: () => {
+      reach();
+      return released;
+    },
+  };
+};
+
+const latchedSessions = (inner: FakeSessions, wait: Latch): FakeSessions => ({
+  ...inner,
+  open: async (agent: Agent) => {
+    await wait.pass();
+    return inner.open(agent);
+  },
+});
+
 describe('archive control', { timeout: TIMEOUT }, () => {
   let deck: Store;
   let yard: Store;
@@ -67,20 +104,23 @@ describe('archive control', { timeout: TIMEOUT }, () => {
     await Promise.all([deck.close(), yard.close()]);
   });
 
-  beforeEach(async () => {
-    home = await mkdtemp(join(tmpdir(), 'qd-archive-'));
-    errors = [];
-    sessions = fakeSessions();
-    worktrees = fakeWorktrees();
-    lifecycle = createAgentLifecycle({
+  const lifecycleWith = (host: SessionHost): AgentLifecycle =>
+    createAgentLifecycle({
       naming: PAIR,
-      sessions,
+      sessions: host,
       worktrees,
       openStores: () => [deck, yard],
       budget: () =>
         Promise.resolve({ hours: 5, capTokens: null, holdAtFraction: 0.8 }),
       random: () => 0,
     });
+
+  beforeEach(async () => {
+    home = await mkdtemp(join(tmpdir(), 'qd-archive-'));
+    errors = [];
+    sessions = fakeSessions();
+    worktrees = fakeWorktrees();
+    lifecycle = lifecycleWith(sessions);
     control = await startArchiveControl({
       store: deck,
       lifecycle,
@@ -254,5 +294,98 @@ describe('archive control', { timeout: TIMEOUT }, () => {
     expect(worktrees.removed).toEqual([]);
     const { rows } = await deck.db.query('select id from cards');
     expect(rows).toHaveLength(1);
+  });
+
+  const turnCount = async (): Promise<number> => {
+    const { rows } = await deck.db.query<{ n: number }>(
+      'select count(*)::int as n from turns',
+    );
+    return rows[0]?.n ?? -1;
+  };
+
+  const cancelledEvents = async () => {
+    const { rows } = await deck.db.query<{ payload: unknown }>(
+      'select payload from events where kind = $1 order by id',
+      [BIRTH_CANCELLED_EVENT],
+    );
+    return rows.map((row) => row.payload);
+  };
+
+  it('keeps an agent retired when the archive lands while its session opens', async () => {
+    const opening = latch();
+    const slow = latchedSessions(fakeSessions(), opening);
+    const birthing = lifecycleWith(slow).birth({
+      store: deck,
+      role: 'builder',
+      runtime: 'kiro',
+    });
+    await opening.reached;
+
+    await archive(true);
+    await control.drain();
+    expect(await statuses()).toEqual({ crane: 'retired' });
+    opening.release();
+
+    await expect(birthing).rejects.toBeInstanceOf(BirthCancelledError);
+    await expect(birthing).rejects.toMatchObject({ reason: 'retired' });
+    expect(slow.opened).toEqual(['crane']);
+    expect(slow.closed).toEqual(['session-crane']);
+    const { rows } = await deck.db.query<{
+      status: string;
+      sessionId: string | null;
+    }>('select status, session_id as "sessionId" from agents');
+    expect(rows).toEqual([{ status: 'retired', sessionId: null }]);
+    expect(await turnCount()).toBe(0);
+    expect(await cancelledEvents()).toEqual([
+      { name: 'crane', reason: 'retired', sessionId: 'session-crane' },
+    ]);
+    expect((await birth(yard)).name).toBe('crane');
+  });
+
+  it('removes a worktree prepared after the archive retired the agent, and opens no session', async () => {
+    const preparing = latch();
+    const birthing = lifecycle.birth({
+      store: deck,
+      role: 'builder',
+      runtime: 'kiro',
+      prepare: async (agent) => {
+        await preparing.pass();
+        return attachWorktree(deck, agent, '/wt/crane');
+      },
+    });
+    await preparing.reached;
+
+    await archive(true);
+    await control.drain();
+    preparing.release();
+
+    await expect(birthing).rejects.toMatchObject({
+      name: 'BirthCancelledError',
+      reason: 'retired',
+    });
+    expect(sessions.opened).toEqual([]);
+    expect(worktrees.removed).toEqual([{ path: '/wt/crane', force: false }]);
+    const { rows } = await deck.db.query(
+      'select status, worktree_path as "worktreePath" from agents',
+    );
+    expect(rows).toEqual([{ status: 'retired', worktreePath: null }]);
+    expect(await cancelledEvents()).toEqual([
+      { name: 'crane', reason: 'retired', sessionId: null },
+    ]);
+  });
+
+  it('cancels a birth that starts after the archive control has passed', async () => {
+    await archive(true);
+    await control.drain();
+
+    await expect(birth(deck)).rejects.toMatchObject({
+      name: 'BirthCancelledError',
+      reason: 'archived',
+    });
+    expect(sessions.opened).toEqual([]);
+    expect(await statuses()).toEqual({ crane: 'retired' });
+    expect(await cancelledEvents()).toEqual([
+      { name: 'crane', reason: 'archived', sessionId: null },
+    ]);
   });
 });
