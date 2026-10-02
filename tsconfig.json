@@ -10,6 +10,7 @@
     "node_modules",
     "**/dist",
     "packages/server/test",
-    "packages/dashboard/src"
+    "packages/dashboard/src",
+    "packages/dashboard/test/primitives"
   ]
 }
