@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FAQ · Quarterdeck docs</title>
+    <meta
+      name="description"
+      content="Common questions about Quarterdeck: keys, accounts, merging, permissions and data."
+    />
+    <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <nav class="site-nav" aria-label="Docs">
+      <a class="home" href="../">Quarterdeck</a>
+      <a href="quickstart.html">Quickstart</a>
+      <a href="rules.html">Rules</a>
+      <a href="widgets.html">Widgets</a>
+      <a href="data.html">Where your data lives</a>
+      <a href="faq.html" aria-current="page">FAQ</a>
+    </nav>
+
+    <main class="docs">
+      <h1>FAQ</h1>
+
+      <h2 id="keys">Do I need an API key or an account?</h2>
+      <p>
+        No. Quarterdeck has no account and asks for no key. Each runtime signs
+        in through its own CLI with whatever you already use, and
+        <code>quarterdeck doctor</code> prints the command for each. See the
+        <a href="quickstart.html">quickstart</a>.
+      </p>
+
+      <h2 id="telemetry">Does Quarterdeck send anything anywhere?</h2>
+      <p>
+        No. There is no hosted component and no telemetry, and the server
+        listens on <code>127.0.0.1</code> only. The agents themselves talk to
+        their own providers, as they do when you run them by hand, and pull
+        requests go to GitHub through <code>gh</code>.
+      </p>
+
+      <h2 id="runtime">Which runtime should I use?</h2>
+      <p>
+        Kiro is the default. Claude Code and Gemini CLI work too, and you can
+        mix them: <a href="rules.html#models"><code>models.json</code></a> sets
+        the runtime for each role, so the reviewer can run on a different
+        runtime from the builders.
+      </p>
+
+      <h2 id="signin">What happens when a sign-in expires?</h2>
+      <p>
+        You get a card with the exact command to run. Quarterdeck waits for you
+        and then tries again. It never signs in for you.
+      </p>
+
+      <h2 id="merge">Will it merge pull requests on its own?</h2>
+      <p>
+        Not unless you turn that on. By default a pull request needs the
+        reviewer's approval and passing checks, and then you get a merge card;
+        nothing merges until you answer it. Setting
+        <a href="rules.html#merge-gate"><code>autoMerge</code></a> to
+        <code>true</code> on your machine lets the gate merge by itself, and a
+        repository can never turn that on for you.
+      </p>
+
+      <h2 id="permissions">Can an agent run any command it likes?</h2>
+      <p>
+        No. Every permission request is answered from
+        <a href="rules.html#permissions"><code>permissions.json</code></a
+        >. Out of the box, agents may read, search and think inside the
+        repository, and everything else asks you with a card. No rule can let an
+        agent write outside the repository.
+      </p>
+
+      <h2 id="repo">What does Quarterdeck write into my repository?</h2>
+      <p>
+        Nothing, unless you agree to a <code>.quarterdeck/</code> folder for
+        that project's rules. Builders work in their own git worktrees under
+        <code>~/.quarterdeck/</code> and change your code only through pull
+        requests.
+      </p>
+
+      <h2 id="postgres">Can I use my own Postgres?</h2>
+      <p>
+        Yes. Set <code>DATABASE_URL</code> and every project is stored in that
+        database. See <a href="data.html#postgres">your own Postgres</a>.
+      </p>
+
+      <h2 id="delete">How do I delete everything?</h2>
+      <p>
+        Stop Quarterdeck and delete <code>~/.quarterdeck/</code>. Then run
+        <code>git worktree prune</code> in each repository you used. See
+        <a href="data.html#delete">deleting it</a>.
+      </p>
+
+      <h2 id="port">Port 4317 is taken. What now?</h2>
+      <p>
+        Another Quarterdeck may already be running. Otherwise start it on
+        another port with <code>npx quarterdeck up --port 5000</code>, or
+        <code>--port 0</code> to pick a free one.
+      </p>
+
+      <h2 id="amazon">Is Quarterdeck made by Amazon?</h2>
+      <p>
+        No. Quarterdeck is MIT-licensed open source by Kristopher Prince. It
+        works with Kiro but is not affiliated with or endorsed by Amazon.
+      </p>
+    </main>
+
+    <footer>
+      <p>
+        MIT licensed. &copy; Kristopher Prince. &ldquo;Kiro&rdquo; is a
+        trademark of Amazon.com, Inc. or its affiliates. Quarterdeck is not
+        affiliated with or endorsed by Amazon.
+      </p>
+    </footer>
+  </body>
+</html>
