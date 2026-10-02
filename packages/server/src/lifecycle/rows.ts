@@ -34,7 +34,7 @@ export const pendingLifecycleIntents = async (
        result ->> 'discardCardId' as "discardCardId"
      from intents
      where project_id = $1 and status = 'pending' and kind = any($2::text[])
-     order by created_at, id`,
+     order by created_at, seq`,
     [projectId, LIFECYCLE_INTENT_KINDS],
   );
   return rows;

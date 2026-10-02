@@ -217,7 +217,7 @@ describe('lifecycle intents', { timeout: TIMEOUT }, () => {
     ]);
   });
 
-  it('applies intents queued before it started, in order', async () => {
+  it('applies intents queued before it started, in order, even within one clock tick', async () => {
     const agentId = await insertAgent(store, {
       name: 'wren',
       status: 'working',
@@ -225,6 +225,9 @@ describe('lifecycle intents', { timeout: TIMEOUT }, () => {
     });
     const kill = await queue('agent.kill', agentId);
     const retire = await queue('agent.retire', agentId);
+    await store.db.query(
+      'update intents set created_at = (select min(created_at) from intents)',
+    );
 
     await start();
     await settled(retire);
