@@ -92,21 +92,29 @@ export {
 } from './result.js';
 export {
   REPLAY_COMMAND,
+  replayCommand,
+  type ReplayCommandParts,
+} from './replay-command.js';
+export {
   REPLAY_PERMISSIONS,
   readTurnChain,
-  replayCommand,
   replayDriverChain,
   type ConnectReplay,
   type Replay,
   type ReplayChain,
   type ReplayClient,
-  type ReplayCommandParts,
   type ReplayOptions,
   type ReplaySetup,
   type ReplayTurn,
   type SavedTurn,
 } from './replay.js';
-export { findRoundSessions, type RoundSession } from './replay-round.js';
+export {
+  findRoundSessions,
+  findTurnSession,
+  type RoundSession,
+  type RoundAgents,
+  type TurnSession,
+} from './replay-round.js';
 export {
   ROUND_STARTED_EVENT,
   openDriverRound,
