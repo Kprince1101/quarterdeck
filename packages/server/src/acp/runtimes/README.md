@@ -59,7 +59,7 @@ Kiro's client-to-agent extension requests (`_kiro.dev/commands/execute`, `_kiro.
 
 ### Sign-in
 
-Sign-in stays with `kiro-cli login`. When Kiro is not signed in, `session/new` fails with auth required, which `isAuthRequiredError` recognises. Quarterdeck surfaces that to the dashboard and never calls `authenticate` on its own.
+Sign-in stays with `kiro-cli login`. When Kiro is not signed in, `session/new` fails with auth required, which `isAuthRequiredError` recognises. Quarterdeck raises a sign-in card naming `kiro-cli login`, resumes once the person answers, and never calls `authenticate` on its own (see [../../signin/README.md](../../signin/README.md)).
 
 ### Live smoke
 
@@ -126,7 +126,7 @@ Quarterdeck does not merge an unknown administrator policy under its own, becaus
 
 ### Sign-in
 
-Sign-in stays with Gemini CLI. When it has no usable credentials, `session/new` fails with auth required, which `isAuthRequiredError` recognises. The methods it offers (Google sign-in, Gemini API key, Vertex AI) are in `client.agent.authMethods`. Quarterdeck surfaces that to the dashboard and never calls `authenticate` on its own.
+Sign-in stays with Gemini CLI. When it has no usable credentials, `session/new` fails with auth required, which `isAuthRequiredError` recognises. The methods it offers (Google sign-in, Gemini API key, Vertex AI) are in `client.agent.authMethods`. Quarterdeck raises a sign-in card telling the person to run `gemini` and pick one, resumes once they answer, and never calls `authenticate` on its own (see [../../signin/README.md](../../signin/README.md)).
 
 ### Live test
 
@@ -186,7 +186,7 @@ The project and local files sit in the agent's own worktree, so an agent could g
 
 ### Sign-in
 
-Sign-in stays with Claude Code. When it is not signed in, `session/new` fails with auth required, and so does `session/prompt` if the login lapses mid-session. `isAuthRequiredError` recognises both. Quarterdeck surfaces that to the dashboard and never calls `authenticate` on its own.
+Sign-in stays with Claude Code. When it is not signed in, `session/new` fails with auth required, and so does `session/prompt` if the login lapses mid-session. `isAuthRequiredError` recognises both. Quarterdeck raises a sign-in card naming `claude /login`, resumes the session once the person answers (re-sending the prompt in the same session), and never calls `authenticate` on its own (see [../../signin/README.md](../../signin/README.md)).
 
 ### Live smoke
 

@@ -24,10 +24,17 @@ import {
   type DriverRound,
   type DriverRoundOptions,
 } from '../../src/driver/index.js';
+import {
+  SIGNED_IN,
+  SIGN_IN_CARD,
+  SIGN_IN_EVENTS,
+  SignInRequiredError,
+} from '../../src/signin/index.js';
 import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
 import {
   resultText,
   say,
+  signInNeeded,
   startScriptedAgent,
   type ScriptedAgent,
 } from './scripted-agent.js';
@@ -77,7 +84,7 @@ describe('Driver turn loop', () => {
     await rm(turnsDir, { recursive: true, force: true });
     await store.db.exec(
       `delete from events; delete from turns; delete from notebook;
-       delete from agents; delete from rounds;`,
+       delete from cards; delete from agents; delete from rounds;`,
     );
   });
 
@@ -445,6 +452,168 @@ describe('Driver turn loop', () => {
     scripted.reply(say(resultText(RESULT)));
     expect((await round.turn('try again')).status).toBe('result');
   });
+
+  const signInCards = async () => {
+    const { rows } = await store.db.query<{
+      id: string;
+      agentId: string;
+      kind: string;
+      question: string;
+      options: string[];
+      recommendation: string;
+      status: string;
+    }>(
+      `select id, agent_id as "agentId", kind, question, options,
+              recommendation, status
+       from cards where kind = $1 order by created_at`,
+      [SIGN_IN_CARD],
+    );
+    return rows;
+  };
+
+  const openSignInCard = async () => {
+    await expect
+      .poll(async () =>
+        (await signInCards()).filter((card) => card.status === 'open'),
+      )
+      .toHaveLength(1);
+    const card = (await signInCards()).find((row) => row.status === 'open');
+    if (!card) throw new Error('no open sign-in card');
+    return card;
+  };
+
+  const settleCard = (cardId: string, status: string, answer: string | null) =>
+    store.db.query(
+      `update cards set status = $2, answer = $3, answered_at = now()
+       where id = $1`,
+      [cardId, status, answer],
+    );
+
+  it(
+    'raises a sign-in card when the session needs sign-in and opens it once answered',
+    async () => {
+      scripted.requireSignIn(1);
+      scripted.reply(say(resultText(RESULT)));
+      const agentId = await insertAgent();
+      await store.db.query(
+        `update agents set runtime = 'claude' where id = $1`,
+        [agentId],
+      );
+      const opening = openDriverRound(options(agentId, await insertRound(1)));
+
+      const card = await openSignInCard();
+      expect(card).toMatchObject({
+        agentId,
+        options: [SIGNED_IN],
+        recommendation: 'claude /login',
+      });
+      expect(card.question).toContain('`claude /login`');
+      expect(await events(SIGN_IN_EVENTS.required)).toEqual([
+        {
+          cardId: card.id,
+          runtime: 'claude',
+          command: 'claude /login',
+          operation: 'session/new',
+          error: expect.stringContaining('Authentication required'),
+        },
+      ]);
+      expect(await events('card.asked')).toEqual([{ cardId: card.id }]);
+      expect(scripted.sessions).toEqual([]);
+
+      await settleCard(card.id, 'answered', SIGNED_IN);
+      const round = await opening;
+
+      expect((await round.birth).status).toBe('result');
+      expect(scripted.sessionAttempts()).toBe(2);
+      expect(scripted.sessions).toHaveLength(1);
+      expect(launched).toEqual([agentId, agentId]);
+      expect(await events(SIGN_IN_EVENTS.resumed)).toEqual([
+        { cardId: card.id, runtime: 'claude', operation: 'session/new' },
+      ]);
+    },
+    TIMEOUT,
+  );
+
+  it(
+    'resends a prompt that needed sign-in in the same session once answered',
+    async () => {
+      scripted.reply(signInNeeded(), say(resultText(RESULT)));
+
+      const round = await open();
+      const card = await openSignInCard();
+      expect(card.recommendation).toBe('kiro-cli login');
+      expect(await events(SIGN_IN_EVENTS.required)).toEqual([
+        expect.objectContaining({
+          runtime: 'kiro',
+          operation: 'session/prompt',
+        }),
+      ]);
+      expect((await agentRow(round.agent.id))?.status).toBe('working');
+
+      await settleCard(card.id, 'answered', SIGNED_IN);
+      const birth = await round.birth;
+
+      expect(birth).toMatchObject({
+        status: 'result',
+        turns: [expect.objectContaining({ seq: 1 })],
+      });
+      expect(scripted.prompts).toHaveLength(2);
+      expect(scripted.prompts[1]).toEqual(scripted.prompts[0]);
+      expect(scripted.sessions).toHaveLength(1);
+      expect((await turnRows(round.agent.id)).map((row) => row.seq)).toEqual([
+        1,
+      ]);
+      expect(await events(TURN_EVENTS.failed)).toEqual([]);
+    },
+    TIMEOUT,
+  );
+
+  it(
+    'asks again when the agent still needs sign-in after the answer',
+    async () => {
+      scripted.requireSignIn(2);
+      scripted.reply(say(resultText(RESULT)));
+      const opening = open();
+
+      const first = await openSignInCard();
+      await settleCard(first.id, 'answered', SIGNED_IN);
+      const second = await openSignInCard();
+      expect(second.id).not.toBe(first.id);
+      await settleCard(second.id, 'answered', SIGNED_IN);
+
+      expect((await (await opening).birth).status).toBe('result');
+      expect(scripted.sessionAttempts()).toBe(3);
+      expect(await events(SIGN_IN_EVENTS.required)).toHaveLength(2);
+    },
+    TIMEOUT,
+  );
+
+  it(
+    'fails the turn with the command to run when sign-in is declined',
+    async () => {
+      scripted.reply(signInNeeded());
+
+      const round = await open();
+      const card = await openSignInCard();
+      await settleCard(card.id, 'declined', null);
+
+      const failure = await round.birth.catch((err: unknown) => err);
+      expect(failure).toBeInstanceOf(SignInRequiredError);
+      expect(failure).toMatchObject({
+        runtime: 'kiro',
+        command: 'kiro-cli login',
+        cardId: card.id,
+        status: 'declined',
+      });
+      expect(await events(TURN_EVENTS.failed)).toEqual([
+        { seq: 1, error: expect.stringContaining('`kiro-cli login`') },
+      ]);
+      expect(await events(SIGN_IN_EVENTS.resumed)).toEqual([]);
+      expect((await agentRow(round.agent.id))?.status).toBe('idle');
+      expect(scripted.prompts).toHaveLength(1);
+    },
+    TIMEOUT,
+  );
 
   it('refuses a round that has ended or does not exist', async () => {
     const agentId = await insertAgent();

@@ -21,6 +21,7 @@ export interface ScriptedReply {
   stopReason?: StopReason;
   usage?: Pick<Usage, 'inputTokens' | 'outputTokens'>;
   fail?: string;
+  authRequired?: boolean;
   gate?: Promise<void>;
 }
 
@@ -39,9 +40,13 @@ export interface ScriptedAgent {
   client: AcpClient;
   sessions: ScriptedSession[];
   prompts: ScriptedPrompt[];
+  sessionAttempts: () => number;
   maxConcurrent: () => number;
   reply: (...replies: ScriptedReply[]) => void;
+  requireSignIn: (attempts: number) => void;
 }
+
+export const signInNeeded = (): ScriptedReply => ({ authRequired: true });
 
 export const say = (
   text: string,
@@ -71,7 +76,7 @@ export const startScriptedAgent = async (): Promise<ScriptedAgent> => {
   const sessions: ScriptedSession[] = [];
   const prompts: ScriptedPrompt[] = [];
   const queue: ScriptedReply[] = [];
-  const counts = { running: 0, max: 0 };
+  const counts = { running: 0, max: 0, attempts: 0, signInsLeft: 0 };
 
   const app = agent({ name: 'scripted' })
     .onRequest('initialize', () => ({
@@ -80,6 +85,11 @@ export const startScriptedAgent = async (): Promise<ScriptedAgent> => {
       authMethods: [],
     }))
     .onRequest('session/new', ({ params }) => {
+      counts.attempts += 1;
+      if (counts.signInsLeft > 0) {
+        counts.signInsLeft -= 1;
+        throw RequestError.authRequired();
+      }
       const sessionId = `scripted-${sessions.length + 1}`;
       sessions.push({
         sessionId,
@@ -99,6 +109,7 @@ export const startScriptedAgent = async (): Promise<ScriptedAgent> => {
         const next = queue.shift();
         if (!next) throw RequestError.internalError(undefined, 'no reply');
         await next.gate;
+        if (next.authRequired) throw RequestError.authRequired();
         for (const text of next.chunks ?? []) {
           await client.notify('session/update', {
             sessionId: params.sessionId,
@@ -134,9 +145,13 @@ export const startScriptedAgent = async (): Promise<ScriptedAgent> => {
     client,
     sessions,
     prompts,
+    sessionAttempts: () => counts.attempts,
     maxConcurrent: () => counts.max,
     reply: (...replies) => {
       queue.push(...replies);
+    },
+    requireSignIn: (attempts) => {
+      counts.signInsLeft = attempts;
     },
   };
 };

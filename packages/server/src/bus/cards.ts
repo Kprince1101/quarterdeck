@@ -27,6 +27,15 @@ export interface AskCard {
   recommendation: string;
 }
 
+export interface CardInput extends AskCard {
+  kind: string;
+}
+
+export interface CardNotice {
+  kind: string;
+  payload: Record<string, unknown>;
+}
+
 export interface RaisedCard {
   cardId: string;
   ticketId: string | null;
@@ -57,18 +66,20 @@ const cardEvent = (
   kind: string,
   cardId: string,
   links: CardLinks,
+  payload: Record<string, unknown> = {},
 ): PublishInput => {
-  const input: PublishInput = { kind, payload: { cardId } };
+  const input: PublishInput = { kind, payload: { ...payload, cardId } };
   if (links.agent_id !== null) input.agentId = links.agent_id;
   if (links.ticket_id !== null) input.ticketId = links.ticket_id;
   return input;
 };
 
-export const raiseAskCard = (
+export const raiseCard = (
   store: BusStore,
   agentId: string,
-  card: AskCard,
+  card: CardInput,
   expiryMs: number,
+  notices: readonly CardNotice[] = [],
 ): Promise<RaisedCard> =>
   store.db.transaction(async (tx) => {
     const { rows } = await tx.query<{
@@ -89,7 +100,7 @@ export const raiseAskCard = (
         store.projectId,
         agentId,
         ACTIVE_TICKET,
-        ASK_CARD,
+        card.kind,
         card.question,
         JSON.stringify(card.options),
         card.checked,
@@ -98,21 +109,34 @@ export const raiseAskCard = (
       ],
     );
     const [row] = rows;
-    if (!row) throw new Error('Could not raise the ask card');
+    if (!row) throw new Error(`Could not raise the ${card.kind} card`);
+    const links = { agent_id: agentId, ticket_id: row.ticket_id };
     await publishEvent(
       tx,
       store.projectId,
-      cardEvent('card.asked', row.id, {
-        agent_id: agentId,
-        ticket_id: row.ticket_id,
-      }),
+      cardEvent('card.asked', row.id, links),
     );
+    for (const notice of notices) {
+      await publishEvent(
+        tx,
+        store.projectId,
+        cardEvent(notice.kind, row.id, links, notice.payload),
+      );
+    }
     return {
       cardId: row.id,
       ticketId: row.ticket_id,
       expiresAt: row.expires_at,
     };
   });
+
+export const raiseAskCard = (
+  store: BusStore,
+  agentId: string,
+  card: AskCard,
+  expiryMs: number,
+): Promise<RaisedCard> =>
+  raiseCard(store, agentId, { ...card, kind: ASK_CARD }, expiryMs);
 
 const readOutcome = async (
   store: BusStore,
