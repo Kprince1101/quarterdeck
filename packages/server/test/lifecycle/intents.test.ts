@@ -19,7 +19,7 @@ import {
   insertAgent,
   lenientSessions,
 } from '../round-end/fixtures.js';
-import { GRACE_MS, TIMEOUT } from './fixtures.js';
+import { GRACE_MS, TIMEOUT, noBudgetCap } from './fixtures.js';
 
 type CardReply = 'yes' | 'no' | 'decline';
 
@@ -64,6 +64,7 @@ describe('lifecycle intents', { timeout: TIMEOUT }, () => {
         sessions,
         worktrees,
         openStores: () => [store],
+        budget: noBudgetCap,
         killGraceMs: GRACE_MS,
       }),
       onError: (err) => errors.push(err),

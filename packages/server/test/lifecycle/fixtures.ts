@@ -1,9 +1,13 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
+import type { BudgetWindow } from '@quarterdeck/rules';
 import { recordAgentProcess } from '../../src/agents/index.js';
 import type { Store } from '../../src/store/index.js';
 
 export const TIMEOUT = 30_000;
+
+export const noBudgetCap = (): Promise<BudgetWindow> =>
+  Promise.resolve({ hours: 5, capTokens: null, holdAtFraction: 0.8 });
 export const GRACE_MS = 200;
 export const IS_WINDOWS = process.platform === 'win32';
 

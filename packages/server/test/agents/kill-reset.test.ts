@@ -14,6 +14,7 @@ import {
   IS_WINDOWS,
   exitOf,
   giveProcess,
+  noBudgetCap,
   startSleeper,
   stopSleepers,
   storedPid,
@@ -52,6 +53,7 @@ describe('kill, reset and retire', { timeout: TIMEOUT }, () => {
       sessions,
       worktrees: fakeWorktrees(),
       openStores: () => [store],
+      budget: noBudgetCap,
       killGraceMs: GRACE_MS,
     });
   };
