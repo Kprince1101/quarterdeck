@@ -1,6 +1,15 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   agent,
   PROTOCOL_VERSION,
@@ -11,10 +20,13 @@ import {
   AcpClientError,
   connectAcpClient,
   createKiroAdapter,
+  defaultKiroProcessDir,
   KIRO_ADAPTER,
   KIRO_EXTENSION_NOTIFICATIONS,
+  KIRO_SHADOW_CONFIG_CARD,
   kiroAgentConfigPath,
   KiroConfigError,
+  KiroShadowConfigError,
   subscribeKiroEvents,
   toKiroEvent,
 } from '@quarterdeck/server';
@@ -28,12 +40,22 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { fakeAgentLaunch } from './fake-agent/launch.ts';
 import { describeRuntimeConformance } from './runtime-conformance.ts';
 
-const agentsDir = mkdtempSync(join(tmpdir(), 'quarterdeck-kiro-agents-'));
-const adapter = createKiroAdapter({ agentsDir });
+const root = mkdtempSync(join(tmpdir(), 'quarterdeck-kiro-'));
+const agentsDir = join(root, 'agents');
+const processDir = join(root, 'process');
+const worktree = join(root, 'worktree');
+mkdirSync(worktree);
+const adapter = createKiroAdapter({ agentsDir, processDir });
 
 afterAll(() => {
-  rmSync(agentsDir, { recursive: true, force: true });
+  rmSync(root, { recursive: true, force: true });
 });
+
+const PROJECT = 'deck';
+
+const CWD_AGENT = fileURLToPath(
+  new URL('kiro-fixtures/cwd-agent.ts', import.meta.url),
+);
 
 const clientOptions = (
   overrides: Partial<AcpClientOptions> = {},
@@ -73,7 +95,7 @@ const SEARCH: McpServer = {
 };
 
 const configPath = (name: string) =>
-  kiroAgentConfigPath(agentsDir, `quarterdeck-${name}`);
+  kiroAgentConfigPath(agentsDir, `quarterdeck-${PROJECT}-${name}`);
 
 const agentText = (events: AcpClientEvent[]): string =>
   events
@@ -86,20 +108,24 @@ const agentText = (events: AcpClientEvent[]): string =>
     })
     .join('');
 
-describeRuntimeConformance(adapter, { agentName: 'conformance' });
+describeRuntimeConformance(adapter, {
+  project: PROJECT,
+  agentName: 'conformance',
+});
 
 describe('kiro command', () => {
-  it('runs kiro-cli acp with the per-agent config', () => {
+  it('runs kiro-cli acp --agent from the Quarterdeck kiro folder', () => {
     expect(
       KIRO_ADAPTER.command({
         cwd: '/work/deck',
+        project: 'deck',
         agentName: 'narwhal',
         env: { PATH: '/bin' },
       }),
     ).toEqual({
       command: 'kiro-cli',
-      args: ['acp', '--agent', 'quarterdeck-narwhal'],
-      cwd: '/work/deck',
+      args: ['acp', '--agent', 'quarterdeck-deck-narwhal'],
+      cwd: defaultKiroProcessDir(),
       env: { PATH: '/bin' },
     });
   });
@@ -112,21 +138,101 @@ describe('kiro command', () => {
   it.each(['', '../escape', 'a/b', '-flag'])(
     'refuses agent name %j',
     (agentName) => {
-      expect(() => KIRO_ADAPTER.command({ cwd: '/w', agentName })).toThrow(
-        KiroConfigError,
-      );
+      expect(() =>
+        KIRO_ADAPTER.command({ cwd: '/w', project: PROJECT, agentName }),
+      ).toThrow(KiroConfigError);
     },
   );
 
-  it('refuses a launch with no agent name', async () => {
-    expect(() => KIRO_ADAPTER.command({ cwd: '/w' })).toThrow(KiroConfigError);
+  it.each(['', '../escape', 'a/b'])('refuses project %j', (project) => {
+    expect(() =>
+      KIRO_ADAPTER.command({ cwd: '/w', project, agentName: 'narwhal' }),
+    ).toThrow(KiroConfigError);
+  });
+
+  it('refuses a launch with no project or agent name', async () => {
+    expect(() => KIRO_ADAPTER.command({ cwd: '/w', project: PROJECT })).toThrow(
+      KiroConfigError,
+    );
+    expect(() => KIRO_ADAPTER.command({ cwd: '/w', agentName: 'x' })).toThrow(
+      KiroConfigError,
+    );
     await expect(
       adapter.connect(
-        { cwd: tmpdir(), command: fakeAgentLaunch() },
+        { cwd: worktree, agentName: 'x', command: fakeAgentLaunch() },
         clientOptions(),
       ),
     ).rejects.toBeInstanceOf(KiroConfigError);
   });
+});
+
+describe('kiro process directory', () => {
+  it('never runs kiro-cli in the worktree', async () => {
+    const marker = join(root, 'cwd-marker');
+    const fake = fakeAgentLaunch();
+    const client = await adapter.connect(
+      {
+        cwd: worktree,
+        project: PROJECT,
+        agentName: 'cwd',
+        env: { ...process.env, QUARTERDECK_CWD_MARKER: marker },
+        command: {
+          command: fake.command,
+          args: fake.args.map((arg) => {
+            if (arg.endsWith('main.ts')) return CWD_AGENT;
+            return arg;
+          }),
+        },
+      },
+      clientOptions(),
+    );
+    await client.close();
+    const spawnedIn = readFileSync(marker, 'utf8');
+    expect(spawnedIn).toBe(realpathSync(processDir));
+    expect(spawnedIn).not.toBe(realpathSync(worktree));
+  });
+});
+
+describe('kiro workspace shadow', () => {
+  it.each(['json', 'md'])(
+    'refuses to start when the worktree has its own .%s agent',
+    async (extension) => {
+      const shadowDir = join(worktree, '.kiro', 'agents');
+      const shadow = join(
+        shadowDir,
+        `quarterdeck-${PROJECT}-shadowed.${extension}`,
+      );
+      mkdirSync(shadowDir, { recursive: true });
+      writeFileSync(shadow, '{"allowedTools":["*"]}');
+      const spawned: AcpClientEvent[] = [];
+      try {
+        const error: unknown = await adapter
+          .connect(
+            {
+              cwd: worktree,
+              project: PROJECT,
+              agentName: 'shadowed',
+              command: fakeAgentLaunch(),
+            },
+            clientOptions({ onEvent: (event) => spawned.push(event) }),
+          )
+          .then(
+            () => undefined,
+            (err: unknown) => err,
+          );
+        expect(error).toBeInstanceOf(KiroShadowConfigError);
+        expect(error).toMatchObject({
+          cardKind: KIRO_SHADOW_CONFIG_CARD,
+          agentName: `quarterdeck-${PROJECT}-shadowed`,
+          path: shadow,
+        });
+        expect(spawned).toEqual([]);
+        expect(existsSync(configPath('shadowed'))).toBe(false);
+      } finally {
+        rmSync(join(worktree, '.kiro'), { recursive: true, force: true });
+      }
+    },
+  );
 });
 
 describe('kiro agent config', () => {
@@ -134,7 +240,8 @@ describe('kiro agent config', () => {
     const events: AcpClientEvent[] = [];
     const client = await adapter.connect(
       {
-        cwd: tmpdir(),
+        cwd: worktree,
+        project: PROJECT,
         agentName: 'narwhal',
         mcpServers: [BUS, DOCS, EVENTS],
         command: fakeAgentLaunch(),
@@ -144,7 +251,7 @@ describe('kiro agent config', () => {
     const path = configPath('narwhal');
     try {
       expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({
-        name: 'quarterdeck-narwhal',
+        name: 'quarterdeck-deck-narwhal',
         description:
           'Quarterdeck agent. Written by Quarterdeck, removed on close.',
         mcpServers: {
@@ -165,12 +272,12 @@ describe('kiro agent config', () => {
       });
 
       const { sessionId } = await client.newSession({
-        cwd: tmpdir(),
+        cwd: worktree,
         mcpServers: [BUS, DOCS, EVENTS, SEARCH],
       });
       await client.prompt(sessionId, 'describe_session');
       expect(JSON.parse(agentText(events))).toEqual({
-        cwd: tmpdir(),
+        cwd: worktree,
         mcpServers: ['events', 'search'],
       });
     } finally {
@@ -179,13 +286,43 @@ describe('kiro agent config', () => {
     expect(existsSync(path)).toBe(false);
   });
 
+  it('keeps two projects with the same agent name apart', async () => {
+    const first = await adapter.connect(
+      {
+        cwd: worktree,
+        project: 'alpha',
+        agentName: 'twin',
+        command: fakeAgentLaunch(),
+      },
+      clientOptions(),
+    );
+    const second = await adapter.connect(
+      {
+        cwd: worktree,
+        project: 'beta',
+        agentName: 'twin',
+        command: fakeAgentLaunch(),
+      },
+      clientOptions(),
+    );
+    const betaPath = kiroAgentConfigPath(agentsDir, 'quarterdeck-beta-twin');
+    try {
+      await first.close();
+      expect(existsSync(betaPath)).toBe(true);
+    } finally {
+      await second.close();
+    }
+    expect(existsSync(betaPath)).toBe(false);
+  });
+
   it('removes the config when the agent fails to start', async () => {
     await expect(
       adapter.connect(
         {
-          cwd: tmpdir(),
+          cwd: worktree,
+          project: PROJECT,
           agentName: 'nostart',
-          command: { command: join(agentsDir, 'missing-kiro-cli'), args: [] },
+          command: { command: join(root, 'missing-kiro-cli'), args: [] },
         },
         clientOptions(),
       ),
@@ -195,11 +332,16 @@ describe('kiro agent config', () => {
 
   it('removes the config when the agent exits on its own', async () => {
     const client = await adapter.connect(
-      { cwd: tmpdir(), agentName: 'crasher', command: fakeAgentLaunch() },
+      {
+        cwd: worktree,
+        project: PROJECT,
+        agentName: 'crasher',
+        command: fakeAgentLaunch(),
+      },
       clientOptions(),
     );
     const { sessionId } = await client.newSession({
-      cwd: tmpdir(),
+      cwd: worktree,
       mcpServers: [],
     });
     await client.prompt(sessionId, 'crash').catch(() => undefined);

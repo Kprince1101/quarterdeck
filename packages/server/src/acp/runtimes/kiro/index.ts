@@ -6,13 +6,18 @@ export {
 } from './adapter.js';
 export type { KiroAdapterOptions } from './adapter.js';
 export {
+  assertNoWorkspaceShadow,
   buildKiroAgentConfig,
   defaultKiroAgentsDir,
+  defaultKiroProcessDir,
   KIRO_AGENT_PREFIX,
+  KIRO_SHADOW_CONFIG_CARD,
   kiroAgentConfigPath,
   kiroAgentName,
   KiroConfigError,
   kiroMcpServers,
+  KiroShadowConfigError,
+  workspaceKiroAgentPaths,
 } from './config.js';
 export type { KiroAgentConfig, KiroMcpServer } from './config.js';
 export {

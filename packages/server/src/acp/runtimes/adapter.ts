@@ -10,6 +10,7 @@ import type {
 export interface RuntimeLaunch {
   cwd: string;
   env?: NodeJS.ProcessEnv;
+  project?: string;
   agentName?: string;
   mcpServers?: McpServer[];
   command?: AgentCommand;
