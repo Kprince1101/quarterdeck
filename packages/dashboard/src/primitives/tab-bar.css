@@ -1,0 +1,66 @@
+.qd-tab-bar {
+  display: flex;
+  gap: var(--qd-space-1);
+  min-width: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--qd-line);
+}
+
+.qd-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--qd-space-2);
+  margin-bottom: -1px;
+  padding: var(--qd-space-2) var(--qd-space-3);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--qd-muted);
+  font: inherit;
+  font-size: var(--qd-text-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.qd-tab:hover {
+  color: var(--qd-fg);
+}
+
+.qd-tab:focus-visible {
+  outline: 1px solid var(--qd-accent);
+  outline-offset: -1px;
+}
+
+.qd-tab[aria-selected='true'] {
+  border-bottom-color: var(--qd-accent);
+  color: var(--qd-fg);
+}
+
+.qd-tab-unread {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--qd-accent);
+}
+
+.qd-tab-panel {
+  min-height: 0;
+}
+
+.qd-tab-panel:focus-visible {
+  outline: 1px solid var(--qd-accent);
+}
+
+.qd-newest-marker {
+  display: block;
+  height: 1px;
+}
+
+.qd-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

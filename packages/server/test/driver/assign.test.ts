@@ -21,6 +21,7 @@ import {
 import { BudgetHeldError } from '../../src/budget/index.js';
 import {
   AgentNotRetiredError,
+  BUILDER_STUCK_EVENT,
   BuilderNotAvailableError,
   BuilderSessionLostError,
   DRIVER_TURN_INSTRUCTIONS,
@@ -32,6 +33,8 @@ import {
   builderWorktreePath,
   continueBuilder,
   reassignTickets,
+  STUCK_AFTER_CONTINUES,
+  worktreeHead,
   type BuilderContext,
 } from '../../src/driver/index.js';
 import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
@@ -477,6 +480,7 @@ describe('builder assignment and continue', () => {
           payload: {
             name: 'crane',
             prompt: 'CI failed on lint; fix it and push.',
+            head: base,
           },
         },
       ]);
@@ -484,6 +488,61 @@ describe('builder assignment and continue', () => {
     },
     TIMEOUT,
   );
+
+  it(
+    'flags a builder stuck after three continues made no commit, once per head',
+    async () => {
+      const ticketId = await insertTicket();
+      const { builder, worktreePath } = await assignAndSettle(ticketId);
+      const continueAndSettle = async () => {
+        scripted.reply(say('Still on it.'));
+        const continuation = await continueBuilder(ctx, {
+          builderId: builder.id,
+          prompt: 'Keep going.',
+        });
+        await continuation.turn;
+      };
+
+      await continueAndSettle();
+      await continueAndSettle();
+      await continueAndSettle();
+      expect(await events(BUILDER_STUCK_EVENT)).toEqual([]);
+      await continueAndSettle();
+      await continueAndSettle();
+      expect(await events(BUILDER_STUCK_EVENT)).toEqual([
+        {
+          agentId: builder.id,
+          ticketId,
+          payload: {
+            name: 'crane',
+            head: base,
+            continues: STUCK_AFTER_CONTINUES,
+          },
+        },
+      ]);
+
+      git(worktreePath, 'commit', '--quiet', '--allow-empty', '-m', 'work');
+      const moved = git(worktreePath, 'rev-parse', 'HEAD');
+      await continueAndSettle();
+      await continueAndSettle();
+      await continueAndSettle();
+      expect(await events(BUILDER_STUCK_EVENT)).toHaveLength(1);
+      await continueAndSettle();
+      expect(
+        (await events(BUILDER_STUCK_EVENT)).map((event) => event.payload),
+      ).toEqual([
+        { name: 'crane', head: base, continues: STUCK_AFTER_CONTINUES },
+        { name: 'crane', head: moved, continues: STUCK_AFTER_CONTINUES },
+      ]);
+      expect((await agentRow(builder.id))?.status).toBe('idle');
+    },
+    TIMEOUT,
+  );
+
+  it('reads no head without a worktree', async () => {
+    expect(await worktreeHead(null)).toBeNull();
+    expect(await worktreeHead(join(root, 'nowhere'))).toBeNull();
+  });
 
   it(
     'refuses to continue a working builder, an empty prompt or a lost session',

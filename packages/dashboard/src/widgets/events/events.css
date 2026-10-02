@@ -1,0 +1,46 @@
+.qd-events {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qd-space-2);
+}
+
+.qd-event-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--qd-space-2) var(--qd-space-3);
+  font-size: var(--qd-text-sm);
+}
+
+.qd-event-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--qd-space-1);
+  color: var(--qd-muted);
+}
+
+.qd-event-filter select {
+  max-width: 14rem;
+  padding: var(--qd-space-1) var(--qd-space-2);
+  border: 1px solid var(--qd-line);
+  border-radius: var(--qd-radius);
+  background: var(--qd-surface-raised);
+  color: var(--qd-fg);
+  font: inherit;
+}
+
+.qd-event-filter select:focus-visible {
+  outline: 2px solid var(--qd-accent);
+  outline-offset: 1px;
+}
+
+.qd-event-list .qd-event-project {
+  flex: 1;
+  overflow: hidden;
+  color: var(--qd-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qd-event-list time {
+  flex-shrink: 0;
+}

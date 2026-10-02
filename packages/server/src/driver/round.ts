@@ -26,6 +26,11 @@ import {
   type DriverTurnResult,
   type TurnFormat,
 } from './result.js';
+import {
+  markStuckFlagsSurfaced,
+  unsurfacedStuckFlags,
+  withStuckFlags,
+} from './stuck.js';
 import { runTurn, type TurnOutcome, type TurnTarget } from './turns.js';
 
 export const ROUND_STARTED_EVENT = 'driver.round_started';
@@ -157,7 +162,18 @@ export const openDriverRound = async (
   const enqueue = serialize();
   const turnAs = <T>(input: string, format: TurnFormat<T>) =>
     enqueue(() => runTurn(target, input, format));
-  const turn = (input: string) => turnAs(input, DRIVER_TURN_FORMAT);
+  const turn = (input: string) =>
+    enqueue(async () => {
+      const flags = await unsurfacedStuckFlags(store);
+      const outcome = await runTurn(
+        target,
+        withStuckFlags(input, flags),
+        DRIVER_TURN_FORMAT,
+      );
+      if (outcome.status !== 'stopped')
+        await markStuckFlagsSurfaced(store, agent, flags);
+      return outcome;
+    });
   const birthInput = buildBirthInput({
     agent,
     round,

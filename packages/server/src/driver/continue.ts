@@ -8,9 +8,10 @@ import {
   withClaim,
   type BuilderContext,
 } from './builders.js';
+import { BUILDER_CONTINUED_EVENT, flagIfStuck, worktreeHead } from './stuck.js';
 import type { TurnRecord } from './turns.js';
 
-export const BUILDER_CONTINUED_EVENT = 'builder.continued';
+export { BUILDER_CONTINUED_EVENT };
 
 export type ContinueContext = Pick<
   BuilderContext,
@@ -44,13 +45,15 @@ export const continueBuilder = async (
   );
   const target = await withClaim(ctx.store, builder.id, async () => {
     const found = builderTarget(ctx, builder, ticketId);
+    const head = await worktreeHead(builder.worktreePath);
     const event: PublishInput = {
       kind: BUILDER_CONTINUED_EVENT,
       agentId: builder.id,
-      payload: { name: builder.name, prompt },
+      payload: { name: builder.name, prompt, head },
     };
     if (ticketId !== null) event.ticketId = ticketId;
     await ctx.store.publish(event);
+    await flagIfStuck(ctx.store, builder, ticketId, head);
     return found;
   });
   return { builder, ticketId, turn: promptBuilder(target, prompt) };
