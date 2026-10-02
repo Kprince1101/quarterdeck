@@ -48,6 +48,12 @@ describe('permissionAnswer', () => {
     expect(answer('wren asks to run cat /work/repository/x.')).toBe('deny');
   });
 
+  it('denies a command on the root directory itself', () => {
+    expect(asked('find / -name id_rsa')).toBe('deny');
+    expect(asked('ls /')).toBe('deny');
+    expect(asked('du -sh /.')).toBe('deny');
+  });
+
   it('denies paths it cannot resolve from the card text', () => {
     for (const command of [
       'cat ../../.ssh/id_rsa',

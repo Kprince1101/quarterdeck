@@ -36,7 +36,7 @@ const UNRESOLVED_PATHS: readonly RegExp[] = [
   /`/,
 ];
 
-const ABSOLUTE_PATH = /(?<![\w:/.])\/[^\s,'"`)]+/g;
+const ABSOLUTE_PATH = /(?<![\w:/.])\/[^\s,'"`)]*/g;
 const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
 const API_TOKEN = /#token=[\w-]+/g;
 
