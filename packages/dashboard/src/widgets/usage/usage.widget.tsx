@@ -1,32 +1,43 @@
 import { defineWidget } from '../registry.js';
-import { NO_CAP, type UsageLevel } from './usage-model.js';
+import { NO_CAP, type UsageView } from './usage-model.js';
 import { useUsageWidget } from './use-usage-widget.js';
 import './usage.css';
 
 interface CapReadoutProps {
-  capLoaded: boolean;
-  percentLabel: string | null;
-  level: UsageLevel | null;
+  view: UsageView;
 }
 
-const CapReadout = ({ capLoaded, percentLabel, level }: CapReadoutProps) => {
-  if (!capLoaded) return null;
-  if (percentLabel === null || level === null) {
+const CapReadout = ({ view }: CapReadoutProps) => {
+  if (view.percentLabel === null || view.level === null) {
     return <p className="qd-usage-no-cap">{NO_CAP}</p>;
   }
   return (
-    <p className="qd-usage-percent" data-level={level}>
-      {percentLabel}
+    <p className="qd-usage-percent" data-level={view.level}>
+      {view.percentLabel}
       <span className="qd-usage-of-cap"> of cap</span>
     </p>
   );
 };
 
-interface CapErrorProps {
+interface UsageReadoutProps {
+  view: UsageView | null;
+}
+
+const UsageReadout = ({ view }: UsageReadoutProps) => {
+  if (view === null) return <p className="qd-empty">Reading usage…</p>;
+  return (
+    <>
+      <CapReadout view={view} />
+      <p className="qd-usage-tokens">{view.usedLabel}</p>
+    </>
+  );
+};
+
+interface UsageErrorProps {
   error: string | null;
 }
 
-const CapError = ({ error }: CapErrorProps) => {
+const UsageError = ({ error }: UsageErrorProps) => {
   if (error === null) return null;
   return (
     <p className="qd-usage-error" role="alert">
@@ -36,17 +47,11 @@ const CapError = ({ error }: CapErrorProps) => {
 };
 
 export const UsageWidget = () => {
-  const { tokensLabel, percentLabel, level, capLoaded, capError } =
-    useUsageWidget();
+  const { view, error } = useUsageWidget();
   return (
     <div className="qd-usage">
-      <CapReadout
-        capLoaded={capLoaded}
-        percentLabel={percentLabel}
-        level={level}
-      />
-      <p className="qd-usage-tokens">{tokensLabel}</p>
-      <CapError error={capError} />
+      <UsageReadout view={view} />
+      <UsageError error={error} />
     </div>
   );
 };

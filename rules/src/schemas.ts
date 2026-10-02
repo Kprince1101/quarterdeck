@@ -75,11 +75,6 @@ export const lifecycleSchema = z.strictObject({
     autoMerge: z.boolean(),
     base: z.string().min(1).optional(),
   }),
-  usage: z
-    .strictObject({
-      windowCapTokens: z.number().int().positive(),
-    })
-    .optional(),
 });
 
 export const repoMergeGateSchema = z.strictObject({

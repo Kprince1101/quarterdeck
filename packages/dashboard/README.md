@@ -18,7 +18,7 @@ The server serves that folder at `/`:
 - `GET /assets/<file>` answers the file. The names are content-hashed, so they can be cached for good.
 - Resolve the folder from the package, not the working directory: `dirname(require.resolve('@quarterdeck/dashboard/package.json')) + '/dist'`.
 
-The page talks only to its own origin: intents go to `POST /api/intents/<name>`, the Rules and Usage widgets read rule files from `GET /api/rules`, and the stream opens at `ws(s)://<page host>/ws`. Nothing else is fetched.
+The page talks only to its own origin: intents go to `POST /api/intents/<name>`, the Rules widget reads rule files from `GET /api/rules`, and the stream opens at `ws(s)://<page host>/ws`. Nothing else is fetched.
 
 `npm run dev --workspace packages/dashboard` starts Vite on `http://127.0.0.1:5173` and proxies `/api` and `/ws` to the API on `127.0.0.1:4317`. The proxy keeps the browser's `Origin`, so start the API with `allowedOrigins: ['http://127.0.0.1:5173']` for dev.
 
@@ -104,9 +104,9 @@ The Driver widget shows one round at a time: the active round, or the newest if 
 
 ## The Usage widget
 
-`usage` starts in the tray. It sums `inputTokens + outputTokens` of every turn in the stream that started in the trailing 5 hours, across every agent, and re-sums every 15 seconds so old turns drop out. The stream keeps each agent's latest 20 turns, so an agent with more turns than that in the window is undercounted.
+`usage` starts in the tray. It shows the budget window that holds launches (`lifecycle.budget.window`, see [budget](../server/src/budget/README.md)): it sends `usage.read` for the stream's project and renders the reply, so the widget and the hold always read the same meter. The count is per project, so the readout says _this project_. It never sums the stream's `turns` table, which keeps only each agent's latest 20 turns.
 
-The cap is `usage.windowCapTokens` in `lifecycle.json`, a machine-wide plan limit. The widget reads it from `GET /api/rules` (shipped defaults plus the machine layer; a repo layer is ignored) when it mounts and every minute after. With a cap it shows the percent of the cap, amber from 60% and red from 80%. Without one it shows the token total and _No cap set_. If the rules cannot be read, it says why and keeps the last cap it read. It only displays usage: nothing is held or paused.
+It reads on mount, every 15 seconds so old turns leave the window, and whenever a turn in the stream ends. With a cap it shows the percent of the cap, amber from 60% and red from 80%. Without one it shows the token total and _No cap set_. A failed read shows the error and keeps the last reading. It only displays usage: the hold is the budget module's.
 
 ## The grid
 

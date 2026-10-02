@@ -1,28 +1,42 @@
-import type { TurnRow } from '@quarterdeck/server/stream-schema';
+import type { UsageReadResult } from '@quarterdeck/server/intents';
+import type { ProjectRow, TurnRow } from '@quarterdeck/server/stream-schema';
 
 export const NOW = Date.parse('2026-10-01T12:00:00.000Z');
-export const HOUR = 60 * 60 * 1000;
-
 export const AGENT = '00000000-0000-4000-8000-0000000000b1';
-export const OTHER_AGENT = '00000000-0000-4000-8000-0000000000b2';
+export const PROJECT_ID = '00000000-0000-4000-8000-000000000001';
 
-export const ago = (ms: number): string => new Date(NOW - ms).toISOString();
+export const at = (minute: number): string =>
+  new Date(NOW + minute * 60_000).toISOString();
 
-export const turn = (
-  id: number,
-  startedAt: string,
-  inputTokens: number,
-  outputTokens: number,
-  agentId: string = AGENT,
-): TurnRow => ({
+export const project = (slug: string): ProjectRow => ({
+  id: PROJECT_ID,
+  slug,
+  name: slug,
+  repoPath: null,
+  createdAt: at(-600),
+  updatedAt: at(-600),
+  archivedAt: null,
+});
+
+export const turn = (id: number, endedAt: string | null): TurnRow => ({
   id,
-  agentId,
+  agentId: AGENT,
   ticketId: null,
   seq: id,
   stopReason: 'end_turn',
-  inputTokens,
-  outputTokens,
+  inputTokens: 10,
+  outputTokens: 2,
   transcriptPath: null,
-  startedAt,
-  endedAt: startedAt,
+  startedAt: at(-60),
+  endedAt,
+});
+
+export const usage = (
+  usedTokens: number,
+  capTokens: number | null,
+): UsageReadResult => ({
+  windowHours: 5,
+  usedTokens,
+  capTokens,
+  percent: capTokens && (usedTokens / capTokens) * 100,
 });

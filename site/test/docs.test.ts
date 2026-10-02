@@ -157,21 +157,15 @@ describe('rules page', () => {
     const lifecycle = readJson('rules/lifecycle.json') as {
       budget: Record<string, unknown>;
       mergeGate: Record<string, unknown>;
-      usage?: Record<string, unknown>;
     } & Record<string, unknown>;
-    const nested = new Set(['budget', 'mergeGate', 'usage']);
     const cells = tableCells(html);
     const expected = [
       ...Object.keys(lifecycleSchema.shape)
-        .filter((key) => !nested.has(key))
+        .filter((key) => key !== 'budget' && key !== 'mergeGate')
         .map((key) => [key, lifecycle[key]]),
       ...Object.keys(lifecycleSchema.shape.budget.shape).map((key) => [
         `budget.${key}`,
         lifecycle.budget[key],
-      ]),
-      ...Object.keys(lifecycleSchema.shape.usage.unwrap().shape).map((key) => [
-        `usage.${key}`,
-        lifecycle.usage?.[key],
       ]),
       ...Object.keys(lifecycleSchema.shape.mergeGate.shape).map((key) => [
         key,
