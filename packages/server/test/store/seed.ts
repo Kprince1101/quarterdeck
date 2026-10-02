@@ -68,6 +68,10 @@ export const seedProject = async (
       insert into charter_proposals (project_id, body) select id, 'be kind' from p
       returning id
     ),
+    note_proposal as (
+      insert into notebook_proposals (project_id, op, body)
+      select id, 'add', 'remember' from p returning id
+    ),
     spend as (
       insert into budget (project_id, round_id, limit_tokens)
       select p.id, round.id, 10 from p, round returning id

@@ -54,8 +54,10 @@ export const namingSchema = z.strictObject({
     .refine(hasUniqueValues, 'names must be unique'),
 });
 
+export const settleSecondsSchema = z.number().int().positive();
+
 export const lifecycleSchema = z.strictObject({
-  autoEndSettleSeconds: z.number().int().positive(),
+  autoEndSettleSeconds: settleSecondsSchema,
   stuckAfterMinutes: z.number().int().positive(),
   budget: z.strictObject({
     maxTokensPerTicket: z.number().int().positive(),

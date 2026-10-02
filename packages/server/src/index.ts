@@ -7,6 +7,7 @@ export * from './bus/index.js';
 export * from './driver/index.js';
 export * from './gate/index.js';
 export * from './planner/index.js';
+export * from './round-end/index.js';
 export * from './signin/index.js';
 export * from './store/index.js';
 export * from './tickets/index.js';
