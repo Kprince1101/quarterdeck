@@ -1,4 +1,4 @@
-import { mkdir, readFile, stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import {
@@ -13,6 +13,7 @@ import {
 import {
   createProjectStores,
   dispatchIntent,
+  ensurePrivateDir,
   quarterdeckHome,
   type ProjectStores,
 } from '@quarterdeck/server';
@@ -306,7 +307,7 @@ export const runInit: Command = async (args, io) => {
     repoPath,
   });
   const choice = await decideRuntime(values, io, repoPath);
-  await mkdir(quarterdeckHome(io.homeDir), { recursive: true });
+  await ensurePrivateDir(quarterdeckHome(io.homeDir));
   const data = await createProject(io, input, choice);
   report(io, repoPath, input, choice, data);
   return 0;

@@ -6,6 +6,7 @@ import {
   type Agent,
   type AgentLifecycle,
 } from '../agents/index.js';
+import { redactValue } from '../lib/redact.js';
 import { withSignIn } from '../signin/index.js';
 import { publishEvent, type Store } from '../store/index.js';
 import { collectReply } from './reply.js';
@@ -137,7 +138,7 @@ const finishTurn = (
     await publishEvent(tx, ctx.store.projectId, {
       kind: outcome.kind,
       agentId: agent.id,
-      payload: { seq: conversation.turns, ...outcome.payload },
+      payload: redactValue({ seq: conversation.turns, ...outcome.payload }),
     });
   });
 

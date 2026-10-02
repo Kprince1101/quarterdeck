@@ -17,6 +17,7 @@ import {
 } from '@quarterdeck/rules';
 import { hasErrorCode } from '../lib/errors.js';
 import { pathExists } from '../lib/fs.js';
+import { ensurePrivateDir, writePrivateFile } from '../lib/private-fs.js';
 import type { StagedWork } from './context.js';
 import { badRequest } from './http-error.js';
 
@@ -51,6 +52,20 @@ const writeAtomically = async (path: string, content: string) => {
   const staged = `${path}.${process.pid}.tmp`;
   await writeFile(staged, content);
   await rename(staged, path);
+};
+
+const writePrivatelyAtomically = async (path: string, content: string) => {
+  await ensurePrivateDir(dirname(path));
+  const staged = `${path}.${process.pid}.tmp`;
+  await writePrivateFile(staged, content);
+  await rename(staged, path);
+};
+
+const writeLayer = (target: RuleLayerTarget, path: string, content: string) => {
+  if (target.repoDir === undefined) {
+    return writePrivatelyAtomically(path, content);
+  }
+  return writeAtomically(path, content);
 };
 
 const relabel = (err: RulesError, stagedPath: string, realPath: string) => {
@@ -91,7 +106,7 @@ export const stageRuleWrite = async (
   const path = ruleLayerPath(target);
   return {
     result: { path },
-    afterCommit: () => writeAtomically(path, content),
+    afterCommit: () => writeLayer(target, path, content),
   };
 };
 

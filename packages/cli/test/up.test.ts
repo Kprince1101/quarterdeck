@@ -1,4 +1,5 @@
 import { once } from 'node:events';
+import { chmod, mkdir, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { quarterdeckHome, readApiToken } from '@quarterdeck/server';
@@ -62,6 +63,35 @@ describe('quarterdeck up', { timeout: TIMEOUT }, () => {
     await expect(fetch(`${url}/`)).rejects.toThrow();
     await expect(readApiToken(quarterdeckHome(box.home))).rejects.toThrow();
   });
+
+  const homeMode = async (): Promise<number> =>
+    (await stat(quarterdeckHome(box.home))).mode & 0o777;
+
+  const upAndStop = async (): Promise<void> => {
+    const io = testIo(box.home);
+    const exit = main(['up', '--port', '0'], io);
+    await running(io.lines);
+    io.stop();
+    expect(await exit).toBe(0);
+  };
+
+  it.skipIf(process.platform === 'win32')(
+    'creates a fresh ~/.quarterdeck as 0700',
+    async () => {
+      await upAndStop();
+      expect(await homeMode()).toBe(0o700);
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'tightens a pre-existing loose ~/.quarterdeck to 0700',
+    async () => {
+      await mkdir(quarterdeckHome(box.home));
+      await chmod(quarterdeckHome(box.home), 0o755);
+      await upAndStop();
+      expect(await homeMode()).toBe(0o700);
+    },
+  );
 
   it('says so when the port is taken', async () => {
     const taken = createServer();

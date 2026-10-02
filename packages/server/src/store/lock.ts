@@ -1,5 +1,6 @@
 import { open, readFile, rm } from 'node:fs/promises';
 import { hasErrorCode as hasCode } from '../lib/errors.js';
+import { PRIVATE_FILE_MODE } from '../lib/private-fs.js';
 
 export interface DataDirLock {
   release: () => Promise<void>;
@@ -17,7 +18,7 @@ const isAlive = (pid: number): boolean => {
 };
 
 const writeLock = async (path: string): Promise<void> => {
-  const handle = await open(path, 'wx');
+  const handle = await open(path, 'wx', PRIVATE_FILE_MODE);
   try {
     await handle.writeFile(String(process.pid));
   } finally {

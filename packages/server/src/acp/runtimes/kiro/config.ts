@@ -1,7 +1,8 @@
-import { access, mkdir, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { McpServer } from '@agentclientprotocol/sdk';
+import { writePrivateFile } from '../../../lib/private-fs.js';
 import { quarterdeckHome } from '../../../store/paths.js';
 
 export const KIRO_AGENT_PREFIX = 'quarterdeck-';
@@ -141,7 +142,7 @@ export const writeKiroAgentConfig = async (
 ): Promise<string> => {
   await mkdir(agentsDir, { recursive: true });
   const path = kiroAgentConfigPath(agentsDir, config.name);
-  await writeFile(path, `${JSON.stringify(config, null, 2)}\n`);
+  await writePrivateFile(path, `${JSON.stringify(config, null, 2)}\n`);
   return path;
 };
 

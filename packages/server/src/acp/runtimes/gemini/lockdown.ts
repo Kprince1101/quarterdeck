@@ -1,6 +1,7 @@
-import { mkdir, readdir, stat, writeFile } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 import { platform } from 'node:os';
 import { join } from 'node:path';
+import { ensurePrivateDir, writePrivateFile } from '../../../lib/private-fs.js';
 import { quarterdeckHome } from '../../../store/paths.js';
 
 export const GEMINI_SYSTEM_SETTINGS_ENV = 'GEMINI_CLI_SYSTEM_SETTINGS_PATH';
@@ -111,12 +112,12 @@ export const assertNoAdminPolicy = async (
 };
 
 export const writeGeminiLockdown = async (paths: GeminiPaths) => {
-  await mkdir(paths.dir, { recursive: true });
-  await writeFile(
+  await ensurePrivateDir(paths.dir);
+  await writePrivateFile(
     paths.systemSettings,
     `${JSON.stringify(GEMINI_SYSTEM_SETTINGS, null, 2)}\n`,
   );
-  await writeFile(paths.adminPolicy, GEMINI_ADMIN_POLICY);
+  await writePrivateFile(paths.adminPolicy, GEMINI_ADMIN_POLICY);
 };
 
 export const geminiLockdownEnv = (

@@ -1,6 +1,7 @@
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathExists } from '../lib/fs.js';
+import { ensurePrivateDir, writePrivateFile } from '../lib/private-fs.js';
 import { quarterdeckHome, type Queryable } from '../store/index.js';
 
 export type PauseScope = 'global' | 'project' | 'agent';
@@ -24,9 +25,9 @@ export const setGlobalPause = async (
     return;
   }
   if (await pathExists(path)) return;
-  await mkdir(home, { recursive: true });
+  await ensurePrivateDir(home);
   const pausedAt = new Date().toISOString();
-  await writeFile(path, `${JSON.stringify({ pausedAt })}\n`);
+  await writePrivateFile(path, `${JSON.stringify({ pausedAt })}\n`);
 };
 
 export const isProjectArchived = async (
