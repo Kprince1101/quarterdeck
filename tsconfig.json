@@ -12,6 +12,7 @@
     "packages/server/test",
     "packages/dashboard/src",
     "packages/dashboard/test/primitives",
-    "packages/dashboard/test/widgets/planner"
+    "packages/dashboard/test/widgets/planner",
+    "packages/dashboard/test/widgets/cards"
   ]
 }
