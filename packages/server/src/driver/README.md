@@ -80,6 +80,62 @@ A prompt that throws still gets `output.md` and `updates.jsonl` with what arrive
 
 While a prompt runs the agent is `working`; afterwards it is `idle` again. Only an `idle` or `working` agent is moved, so a pause or kill set meanwhile stands. A pause does not cancel a running prompt; it holds the next one.
 
+## Replay
+
+```ts
+import {
+  KIRO_ADAPTER,
+  projectTurnsDir,
+  replayDriverChain,
+} from '@quarterdeck/server';
+
+const through = 7;
+const replay = await replayDriverChain({
+  runtime: 'kiro',
+  connect: ({ cwd, onPermissionRequest }) =>
+    KIRO_ADAPTER.connect(
+      { cwd, project: 'commander', agentName: `replay-${through}` },
+      { clientName: 'quarterdeck', clientVersion, onPermissionRequest },
+    ),
+  turnsDir: projectTurnsDir('commander'),
+  agentId: driver.id,
+  through,
+  onTurn: (turn) => console.log(turn.seq, turn.result),
+});
+```
+
+Kiro, the default runtime, needs a `project` and an `agentName`. Give it a throwaway name such as `replay-<seq>` so it doesn't collide with a live agent's. While the replay runs, Kiro's adapter writes that agent's config to `~/.kiro/agents/quarterdeck-<project>-replay-<seq>.json` and starts the process in `~/.quarterdeck/kiro/`. It removes the config when replay closes the client. That file is the runtime's launch config, not Quarterdeck state; with no MCP servers passed, it names none.
+
+`replayDriverChain` sends a Driver's saved prompts again, in order, in one new ACP session: each turn's `input.md`, re-prompts included, exactly as it was sent.
+
+The replay mirrors one round's session: the one turn `n` was part of. Each `driver.round_started` opens a new session whose first prompt is the birth input (`isBirthInput`), so the chain runs from the latest birth at or before `n` through `n`, never across a round boundary. `readTurnChain` reads the inputs from `n` back to that birth before anything connects. A missing `input.md` rejects with `TurnInputMissingError` (its `seq` and `path`), and a chain with no birth input at or before `n` (not a Driver's) with `NoBirthTurnError`.
+
+### Replay writes nothing
+
+No `turns` row, event, card, agent change or turn file. Replay owns everything the agent could write through:
+
+- **Its client.** `connect` is called once with the `cwd` and the permission handler to build the client with, and replay closes the client when it is done, failed or not. Pass the handler through unchanged; a `connect` that swaps it breaks this guarantee.
+- **Its permissions.** The handler is `REPLAY_PERMISSIONS`: every request gets a reject option (`reject_once`, else `reject_always`), or `cancelled` when none is offered. It never allows and never raises a card, so a replayed turn can't run a shell command, edit a file or page the human.
+- **Its directory.** Without `cwd` the agent is launched and the session opened in a fresh temporary directory, removed afterwards, so read-only tools can't see the live repo or work done since the original turn. A caller that passes `cwd` gets that directory, which replay leaves in place.
+- **Its servers.** The session gets no MCP servers, so the bus tools (`ask`, `report`, `status`, `verdict`, `read`) are not there.
+- **Its sign-in.** If opening the session or a prompt fails with auth required, replay raises no sign-in card. It rejects with `ReplaySignInError`, whose message and `command` give the sign-in command for `runtime` (`signInCommand(runtime, client.agent.authMethods)`). Sign in, then replay again.
+
+The Driver therefore replies without its tools; a turn that leaned on them can read differently from the original.
+
+Each `ReplayTurn` holds the `seq`, the `input` sent, the `savedOutput` from `output.md` (null if there is none), the replayed `output`, its `stopReason` and `result`, the reply parsed as a Driver turn result (`ParsedTurnResult`). Every prompt is sent whatever the one before it returned; a prompt that throws rejects the replay.
+
+### The dashboard's command
+
+`replayCommand({ project, agentId, through })` is the command the dashboard shows beside a Driver turn to replay its round up to that turn:
+
+```sh
+npx quarterdeck replay commander 7d0f3a4e-2b1c-4c5d-9e8f-0a1b2c3d4e5f 7
+```
+
+`packages/cli` has no `replay` subcommand yet (ticket QD11d). Until then, the line shows the command's agreed shape, but it doesn't run.
+
+It refuses a project that is not a slug, an agent id that is not a uuid and an `n` that is not a positive integer, so the line is always safe to paste. `agentId` is checked the same way by `readTurnChain`, since it names a folder under `turnsDir`.
+
 ## Events
 
 | `kind`                 | Payload                                   |
