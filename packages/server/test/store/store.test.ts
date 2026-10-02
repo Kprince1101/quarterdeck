@@ -29,7 +29,11 @@ describe('openStore on disk', () => {
       const first = await openStore({ project: 'deck', home });
       expect(first.dataDir).toBe(join(home, 'deck', 'pg'));
       expect(existsSync(join(first.dataDir, 'PG_VERSION'))).toBe(true);
-      expect(first.migrated).toEqual(['0001_init', '0002_agent_names']);
+      expect(first.migrated).toEqual([
+        '0001_init',
+        '0002_agent_names',
+        '0003_intents',
+      ]);
       await first.db.query(
         'insert into notebook (project_id, body) values ($1, $2)',
         [first.projectId, 'remember this'],

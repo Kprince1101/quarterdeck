@@ -25,6 +25,7 @@ export const STORE_TABLES = [
   'charter_proposals',
   'budget',
   'layouts',
+  'intents',
 ] as const;
 
 export type StoreTable = (typeof STORE_TABLES)[number];

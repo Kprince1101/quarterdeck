@@ -10,6 +10,11 @@
       "@quarterdeck/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./intents": {
+      "@quarterdeck/source": "./src/intents/index.ts",
+      "types": "./dist/intents/index.d.ts",
+      "default": "./dist/intents/index.js"
     }
   },
   "files": [
