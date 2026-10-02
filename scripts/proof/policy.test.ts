@@ -65,12 +65,68 @@ describe('permissionAnswer', () => {
     ).toBe('allow');
   });
 
+  it('allows a push of a feature branch', () => {
+    for (const command of [
+      'git push -u origin docs/fix-typo',
+      'git push -q -u origin docs/fix-typo 2>&1 | tail -2',
+      'git -C /tmp/qdp-1/wt push origin HEAD:docs/fix-typo',
+      'cd /tmp/qdp-1/wt && git commit -qam "docs: fix push" && git push origin fix',
+    ])
+      expect(
+        permissionAnswer(`heron asks to run ${command}: ${command}.`, ROOTS),
+      ).toBe('allow');
+  });
+
+  it('denies a push to the default branch, a forced or deleting refspec, or a bulk push', () => {
+    for (const command of [
+      'git push origin main',
+      'git push origin master',
+      'git push origin HEAD:main',
+      'git push origin feature:refs/heads/main',
+      'git push origin HEAD',
+      'git push origin +HEAD:feature',
+      'git push origin :feature',
+      'git push',
+      'git push origin',
+      'git push --mirror origin',
+      'git push --all origin',
+      'git push --delete origin feature',
+      'git push -d origin feature',
+      'git push --tags origin',
+      'git push --follow-tags origin feature',
+      'git push --receive-pack=x origin feature',
+      'git push --exec=x origin feature',
+      'git push -uf origin feature',
+      'git push --force-with-lease origin feature',
+      'git -C /tmp/qdp-1/wt push origin main',
+      'cd /tmp/qdp-1/wt && git push origin feature && git push origin main',
+    ])
+      expect(
+        permissionAnswer(`heron asks to run ${command}: ${command}.`, ROOTS),
+      ).toBe('deny');
+  });
+
+  it('denies merging however the command is spaced', () => {
+    for (const command of [
+      'gh  pr  merge 72 --squash',
+      'gh --repo o/r pr merge 72',
+      'gh\tpr merge 72',
+      'gh api -X PUT repos/o/r/pulls/72/merge',
+    ])
+      expect(permissionAnswer(`ferret asks to run ${command}.`, ROOTS)).toBe(
+        'deny',
+      );
+  });
+
   it('denies merging, force-pushing and deleting whatever the paths', () => {
     for (const command of [
       'gh pr merge 3 --squash',
       'git push --force origin x',
       'git push -f origin x',
       'rm -rf /tmp/qdp-1/wt',
+      'rm -fr /tmp/qdp-1/wt',
+      'rm -Rf /tmp/qdp-1/wt',
+      'rm -r /tmp/qdp-1/wt',
       'rm -R /tmp/qdp-1/wt',
       'rm --recursive /tmp/qdp-1/wt',
       'rm -f -r /tmp/qdp-1/wt',

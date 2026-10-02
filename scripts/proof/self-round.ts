@@ -9,6 +9,7 @@ import {
 import { userInfo } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
+  SETTLED_REASON,
   originRepository,
   redactSecrets,
   redactValue,
@@ -59,6 +60,11 @@ const PLANNER_MESSAGE = [
 const ROUND_GOAL = 'Ship the one approved documentation ticket.';
 const RUNNING =
   /Quarterdeck is running at (http:\/\/127\.0\.0\.1:\d+)\/#token=([\w-]+)/;
+
+if (process.env['DATABASE_URL'])
+  throw new Error(
+    'Unset DATABASE_URL first: with it set, the proof would write to and wipe that database instead of the temp home.',
+  );
 
 const repo = resolve(process.argv[2] ?? '.');
 const home = await mkdtemp('/tmp/qdp-');
@@ -126,7 +132,6 @@ const writeMachineRules = async (): Promise<void> => {
       executeAllow('git commit *'),
       executeAllow('git switch *'),
       executeAllow('git checkout -b *'),
-      executeAllow('git push *'),
       executeAllow('gh pr create *'),
       executeAllow('gh pr view *'),
       executeAllow('gh pr diff *'),
@@ -351,11 +356,16 @@ const runRound = async (): Promise<void> => {
   if (start.status !== 202) throw new Error('round.start was refused');
   const begun = await waitFor('the round starts', eventOf('round.started'));
   const roundId = (begun['payload'] as Row)['roundId'];
-  await waitFor(
+  const ended = await waitFor(
     'the round ends itself',
     eventOf('round.ended', (e) => (e['payload'] as Row)['roundId'] === roundId),
     ROUND_TIMEOUT_MS,
   );
+  const reason = (ended['payload'] as Row)['reason'];
+  if (reason !== SETTLED_REASON)
+    throw new Error(`the round ended with reason ${String(reason)}`);
+  const merged = await eventOf('ticket.merged')();
+  if (merged === undefined) throw new Error('the round ended with no merge');
 };
 
 const acceptNotebookAdd = async (): Promise<void> => {
@@ -387,10 +397,16 @@ const showAndWipe = async (): Promise<void> => {
   log(`data widget: ${JSON.stringify((data['summary'] as Row)['tables'])}`);
   const projectDir = join(machine, PROJECT);
   log(`before wipe: ${projectDir} exists = ${await exists(projectDir)}`);
-  await intent('wipe.project', { confirm: PROJECT });
+  const wipe = await intent('wipe.project', { confirm: PROJECT });
+  const wiped = (wipe.body['result'] as { wiped?: unknown } | undefined)?.wiped;
+  if (wipe.status !== 200 || !Array.isArray(wiped) || !wiped.includes(PROJECT))
+    throw new Error(`wipe.project did not wipe ${PROJECT}: ${wipe.status}`);
   const after = await intent('data.summary', {});
+  const left = await exists(projectDir);
   log(`after wipe: data.summary answers ${after.status}`);
-  log(`after wipe: ${projectDir} exists = ${await exists(projectDir)}`);
+  log(`after wipe: ${projectDir} exists = ${left}`);
+  if (after.status !== 404 || left)
+    throw new Error(`the wipe left ${PROJECT} behind`);
 };
 
 const proof = async (): Promise<void> => {

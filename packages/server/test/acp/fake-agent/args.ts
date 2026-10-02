@@ -12,6 +12,7 @@ export const FAKE_AGENT_FLAGS: Record<FakeAgentFlag, string> = {
   ignoreSigterm: '--ignore-sigterm',
   crew: '--crew',
   crashDriver: '--crash-driver',
+  builderAsks: '--builder-asks',
 };
 
 const FLAG_ENTRIES = Object.entries(FAKE_AGENT_FLAGS) as [

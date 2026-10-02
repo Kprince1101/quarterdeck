@@ -9,7 +9,9 @@ import {
   type Quarterdeck,
   type QuarterdeckOptions,
 } from '../../src/quarterdeck/index.js';
+import type { Store } from '../../src/store/index.js';
 import {
+  FAKE_BUILDER_PUSH,
   FAKE_PR_HEAD,
   FAKE_PR_URL,
   FAKE_PROPOSAL_TITLE,
@@ -228,6 +230,48 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
         [store.projectId],
       ),
     ).toBe(0);
+  });
+
+  const reportAfterAsking = async (): Promise<Store> => {
+    const runtime = crewRuntime({ [PROJECT]: { builderAsks: true } });
+    const qd = await start({
+      adapters: runtime.adapters,
+      github: fakeGitHub(),
+    });
+    await openProject(qd, PROJECT);
+    const store = await startRound(qd, PROJECT);
+    const ticketId = await proposeTicket(store, 'Add a greeting');
+    await sendIntent(qd, 'ticket.approve', { project: PROJECT, ticketId });
+    return store;
+  };
+
+  const permissionCards = (store: Store): Promise<number | undefined> =>
+    valueOf<number>(
+      store,
+      `select count(*)::int as value from cards
+       where project_id = $1 and kind = 'agent.permission'`,
+      [store.projectId],
+    );
+
+  it('reads a builder’s permissions from the home it was started with', async () => {
+    await writeMachineRule(homeDir, 'permissions.json', {
+      rules: [
+        { kind: 'execute', pattern: FAKE_BUILDER_PUSH, decision: 'allow' },
+      ],
+    });
+    const store = await reportAfterAsking();
+    await vi.waitFor(async () => {
+      expect(await eventsOf(store, 'ticket.reported')).toHaveLength(1);
+    }, WAIT);
+    expect(await permissionCards(store)).toBe(0);
+  });
+
+  it('cards a builder’s push when the home allows nothing', async () => {
+    const store = await reportAfterAsking();
+    await vi.waitFor(async () => {
+      expect(await permissionCards(store)).toBe(1);
+    }, WAIT);
+    expect(await eventsOf(store, 'ticket.reported')).toEqual([]);
   });
 
   it('passes the Agents widget’s poke and kill to the live Driver', async () => {

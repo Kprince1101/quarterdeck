@@ -86,16 +86,15 @@ const PROPOSAL = {
   body: 'Say hello in the README.',
 };
 
-const allowedToPropose = async (turn: FakeTurn): Promise<boolean> => {
+export const FAKE_BUILDER_PUSH = 'git push origin fake-branch';
+
+const allowed = async (
+  turn: FakeTurn,
+  toolCall: { title: string; kind: 'other' | 'execute'; rawInput: object },
+): Promise<boolean> => {
   const response = await turn.client.request('session/request_permission', {
     sessionId: turn.sessionId,
-    toolCall: {
-      toolCallId: 'fake-propose',
-      title: 'mcp__quarterdeck__propose',
-      kind: 'other',
-      status: 'pending',
-      rawInput: PROPOSAL,
-    },
+    toolCall: { toolCallId: 'fake-asked', status: 'pending', ...toolCall },
     options: FAKE_PERMISSION_OPTIONS,
   });
   if (response.outcome.outcome === 'cancelled') return false;
@@ -103,9 +102,25 @@ const allowedToPropose = async (turn: FakeTurn): Promise<boolean> => {
 };
 
 const propose = async (turn: FakeTurn): Promise<StopReason> => {
-  if (!(await allowedToPropose(turn)))
-    return say(turn, 'Quarterdeck refused my propose call.');
+  const asked = await allowed(turn, {
+    title: 'mcp__quarterdeck__propose',
+    kind: 'other',
+    rawInput: PROPOSAL,
+  });
+  if (!asked) return say(turn, 'Quarterdeck refused my propose call.');
   return say(turn, await callBus(turn, 'propose', PROPOSAL));
+};
+
+const pushAllowed = (
+  turn: FakeTurn,
+  options: FakeAgentOptions,
+): Promise<boolean> => {
+  if (!options.builderAsks) return Promise.resolve(true);
+  return allowed(turn, {
+    title: FAKE_BUILDER_PUSH,
+    kind: 'execute',
+    rawInput: { command: FAKE_BUILDER_PUSH },
+  });
 };
 
 const firstId = (pattern: RegExp, text: string): string =>
@@ -139,7 +154,9 @@ const HANDLERS: Record<
         })),
       }),
     ),
-  builder: async (turn) => {
+  builder: async (turn, options) => {
+    if (!(await pushAllowed(turn, options)))
+      return say(turn, 'Quarterdeck refused my push.');
     const reply = await callBus(turn, 'report', {
       ticket: firstId(ASSIGNMENT, turn.text),
       pr: FAKE_PR_URL,

@@ -20,14 +20,31 @@ npm run build
 node scripts/proof/self-round.ts .
 ```
 
-It needs a signed-in claude and gh (`quarterdeck doctor`). The round's pull request merges into the real default branch.
+It needs a signed-in claude and gh (`quarterdeck doctor`). The round's pull request merges into the real default branch. It refuses to start while `DATABASE_URL` is set, since the store would then live in that database instead of the temp home. It fails, rather than reporting success, if:
+
+- the round ends for any reason but `settled`;
+- nothing merged;
+- the wipe does not name the project;
+- `data.summary` still answers, or the project folder is still there.
+
+**Rerunning the script means auto-approving arbitrary commands inside the repository and the temp home.** The agents run `npm`, `npx`, `node`, `git` and anything else they choose there, and the script's policy (below) allows any of it that is not on its short deny list. Run it only on a machine and an account you are willing to let a coding agent use that way, and watch it.
 
 Before `init`, the script writes two machine-layer rules into the temp home:
 
 - `rules.local.lifecycle.json`: `mergeGate.autoMerge: true` (the gate merges on its own once the reviewer approves and checks pass) and `autoEndSettleSeconds: 60`.
-- `rules.local.permissions.json`: `rules/examples/hardened.permissions.json`, plus `edit` and a few `git`/`gh` commands allowed. `* --force*` stays at ask and `gh pr merge*` is denied, so only the gate merges.
+- `rules.local.permissions.json`: `rules/examples/hardened.permissions.json`, plus `edit`, `git add`, `git commit`, `git switch`, `git checkout -b`, `gh pr create`, `gh pr view` and `gh pr diff` allowed, `* --force*` at ask, and `gh pr merge*` denied. `git push` is not allowed by the rules, so every push becomes a card.
 
-Anything the rules leave at `ask` becomes an `agent.permission` card. The script answers those cards the way the operator would: it denies merging, force-pushing, recursive deletes, `sudo`, `curl`/`wget` and `reset --hard`, and any absolute path outside the repository or the temp home. It also denies anything it cannot resolve from the card's text: a `..` segment, `~`, a `$` variable or substitution, or a backtick. It allows everything else, and logs every answer. The run below used the first version of this policy, which had only the absolute-path check. Under the stricter one, the builder's commit, push and `gh pr create` card would have been denied, because its PR body quoted code in backticks. Any other kind of card waits for a person. None came up.
+Anything the rules leave at `ask` becomes an `agent.permission` card. The script answers those cards from the card's text, the way the operator would. It denies:
+
+- `gh pr merge` however it is spaced or flagged, and `gh api` calls to a pull request's `merge` endpoint;
+- any `git push` that has no refspec, whose refspec names `main`, `master` or `HEAD` (bare, as `<src>:<dst>`, or as `refs/heads/…`), or that starts with `+` or `:`;
+- any `git push` that uses `--force*`, `-f`, `-d`, `--mirror`, `--all`, `--delete`, `--tags`, `--follow-tags`, `--receive-pack`, `--exec` or `--prune`;
+- recursive `rm` in any flag form (`-r`, `-R`, `-rf`, `-fr`, `--recursive`, or `-r` after other flags), plus `sudo`, `curl`/`wget` and `reset --hard`;
+- any absolute path outside the repository or the temp home, and anything it cannot resolve from the text: a `..` segment, `~`, a `$` variable or substitution, or a backtick.
+
+It allows everything else, and logs every answer. Any other kind of card waits for a person. None came up.
+
+The run below used the first version of this setup. The permission rules allowed `git push *`, and the card policy had only the absolute-path check and the first deny list. The builder's one push was part of a `cd … && …` chain, so it reached a card anyway, and it pushed a feature branch. Under the current policy, that card would have been denied because its PR body quoted code in backticks.
 
 The event excerpts below went through the server's secret redaction (`redactValue`). In the recorded run, the script's own log lines (the `[+Ns]` lines) did not, and were checked by hand for secrets; the script now passes them through `redactSecrets` as well. The proof script then replaced the temp home with `$QD_HOME`, the repository path with `$REPO`, the remote's owner with `<owner>`, email addresses with `<email>` and the API token with `[redacted]`.
 

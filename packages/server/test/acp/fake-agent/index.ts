@@ -6,6 +6,7 @@ export {
 } from './args.ts';
 export * from './constants.ts';
 export {
+  FAKE_BUILDER_PUSH,
   FAKE_PR_HEAD,
   FAKE_PR_URL,
   FAKE_PROPOSAL_TITLE,
