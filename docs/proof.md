@@ -49,6 +49,8 @@ Before `init`, the script writes two machine-layer rules into the temp home:
 
 Anything the rules leave at `ask` becomes an `agent.permission` card. The script answers those cards from the card's text, the way the operator would.
 
+Before any other check, the script denies a card whose text contains a quote, a backslash, `$`, a backtick, or a glob character (`*`, `?`, `[`, `]`, `{`, `}`). A spelling the text check cannot read literally (`'r''m'`, `r\m`, `"gh"`) never reaches the rules below. This also means a builder has to write commit messages and PR bodies without quotes, for example with `git commit -F <file>` and `gh pr create --body-file <file>`.
+
 A `git push` is allowed only if all of these hold:
 
 - its text has no quotes, backslashes, `$` or backticks;

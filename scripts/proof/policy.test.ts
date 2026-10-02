@@ -85,9 +85,26 @@ describe('permissionAnswer', () => {
       'git push -q --set-upstream origin docs/fix-typo',
       'git -C /tmp/qdp-1/wt push origin fix:docs/fix-typo',
       'git push origin refs/heads/fix',
-      'cd /tmp/qdp-1/wt && git commit -qam "docs: fix typo" && git push origin fix',
+      'cd /tmp/qdp-1/wt && git commit -qam docs-fix && git push origin fix',
     ])
       expect(asked(command)).toBe('allow');
+  });
+
+  it('denies any command with quoting, escaping, expansion or glob characters', () => {
+    for (const command of [
+      "'r''m' -rf /tmp/qdp-1/wt",
+      'r\\m -rf /tmp/qdp-1/wt',
+      '"gh" pr merge 72',
+      'g\\h pr merge 72',
+      'git commit -qam "docs: fix typo"',
+      'echo $HOME',
+      'echo `id`',
+      'ls /tmp/qdp-1/wt/*.md',
+      'ls /tmp/qdp-1/wt/README.m?',
+      'ls /tmp/qdp-1/wt/[a-z]*',
+      'echo {a,b}',
+    ])
+      expect(asked(command)).toBe('deny');
   });
 
   it('allows switching to, creating and listing other branches', () => {
