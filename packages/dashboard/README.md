@@ -18,7 +18,7 @@ The server serves that folder at `/`:
 - `GET /assets/<file>` answers the file. The names are content-hashed, so they can be cached for good.
 - Resolve the folder from the package, not the working directory: `dirname(require.resolve('@quarterdeck/dashboard/package.json')) + '/dist'`.
 
-The page talks only to its own origin: intents go to `POST /api/intents/<name>`, the Rules widget reads rule files from `GET /api/rules`, and the stream opens at `ws(s)://<page host>/ws`. Nothing else is fetched.
+The page talks only to its own origin: intents go to `POST /api/intents/<name>`, the Rules and Usage widgets read rule files from `GET /api/rules`, and the stream opens at `ws(s)://<page host>/ws`. Nothing else is fetched.
 
 `npm run dev --workspace packages/dashboard` starts Vite on `http://127.0.0.1:5173` and proxies `/api` and `/ws` to the API on `127.0.0.1:4317`. The proxy keeps the browser's `Origin`, so start the API with `allowedOrigins: ['http://127.0.0.1:5173']` for dev.
 
@@ -38,6 +38,7 @@ src/widgets/data/            Data: table counts, rows a page at a time, paths on
 src/widgets/driver/          the Driver widget: round picker, turns, turn detail, replay command
 src/widgets/planner/         Planner: the conversation, proposals to approve, edit or reject
 src/widgets/rules/           Rules: edit rules.local.* with validation, a diff and provenance
+src/widgets/usage/           Usage: tokens in the trailing 5h and the share of usage.windowCapTokens
 src/grid/                    the grid: layout JSON, actions, drag, resize, keyboard, tray
 src/theme/tokens.css         dark theme tokens (--qd-*) and the page base
 src/theme/tokens.ts          the same token names, typed: token('accent') is 'var(--qd-accent)'
@@ -100,6 +101,12 @@ The grid draws the `Panel` (title, move, duplicate, hide, resize), so the compon
 ## The Driver widget
 
 The Driver widget shows one round at a time: the active round, or the newest if none is active, until another is picked in the Round picker. It lists the turns of the round's Driver agents from the stream, newest first, so it holds each Driver's latest 20. Selecting a turn sends `turn.read` (see [the API](../server/src/api/README.md)) for its input, output and result, and reads it again when the turn ends. The replay command is `replayCommand({ round, through: n, project })` from `@quarterdeck/server/replay-command`, with `round` and `n` from `turn.read`, and a Copy button puts it on the clipboard. The turn field next to it starts at the selected turn's `n` and takes any whole number from 1 to it, so a round longer than the 20 listed turns can still be replayed through an earlier turn. A turn whose session a later Driver session replaced gets no command, since `quarterdeck replay` runs only the latest.
+
+## The Usage widget
+
+`usage` starts in the tray. It sums `inputTokens + outputTokens` of every turn in the stream that started in the trailing 5 hours, across every agent, and re-sums every 15 seconds so old turns drop out. The stream keeps each agent's latest 20 turns, so an agent with more turns than that in the window is undercounted.
+
+The cap is `usage.windowCapTokens` in `lifecycle.json`, a machine-wide plan limit. The widget reads it from `GET /api/rules` (shipped defaults plus the machine layer; a repo layer is ignored) when it mounts and every minute after. With a cap it shows the percent of the cap, amber from 60% and red from 80%. Without one it shows the token total and _No cap set_. If the rules cannot be read, it says why and keeps the last cap it read. It only displays usage: nothing is held or paused.
 
 ## The grid
 
