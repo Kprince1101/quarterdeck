@@ -93,6 +93,7 @@ describe('bus host', () => {
       const { tools } = await client.listTools();
       expect(tools.map((tool) => tool.name).toSorted()).toEqual([
         'ask',
+        'propose',
         'read',
         'report',
         'status',

@@ -6,6 +6,7 @@ export * from './agents/index.js';
 export * from './budget/index.js';
 export * from './bus/index.js';
 export * from './driver/index.js';
+export * from './planner/index.js';
 export * from './store/index.js';
 export * from './api/index.js';
 export * from './stream/index.js';

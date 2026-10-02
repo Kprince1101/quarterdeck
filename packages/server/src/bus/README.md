@@ -1,6 +1,6 @@
 # bus
 
-The bus MCP server handed to every agent session: the tools agents use to reach Quarterdeck: `status`, `read`, `ask`, `report` and `verdict`.
+The bus MCP server handed to every agent session: the tools agents use to reach Quarterdeck: `status`, `read`, `ask`, `report`, `verdict` and the Planner's `propose`.
 
 ## How a session reaches it
 
@@ -93,6 +93,15 @@ The reviewer's verdict on a ticket in review. Only an agent with role `reviewer`
 - `changes` moves it to `bounced`, back to its builder, who fixes it and reports again.
 
 Either way a `ticket.verdict` event is recorded for the reviewer and the ticket with `{ decision, notes, pr, head }`, `pr` and `head` being what the ticket held when the verdict was given. The latest `ticket.verdict` for a ticket is its verdict, and a later `ticket.reported` withdraws it, so the merge gate should merge only when the newest of the two is an approval and the PR head still matches its `head`.
+
+### `propose(title, body?, dependsOn?)`
+
+Planner only: the caller must be a `planner` agent that is not ended, killed or retired, or the call is an error. Stores one ticket with status `proposed` and records a `ticket.proposed` event with the caller as `agentId`, the ticket as `ticketId` and `{ title }`. Returns `proposed <ticketId>`.
+
+- `title`: 1 to 200 characters after trimming. `body`: up to 100 000 characters, default empty.
+- `dependsOn`: up to 50 distinct ticket ids of this project. Proposed tickets may be named; `rejected` and `cancelled` ones may not, since they will never be built.
+
+The human then approves (`ticket.approve`, which opens it), edits (`ticket.update`) or rejects (`ticket.reject`) the proposal; see [api](../api/README.md#intents).
 
 ## Adding a tool
 
