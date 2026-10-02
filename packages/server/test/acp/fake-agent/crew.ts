@@ -1,7 +1,7 @@
 import type { McpServer, StopReason } from '@agentclientprotocol/sdk';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { FAKE_CRASH_EXIT_CODE } from './constants.ts';
+import { FAKE_CRASH_EXIT_CODE, FAKE_PERMISSION_OPTIONS } from './constants.ts';
 import type { FakeAgentOptions, FakeTurn } from './types.ts';
 
 export const FAKE_PR_URL = 'https://github.com/example/example/pull/7';
@@ -15,9 +15,15 @@ const REVIEW = new RegExp(`Review ticket (${UUID}):`);
 const APPROVED_LINE = /^- (Ticket approved|Approved tickets waiting)/;
 const TICKET_IDS = new RegExp(`\\(ticket (${UUID})\\)`, 'g');
 
-type CrewRole = 'birth' | 'wrap-up' | 'builder' | 'reviewer' | 'driver';
+const PLANNER_OPENING = /^# Planner brief\n/;
+
+export const FAKE_PROPOSAL_TITLE = 'Fix the README greeting';
+
+type CrewRole =
+  'birth' | 'wrap-up' | 'builder' | 'reviewer' | 'driver' | 'planner';
 
 const roleOf = (text: string): CrewRole => {
+  if (PLANNER_OPENING.test(text)) return 'planner';
   if (DRIVER_BIRTH.test(text)) return 'birth';
   if (WRAP_UP.test(text)) return 'wrap-up';
   if (REVIEW.test(text)) return 'reviewer';
@@ -75,6 +81,33 @@ const callBus = async (
   }
 };
 
+const PROPOSAL = {
+  title: FAKE_PROPOSAL_TITLE,
+  body: 'Say hello in the README.',
+};
+
+const allowedToPropose = async (turn: FakeTurn): Promise<boolean> => {
+  const response = await turn.client.request('session/request_permission', {
+    sessionId: turn.sessionId,
+    toolCall: {
+      toolCallId: 'fake-propose',
+      title: 'mcp__quarterdeck__propose',
+      kind: 'other',
+      status: 'pending',
+      rawInput: PROPOSAL,
+    },
+    options: FAKE_PERMISSION_OPTIONS,
+  });
+  if (response.outcome.outcome === 'cancelled') return false;
+  return response.outcome.optionId === 'allow-once';
+};
+
+const propose = async (turn: FakeTurn): Promise<StopReason> => {
+  if (!(await allowedToPropose(turn)))
+    return say(turn, 'Quarterdeck refused my propose call.');
+  return say(turn, await callBus(turn, 'propose', PROPOSAL));
+};
+
 const firstId = (pattern: RegExp, text: string): string =>
   pattern.exec(text)?.[1] ?? '';
 
@@ -92,6 +125,7 @@ const HANDLERS: Record<
     if (options.crashDriver) turn.exitProcess(FAKE_CRASH_EXIT_CODE);
     return say(turn, fenced({ summary: 'Born.', actions: [] }));
   },
+  planner: propose,
   'wrap-up': (turn) =>
     say(turn, fenced({ summary: 'Round done.', notebook: [], charter: null })),
   driver: (turn) =>

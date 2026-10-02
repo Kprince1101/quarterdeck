@@ -16,6 +16,7 @@ export interface CrewSessionSite {
   bus: PlannerBus;
   adapters: PlannerAdapters;
   repoPath: () => Promise<string>;
+  homeDir: string;
   passEnv: () => Promise<readonly string[]>;
   onExit?: (agent: Agent) => void;
 }
@@ -93,6 +94,7 @@ export const createCrewSessions = (site: CrewSessionSite): CrewSessionHost => {
         store: site.store,
         slug: site.slug,
         repoPath,
+        homeDir: site.homeDir,
         bus: site.bus,
         adapters: site.adapters,
         passEnv: await site.passEnv(),

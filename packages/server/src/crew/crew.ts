@@ -19,6 +19,7 @@ import {
   type CrewService,
 } from './failures.js';
 import { crewLifecycle } from './lifecycle.js';
+import { cardPermissions } from './permission-card.js';
 import { createReviewerDesk, type ReviewerDesk } from './reviewer.js';
 import { startCrewRounds, type CrewRounds } from './rounds.js';
 import { crewRules, type CrewRules } from './rules.js';
@@ -124,6 +125,8 @@ const startServices = async (parts: CrewParts) => {
       openStores: options.openStores,
       adapters: options.adapters ?? PLANNER_ADAPTERS,
       homeDir: options.homeDir,
+      permissionCards: (agent, signal) =>
+        cardPermissions({ store, agent, signal }),
       onError: report('planner'),
     }),
   );
@@ -177,6 +180,7 @@ export const startCrew = async (options: CrewOptions): Promise<Crew> => {
     bus: options.bus,
     adapters: options.adapters ?? PLANNER_ADAPTERS,
     repoPath: rules.repoPath,
+    homeDir: options.homeDir,
     passEnv: async () => (await rules.load('env')).pass,
     onExit: (agent) => {
       exited(agent);
