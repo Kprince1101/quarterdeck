@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   afterAll,
   afterEach,
@@ -30,6 +32,7 @@ import {
 } from './fixtures.js';
 
 const SETTLE_SECONDS = 120;
+const HOME = join(tmpdir(), 'qd-auto-end-home-never-created');
 
 describe('auto-end', { timeout: TIMEOUT }, () => {
   let store: Store;
@@ -66,6 +69,7 @@ describe('auto-end', { timeout: TIMEOUT }, () => {
       roundId,
       settleSeconds: SETTLE_SECONDS,
       schedule: scheduler.schedule,
+      home: HOME,
       end: async (id) => {
         ended.push(id);
       },
@@ -87,23 +91,61 @@ describe('auto-end', { timeout: TIMEOUT }, () => {
     await insertAgent(store, { name: 'pike', status: 'idle' });
     await insertCard(store);
 
-    const state = await readSettleState(store.db, store.projectId, roundId);
+    const state = await readSettleState(
+      store.db,
+      store.projectId,
+      roundId,
+      HOME,
+    );
 
     expect(state).toEqual({
       roundEnded: false,
       openTickets: 1,
       runningAgents: 1,
       openCards: 1,
+      paused: false,
     });
     expect(isSettled(state)).toBe(false);
-    expect(
-      isSettled({
-        roundEnded: false,
-        openTickets: 0,
-        runningAgents: 0,
-        openCards: 0,
-      }),
-    ).toBe(true);
+    const quiet = {
+      roundEnded: false,
+      openTickets: 0,
+      runningAgents: 0,
+      openCards: 0,
+      paused: false,
+    };
+    expect(isSettled(quiet)).toBe(true);
+    expect(isSettled({ ...quiet, paused: true })).toBe(false);
+  });
+
+  it('never settles while the project is paused, and settles on unpause', async () => {
+    const setPaused = async (paused: boolean) => {
+      await store.db.query(
+        `update projects set paused_at = case when $2::boolean then now() end
+         where id = $1`,
+        [store.projectId, paused],
+      );
+      await store.publish({ kind: 'pause.set' });
+    };
+    await setPaused(true);
+    try {
+      await start();
+      expect(scheduler.live()).toEqual([]);
+      expect(
+        (await readSettleState(store.db, store.projectId, roundId, HOME))
+          .paused,
+      ).toBe(true);
+
+      await setPaused(false);
+
+      await vi.waitFor(() => {
+        expect(scheduler.live()).toHaveLength(1);
+      });
+    } finally {
+      await store.db.query(
+        'update projects set paused_at = null where id = $1',
+        [store.projectId],
+      );
+    }
   });
 
   it('arms the settle timer at once when the round is already settled, and ends it when it fires', async () => {

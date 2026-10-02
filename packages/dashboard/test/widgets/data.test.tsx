@@ -73,6 +73,7 @@ const SNAPSHOT: StreamMessage = {
         createdAt: STAMP,
         updatedAt: STAMP,
         archivedAt: null,
+        pausedAt: null,
       },
     ],
   },

@@ -83,6 +83,7 @@ describe('a settled round, end to end', { timeout: TIMEOUT }, () => {
       charter: await charter(),
       turnsDir,
       budget: NO_CAP,
+      pause: { hold: (_subject, run) => run() },
     });
     await round.birth;
     return round;

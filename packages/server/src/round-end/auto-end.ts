@@ -22,6 +22,7 @@ export interface AutoEndOptions {
   settleSeconds: number;
   end: (roundId: string) => Promise<void>;
   schedule?: Scheduler;
+  home?: string;
   onError?: (err: unknown) => void;
 }
 
@@ -29,6 +30,8 @@ export interface AutoEnd {
   check: () => Promise<void>;
   close: () => Promise<void>;
 }
+
+const PAUSE_KINDS: readonly string[] = ['pause.set', 'pause.all'];
 
 const SETTLE_TABLES: ReadonlySet<WatchedTable> = new Set([
   'rounds',
@@ -75,7 +78,9 @@ export const startAutoEnd = async (
   };
 
   const settled = async (): Promise<boolean> =>
-    isSettled(await readSettleState(store.db, store.projectId, roundId));
+    isSettled(
+      await readSettleState(store.db, store.projectId, roundId, options.home),
+    );
 
   const fire = async (): Promise<boolean> => {
     disarm = undefined;
@@ -119,6 +124,7 @@ export const startAutoEnd = async (
 
   const onEvent = (event: StoreEvent): void => {
     if (event.kind === GATE_EVENTS.merged) rearm().catch(report);
+    if (PAUSE_KINDS.includes(event.kind)) check().catch(report);
   };
   const onChange = (change: TableChange): void => {
     if (SETTLE_TABLES.has(change.table)) check().catch(report);

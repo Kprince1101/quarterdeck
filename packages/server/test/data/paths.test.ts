@@ -33,6 +33,7 @@ describe('dataPaths', () => {
     expect(machine.map(({ path }) => path)).toEqual(
       expect.arrayContaining([
         join(DATA, 'plugins'),
+        join(DATA, 'pause.json'),
         join(DATA, 'sock'),
         join(DATA, 'kiro'),
         join(DATA, 'gemini'),

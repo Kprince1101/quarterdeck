@@ -16,6 +16,7 @@ export const project = (slug: string): ProjectRow => ({
   createdAt: at(-600),
   updatedAt: at(-600),
   archivedAt: null,
+  pausedAt: null,
 });
 
 export const turn = (id: number, endedAt: string | null): TurnRow => ({

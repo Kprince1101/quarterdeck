@@ -2,7 +2,8 @@ import {
   ACTIVE_TICKET_STATUSES,
   APPROVED_TICKET_STATUS,
 } from '../driver/index.js';
-import type { Queryable } from '../store/index.js';
+import { pausedScopes } from '../pause/index.js';
+import { quarterdeckHome, type Queryable } from '../store/index.js';
 
 export const OPEN_TICKET_STATUSES: readonly string[] = [
   APPROVED_TICKET_STATUS,
@@ -20,14 +21,18 @@ export interface SettleState {
   openTickets: number;
   runningAgents: number;
   openCards: number;
+  paused: boolean;
 }
+
+type CountedState = Omit<SettleState, 'paused'>;
 
 export const readSettleState = async (
   db: Queryable,
   projectId: string,
   roundId: string,
+  home: string = quarterdeckHome(),
 ): Promise<SettleState> => {
-  const { rows } = await db.query<SettleState>(
+  const { rows } = await db.query<CountedState>(
     `select
        coalesce((select status = 'ended' from rounds
                  where id = $2 and project_id = $1), true) as "roundEnded",
@@ -41,11 +46,13 @@ export const readSettleState = async (
   );
   const [state] = rows;
   if (!state) throw new Error(`no settle state for round ${roundId}`);
-  return state;
+  const paused = (await pausedScopes(db, projectId, home)).length > 0;
+  return { ...state, paused };
 };
 
 export const isSettled = (state: SettleState): boolean =>
   !state.roundEnded &&
+  !state.paused &&
   state.openTickets === 0 &&
   state.runningAgents === 0 &&
   state.openCards === 0;
