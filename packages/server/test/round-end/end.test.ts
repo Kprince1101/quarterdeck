@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { McpServerStdio } from '@agentclientprotocol/sdk';
-import { loadRule } from '@quarterdeck/rules';
+import { loadRule, type BudgetWindow } from '@quarterdeck/rules';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createAgentLifecycle } from '../../src/agents/index.js';
 import { openDriverRound } from '../../src/driver/index.js';
@@ -38,6 +38,7 @@ const BUS: McpServerStdio = {
   env: [],
 };
 const BIRTH = { summary: 'Nothing to assign.', actions: [] };
+const NO_CAP: BudgetWindow = { hours: 5, capTokens: null, holdAtFraction: 0.8 };
 
 describe('a settled round, end to end', { timeout: TIMEOUT }, () => {
   let t: TestApi;
@@ -81,6 +82,7 @@ describe('a settled round, end to end', { timeout: TIMEOUT }, () => {
       cwd: repoDir,
       charter: await charter(),
       turnsDir,
+      budget: NO_CAP,
     });
     await round.birth;
     return round;
@@ -119,6 +121,7 @@ describe('a settled round, end to end', { timeout: TIMEOUT }, () => {
         sessions: lenientSessions(),
         worktrees: fakeWorktrees(),
         openStores: () => [store],
+        budget: () => Promise.resolve(NO_CAP),
       }),
       settleSeconds: 120,
       schedule: scheduler.schedule,

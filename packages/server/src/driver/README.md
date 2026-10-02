@@ -17,6 +17,7 @@ const round = await openDriverRound({
   cwd: repoPath,
   charter: await loadRule('charter', { repoDir: repoPath }),
   turnsDir: projectTurnsDir('commander'),
+  budget: (await loadRule('lifecycle', { repoDir: repoPath })).budget.window,
 });
 const birth = await round.birth;
 const next = await round.turn('heron reported QD12: <report>');
@@ -24,10 +25,11 @@ const next = await round.turn('heron reported QD12: <report>');
 
 `openDriverRound` checks the round (`RoundNotFoundError` for one outside the project, `RoundEndedError` once it has ended) and the agent (`NotADriverError` unless it is a `driver` that is not `ended`, `killed` or `retired`). It then:
 
-1. Launches the bus for the Driver (`bus.launch(agentId)`) and opens one ACP session with `client.newSession({ cwd, mcpServers: [bus] })`. Every turn of the round goes to that session; nothing else opens one. If the runtime needs sign-in, a sign-in card waits for the person and the session opens after, with a fresh bus launch (see [../signin/README.md](../signin/README.md)).
-2. Reads the active notebook: every `notebook` row of the project that is not retired (`retired_at` null), pinned entries first, then oldest first.
-3. Stores the session on the agent (`session_id`, `round_id`; a `starting` agent becomes `idle`) and records `driver.round_started` with `{ roundId, round, sessionId, notebook }`, where `notebook` lists the entry ids the Driver was born with.
-4. Queues the birth turn and returns. `round.birth` settles with its outcome; await it.
+1. Checks the budget (`assertLaunchBudget` with the Driver's id; see [budget](../budget/README.md)). A held launch throws `BudgetHeldError` before the bus or a session starts.
+2. Launches the bus for the Driver (`bus.launch(agentId)`) and opens one ACP session with `client.newSession({ cwd, mcpServers: [bus] })`. Every turn of the round goes to that session; nothing else opens one. If the runtime needs sign-in, a sign-in card waits for the person and the session opens after, with a fresh bus launch (see [../signin/README.md](../signin/README.md)).
+3. Reads the active notebook: every `notebook` row of the project that is not retired (`retired_at` null), pinned entries first, then oldest first.
+4. Stores the session on the agent (`session_id`, `round_id`; a `starting` agent becomes `idle`) and records `driver.round_started` with `{ roundId, round, sessionId, notebook }`, where `notebook` lists the entry ids the Driver was born with.
+5. Queues the birth turn and returns. `round.birth` settles with its outcome; await it.
 
 The birth input (`buildBirthInput`) is the Driver's name and round number, the charter, the round's goal, the notebook entries and the turn result format. The next round gets a new session and a new birth input, carrying the notebook as it is then.
 
@@ -175,6 +177,7 @@ const ctx: BuilderContext = {
     sessions,
     worktrees: gitWorktrees,
     openStores,
+    budget: () => Promise.resolve(budget),
   }),
   sessions, // a BuilderSessionHost: the lifecycle's SessionHost plus client(sessionId)
   worktrees: gitWorktrees,
@@ -183,6 +186,7 @@ const ctx: BuilderContext = {
   base: 'origin/main',
   worktreesDir: projectWorktreesDir('commander'),
   turnsDir: projectTurnsDir('commander'),
+  budget, // (await loadRule('lifecycle', { repoDir: repoPath })).budget.window
 };
 const assignment = await assignTicket(ctx, { ticketId });
 await continueBuilder(ctx, { builderId, prompt: 'CI failed on lint; fix it.' });
@@ -194,6 +198,8 @@ await reassignTickets(ctx, retiredBuilderId);
 ### Assigning
 
 `assignTicket(ctx, { ticketId, builderId? })` takes an approved ticket: status `open`, no assignee, and every ticket in `depends_on` `done`. Anything else throws `TicketNotAssignableError` before a builder is touched.
+
+Every assign and continue is a launch, so it checks `ctx.budget` first (see [budget](../budget/README.md)). A held launch throws `BudgetHeldError` and touches no builder, worktree, session or ticket. A new builder is checked by the lifecycle's birth with the ticket's id. A moved builder is checked with its id and the ticket's, and a continue with the builder's id.
 
 Every builder works a ticket in its own worktree, `builderWorktreePath(worktreesDir, name, ticketId)`: `<worktreesDir>/<name>-<first 8 of the ticket id>`, detached at `base`. The builder branches there itself.
 

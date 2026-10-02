@@ -1,4 +1,5 @@
 import type { Agent } from '../agents/index.js';
+import { assertLaunchBudget } from '../budget/index.js';
 import type { PublishInput } from '../store/index.js';
 import {
   builderTarget,
@@ -14,7 +15,7 @@ export { BUILDER_CONTINUED_EVENT };
 
 export type ContinueContext = Pick<
   BuilderContext,
-  'store' | 'sessions' | 'turnsDir'
+  'store' | 'sessions' | 'turnsDir' | 'budget'
 >;
 
 export interface ContinueRequest {
@@ -34,6 +35,9 @@ export const continueBuilder = async (
 ): Promise<Continuation> => {
   const prompt = request.prompt.trim();
   if (prompt === '') throw new Error('A continue prompt cannot be empty');
+  await assertLaunchBudget(ctx.store, ctx.budget, {
+    agentId: request.builderId,
+  });
   const { builder, ticketId } = await claimBuilder(
     ctx.store,
     request.builderId,

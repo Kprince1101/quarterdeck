@@ -160,7 +160,12 @@ const sets = (layer: unknown, path: Path): boolean => {
 
 export const isTightenOnly = (name: RuleName, path: Path): boolean => {
   if (name === 'permissions') return true;
-  return REPO_TIGHTEN_ONLY_KEYS[name]?.includes(path[0] ?? '') ?? false;
+  const key = path.join('.');
+  return (
+    REPO_TIGHTEN_ONLY_KEYS[name]?.some(
+      (prefix) => key === prefix || key.startsWith(`${prefix}.`),
+    ) ?? false
+  );
 };
 
 const sameValue = (a: unknown, b: unknown): boolean =>
