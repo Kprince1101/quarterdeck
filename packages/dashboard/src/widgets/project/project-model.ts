@@ -24,6 +24,7 @@ const ACTIVE_TICKET_STATUSES: ReadonlySet<TicketRow['status']> = new Set([
   'in_progress',
   'in_review',
   'bounced',
+  'blocked',
 ]);
 
 export interface ProjectOption {
