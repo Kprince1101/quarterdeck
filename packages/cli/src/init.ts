@@ -16,11 +16,8 @@ import {
   quarterdeckHome,
   type ProjectStores,
 } from '@quarterdeck/server';
-import {
-  INTENTS,
-  type IntentName,
-  type IntentPayload,
-} from '@quarterdeck/server/intents';
+import type { IntentPayload } from '@quarterdeck/server/intents';
+import { parseIntent } from './intent.js';
 import { CliError, type CliIo, type Command } from './io.js';
 import { choose, confirm } from './prompt.js';
 
@@ -64,18 +61,6 @@ export const slugFromFolder = (folder: string): string =>
     .replaceAll(/[^a-z0-9_-]+/g, '-')
     .replace(/^[^a-z0-9]+/, '')
     .slice(0, MAX_SLUG_LENGTH);
-
-const parseIntent = <N extends IntentName>(
-  name: N,
-  value: unknown,
-): IntentPayload<N> => {
-  const parsed = INTENTS[name].safeParse(value);
-  if (parsed.success) return parsed.data as IntentPayload<N>;
-  const issues = parsed.error.issues.map(
-    (issue) => `${issue.path.join('.')}: ${issue.message}`,
-  );
-  throw new CliError(`Invalid ${name}: ${issues.join('; ')}`);
-};
 
 const isDirectory = async (path: string): Promise<boolean> =>
   stat(path).then(

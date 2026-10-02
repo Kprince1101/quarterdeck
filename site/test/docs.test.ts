@@ -83,7 +83,9 @@ describe('docs', () => {
       ...pageText(readDoc(page)).matchAll(/npx quarterdeck (\w+)/g),
     ]).map((match) => match[1]);
 
-    expect(new Set(commands)).toEqual(new Set(['doctor', 'init', 'up']));
+    expect(new Set(commands)).toEqual(
+      new Set(['doctor', 'init', 'up', 'wipe']),
+    );
     commands.forEach((command) => expect(USAGE).toContain(`\n  ${command} `));
   });
 });

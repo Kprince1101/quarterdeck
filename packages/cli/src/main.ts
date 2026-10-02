@@ -5,6 +5,7 @@ import { runInit } from './init.js';
 import { CliError, type CliIo, type Command } from './io.js';
 import { runReplay } from './replay.js';
 import { runUp } from './up.js';
+import { runWipe } from './wipe.js';
 
 export const CANCELLED_EXIT_CODE = 130;
 
@@ -15,6 +16,7 @@ Commands:
   init [repo-path]    Create a project from a git repository
   doctor              Check kiro-cli, claude, gemini and gh are installed and signed in
   replay <round> [n]  Replay a round's Driver turns 1 to n, writing nothing
+  wipe <project>      Stop a project's agents and delete its data (--all for every project)
 
 Run quarterdeck <command> --help for a command's options.`;
 
@@ -23,6 +25,7 @@ const COMMANDS: Record<string, Command> = {
   init: runInit,
   doctor: runDoctor,
   replay: runReplay,
+  wipe: runWipe,
 };
 
 const HELP = new Set(['help', '--help', '-h']);

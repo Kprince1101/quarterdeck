@@ -202,6 +202,13 @@ git -C path/to/your/repo worktree prune</code></pre>
         (<code>~/.quarterdeck/rules.local.*</code>); delete those yourself if
         you want them gone.
       </p>
+      <p>
+        With Quarterdeck stopped, the same wipe runs from a terminal and asks
+        for the same name. In a script, pass that name as
+        <code>--confirm</code>.
+      </p>
+      <pre><code>npx quarterdeck wipe my-app
+npx quarterdeck wipe --all --confirm "wipe everything"</code></pre>
     </main>
 
     <footer>

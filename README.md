@@ -50,6 +50,8 @@ The dashboard's Data widget lists every table with its rows and every path above
 - **Wipe project** (type the project's name to confirm) stops the project first: it is archived so nothing new starts, every live agent is killed, every process group it started is swept, and each worktree is removed from your repository. Then its rows, `pg/`, `pg.lock`, `turns/` and `worktrees/` are deleted. If a process cannot be confirmed stopped, the wipe is refused and the project kept, so the next start can sweep it.
 - **Wipe everything** (type `wipe everything`) does the same for every project.
 
+`quarterdeck wipe <project>` and `quarterdeck wipe --all` do the same from a terminal, with the same typed confirmation (or `--confirm <phrase>` in a script). See `packages/cli/README.md`.
+
 Wiping keeps the rules files and everything else under `~/.quarterdeck/` that is not a project: `plugins/`, `pause.json`, `sock/` and the runtime folders. To remove everything by hand, stop Quarterdeck and delete `~/.quarterdeck/`, then run `git worktree prune` in each repository. See `site/public/docs/data.html`.
 
 ## Rules
@@ -87,3 +89,9 @@ Each workspace package is written in TypeScript under `src/` and built to `dist/
 - `files` lists `dist` and any data files the package reads at runtime.
 
 `npm run build` builds every package, and `npm test` builds before it runs vitest. Each package gets a test that spawns `process.execPath` to import it by name, which proves the built entry loads in plain Node.
+
+The `clean-machine` CI job goes one step further. It packs `rules`, `server`, `dashboard` and `cli` with `npm pack`, installs the tarballs into an empty folder in a `node:22-bookworm-slim` container that has nothing else on it, and runs `scripts/clean-machine/check.ts` there: `npx quarterdeck up` must serve the built dashboard and the intents API, the installed ACP client must drive the in-repo fake agent through a turn, `up` must stop with exit 0 on `SIGTERM`, and `npx quarterdeck wipe` must delete the project. To run the check against a local build, from `packages/cli` (so `npx` finds the bin):
+
+```sh
+node --experimental-strip-types ../../scripts/clean-machine/check.ts ../server/test/acp/fake-agent/main.ts
+```

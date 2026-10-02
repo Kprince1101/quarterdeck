@@ -99,3 +99,23 @@ Sign in: …
 A missing `input.md` in the chain is an error naming the file, before anything starts. Ctrl+C closes the agent and exits 130.
 
 `test/replay.test.ts` runs the command against a stub runtime adapter; `packages/server/test/driver/replay.test.ts` covers `replayDriverChain` against real ACP agents.
+
+## wipe
+
+```sh
+quarterdeck wipe <project> [--confirm <project>]
+quarterdeck wipe --all [--confirm "wipe everything"]
+```
+
+Does what the Data widget's Wipe buttons do, through the same `wipe.project` and `wipe.all` intents: the project is archived, every live agent is killed, every process group it started is swept and each worktree is removed, then its rows and its folder under `~/.quarterdeck/` are deleted (see [where your data lives](../../README.md#where-your-data-lives)). Rules files and the rest of `~/.quarterdeck/` stay.
+
+The confirmation is the dashboard's: type the project slug, or `wipe everything` for `--all`. Anything else wipes nothing and exits 1. Without a terminal there is no prompt, so pass the phrase you would have typed as `--confirm`; without it, wipe refuses. A project that does not exist is an error before anything is asked, and `--all` with no projects says there is nothing to wipe and exits 0.
+
+```
+$ quarterdeck wipe deck
+This stops deck's agents and deletes everything Quarterdeck stores for it in /home/you/.quarterdeck/deck.
+Type deck to wipe: deck
+Wiped deck. Stopped wren (deck) first.
+```
+
+Wipe opens the project's store itself, so it refuses (exit 1) while `quarterdeck up` or anything else has the project open: stop the server first, or use the dashboard. If a process cannot be confirmed stopped, the server's 409 is printed and the project is kept, archived, so the next start sweeps it.
