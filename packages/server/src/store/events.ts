@@ -1,4 +1,4 @@
-import type { PGlite } from '@electric-sql/pglite';
+import type { PGlite, Transaction } from '@electric-sql/pglite';
 
 export const EVENTS_CHANNEL = 'quarterdeck_events';
 
@@ -41,7 +41,7 @@ const reportError = (err: unknown): void => {
 };
 
 export const publishEvent = async (
-  db: PGlite,
+  db: PGlite | Transaction,
   projectId: string,
   input: PublishInput,
 ): Promise<StoreEvent> => {

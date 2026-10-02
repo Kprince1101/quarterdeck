@@ -68,3 +68,4 @@ Every insert into `events`, through `publish` or plain SQL, fires `pg_notify` on
 | `charter_proposals` | Proposed charter changes: `body`, `rationale`, `status` open / accepted / rejected.                                             |
 | `budget`            | Token and USD limits and spend, one row per (project, round, agent) scope; null round/agent is wider.                           |
 | `layouts`           | This project's saved dashboard layouts as JSON `spec`, unique by `name`. Shipped presets live in code or `rules/`, not here.    |
+| `intents`           | Every intent the HTTP API accepted: `kind`, `input`, `status` pending / applied / rejected, `result`, `settled_at`.             |

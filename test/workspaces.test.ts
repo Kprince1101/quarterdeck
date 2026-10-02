@@ -10,7 +10,10 @@ interface PackageManifest {
   author?: string;
   engines?: { node?: string };
   workspaces?: string[];
+  scripts?: { build?: string };
 }
+
+const CLEAR_DIST = `node -e "require('node:fs').rmSync('dist', { recursive: true, force: true })" && `;
 
 const ROOT = resolve(import.meta.dirname, '..');
 const WORKSPACES = [
@@ -44,6 +47,15 @@ describe('workspace manifests', () => {
     expect(manifest.type).toBe('module');
     expect(manifest.engines?.node).toBe('>=22');
   });
+
+  it.each(['rules', 'packages/server'])(
+    '%s clears dist before it builds, so nothing stale ships',
+    (dir) => {
+      expect(readManifest(dir).scripts?.build?.startsWith(CLEAR_DIST)).toBe(
+        true,
+      );
+    },
+  );
 
   it('cli ships under the quarterdeck name for npx', () => {
     expect(readManifest('packages/cli').name).toBe('quarterdeck');

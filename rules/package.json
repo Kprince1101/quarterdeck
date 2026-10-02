@@ -10,6 +10,11 @@
       "@quarterdeck/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./schemas": {
+      "@quarterdeck/source": "./src/schemas.ts",
+      "types": "./dist/schemas.d.ts",
+      "default": "./dist/schemas.js"
     }
   },
   "files": [
@@ -22,7 +27,7 @@
     "models.json"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json"
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc -p tsconfig.build.json"
   },
   "engines": {
     "node": ">=22"

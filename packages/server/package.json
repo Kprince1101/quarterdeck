@@ -10,13 +10,18 @@
       "@quarterdeck/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./intents": {
+      "@quarterdeck/source": "./src/intents/index.ts",
+      "types": "./dist/intents/index.d.ts",
+      "default": "./dist/intents/index.js"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').cpSync('src/store/migrations', 'dist/store/migrations', { recursive: true })\""
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc -p tsconfig.build.json && node -e \"require('node:fs').cpSync('src/store/migrations', 'dist/store/migrations', { recursive: true })\""
   },
   "engines": {
     "node": ">=22"
