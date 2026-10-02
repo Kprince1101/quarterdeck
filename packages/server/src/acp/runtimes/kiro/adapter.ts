@@ -1,5 +1,5 @@
-import { mkdir } from 'node:fs/promises';
 import type { McpServer } from '@agentclientprotocol/sdk';
+import { ensurePrivateDir } from '../../../lib/private-fs.js';
 import type {
   AcpClient,
   AgentCommand,
@@ -114,7 +114,7 @@ export const createKiroAdapter = ({
     const name = kiroAgentName(launch.project, launch.agentName);
     await assertNoWorkspaceShadow(launch.cwd, name);
     const config = buildKiroAgentConfig(name, launch.mcpServers ?? []);
-    await mkdir(processDir, { recursive: true });
+    await ensurePrivateDir(processDir);
     const path = await writeKiroAgentConfig(agentsDir, config);
     const remove = () => removeKiroAgentConfig(path);
     let client: AcpClient;

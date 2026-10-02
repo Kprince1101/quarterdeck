@@ -1,5 +1,5 @@
-import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { ensurePrivateDir } from '../../../lib/private-fs.js';
 import { quarterdeckHome } from '../../../store/paths.js';
 import type {
   AcpClient,
@@ -170,7 +170,7 @@ export const createClaudeAdapter = ({
     options: LaunchOptions,
   ): Promise<AcpClient> => {
     await refuseUnlockedSettings(launch);
-    await mkdir(processDir, { recursive: true });
+    await ensurePrivateDir(processDir);
     const client = await launchAcpClient(agentLaunch(launch), {
       initializeTimeoutMs: CLAUDE_INITIALIZE_TIMEOUT_MS,
       ...options,
