@@ -103,7 +103,24 @@ export interface ClosedEvent {
   type: 'closed';
 }
 
+export interface AgentVersionEvent {
+  type: 'agent_version';
+  command: string;
+  version: string | null;
+  error?: string;
+}
+
+export interface SpawnRetryEvent {
+  type: 'spawn_retry';
+  attempt: number;
+  retries: number;
+  delayMs: number;
+  message: string;
+}
+
 export type AcpClientEvent =
+  | AgentVersionEvent
+  | SpawnRetryEvent
   | SpawnedEvent
   | SessionUpdateEvent
   | PermissionEvent
