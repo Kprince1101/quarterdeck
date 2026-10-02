@@ -1,21 +1,38 @@
-# Quarterdeck for Kiro
+# Quarterdeck
 
-Run a crew of Kiro and Claude Code agents from one local board.
+Run a crew of coding agents from one local board.
 
-One process on your machine. It starts the agents through their own CLIs (Kiro, Claude Code, Gemini CLI, anything that speaks the Agent Client Protocol), hands them tickets, reviews their pull requests, merges the ones that pass, and stops for you only when a decision is irreversible or product-shaped. You watch and steer from a dashboard at localhost that you can rearrange however you like.
+One process on your machine. It starts agents through their own CLIs (Kiro, Claude Code, Gemini CLI, anything that speaks the Agent Client Protocol), hands them tickets, reviews their pull requests, merges the ones that pass, and stops for you only when a decision is irreversible or product-shaped. You watch and steer from a dashboard at localhost that you can rearrange however you like.
 
 No API keys. No account. No telemetry. Everything Quarterdeck stores lives in one folder you can open, read and delete.
 
-Status: being built, by itself. See SPEC.md.
+Status: built, by itself, from SPEC.md. What remains is the proof that it can run a round on its own repository end to end (QD14). Until that lands, treat it as alpha.
 
 ## Getting started
 
+Node 22 and one agent CLI signed in. Then:
+
 ```sh
-npx quarterdeck init path/to/your/repo   # creates ~/.quarterdeck and a project
+npx quarterdeck doctor                    # checks kiro-cli, claude, gemini and gh, and says exactly what to run for each miss
+npx quarterdeck init path/to/your/repo   # creates ~/.quarterdeck and a project, asks which runtime
 npx quarterdeck up                        # starts the server and prints the dashboard URL
 ```
 
-`init` writes nothing into your repository unless you agree to a `.quarterdeck/` folder for that project's settings. See `packages/cli/README.md`.
+`init` writes nothing into your repository unless you agree to a `.quarterdeck/` folder for that project's settings. `quarterdeck wipe <project>` removes a project and everything it stored; `quarterdeck replay <round> [n]` re-runs a round's Driver turns in a fresh session that writes nothing, which is how you ask "why did it decide that?". See `packages/cli/README.md` for every command and flag.
+
+## How a round works
+
+- The **Planner** is a conversation per project. You describe what you want; it proposes tickets; you approve, edit or reject them on the board.
+- **Start Round** births a **Driver**: one session that reads the approved tickets, births builders with names from the naming theme, assigns work, continues idle builders, and asks you questions as **cards** when something is irreversible or product-shaped. A declined or unanswered card is a result the Driver sees, not a crash.
+- Each **builder** works in its own git worktree, opens a pull request, and reports it. The **reviewer** reads the PR against `rules/reviewer.md` and returns a verdict. Approve plus auto-merge means a squash merge through `gh`; otherwise it waits for you.
+- A round **ends itself** when nothing is open and the settle time has passed, then runs a wrap-up that proposes **notebook** entries and charter edits. Approved entries are what the next Driver is born knowing.
+- Guardrails: pause an agent, a project or everything; kill, retire or reset an agent; a stuck detector for builders that stop making commits; a token budget that holds launches at 80% of a cap; and a merge gate you can turn off.
+
+Agents are driven over the Agent Client Protocol. Permission requests are answered from `rules/permissions.json` (allow, deny, or card you), never by trusting every tool. A runtime that needs sign-in becomes a card with the exact command, never something Quarterdeck automates around.
+
+## The dashboard
+
+A grid of widgets you drag, resize, hide and duplicate; layouts are saved by the server and three presets ship (default, ops, minimal). Widgets: **Board** (liveness, pause all, project picker), **Project** (round controls, toggles, reviewer), **Agents** (state, held work, actions), **Events** (filtered feed), **Cards** (open questions with reply), **Planner**, **Driver** (turns, replay command), **Notebook** (proposals with diffs), **Usage** (tokens in the 5-hour window), **Rules** (edit any rules file in place, with validation), **Data** (every table, every path, wipe). See `site/public/docs/widgets.html`.
 
 ## Where your data lives
 
@@ -70,7 +87,9 @@ The merge gate (`mergeGate` in `lifecycle.json`) is tighten-only in the repo lay
 
 So is the auto-end settle time (`autoEndSettleSeconds`, how long a round must stay settled before it ends itself): the repo layer can lengthen it but never shorten it. See `packages/server/src/round-end/README.md`.
 
-## Workspace packages
+## Contributing
+
+### Workspace packages
 
 Each workspace package is written in TypeScript under `src/` and built to `dist/` by its own `build` script (`tsc -p tsconfig.build.json`). Node refuses to strip types from files under `node_modules`, so a published package has to ship JavaScript. Its `exports` map lists three conditions, in this order:
 
