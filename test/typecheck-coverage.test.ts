@@ -18,7 +18,11 @@ const ROOT = resolve(import.meta.dirname, '..');
 const TSC = resolve(ROOT, 'node_modules/typescript/bin/tsc');
 const TYPE_ERROR = "export const probe: number = 'not a number';\n";
 const TS_SPECIFIER = "export { probe } from './probe-target.ts';\n";
-const PROJECTS = ['tsconfig.json', 'packages/server/test/tsconfig.json'];
+const PROJECTS = [
+  'tsconfig.json',
+  'packages/server/test/tsconfig.json',
+  'packages/dashboard/tsconfig.json',
+];
 const PROBES = [
   'packages/server/test/probe.test.ts',
   'packages/server/test/acp/probe.ts',
