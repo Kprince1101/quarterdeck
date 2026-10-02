@@ -13,7 +13,8 @@ export const ROOT = resolve(SITE, '..');
 export const vercel = JSON.parse(
   readFileSync(resolve(SITE, 'vercel.json'), 'utf8'),
 ) as VercelConfig;
-export const PUBLIC = resolve(SITE, vercel.outputDirectory ?? '');
+export const PUBLIC = resolve(SITE, 'public');
+export const OUT = resolve(SITE, vercel.outputDirectory ?? '');
 
 export const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 export const TEXT_EXTENSIONS = ['.html', '.css', '.svg'];
@@ -86,8 +87,8 @@ export interface Link {
 }
 
 const linkTarget = (page: string, path: string): string => {
-  if (path === '') return resolve(PUBLIC, page);
-  const target = resolve(PUBLIC, dirname(page), path);
+  if (path === '') return resolve(OUT, page);
+  const target = resolve(OUT, dirname(page), path);
   if (path.endsWith('/')) return resolve(target, 'index.html');
   return target;
 };

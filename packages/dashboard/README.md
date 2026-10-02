@@ -26,7 +26,9 @@ The page talks only to its own origin: intents go to `POST /api/intents/<name>`,
 
 ```
 src/main.tsx                 mounts <App /> into #root
-src/app.tsx                  DeckProvider > Shell > DeckLayout
+src/mount.tsx                mountApp(props): the stylesheets and <App {...props} /> in #root
+src/app.tsx                  DeckProvider > Shell > DeckLayout; `mode` labels the header
+src/demo/                    demo mode: a fake server in the page, built by site/
 src/deck/deck.tsx            DeckProvider and useDeck(): one stream per tab, plus the intent client
 src/shell/shell.tsx          Shell (header + workspace), Panel, StreamStatusBadge
 src/widgets/registry.ts      defineWidget, WidgetDefinition, createRegistry
@@ -92,6 +94,18 @@ That is the whole registration. `src/widgets/widgets.ts` picks up every `*.widge
 The grid draws the `Panel` (title, move, duplicate, hide, resize), so the component renders only its body. `createRegistry` throws at load on a repeated `type`, a type that is not kebab-case, or a `size` under `minSize`; a `*.widget.tsx` without a `defineWidget` default export fails the same way.
 
 `useDeck()` gives every widget the same `StreamState` (see [`src/api`](src/api/README.md)), the same `IntentClient` and the same `RulesReader`, so a dashboard with ten widgets still opens one socket. `DeckProvider` takes `stream` options, an `intents` client and a `rules` reader, which is how tests and the site's demo mode feed it fake data.
+
+## Demo mode
+
+`src/demo/main.tsx` is a second entry: the same `App`, labelled **Demo** in the header, on a fake server that lives in the page. The site builds it (`site/demo/index.html`, `npm run build --workspace site`) to `site/dist/demo/`. It never opens a socket and never sends a request:
+
+- **Stream.** `DeckProvider` gets `stream: { url, WebSocket: demoWebSocket(store) }`. The socket is an `EventTarget` that hands `openStream` the store's snapshot, the events after its cursor, then every change and event, as JSON, exactly as the real stream does.
+- **Intents and rules.** `intents` and `rules` are the real `createIntentClient` and `createRulesReader` with a `fetch` that answers in the page (`demoFetch`): it checks each intent against the same schema, applies it to the store and replies like the API, refusals included. Recorded intents publish their `<intent>` event; reads (`data.*`, `turn.read`, `usage.read`, machine `rules.*`) do not.
+- **Scripted rounds.** Every 2.5 s the director plays one beat of the open round (`demo-script.ts`): the Driver plans and assigns three tickets, two builders work, one asks through a card, the reviewer passes or bounces each pull request, the gate merges, and the Driver proposes a notebook entry. A card waits up to 12 beats for an answer, then expires and the builder takes its recommendation. Four beats after a round ends the next one starts; the rounds come from `DEMO_ROUND_PLANS`, in order, then again. Pausing the project, or everything from the Board, holds the script, and so does archiving it. The script leaves a `blocked` ticket alone; the round's end reopens it.
+- **What a person can do.** Answer or decline cards, start, end and kill rounds, pause the project, an agent or everything (the store sends the `machine` message the Board reads), end, kill, retire or reset an agent (as on the server: a kill blocks the `assigned` and `in_progress` tickets it held, a reset clears the session and puts a running agent back to `idle`, a retired agent is refused with 409), archive the project (every agent retires, with `archive.retired`), talk to the Planner (it replies and proposes a ticket; an approved ticket goes into the next round), decide notebook proposals, edit the machine rules layer, move widgets and reset to a preset, browse the Data widget, poke an agent (`agent.message` is queued, as on the server), and wipe. A wipe touches nothing real: it answers `{ wiped: ['harbor'], stopped }` with the live agents, sends an empty snapshot and seeds the demo again, with event ids continuing so an open stream follows. Adding or editing a project is refused with a reason.
+- **Where it opens.** The project `harbor` with round 1 finished, round 2 under way, a Planner conversation with a proposed ticket, and a machine `lifecycle` layer that sets `budget.window.capTokens`, so Usage shows a share. The demo's budget window opens at the start of the round before the open one.
+
+Nothing is kept: a reload starts the demo over.
 
 ## The Rules widget
 
