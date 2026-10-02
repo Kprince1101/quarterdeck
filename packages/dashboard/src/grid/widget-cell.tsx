@@ -4,6 +4,7 @@ import {
   type WidgetCellProps,
   type WidgetCellView,
 } from './use-widget-cell.js';
+import { WidgetSlot } from './widget-slot.js';
 
 interface CellControlsProps {
   view: WidgetCellView;
@@ -46,7 +47,6 @@ const CellControls = ({ view }: CellControlsProps) => (
 
 export const WidgetCell = ({ cell, controls }: WidgetCellProps) => {
   const view = useWidgetCell({ cell, controls });
-  const { Widget } = cell;
   return (
     <div
       className="qd-grid-cell"
@@ -55,7 +55,11 @@ export const WidgetCell = ({ cell, controls }: WidgetCellProps) => {
       data-widget={cell.item.widget}
     >
       <Panel title={cell.label} actions={<CellControls view={view} />}>
-        <Widget instanceId={cell.id} />
+        <WidgetSlot
+          label={cell.label}
+          panes={cell.panes}
+          stacked={cell.stacked}
+        />
       </Panel>
       <button
         type="button"

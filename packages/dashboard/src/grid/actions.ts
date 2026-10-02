@@ -74,16 +74,29 @@ export const fitSize = (layout: GridLayout, size: WidgetSize): WidgetSize => ({
   h: clamp(size.h, 1, layout.rows),
 });
 
+export type Slot = Pick<GridItem, 'widget' | 'tabs'>;
+
+const slotOf = ({ widget, tabs }: Slot): Slot => {
+  if (tabs === undefined) return { widget };
+  return { widget, tabs: [...tabs] };
+};
+
 export const placeNew = (
   layout: GridLayout,
-  widget: string,
+  slot: Slot,
   wanted: WidgetSize,
 ): GridLayout | null => {
   const size = fitSize(layout, wanted);
   const spot = findSpot(layout, size);
   if (spot === null) return null;
-  const item = { id: nextItemId(layout, widget), widget, ...spot, ...size };
-  return { ...layout, items: [...layout.items, { ...item, hidden: false }] };
+  const item = {
+    id: nextItemId(layout, slot.widget),
+    ...slotOf(slot),
+    ...spot,
+    ...size,
+    hidden: false,
+  };
+  return { ...layout, items: [...layout.items, item] };
 };
 
 const moveTo = (
@@ -172,7 +185,7 @@ const applyToItem = (
     case 'show':
       return show(layout, item);
     case 'duplicate':
-      return placeNew(layout, item.widget, item);
+      return placeNew(layout, item, item);
     case 'remove':
       return remove(layout, item);
   }
@@ -186,7 +199,7 @@ export const applyGridAction = (
   if (action.type === 'add') {
     const definition = registry.get(action.widget);
     if (definition === undefined) return null;
-    return placeNew(layout, action.widget, definition.size);
+    return placeNew(layout, { widget: action.widget }, definition.size);
   }
   const item = findItem(layout, action.id);
   if (item === undefined) return null;

@@ -178,13 +178,38 @@ describe('intent schemas', () => {
   });
 
   it('validates layout grids', () => {
-    const item = { id: 'a', widget: 'board', x: 0, y: 0, w: 0, h: 1 };
+    const item = {
+      id: 'a',
+      widget: 'board',
+      x: 0,
+      y: 0,
+      w: 1,
+      h: 1,
+      hidden: false,
+    };
+    const saves = (spec: unknown) =>
+      INTENTS['layout.save'].safeParse({ project, name: 'n', spec }).success;
+    expect(saves({ columns: 12, rows: 12, items: [item] })).toBe(true);
+    expect(saves({ columns: 12, rows: 12, items: [{ ...item, w: 0 }] })).toBe(
+      false,
+    );
+    expect(saves({ columns: 12, items: [item] })).toBe(false);
     expect(
-      INTENTS['layout.save'].safeParse({
-        project,
-        name: 'n',
-        spec: { columns: 12, items: [item] },
-      }).success,
+      saves({ columns: 12, rows: 12, items: [{ ...item, config: {} }] }),
     ).toBe(false);
+    expect(
+      saves({ columns: 12, rows: 12, items: [{ ...item, tabs: ['board'] }] }),
+    ).toBe(false);
+  });
+
+  it('resets a layout only to a shipped preset', () => {
+    const resets = (preset: string) =>
+      INTENTS['layout.reset'].safeParse({ project, name: 'n', preset }).success;
+    expect(['default', 'ops', 'minimal'].map(resets)).toEqual([
+      true,
+      true,
+      true,
+    ]);
+    expect(resets('cockpit')).toBe(false);
   });
 });

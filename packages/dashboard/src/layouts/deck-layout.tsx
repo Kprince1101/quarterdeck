@@ -1,0 +1,24 @@
+import type { WidgetRegistry } from '../widgets/registry.js';
+import { WidgetMount } from '../widgets/widget-mount.js';
+import { LayoutBar } from './layout-bar.js';
+import { useDeckLayout } from './use-deck-layout.js';
+
+export interface DeckLayoutProps {
+  registry?: WidgetRegistry | undefined;
+  saveDelayMs?: number | undefined;
+}
+
+export const DeckLayout = ({ registry, saveDelayMs }: DeckLayoutProps) => {
+  const view = useDeckLayout({ saveDelayMs });
+  return (
+    <div className="qd-layout">
+      <LayoutBar view={view} />
+      <WidgetMount
+        registry={registry}
+        initialLayout={view.initialLayout}
+        syncedLayout={view.syncedLayout}
+        onLayoutChange={view.handleLayoutChange}
+      />
+    </div>
+  );
+};

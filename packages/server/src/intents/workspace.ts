@@ -1,9 +1,9 @@
 import { z } from 'zod';
+import { gridLayoutSchema, presetNameSchema } from '../layouts/index.js';
 import {
   MAX_TEXT_LENGTH,
   absolutePathSchema,
   changesSomething,
-  hasUniqueValues,
   inProject,
   projectSlugSchema,
   ruleNameSchema,
@@ -11,35 +11,6 @@ import {
 } from './fields.js';
 
 export const WIPE_ALL_CONFIRMATION = 'wipe everything';
-
-const MAX_GRID_COLUMNS = 48;
-const MAX_LAYOUT_ITEMS = 200;
-const WIDGET_TYPE = /^[a-z][a-z0-9-]*$/;
-
-const gridCell = z.number().int().min(0);
-const gridSpan = z.number().int().positive();
-
-export const layoutItemSchema = z.strictObject({
-  id: z.string().min(1).max(100),
-  widget: z.string().regex(WIDGET_TYPE),
-  x: gridCell,
-  y: gridCell,
-  w: gridSpan,
-  h: gridSpan,
-  hidden: z.boolean().default(false),
-  config: z.record(z.string(), z.json()).default({}),
-});
-
-export const layoutSpecSchema = z.strictObject({
-  columns: gridSpan.max(MAX_GRID_COLUMNS),
-  items: z
-    .array(layoutItemSchema)
-    .max(MAX_LAYOUT_ITEMS)
-    .refine(
-      (items) => hasUniqueValues(items.map((item) => item.id)),
-      'layout item ids must be unique',
-    ),
-});
 
 const ruleContentSchema = z.string().max(MAX_TEXT_LENGTH);
 
@@ -60,6 +31,7 @@ export const WORKSPACE_INTENTS = {
     (input) => changesSomething(input, PROJECT_FIELDS),
     'project.update needs name or repoPath',
   ),
+  'project.archive': inProject({ archived: z.boolean() }),
   'rules.write': z.discriminatedUnion('scope', [
     z.strictObject({ ...machineRule, content: ruleContentSchema }),
     inProject({ ...projectRule, content: ruleContentSchema }),
@@ -70,7 +42,11 @@ export const WORKSPACE_INTENTS = {
   ]),
   'layout.save': inProject({
     name: titleSchema,
-    spec: layoutSpecSchema,
+    spec: gridLayoutSchema,
+  }),
+  'layout.reset': inProject({
+    name: titleSchema,
+    preset: presetNameSchema,
   }),
   'layout.delete': inProject({ name: titleSchema }),
   'wipe.project': inProject({ confirm: projectSlugSchema }).refine(

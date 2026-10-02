@@ -1,10 +1,13 @@
 import type { WorkspaceIntentName } from '../../intents/index.js';
+import { presetLayout, type GridLayout } from '../../layouts/index.js';
+import type { Queryable } from '../../store/index.js';
 import type { IntentHandlers } from '../context.js';
 import { applyInProject, findRow, unrecorded } from '../record.js';
 import { assertDirectory } from '../repo-path.js';
 import { RULES_HANDLERS } from './rules.js';
 
-type ProjectIntentName = 'project.create' | 'project.update';
+type ProjectIntentName =
+  'project.create' | 'project.update' | 'project.archive';
 
 const PROJECT_HANDLERS: IntentHandlers<ProjectIntentName> = {
   'project.create': async (ctx, input, name) => {
@@ -37,23 +40,55 @@ const PROJECT_HANDLERS: IntentHandlers<ProjectIntentName> = {
       return { projectId };
     });
   },
+  'project.archive': (ctx, input, name) =>
+    applyInProject(ctx, name, input, async (tx, projectId) => {
+      await findRow(
+        tx,
+        `update projects set archived_at =
+           case when $2::boolean then coalesce(archived_at, now()) end
+         where id = $1
+         returning id`,
+        [projectId, input.archived],
+        `project ${input.project} not found`,
+      );
+      return { projectId, archived: input.archived };
+    }),
+};
+
+const saveLayout = async (
+  tx: Queryable,
+  projectId: string,
+  name: string,
+  spec: GridLayout,
+) => {
+  const layout = await findRow<{ id: string }>(
+    tx,
+    `insert into layouts (project_id, name, spec) values ($1, $2, $3::jsonb)
+     on conflict (project_id, name) do update set spec = excluded.spec
+     returning id`,
+    [projectId, name, JSON.stringify(spec)],
+    `layout ${name} was not saved`,
+  );
+  return { layoutId: layout.id, name };
 };
 
 export const WORKSPACE_HANDLERS: IntentHandlers<WorkspaceIntentName> = {
   ...PROJECT_HANDLERS,
   ...RULES_HANDLERS,
   'layout.save': (ctx, input, name) =>
-    applyInProject(ctx, name, input, async (tx, projectId) => {
-      const layout = await findRow<{ id: string }>(
+    applyInProject(ctx, name, input, (tx, projectId) =>
+      saveLayout(tx, projectId, input.name, input.spec),
+    ),
+  'layout.reset': (ctx, input, name) =>
+    applyInProject(ctx, name, input, async (tx, projectId) => ({
+      ...(await saveLayout(
         tx,
-        `insert into layouts (project_id, name, spec) values ($1, $2, $3::jsonb)
-         on conflict (project_id, name) do update set spec = excluded.spec
-         returning id`,
-        [projectId, input.name, JSON.stringify(input.spec)],
-        `layout ${input.name} was not saved`,
-      );
-      return { layoutId: layout.id, name: input.name };
-    }),
+        projectId,
+        input.name,
+        presetLayout(input.preset),
+      )),
+      preset: input.preset,
+    })),
   'layout.delete': (ctx, input, name) =>
     applyInProject(ctx, name, input, async (tx, projectId) => {
       await findRow(

@@ -1,0 +1,35 @@
+export {
+  inBounds,
+  isFree,
+  overlaps,
+  type Board,
+  type Bounds,
+  type Placed,
+  type Point,
+  type Rect,
+  type Size,
+} from './geometry.js';
+export {
+  DEFAULT_PRESET,
+  LAYOUT_PRESETS,
+  PRESET_NAMES,
+  presetLayout,
+  presetNameSchema,
+  type PresetName,
+} from './presets.js';
+export {
+  GRID_COLUMNS,
+  GRID_ROWS,
+  MAX_GRID_SPAN,
+  MAX_ITEM_ID_LENGTH,
+  MAX_LAYOUT_ITEMS,
+  WIDGET_TYPE,
+  gridItemSchema,
+  gridLayoutSchema,
+  layoutKey,
+  parseGridLayout,
+  readGridLayout,
+  widgetTypeSchema,
+  type GridItem,
+  type GridLayout,
+} from './spec.js';

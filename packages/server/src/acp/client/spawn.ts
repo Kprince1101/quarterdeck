@@ -87,7 +87,7 @@ export const spawnAcpClient = async (
   return connectAcpClient({
     stream: ndJsonStream(
       Writable.toWeb(child.stdin),
-      Readable.toWeb(child.stdout),
+      Readable.toWeb(child.stdout) as ReadableStream<Uint8Array>,
     ),
     options,
     events,

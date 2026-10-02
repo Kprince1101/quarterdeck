@@ -1,12 +1,24 @@
 import type { WidgetRegistry } from '../widgets/registry.js';
 import { applyGridAction, findItem, type GridAction } from './actions.js';
 import { itemLabels, titleOf } from './labels.js';
-import type { GridItem, GridLayout } from './layout.js';
+import { layoutKey, type GridItem, type GridLayout } from './layout.js';
+
+export type LayoutOrigin = 'initial' | 'load' | 'edit';
 
 export interface GridState {
   layout: GridLayout;
   announcement: string;
+  origin: LayoutOrigin;
 }
+
+export interface LoadAction {
+  type: 'load';
+  layout: GridLayout;
+}
+
+export type GridStateAction = GridAction | LoadAction;
+
+export const LAYOUT_LOADED = 'Layout loaded.';
 
 type ActionType = GridAction['type'];
 
@@ -72,12 +84,33 @@ export const announce = (
   return DONE[action.type](item, label);
 };
 
+const load = (state: GridState, layout: GridLayout): GridState => {
+  if (layoutKey(layout) === layoutKey(state.layout)) return state;
+  return { layout, announcement: LAYOUT_LOADED, origin: 'load' };
+};
+
+const edit = (
+  state: GridState,
+  action: GridAction,
+  registry: WidgetRegistry,
+): GridState => {
+  const next = applyGridAction(state.layout, action, registry);
+  if (next === state.layout) return state;
+  const announcement = announce(action, state.layout, next, registry);
+  if (next === null && announcement === state.announcement) return state;
+  if (next === null) return { ...state, announcement };
+  return { layout: next, announcement, origin: 'edit' };
+};
+
+export const initialGridState = (layout: GridLayout): GridState => ({
+  layout,
+  announcement: '',
+  origin: 'initial',
+});
+
 export const createGridReducer =
   (registry: WidgetRegistry) =>
-  (state: GridState, action: GridAction): GridState => {
-    const next = applyGridAction(state.layout, action, registry);
-    if (next === state.layout) return state;
-    const announcement = announce(action, state.layout, next, registry);
-    if (next === null && announcement === state.announcement) return state;
-    return { layout: next ?? state.layout, announcement };
+  (state: GridState, action: GridStateAction): GridState => {
+    if (action.type === 'load') return load(state, action.layout);
+    return edit(state, action, registry);
   };

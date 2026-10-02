@@ -1,4 +1,4 @@
-import { NotebookError } from './notebook-error.js';
+import { RequestError } from '../request-error.js';
 import type { EntryView } from './notebook-model.js';
 import { ProjectTag } from './project-tag.js';
 import { useEntryRow } from './use-entry-row.js';
@@ -25,7 +25,7 @@ export const EntryRow = ({ entry, showProject }: EntryRowProps) => {
         </button>
       </div>
       <p className="qd-notebook-text">{entry.body}</p>
-      <NotebookError error={error} />
+      <RequestError error={error} />
     </li>
   );
 };
