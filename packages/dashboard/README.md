@@ -32,7 +32,8 @@ src/shell/shell.tsx          Shell (header + workspace), Panel, StreamStatusBadg
 src/widgets/registry.ts      defineWidget, WidgetDefinition, createRegistry
 src/widgets/widgets.ts       WIDGETS: every src/widgets/**/*.widget.tsx, found at build time
 src/widgets/widget-mount.tsx WidgetMount: the grid over WIDGETS
-src/widgets/starter/         the Tables and Events starter widgets
+src/widgets/starter/         the Tables starter widget
+src/widgets/events/          Events: the feed, filtered by project and kind
 src/grid/                    the grid: layout JSON, actions, drag, resize, keyboard, tray
 src/theme/tokens.css         dark theme tokens (--qd-*) and the page base
 src/theme/tokens.ts          the same token names, typed: token('accent') is 'var(--qd-accent)'
