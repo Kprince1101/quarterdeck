@@ -30,7 +30,7 @@ export {
   TICKET_REF_MAX,
   TICKET_STATUSES,
   type ApprovedTicket,
-  type PullRequest,
+  type TicketPullRequest,
   type TicketSource,
   type TicketSourceMethods,
   type TicketStatus,

@@ -26,7 +26,7 @@ export interface ApprovedTicket {
   body: string;
 }
 
-export interface PullRequest {
+export interface TicketPullRequest {
   url: string;
   head: string | null;
 }
@@ -36,7 +36,7 @@ export interface TicketSource {
   listApproved: () => Promise<ApprovedTicket[]>;
   setStatus: (ref: string, status: TicketStatus) => Promise<void>;
   note: (ref: string, body: string) => Promise<void>;
-  attachPr: (ref: string, pr: PullRequest) => Promise<void>;
+  attachPr: (ref: string, pr: TicketPullRequest) => Promise<void>;
 }
 
 export type TicketSourceMethods = Omit<TicketSource, 'name'>;
