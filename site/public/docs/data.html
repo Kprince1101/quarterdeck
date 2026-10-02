@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Where your data lives · Quarterdeck docs</title>
+    <meta
+      name="description"
+      content="Every path Quarterdeck writes on your machine, what is in it, and how to delete it."
+    />
+    <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <nav class="site-nav" aria-label="Docs">
+      <a class="home" href="../">Quarterdeck</a>
+      <a href="quickstart.html">Quickstart</a>
+      <a href="rules.html">Rules</a>
+      <a href="widgets.html">Widgets</a>
+      <a href="data.html" aria-current="page">Where your data lives</a>
+      <a href="faq.html">FAQ</a>
+    </nav>
+
+    <main class="docs">
+      <h1>Where your data lives</h1>
+      <p class="lead">
+        Everything Quarterdeck stores is on your machine, in one folder:
+        <code>~/.quarterdeck/</code>. There is no hosted component and no
+        telemetry, and you can open, read and delete all of it.
+      </p>
+
+      <h2 id="folder">The folder</h2>
+      <pre><code>~/.quarterdeck/
+  rules.local.&lt;file&gt;           your machine's rules
+  &lt;project&gt;/
+    pg/                          the project's Postgres data
+    pg.lock                      which process has the project open
+    turns/&lt;agent-id&gt;/&lt;seq&gt;/      one folder per agent turn
+    worktrees/&lt;builder&gt;-&lt;ticket&gt;/  a builder's git worktree
+  sock/&lt;hash&gt;.sock               a project's bus socket, while running
+  kiro/                          where kiro-cli runs
+  gemini/                        where gemini runs, and its locked settings
+  runtimes/claude/               where the Claude Code agent runs</code></pre>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Path</th>
+            <th>What it holds</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>~/.quarterdeck/rules.local.&lt;file&gt;</code></td>
+            <td>
+              Your machine's <a href="rules.html#layers">rules</a> overrides.
+              Configuration, not state: wiping projects leaves them.
+            </td>
+          </tr>
+          <tr>
+            <td><code>~/.quarterdeck/&lt;project&gt;/pg/</code></td>
+            <td>
+              The project's store: a real Postgres data directory (PGlite), one
+              per project. Tickets, agents, events, cards, turns and the rest.
+              Deleting it deletes the project's state.
+            </td>
+          </tr>
+          <tr>
+            <td><code>~/.quarterdeck/&lt;project&gt;/pg.lock</code></td>
+            <td>
+              The process id of the Quarterdeck that has the project open, so
+              two never write the same data directory. Removed on close.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code
+                >~/.quarterdeck/&lt;project&gt;/turns/&lt;agent-id&gt;/&lt;seq&gt;/</code
+              >
+            </td>
+            <td>
+              One agent turn as plain files: <code>input.md</code> (the prompt),
+              <code>output.md</code> (the reply),
+              <code>updates.jsonl</code> (every update the agent sent) and, when
+              the turn ends in a result Quarterdeck can read,
+              <code>result.json</code>. <code>&lt;seq&gt;</code> counts each
+              agent's turns from <code>0001</code>.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code
+                >~/.quarterdeck/&lt;project&gt;/worktrees/&lt;builder&gt;-&lt;ticket&gt;/</code
+              >
+            </td>
+            <td>
+              The git worktree a builder works a ticket in, registered with your
+              repository. <code>&lt;ticket&gt;</code> is the first 8 characters
+              of the ticket id. Retiring the builder removes it.
+            </td>
+          </tr>
+          <tr>
+            <td><code>~/.quarterdeck/sock/&lt;hash&gt;.sock</code></td>
+            <td>
+              The socket a project's agents reach Quarterdeck's tools on. It
+              holds no data and is removed on shutdown. When the path would be
+              too long it goes in
+              <code>$TMPDIR/quarterdeck-&lt;uid&gt;/</code> instead.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>~/.quarterdeck/kiro/</code>,
+              <code>~/.quarterdeck/gemini/</code>,
+              <code>~/.quarterdeck/runtimes/claude/</code>
+            </td>
+            <td>
+              The folders each runtime's process runs in, so nothing in your
+              repository can change how it starts.
+              <code>gemini/</code> also holds the settings and policy that keep
+              Gemini asking before it uses a tool.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2 id="outside">Outside the folder</h2>
+      <ul>
+        <li>
+          <code>&lt;repo&gt;/.quarterdeck/rules.local.&lt;file&gt;</code>: a
+          project's own rules. Quarterdeck writes here only after you agree to
+          it in <code>quarterdeck init</code>, when you save a rule for one
+          project, or when you accept a charter proposal.
+        </li>
+        <li>
+          <code
+            >~/.kiro/agents/quarterdeck-&lt;project&gt;-&lt;agent&gt;.json</code
+          >: the agent config Kiro needs to start an agent. It is removed when
+          the agent's process exits.
+        </li>
+        <li>
+          Your runtimes' and <code>gh</code>'s own sign-ins stay where those
+          tools keep them. Quarterdeck does not copy or store them.
+        </li>
+      </ul>
+
+      <h2 id="postgres">Your own Postgres</h2>
+      <p>
+        Set <code>DATABASE_URL</code> before <code>quarterdeck up</code> and
+        every project is stored in that database instead, one set of tables with
+        rows kept apart by project. Nothing is written to
+        <code>~/.quarterdeck/&lt;project&gt;/pg/</code>; turn files and
+        worktrees still are.
+      </p>
+
+      <h2 id="delete">Deleting it</h2>
+      <p>
+        Stop Quarterdeck first. Then delete
+        <code>~/.quarterdeck/&lt;project&gt;/</code> to remove one project (its
+        state, its turn files and its worktrees, unsaved work included), or
+        <code>~/.quarterdeck/</code> to remove everything. After deleting
+        worktrees, run <code>git worktree prune</code> in your repository to
+        drop their registrations.
+      </p>
+      <pre><code>rm -rf ~/.quarterdeck/my-app
+git -C path/to/your/repo worktree prune</code></pre>
+      <p>
+        The server's wipe for one project and for everything does the same while
+        it is running. With <code>DATABASE_URL</code>, it also deletes the
+        project's rows from your database. Wiping keeps your machine rules
+        (<code>~/.quarterdeck/rules.local.*</code>); delete those yourself if
+        you want them gone.
+      </p>
+    </main>
+
+    <footer>
+      <p>
+        MIT licensed. &copy; Kristopher Prince. &ldquo;Kiro&rdquo; is a
+        trademark of Amazon.com, Inc. or its affiliates. Quarterdeck is not
+        affiliated with or endorsed by Amazon.
+      </p>
+    </footer>
+  </body>
+</html>

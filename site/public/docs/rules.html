@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rules · Quarterdeck docs</title>
+    <meta
+      name="description"
+      content="Quarterdeck's rules are files: the defaults in rules/, your overrides in rules.local.*, and a repo layer that can only tighten."
+    />
+    <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <nav class="site-nav" aria-label="Docs">
+      <a class="home" href="../">Quarterdeck</a>
+      <a href="quickstart.html">Quickstart</a>
+      <a href="rules.html" aria-current="page">Rules</a>
+      <a href="widgets.html">Widgets</a>
+      <a href="data.html">Where your data lives</a>
+      <a href="faq.html">FAQ</a>
+    </nav>
+
+    <main class="docs">
+      <h1>Rules</h1>
+      <p class="lead">
+        Rules are files. Quarterdeck ships the defaults in <code>rules/</code>;
+        you change them with <code>rules.local.*</code> files next to them, on
+        your machine or in one repository.
+      </p>
+
+      <h2 id="files">The files</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>File</th>
+            <th>What it sets</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>charter.md</code></td>
+            <td>
+              The Driver's charter: who is on the crew, how work is assigned,
+              when to stop for you.
+            </td>
+          </tr>
+          <tr>
+            <td><code>reviewer.md</code></td>
+            <td>The reviewer's prompt: what to read and when to approve.</td>
+          </tr>
+          <tr>
+            <td><code>permissions.json</code></td>
+            <td>What an agent may do without asking you.</td>
+          </tr>
+          <tr>
+            <td><code>naming.json</code></td>
+            <td>The naming theme and the list of agent names.</td>
+          </tr>
+          <tr>
+            <td><code>lifecycle.json</code></td>
+            <td>Auto-end settle time, stuck threshold, budget, merge gate.</td>
+          </tr>
+          <tr>
+            <td><code>models.json</code></td>
+            <td>
+              The runtime (<code>kiro</code>, <code>claude</code> or
+              <code>gemini</code>) and optional model for each role.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2 id="layers">Layers</h2>
+      <p>
+        To change a rule, create a file named <code>rules.local.</code>
+        followed by the file's name, for example
+        <code>rules.local.lifecycle.json</code>. Quarterdeck reads three layers,
+        and the last one wins:
+      </p>
+      <ol>
+        <li><code>rules/&lt;file&gt;</code>, shipped with Quarterdeck.</li>
+        <li>
+          <code>~/.quarterdeck/rules.local.&lt;file&gt;</code>, for every
+          project on this machine.
+        </li>
+        <li>
+          <code>&lt;repo&gt;/.quarterdeck/rules.local.&lt;file&gt;</code>, for
+          one project.
+        </li>
+      </ol>
+      <p>
+        JSON layers merge key by key, so an override only needs the keys it
+        changes. Arrays are replaced whole. A Markdown layer replaces the file
+        below it. Every layer is checked against the rule's schema, and an error
+        names the file that broke it. For example,
+        <code>~/.quarterdeck/rules.local.lifecycle.json</code> with only this in
+        it changes the stuck threshold and keeps every other default:
+      </p>
+      <pre><code>{ "stuckAfterMinutes": 45 }</code></pre>
+      <p>
+        <code>quarterdeck init</code> writes
+        <code>rules.local.models.json</code>
+        when you pick a runtime other than the default, in whichever of the two
+        folders you choose. Accepting a charter proposal writes
+        <code>&lt;repo&gt;/.quarterdeck/rules.local.charter.md</code>.
+      </p>
+
+      <h2 id="tighten-only">The repo layer can only tighten</h2>
+      <p>
+        A <code>.quarterdeck/</code> folder inside a repository can be
+        committed, and anyone with push access can change it. So for the rules
+        that guard you, the repo layer can make Quarterdeck stricter but never
+        looser. Your machine layer sets them freely.
+      </p>
+      <h3>Permissions</h3>
+      <p>
+        <code>&lt;repo&gt;/.quarterdeck/rules.local.permissions.json</code> is
+        not merged into the machine rules. It is decided on its own, it may only
+        say <code>deny</code> or <code>ask</code>, and the stricter of its
+        answer and the machine's answer wins. An <code>allow</code> in it is an
+        error naming the file. This one keeps agents in the project away from
+        <code>.env</code> files, whatever the machine allows:
+      </p>
+      <pre><code>{
+  "rules": [{ "kind": "read", "pattern": "**/.env*", "decision": "deny" }]
+}</code></pre>
+      <h3>Merge gate</h3>
+      <p>
+        In <code>&lt;repo&gt;/.quarterdeck/rules.local.lifecycle.json</code>,
+        <code>mergeGate</code> is tighten-only: a <code>require*</code> flag is
+        on if any layer turns it on, <code>autoMerge</code> is on only if no
+        layer turns it off, and <code>base</code> may not be set there at all.
+        This one makes the project wait for a Copilot review too:
+      </p>
+      <pre><code>{ "mergeGate": { "requireCopilotReview": true } }</code></pre>
+      <p>
+        The other keys in a repo layer, <code>budget</code> included, merge like
+        any other layer.
+      </p>
+
+      <h2 id="permissions">permissions.json</h2>
+      <p>
+        Every permission request an agent makes is answered from these rules,
+        never by trusting all tools. The defaults:
+      </p>
+      <pre><code>{
+  "default": "ask",
+  "rules": [
+    { "kind": "read", "decision": "allow" },
+    { "kind": "search", "decision": "allow" },
+    { "kind": "think", "decision": "allow" }
+  ]
+}</code></pre>
+      <p>
+        A rule is <code>{ kind, pattern?, decision }</code>. The kinds are
+        <code>read</code>, <code>edit</code>, <code>delete</code>,
+        <code>move</code>, <code>search</code>, <code>execute</code>,
+        <code>think</code>, <code>fetch</code>, <code>switch_mode</code> and
+        <code>other</code>. The decisions are:
+      </p>
+      <ul>
+        <li><code>allow</code>: the agent goes ahead, this once.</li>
+        <li><code>deny</code>: the request is rejected.</li>
+        <li>
+          <code>ask</code>: you get a card. Your answer is final; a declined
+          card is a rejection the agent sees.
+        </li>
+      </ul>
+      <p>
+        For <code>execute</code>, the pattern matches each command the shell
+        would run, with <code>*</code> and <code>?</code> as wildcards. For
+        <code>fetch</code> it matches the URL, and for everything else the paths
+        the request touches, as a glob (<code>**</code> crosses folders). The
+        strictest matching rule wins (<code>deny</code>, then <code>ask</code>,
+        then <code>allow</code>), so the order you write rules in does not
+        matter.
+      </p>
+      <p>
+        An <code>allow</code> only holds inside the repository. A read or
+        command that reaches outside it becomes <code>ask</code>, and no rule
+        can allow a write outside it. If the rules cannot be read, the request
+        is rejected.
+      </p>
+      <p>
+        Because arrays are replaced whole, a machine layer that adds a rule
+        repeats the defaults it wants to keep. This
+        <code>~/.quarterdeck/rules.local.permissions.json</code> lets agents run
+        <code>npm test</code> without asking:
+      </p>
+      <pre><code>{
+  "rules": [
+    { "kind": "read", "decision": "allow" },
+    { "kind": "search", "decision": "allow" },
+    { "kind": "think", "decision": "allow" },
+    { "kind": "execute", "pattern": "npm test", "decision": "allow" }
+  ]
+}</code></pre>
+
+      <h2 id="lifecycle">lifecycle.json</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Default</th>
+            <th>What it sets</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>autoEndSettleSeconds</code></td>
+            <td><code>120</code></td>
+            <td>How long a finished agent settles before it is ended.</td>
+          </tr>
+          <tr>
+            <td><code>stuckAfterMinutes</code></td>
+            <td><code>30</code></td>
+            <td>
+              How long an agent may go without progress before it is stuck.
+            </td>
+          </tr>
+          <tr>
+            <td><code>budget.maxTokensPerTicket</code></td>
+            <td><code>2000000</code></td>
+            <td>The token budget for one ticket.</td>
+          </tr>
+          <tr>
+            <td><code>budget.warnAtFraction</code></td>
+            <td><code>0.8</code></td>
+            <td>The share of the budget at which you are warned.</td>
+          </tr>
+          <tr>
+            <td><code>mergeGate</code></td>
+            <td></td>
+            <td>See <a href="#merge-gate">the merge gate</a>.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 id="merge-gate">The merge gate</h3>
+      <p>
+        After a builder reports a pull request, the reviewer reads it and
+        approves it or sends it back. The merge gate then decides whether it
+        merges.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Default</th>
+            <th>What it does</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>requireReviewerApproval</code></td>
+            <td><code>true</code></td>
+            <td>
+              Merge only on the reviewer's approval. Turned off, nobody reads
+              the diff before it merges.
+            </td>
+          </tr>
+          <tr>
+            <td><code>requireChecksPassing</code></td>
+            <td><code>true</code></td>
+            <td>
+              Merge only when the pull request's checks pass. Pending checks
+              wait; failing checks send it back.
+            </td>
+          </tr>
+          <tr>
+            <td><code>requireCopilotReview</code></td>
+            <td><code>false</code></td>
+            <td>
+              Also wait for a Copilot review, and send it back while any thread
+              Copilot opened is unresolved.
+            </td>
+          </tr>
+          <tr>
+            <td><code>autoMerge</code></td>
+            <td><code>false</code></td>
+            <td>
+              Squash merge as soon as the gate passes. Off, you get a merge card
+              and nothing merges until you answer it.
+            </td>
+          </tr>
+          <tr>
+            <td><code>base</code></td>
+            <td>unset</td>
+            <td>
+              The branch pull requests must merge into. Unset, the repository's
+              default branch.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        The gate only merges pull requests in the project's own repository, into
+        its base branch.
+      </p>
+
+      <h2 id="models">models.json</h2>
+      <p>
+        One entry per role: <code>planner</code>, <code>driver</code>,
+        <code>builder</code> and <code>reviewer</code>. Each has a
+        <code>runtime</code> and, optionally, a <code>model</code>. Every role
+        uses <code>kiro</code> by default. This
+        <code>~/.quarterdeck/rules.local.models.json</code> moves the reviewer
+        to Claude Code and leaves the other roles on Kiro:
+      </p>
+      <pre><code>{ "reviewer": { "runtime": "claude" } }</code></pre>
+
+      <h2 id="naming">naming.json</h2>
+      <p>
+        Agents are named from a list: a <code>theme</code> and its
+        <code>names</code>. The default theme is animals. Names are lowercase
+        letters, digits and hyphens, start with a letter, and must be unique.
+      </p>
+
+      <h2 id="prompts">charter.md and reviewer.md</h2>
+      <p>
+        The Driver's charter and the reviewer's prompt, in plain Markdown. A
+        <code>rules.local.charter.md</code> or
+        <code>rules.local.reviewer.md</code> replaces the default whole.
+      </p>
+    </main>
+
+    <footer>
+      <p>
+        MIT licensed. &copy; Kristopher Prince. &ldquo;Kiro&rdquo; is a
+        trademark of Amazon.com, Inc. or its affiliates. Quarterdeck is not
+        affiliated with or endorsed by Amazon.
+      </p>
+    </footer>
+  </body>
+</html>
