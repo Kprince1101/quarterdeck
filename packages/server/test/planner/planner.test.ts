@@ -20,6 +20,7 @@ import { startTestApi, type TestApi } from '../api/harness.ts';
 import { callTool, connectClient } from '../bus/fixtures.ts';
 import {
   TIMEOUT,
+  createPlannerProject,
   openPlannerProject,
   writeMachineRule,
   type PlannerProject,
@@ -67,6 +68,7 @@ describe('Planner', { timeout: TIMEOUT }, () => {
 
   beforeAll(async () => {
     t = await startTestApi();
+    await createPlannerProject(t);
   }, TIMEOUT);
 
   afterEach(async () => {
