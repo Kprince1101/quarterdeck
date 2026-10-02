@@ -1,5 +1,9 @@
 import { isAuthRequiredError, spawnAcpClient } from '@quarterdeck/server';
-import type { AcpClientEvent } from '@quarterdeck/server';
+import type {
+  AcpClient,
+  AcpClientEvent,
+  AcpClientOptions,
+} from '@quarterdeck/server';
 import type {
   ConformanceAdapter,
   ConformanceConnection,
@@ -13,6 +17,11 @@ export interface ClientAdapter {
   spawnedPids: number[];
 }
 
+export type SpawnClient = (
+  launch: FakeAgentLaunch,
+  options: AcpClientOptions,
+) => Promise<AcpClient>;
+
 const forwardUpdates =
   (hooks: ConformanceHooks, spawnedPids: number[]) =>
   (event: AcpClientEvent) => {
@@ -22,14 +31,17 @@ const forwardUpdates =
     }
   };
 
-export const createClientAdapter = (): ClientAdapter => {
+export const createClientAdapter = (
+  name = 'spawnAcpClient',
+  spawnClient: SpawnClient = spawnAcpClient,
+): ClientAdapter => {
   const spawnedPids: number[] = [];
 
   const connect = async (
     launch: FakeAgentLaunch,
     hooks: ConformanceHooks,
   ): Promise<ConformanceConnection> => {
-    const client = await spawnAcpClient(launch, {
+    const client = await spawnClient(launch, {
       clientName: 'quarterdeck-conformance',
       clientVersion: '0.0.0',
       onPermissionRequest: async (request) => ({
@@ -66,7 +78,7 @@ export const createClientAdapter = (): ClientAdapter => {
   };
 
   return {
-    adapter: { name: 'spawnAcpClient', connect },
+    adapter: { name, connect },
     spawnedPids,
   };
 };
