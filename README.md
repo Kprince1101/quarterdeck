@@ -17,6 +17,41 @@ npx quarterdeck up                        # starts the server and prints the das
 
 `init` writes nothing into your repository unless you agree to a `.quarterdeck/` folder for that project's settings. See `packages/cli/README.md`.
 
+## Where your data lives
+
+Nothing Quarterdeck stores leaves your machine. It has no hosted component, no account and no telemetry, and it sends nothing anywhere. What your agents send to their model providers, and what `git` and `gh` push, goes through those tools, signed in as you. Everything Quarterdeck writes is in one of these places:
+
+```text
+~/.quarterdeck/
+  rules.local.<file>              your machine's rules
+  <project>/
+    pg/                           the project's Postgres data (PGlite)
+    pg.lock                       which process has the project open
+    turns/<agent-id>/<seq>/       one folder per agent turn: input.md, output.md, updates.jsonl, result.json
+    worktrees/<builder>-<ticket>/ a builder's git worktree
+  plugins/<name>.mjs              ticket-source plugins you add yourself
+  pause.json                      only while everything is paused
+  sock/<hash>.sock                a project's bus socket, while running
+  kiro/                           where kiro-cli runs
+  gemini/                         where gemini runs, and its locked settings
+  runtimes/claude/                where the Claude Code agent runs
+```
+
+Outside that folder:
+
+- `<repo>/.quarterdeck/rules.local.<file>`: a project's own rules, written only after you agree to it in `quarterdeck init`, when you save a rule for one project, or when you accept a charter proposal.
+- `~/.kiro/agents/quarterdeck-<project>-<agent>.json`: the agent config Kiro needs to start an agent, removed when the agent's process exits.
+- With `DATABASE_URL` set, every project's rows live in that database instead of `~/.quarterdeck/<project>/pg/`. Turn files and worktrees stay in `~/.quarterdeck/<project>/`.
+
+Your runtimes' and `gh`'s sign-ins stay where those tools keep them; Quarterdeck does not copy them.
+
+The dashboard's Data widget lists every table with its rows and every path above with whether it exists. It also wipes:
+
+- **Wipe project** (type the project's name to confirm) stops the project first: it is archived so nothing new starts, every live agent is killed, every process group it started is swept, and each worktree is removed from your repository. Then its rows, `pg/`, `pg.lock`, `turns/` and `worktrees/` are deleted. If a process cannot be confirmed stopped, the wipe is refused and the project kept, so the next start can sweep it.
+- **Wipe everything** (type `wipe everything`) does the same for every project.
+
+Wiping keeps the rules files and everything else under `~/.quarterdeck/` that is not a project: `plugins/`, `pause.json`, `sock/` and the runtime folders. To remove everything by hand, stop Quarterdeck and delete `~/.quarterdeck/`, then run `git worktree prune` in each repository. See `site/public/docs/data.html`.
+
 ## Rules
 
 The defaults live in `rules/`: `charter.md`, `reviewer.md`, `permissions.json`, `naming.json`, `lifecycle.json` and `models.json`. Override any of them with a file named `rules.local.<file>`, for example `rules.local.lifecycle.json`. Quarterdeck reads three layers, last one wins:

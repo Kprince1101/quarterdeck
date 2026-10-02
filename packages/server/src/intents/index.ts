@@ -61,5 +61,7 @@ export {
 export {
   WIPE_ALL_CONFIRMATION,
   WORKSPACE_INTENTS,
+  wipeResultSchema,
+  type WipeResult,
   type WorkspaceIntentName,
 } from './workspace.js';

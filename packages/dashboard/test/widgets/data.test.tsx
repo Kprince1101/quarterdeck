@@ -1,5 +1,9 @@
 // @vitest-environment happy-dom
-import type { DataPage, DataSummary } from '@quarterdeck/server/intents';
+import type {
+  DataPage,
+  DataSummary,
+  WipeResult,
+} from '@quarterdeck/server/intents';
 import type { StreamMessage } from '@quarterdeck/server/stream-schema';
 import { act } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -10,9 +14,11 @@ import {
   formatCell,
   pageView,
   pathViews,
+  wipeSummary,
 } from '../../src/widgets/data/data-view.js';
 import { FAKE_WEBSOCKET, FakeSocket } from '../api/fake-socket.js';
 import { click } from '../grid/events.js';
+import { dom, typeInto, type DomElement } from '../primitives/dom.js';
 import { all, render, textOf, type PageElement } from '../shell/page.js';
 
 const PROJECT_ID = '00000000-0000-4000-8000-000000000001';
@@ -83,6 +89,17 @@ const SNAPSHOT: StreamMessage = {
 const reply = (intent: string, result: unknown): Response =>
   Response.json({ intent, status: 'applied', id: null, result });
 
+const WIPED: Record<string, WipeResult> = {
+  'wipe.project': {
+    wiped: ['deck'],
+    stopped: [
+      { project: 'deck', agent: 'wren' },
+      { project: 'deck', agent: 'lark' },
+    ],
+  },
+  'wipe.all': { wiped: ['deck', 'yard'], stopped: [] },
+};
+
 const fakeServer = () =>
   vi.fn<typeof fetch>((url, init) => {
     const intent = String(url).split('/').at(-1) ?? '';
@@ -93,6 +110,8 @@ const fakeServer = () =>
     if (intent === 'data.summary') {
       return Promise.resolve(reply(intent, SUMMARY));
     }
+    const wiped = WIPED[intent];
+    if (wiped !== undefined) return Promise.resolve(reply(intent, wiped));
     return Promise.resolve(
       reply(intent, notebookPage(body.offset ?? 0, body.limit ?? 25)),
     );
@@ -111,6 +130,20 @@ const buttonNamed = (container: PageElement, name: string): PageElement => {
   return button;
 };
 
+const wipeForm = (container: PageElement, label: string) => {
+  const form = container.querySelector(`form[aria-label="${label}"]`);
+  const field = form?.querySelector('input');
+  const button = form?.querySelector('button');
+  if (!form || !field || !button) throw new Error(`no ${label} form`);
+  return {
+    form,
+    button,
+    isDisabled: () => button.getAttribute('disabled') !== null,
+    type: (value: string) => typeInto(field as unknown as DomElement, value),
+    value: () => (field as unknown as { value: string }).value,
+  };
+};
+
 const sentIntents = (server: ReturnType<typeof fakeServer>) =>
   server.mock.calls.map(([url, init]) => ({
     intent: String(url).split('/').at(-1),
@@ -127,13 +160,19 @@ const mount = (server: ReturnType<typeof fakeServer>) => {
       <DataWidget />
     </DeckProvider>,
   );
+  const attached = rendered.container as unknown as DomElement;
+  dom().document.body.append(attached);
   const deliver = async (message: StreamMessage) => {
     act(() => {
       FakeSocket.opened[0]?.deliver(message);
     });
     await settle();
   };
-  return { ...rendered, deliver };
+  const unmount = () => {
+    rendered.unmount();
+    attached.remove();
+  };
+  return { container: rendered.container, deliver, unmount };
 };
 
 describe('Data widget', () => {
@@ -238,7 +277,7 @@ describe('Data widget', () => {
     unmount();
   });
 
-  it('shows the server error instead of the tables', async () => {
+  it('shows the server error instead of the tables, and why a wipe failed', async () => {
     const server = vi.fn<typeof fetch>(() =>
       Promise.resolve(
         Response.json(
@@ -252,6 +291,66 @@ describe('Data widget', () => {
     expect(textOf(container, '.qd-data-error')).toBe(
       'project deck does not exist',
     );
+    expect(container.querySelector('.qd-data-tables')).toBeNull();
+
+    const wipe = wipeForm(container, 'Wipe project');
+    wipe.type('deck');
+    click(wipe.button);
+    await settle();
+    expect(textOf(container, '[role="alert"]')).toBe(
+      'project deck does not exist',
+    );
+    expect(wipe.value()).toBe('deck');
+    unmount();
+  });
+
+  it('wipes the project only once its slug is typed', async () => {
+    const server = fakeServer();
+    const { container, deliver, unmount } = mount(server);
+    await deliver(SNAPSHOT);
+    const wipe = wipeForm(container, 'Wipe project');
+    expect(wipe.form.textContent).toContain('Type deck to confirm');
+    expect(wipe.isDisabled()).toBe(true);
+
+    wipe.type('dec');
+    expect(wipe.isDisabled()).toBe(true);
+    wipe.type('deck');
+    expect(wipe.isDisabled()).toBe(false);
+    click(wipe.button);
+    await settle();
+
+    expect(
+      sentIntents(server).filter(({ intent }) => intent?.startsWith('wipe.')),
+    ).toEqual([
+      { intent: 'wipe.project', body: { project: 'deck', confirm: 'deck' } },
+    ]);
+    expect(textOf(wipe.form, '[role="status"]')).toBe(
+      'Wiped deck. Stopped wren (deck), lark (deck) first.',
+    );
+    expect(wipe.value()).toBe('');
+    expect(wipe.isDisabled()).toBe(true);
+    expect(
+      sentIntents(server).filter(({ intent }) => intent === 'data.summary'),
+    ).toHaveLength(2);
+    unmount();
+  });
+
+  it('wipes everything only once "wipe everything" is typed', async () => {
+    const server = fakeServer();
+    const { container, deliver, unmount } = mount(server);
+    await deliver(SNAPSHOT);
+    const wipe = wipeForm(container, 'Wipe everything');
+
+    wipe.type('deck');
+    expect(wipe.isDisabled()).toBe(true);
+    wipe.type('wipe everything');
+    click(wipe.button);
+    await settle();
+
+    expect(
+      sentIntents(server).filter(({ intent }) => intent?.startsWith('wipe.')),
+    ).toEqual([{ intent: 'wipe.all', body: { confirm: 'wipe everything' } }]);
+    expect(textOf(wipe.form, '[role="status"]')).toBe('Wiped deck, yard.');
     unmount();
   });
 });
@@ -282,6 +381,10 @@ describe('data view', () => {
     const past = pageView({ ...notebookPage(50, 25) });
     expect(past.range).toBe('Past the last of 30 rows');
     expect(past.canPrevious).toBe(true);
+  });
+
+  it('sums up a wipe that found nothing', () => {
+    expect(wipeSummary({ wiped: [], stopped: [] })).toBe('Wiped nothing.');
   });
 
   it('labels where each path lives', () => {

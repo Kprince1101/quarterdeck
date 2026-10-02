@@ -188,9 +188,17 @@
       <pre><code>rm -rf ~/.quarterdeck/my-app
 git -C path/to/your/repo worktree prune</code></pre>
       <p>
-        The server's wipe for one project and for everything does the same while
-        it is running. With <code>DATABASE_URL</code>, it also deletes the
-        project's rows from your database. Wiping keeps your machine rules
+        Or use the Wipe buttons in the
+        <a href="widgets.html#data">Data widget</a> while Quarterdeck runs.
+        <strong>Wipe project</strong> asks you to type the project's name;
+        <strong>Wipe everything</strong> asks you to type
+        <code>wipe everything</code>. Either stops the project first: it is
+        archived so nothing new starts, every live agent is killed, every
+        process group Quarterdeck started for it is swept, and each worktree is
+        removed from your repository. Then the project's folder is deleted and,
+        with <code>DATABASE_URL</code>, its rows in your database. If a process
+        cannot be confirmed stopped, the wipe is refused and the project kept,
+        so the next start can sweep it. Wiping keeps your machine rules
         (<code>~/.quarterdeck/rules.local.*</code>); delete those yourself if
         you want them gone.
       </p>

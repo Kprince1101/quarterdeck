@@ -287,7 +287,7 @@ describe('workspace intents', { timeout: TIMEOUT }, () => {
         project: 'scratch',
         confirm: 'scratch',
       });
-      expect(res.body.result).toEqual({ wiped: ['scratch'] });
+      expect(res.body.result).toEqual({ wiped: ['scratch'], stopped: [] });
       expect(existsSync(join(t.homeDir, '.quarterdeck', 'scratch'))).toBe(
         false,
       );
@@ -302,7 +302,10 @@ describe('workspace intents', { timeout: TIMEOUT }, () => {
       const refused = await t.send('wipe.all', { confirm: 'yes' });
       expect(refused.status).toBe(400);
       const res = await t.send('wipe.all', { confirm: WIPE_ALL_CONFIRMATION });
-      expect(res.body.result).toEqual({ wiped: ['deck', 'other', 'race'] });
+      expect(res.body.result).toEqual({
+        wiped: ['deck', 'other', 'race'],
+        stopped: [],
+      });
       expect(existsSync(join(t.homeDir, '.quarterdeck', 'deck'))).toBe(false);
       expect(existsSync(machineRule('lifecycle.json'))).toBe(true);
     });

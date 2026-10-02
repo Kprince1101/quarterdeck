@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { homedir } from 'node:os';
 import { closeAllAcpClients } from '../acp/client/index.js';
+import type { StopHosts } from '../lifecycle/stop.js';
 import { quarterdeckHome } from '../store/index.js';
 import type { ApiContext } from './context.js';
 import { createProjectStores, type ProjectStores } from './project-stores.js';
@@ -20,6 +21,7 @@ export interface ApiServerOptions {
   dashboardDir?: string | undefined;
   openProjects?: boolean;
   onError?: (err: unknown) => void;
+  stopHosts?: StopHosts;
 }
 
 export interface ApiServer {
@@ -37,6 +39,7 @@ export const startApiServer = async (
     quarterdeckHome(homeDir),
     options.databaseUrl,
     options.onError,
+    options.stopHosts,
   );
   const ctx: ApiContext = { stores, homeDir };
   let guard = localGuard(0);
