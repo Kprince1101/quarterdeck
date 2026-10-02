@@ -32,6 +32,20 @@ export class TurnInputMissingError extends Error {
   }
 }
 
+export class NoBirthTurnError extends Error {
+  readonly agentId: string;
+  readonly through: number;
+
+  constructor(agentId: string, through: number) {
+    super(
+      `Agent ${agentId} has no saved Driver birth input at or before turn ${through}`,
+    );
+    this.name = 'NoBirthTurnError';
+    this.agentId = agentId;
+    this.through = through;
+  }
+}
+
 export class NotADriverError extends Error {
   readonly agentId: string;
 

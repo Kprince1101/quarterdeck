@@ -78,11 +78,18 @@ While a prompt runs the agent is `working`; afterwards it is `idle` again. Only 
 ## Replay
 
 ```ts
-import { projectTurnsDir, replayDriverChain } from '@quarterdeck/server';
+import {
+  CLAUDE_ADAPTER,
+  projectTurnsDir,
+  replayDriverChain,
+} from '@quarterdeck/server';
 
 const replay = await replayDriverChain({
-  client, // an AcpClient for the runtime to replay against
-  cwd: repoPath,
+  connect: ({ cwd, onPermissionRequest }) =>
+    CLAUDE_ADAPTER.connect(
+      { cwd },
+      { clientName: 'quarterdeck', clientVersion, onPermissionRequest },
+    ),
   turnsDir: projectTurnsDir('commander'),
   agentId: driver.id,
   through: 7,
@@ -90,17 +97,32 @@ const replay = await replayDriverChain({
 });
 ```
 
-`replayDriverChain` sends a Driver's saved prompts 1..n again, in order, in one new ACP session: each turn's `input.md`, birth and re-prompts included, exactly as it was sent. It reads every input first (`readTurnChain`), so a missing `input.md` rejects with `TurnInputMissingError` (its `seq` and `path`) before any session opens.
+`replayDriverChain` sends a Driver's saved prompts again, in order, in one new ACP session: each turn's `input.md`, re-prompts included, exactly as it was sent.
 
-Replay writes nothing: no `turns` row, no event, no agent change and no turn file. The session gets no MCP servers, so the bus tools (`ask`, `report`, `status`, `verdict`, `read`) are not there to write through either; what the agent's own tools may do is up to the client's permission handler.
+The replay mirrors one round's session: the one turn `n` was part of. Each `driver.round_started` opens a new session whose first prompt is the birth input (`isBirthInput`), so the chain runs from the latest birth at or before `n` through `n`, never across a round boundary. `readTurnChain` reads the inputs from `n` back to that birth before anything connects. A missing `input.md` rejects with `TurnInputMissingError` (its `seq` and `path`), and a chain with no birth input at or before `n` (not a Driver's) with `NoBirthTurnError`.
+
+### Replay writes nothing
+
+No `turns` row, event, card, agent change or turn file. Replay owns everything the agent could write through:
+
+- **Its client.** `connect` is called once with the `cwd` and the permission handler to build the client with, and replay closes the client when it is done, failed or not. Pass the handler through unchanged; a `connect` that swaps it breaks this guarantee.
+- **Its permissions.** The handler is `REPLAY_PERMISSIONS`: every request gets a reject option (`reject_once`, else `reject_always`), or `cancelled` when none is offered. It never allows and never raises a card, so a replayed turn can't run a shell command, edit a file or page the human.
+- **Its directory.** Without `cwd` the agent is launched and the session opened in a fresh temporary directory, removed afterwards, so read-only tools can't see the live repo or work done since the original turn. A caller that passes `cwd` gets that directory, which replay leaves in place.
+- **Its servers.** The session gets no MCP servers, so the bus tools (`ask`, `report`, `status`, `verdict`, `read`) are not there.
+
+The Driver therefore replies without its tools; a turn that leaned on them can read differently from the original.
 
 Each `ReplayTurn` holds the `seq`, the `input` sent, the `savedOutput` from `output.md` (null if there is none), the replayed `output`, its `stopReason` and `result`, the reply parsed as a Driver turn result (`ParsedTurnResult`). Every prompt is sent whatever the one before it returned; a prompt that throws rejects the replay.
 
-`replayCommand({ project, agentId, through })` is the command the dashboard shows beside a Driver turn to replay the chain up to it:
+### The dashboard's command
+
+`replayCommand({ project, agentId, through })` is the command the dashboard shows beside a Driver turn to replay its round up to that turn:
 
 ```sh
 npx quarterdeck replay commander 7d0f3a4e-2b1c-4c5d-9e8f-0a1b2c3d4e5f 7
 ```
+
+The `replay` CLI subcommand isn't shipped yet: `packages/cli` has no source, and SPEC's CLI is `up | init | doctor | wipe`. Until a ticket adds it, the line is the command's agreed shape, not one that runs.
 
 It refuses a project that is not a slug, an agent id that is not a uuid and an `n` that is not a positive integer, so the line is always safe to paste. `agentId` is checked the same way by `readTurnChain`, since it names a folder under `turnsDir`.
 

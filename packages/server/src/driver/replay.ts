@@ -1,9 +1,13 @@
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { StopReason } from '@agentclientprotocol/sdk';
-import type { AcpClient } from '../acp/client/index.js';
+import type { AcpClient, PermissionHandler } from '../acp/client/index.js';
+import { answerPermission } from '../acp/permissions/index.js';
 import { hasErrorCode } from '../lib/errors.js';
 import { assertProjectSlug } from '../store/paths.js';
-import { TurnInputMissingError } from './errors.js';
+import { isBirthInput } from './birth-input.js';
+import { NoBirthTurnError, TurnInputMissingError } from './errors.js';
 import { turnDir, turnFile } from './files.js';
 import {
   DRIVER_TURN_FORMAT,
@@ -18,10 +22,20 @@ export const REPLAY_COMMAND = 'npx quarterdeck replay';
 const AGENT_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+export const REPLAY_PERMISSIONS: PermissionHandler = async (request) =>
+  answerPermission(request.options, 'refuse');
+
 export type ReplayClient = Pick<
   AcpClient,
-  'newSession' | 'prompt' | 'subscribe'
+  'newSession' | 'prompt' | 'subscribe' | 'close'
 >;
+
+export interface ReplaySetup {
+  cwd: string;
+  onPermissionRequest: PermissionHandler;
+}
+
+export type ConnectReplay = (setup: ReplaySetup) => Promise<ReplayClient>;
 
 export interface ReplayChain {
   turnsDir: string;
@@ -30,8 +44,8 @@ export interface ReplayChain {
 }
 
 export interface ReplayOptions extends ReplayChain {
-  client: ReplayClient;
-  cwd: string;
+  connect: ConnectReplay;
+  cwd?: string;
   onTurn?: (turn: ReplayTurn) => void;
 }
 
@@ -72,7 +86,7 @@ const assertAgentId = (agentId: string): string => {
 const assertThrough = (through: number): number => {
   if (!Number.isSafeInteger(through) || through < 1) {
     throw new RangeError(
-      `A replay runs turns 1..n with n a positive integer, not ${through}`,
+      `A replay runs turns up to n with n a positive integer, not ${through}`,
     );
   }
   return through;
@@ -107,10 +121,12 @@ export const readTurnChain = async (
   assertAgentId(chain.agentId);
   const through = assertThrough(chain.through);
   const turns: SavedTurn[] = [];
-  for (let seq = 1; seq <= through; seq += 1) {
-    turns.push(await readSavedTurn(chain, seq));
+  for (let seq = through; seq >= 1; seq -= 1) {
+    const turn = await readSavedTurn(chain, seq);
+    turns.unshift(turn);
+    if (isBirthInput(turn.input)) return turns;
   }
-  return turns;
+  throw new NoBirthTurnError(chain.agentId, through);
 };
 
 const replayTurn = async (
@@ -135,22 +151,40 @@ const replayTurn = async (
   }
 };
 
+const replayIn = async (
+  cwd: string,
+  options: ReplayOptions,
+  saved: readonly SavedTurn[],
+): Promise<Replay> => {
+  const client = await options.connect({
+    cwd,
+    onPermissionRequest: REPLAY_PERMISSIONS,
+  });
+  try {
+    const { sessionId } = await client.newSession({ cwd, mcpServers: [] });
+    const turns: ReplayTurn[] = [];
+    for (const turn of saved) {
+      const replayed = await replayTurn(client, sessionId, turn);
+      turns.push(replayed);
+      options.onTurn?.(replayed);
+    }
+    return { sessionId, turns };
+  } finally {
+    await client.close();
+  }
+};
+
 export const replayDriverChain = async (
   options: ReplayOptions,
 ): Promise<Replay> => {
   const saved = await readTurnChain(options);
-  const { client } = options;
-  const { sessionId } = await client.newSession({
-    cwd: options.cwd,
-    mcpServers: [],
-  });
-  const turns: ReplayTurn[] = [];
-  for (const turn of saved) {
-    const replayed = await replayTurn(client, sessionId, turn);
-    turns.push(replayed);
-    options.onTurn?.(replayed);
+  if (options.cwd !== undefined) return replayIn(options.cwd, options, saved);
+  const cwd = await mkdtemp(join(tmpdir(), 'quarterdeck-replay-'));
+  try {
+    return await replayIn(cwd, options, saved);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
   }
-  return { sessionId, turns };
 };
 
 export const replayCommand = (parts: ReplayCommandParts): string =>

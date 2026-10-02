@@ -1,11 +1,13 @@
 export {
   buildBirthInput,
+  isBirthInput,
   readActiveNotebook,
   type BirthInputParts,
   type NotebookEntry,
   type Round,
 } from './birth-input.js';
 export {
+  NoBirthTurnError,
   NotADriverError,
   RoundEndedError,
   RoundNotFoundError,
@@ -26,14 +28,17 @@ export {
 } from './result.js';
 export {
   REPLAY_COMMAND,
+  REPLAY_PERMISSIONS,
   readTurnChain,
   replayCommand,
   replayDriverChain,
+  type ConnectReplay,
   type Replay,
   type ReplayChain,
   type ReplayClient,
   type ReplayCommandParts,
   type ReplayOptions,
+  type ReplaySetup,
   type ReplayTurn,
   type SavedTurn,
 } from './replay.js';

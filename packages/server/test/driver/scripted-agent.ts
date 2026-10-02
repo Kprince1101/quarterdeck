@@ -14,6 +14,7 @@ import {
   connectAcpClient,
   CANCELLED_PERMISSION,
   type AcpClient,
+  type PermissionHandler,
 } from '../../src/acp/client/index.js';
 
 export interface ScriptedReply {
@@ -67,7 +68,9 @@ const withTotal = (usage: ScriptedReply['usage']): Usage | undefined => {
   return { ...usage, totalTokens: usage.inputTokens + usage.outputTokens };
 };
 
-export const startScriptedAgent = async (): Promise<ScriptedAgent> => {
+export const startScriptedAgent = async (
+  onPermissionRequest: PermissionHandler = async () => CANCELLED_PERMISSION,
+): Promise<ScriptedAgent> => {
   const sessions: ScriptedSession[] = [];
   const prompts: ScriptedPrompt[] = [];
   const queue: ScriptedReply[] = [];
@@ -126,7 +129,7 @@ export const startScriptedAgent = async (): Promise<ScriptedAgent> => {
     options: {
       clientName: 'driver-test',
       clientVersion: '0.0.0',
-      onPermissionRequest: async () => CANCELLED_PERMISSION,
+      onPermissionRequest,
     },
   });
 

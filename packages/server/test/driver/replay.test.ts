@@ -8,7 +8,11 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { McpServerStdio } from '@agentclientprotocol/sdk';
+import type {
+  McpServerStdio,
+  PermissionOption,
+  RequestPermissionResponse,
+} from '@agentclientprotocol/sdk';
 import {
   afterAll,
   afterEach,
@@ -19,22 +23,37 @@ import {
   it,
 } from 'vitest';
 import {
+  CANCELLED_PERMISSION,
+  connectAcpClient,
+} from '../../src/acp/client/index.js';
+import {
+  DRIVER_TURN_INSTRUCTIONS,
+  NoBirthTurnError,
   REPLAY_COMMAND,
+  REPLAY_PERMISSIONS,
   TurnInputMissingError,
+  buildBirthInput,
+  isBirthInput,
   openDriverRound,
   readTurnChain,
   replayCommand,
   replayDriverChain,
+  repromptText,
   turnDir,
   turnFile,
+  type ConnectReplay,
+  type ReplaySetup,
   type ReplayTurn,
 } from '../../src/driver/index.js';
+import { pathExists } from '../../src/lib/fs.js';
 import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
+import { connectFakeAgentInProcess } from '../acp/fake-agent/index.ts';
 import {
   resultText,
   say,
   startScriptedAgent,
   type ScriptedAgent,
+  type ScriptedReply,
 } from './scripted-agent.js';
 
 const TIMEOUT = 30_000;
@@ -51,6 +70,15 @@ const BUS: McpServerStdio = {
   env: [],
 };
 
+const birthInput = (round: number): string =>
+  buildBirthInput({
+    agent: { name: 'newt' },
+    round: { number: round, goal: `Goal ${round}.` },
+    charter: '# Driver charter',
+    notebook: [],
+    instructions: DRIVER_TURN_INSTRUCTIONS,
+  });
+
 const snapshot = async (dir: string): Promise<Record<string, string>> => {
   const files: Record<string, string> = {};
   const entries = await readdir(dir, { recursive: true, withFileTypes: true });
@@ -62,17 +90,41 @@ const snapshot = async (dir: string): Promise<Record<string, string>> => {
   return files;
 };
 
+interface Connection {
+  setup: ReplaySetup;
+  agent: ScriptedAgent;
+  closed: boolean;
+}
+
+const scriptedConnect = (...replies: ScriptedReply[]) => {
+  const connections: Connection[] = [];
+  const connect: ConnectReplay = async (setup) => {
+    const agent = await startScriptedAgent(setup.onPermissionRequest);
+    agent.reply(...replies);
+    const connection: Connection = { setup, agent, closed: false };
+    connections.push(connection);
+    const { client } = agent;
+    return {
+      newSession: client.newSession.bind(client),
+      prompt: client.prompt.bind(client),
+      subscribe: client.subscribe.bind(client),
+      close: async () => {
+        connection.closed = true;
+        await client.close();
+      },
+    };
+  };
+  return { connect, connections };
+};
+
 describe('Driver replay', () => {
-  let scripted: ScriptedAgent;
   let turnsDir: string;
 
   beforeEach(async () => {
-    scripted = await startScriptedAgent();
     turnsDir = await mkdtemp(join(tmpdir(), 'qd-replay-'));
   });
 
   afterEach(async () => {
-    await scripted.client.close();
     await rm(turnsDir, { recursive: true, force: true });
   });
 
@@ -83,7 +135,13 @@ describe('Driver replay', () => {
     if (output !== undefined) await writeFile(turnFile(dir, 'output'), output);
   };
 
-  describe('against a recorded round', () => {
+  const chain = (through: number) => ({
+    turnsDir,
+    agentId: AGENT_ID,
+    through,
+  });
+
+  describe('against the store', () => {
     let store: Store;
 
     beforeAll(async () => {
@@ -94,6 +152,13 @@ describe('Driver replay', () => {
       await store.close();
     });
 
+    afterEach(async () => {
+      await store.db.exec(
+        `delete from events; delete from turns; delete from cards;
+         delete from agents; delete from rounds;`,
+      );
+    });
+
     const count = async (table: string): Promise<number> => {
       const { rows } = await store.db.query<{ n: number }>(
         `select count(*)::int as n from ${table}`,
@@ -101,8 +166,14 @@ describe('Driver replay', () => {
       return rows[0]?.n ?? 0;
     };
 
+    const counts = async () => ({
+      turns: await count('turns'),
+      events: await count('events'),
+      cards: await count('cards'),
+    });
+
     it(
-      'sends turns 1..n from their saved inputs in one new session and writes nothing',
+      'sends a recorded round from its saved inputs in one new session and writes nothing',
       async () => {
         const { rows: rounds } = await store.db.query<{ id: string }>(
           `insert into rounds (project_id, number, status, goal)
@@ -115,7 +186,8 @@ describe('Driver replay', () => {
           [store.projectId],
         );
         const agentId = agents[0]?.id ?? '';
-        scripted.reply(
+        const recorder = await startScriptedAgent();
+        recorder.reply(
           say(resultText(BIRTH)),
           say('No JSON here.'),
           say(resultText(ASSIGNED)),
@@ -123,7 +195,7 @@ describe('Driver replay', () => {
         );
         const round = await openDriverRound({
           store,
-          client: scripted.client,
+          client: recorder.client,
           bus: { launch: async () => BUS },
           agentId,
           roundId: rounds[0]?.id ?? '',
@@ -134,77 +206,79 @@ describe('Driver replay', () => {
         await round.birth;
         await round.turn('heron reported QD12.');
         await round.turn('Round goal changed.');
-        const recorded = scripted.prompts.map((prompt) => prompt.text);
+        await recorder.client.close();
+        const recorded = recorder.prompts.map((prompt) => prompt.text);
         expect(recorded).toHaveLength(4);
 
         const files = await snapshot(turnsDir);
-        const turns = await count('turns');
-        const events = await count('events');
+        const before = await counts();
         const agentBefore = await store.db.query(
           'select * from agents where id = $1',
           [agentId],
         );
 
-        const replayer = await startScriptedAgent();
-        try {
-          replayer.reply(
-            say(resultText(BIRTH)),
-            say('Still no JSON.'),
-            say(resultText(BIRTH)),
-          );
-          const seen: number[] = [];
-          const replay = await replayDriverChain({
-            client: replayer.client,
-            cwd: '/work/deck',
-            turnsDir,
-            agentId,
-            through: 3,
-            onTurn: (turn) => seen.push(turn.seq),
-          });
+        const { connect, connections } = scriptedConnect(
+          say(resultText(BIRTH)),
+          say('Still no JSON.'),
+          say(resultText(BIRTH)),
+        );
+        const seen: number[] = [];
+        const replay = await replayDriverChain({
+          connect,
+          turnsDir,
+          agentId,
+          through: 3,
+          onTurn: (turn) => seen.push(turn.seq),
+        });
 
-          expect(replayer.sessions).toEqual([
-            { sessionId: replay.sessionId, cwd: '/work/deck', mcpServers: [] },
-          ]);
-          expect(replayer.prompts).toEqual(
-            recorded.slice(0, 3).map((text) => ({
-              sessionId: replay.sessionId,
-              text,
-            })),
-          );
-          expect(seen).toEqual([1, 2, 3]);
-          expect(replay.turns).toEqual<ReplayTurn[]>([
-            {
-              seq: 1,
-              input: recorded[0] ?? '',
-              savedOutput: resultText(BIRTH),
-              output: resultText(BIRTH),
-              stopReason: 'end_turn',
-              result: { ok: true, value: BIRTH },
-            },
-            {
-              seq: 2,
-              input: recorded[1] ?? '',
-              savedOutput: 'No JSON here.',
-              output: 'Still no JSON.',
-              stopReason: 'end_turn',
-              result: { ok: false, error: 'the reply has no JSON object' },
-            },
-            {
-              seq: 3,
-              input: recorded[2] ?? '',
-              savedOutput: resultText(ASSIGNED),
-              output: resultText(BIRTH),
-              stopReason: 'end_turn',
-              result: { ok: true, value: BIRTH },
-            },
-          ]);
-        } finally {
-          await replayer.client.close();
-        }
+        expect(connections).toHaveLength(1);
+        const [connection] = connections;
+        const cwd = connection?.setup.cwd ?? '';
+        expect(cwd.startsWith(join(tmpdir(), 'quarterdeck-replay-'))).toBe(
+          true,
+        );
+        expect(connection?.setup.onPermissionRequest).toBe(REPLAY_PERMISSIONS);
+        expect(connection?.agent.sessions).toEqual([
+          { sessionId: replay.sessionId, cwd, mcpServers: [] },
+        ]);
+        expect(connection?.agent.prompts).toEqual(
+          recorded.slice(0, 3).map((text) => ({
+            sessionId: replay.sessionId,
+            text,
+          })),
+        );
+        expect(connection?.closed).toBe(true);
+        expect(await pathExists(cwd)).toBe(false);
+        expect(seen).toEqual([1, 2, 3]);
+        expect(replay.turns).toEqual<ReplayTurn[]>([
+          {
+            seq: 1,
+            input: recorded[0] ?? '',
+            savedOutput: resultText(BIRTH),
+            output: resultText(BIRTH),
+            stopReason: 'end_turn',
+            result: { ok: true, value: BIRTH },
+          },
+          {
+            seq: 2,
+            input: recorded[1] ?? '',
+            savedOutput: 'No JSON here.',
+            output: 'Still no JSON.',
+            stopReason: 'end_turn',
+            result: { ok: false, error: 'the reply has no JSON object' },
+          },
+          {
+            seq: 3,
+            input: recorded[2] ?? '',
+            savedOutput: resultText(ASSIGNED),
+            output: resultText(BIRTH),
+            stopReason: 'end_turn',
+            result: { ok: true, value: BIRTH },
+          },
+        ]);
 
         expect(await snapshot(turnsDir)).toEqual(files);
-        expect(await count('turns')).toBe(turns);
-        expect(await count('events')).toBe(events);
+        expect(await counts()).toEqual(before);
         expect(
           (
             await store.db.query('select * from agents where id = $1', [
@@ -215,23 +289,97 @@ describe('Driver replay', () => {
       },
       TIMEOUT,
     );
+
+    it(
+      'rejects every permission the replayed agent asks for, with no card or event',
+      async () => {
+        await save(1, birthInput(1));
+        await save(2, 'permission', 'permission granted: allow-once');
+        const before = await counts();
+        const answered: RequestPermissionResponse[] = [];
+        const connect: ConnectReplay = async (setup) => {
+          const client = await connectAcpClient({
+            stream: connectFakeAgentInProcess(),
+            options: {
+              clientName: 'replay-test',
+              clientVersion: '0.0.0',
+              onPermissionRequest: setup.onPermissionRequest,
+            },
+          });
+          client.subscribe((event) => {
+            if (event.type === 'permission') answered.push(event.response);
+          });
+          return client;
+        };
+
+        const replay = await replayDriverChain({
+          ...chain(2),
+          connect,
+        });
+
+        expect(replay.turns[1]).toMatchObject({
+          seq: 2,
+          savedOutput: 'permission granted: allow-once',
+          output: 'permission rejected: reject-once',
+          stopReason: 'end_turn',
+        });
+        expect(answered).toEqual([
+          { outcome: { outcome: 'selected', optionId: 'reject-once' } },
+        ]);
+        expect(await counts()).toEqual(before);
+      },
+      TIMEOUT,
+    );
   });
 
-  it('keeps the replay text separate per turn and reports stop reasons', async () => {
-    await save(1, 'birth', resultText(BIRTH));
+  it('starts at the latest birth at or before n, so one round is replayed', async () => {
+    await save(1, birthInput(1));
+    await save(2, 'poke one');
+    await save(3, birthInput(2));
+    await save(4, 'poke two');
+    await save(5, repromptText('no JSON', DRIVER_TURN_INSTRUCTIONS));
+
+    expect((await readTurnChain(chain(5))).map((turn) => turn.seq)).toEqual([
+      3, 4, 5,
+    ]);
+    expect((await readTurnChain(chain(3))).map((turn) => turn.seq)).toEqual([
+      3,
+    ]);
+    expect((await readTurnChain(chain(2))).map((turn) => turn.seq)).toEqual([
+      1, 2,
+    ]);
+
+    const { connect, connections } = scriptedConnect(
+      say(resultText(BIRTH)),
+      say(resultText(BIRTH)),
+    );
+    await replayDriverChain({ ...chain(4), connect });
+    expect(connections[0]?.agent.prompts.map((prompt) => prompt.text)).toEqual([
+      birthInput(2),
+      'poke two',
+    ]);
+  });
+
+  it('refuses a chain with no birth input at or before n', async () => {
+    await save(1, 'poke');
+    await save(2, 'poke again');
+    const { connect, connections } = scriptedConnect();
+
+    await expect(
+      replayDriverChain({ ...chain(2), connect }),
+    ).rejects.toBeInstanceOf(NoBirthTurnError);
+    expect(connections).toEqual([]);
+  });
+
+  it('reports stop reasons and a missing saved output', async () => {
+    await save(1, birthInput(1), resultText(BIRTH));
     await save(2, 'poke');
-    scripted.reply(say(resultText(BIRTH)), {
+    const { connect } = scriptedConnect(say(resultText(BIRTH)), {
       chunks: ['I will not.'],
       stopReason: 'refusal',
     });
 
-    const replay = await replayDriverChain({
-      client: scripted.client,
-      cwd: '/work/deck',
-      turnsDir,
-      agentId: AGENT_ID,
-      through: 2,
-    });
+    const replay = await replayDriverChain({ ...chain(2), connect });
 
     expect(replay.turns[1]).toEqual({
       seq: 2,
@@ -243,17 +391,12 @@ describe('Driver replay', () => {
     });
   });
 
-  it('opens no session when an input in 1..n is missing', async () => {
-    await save(1, 'birth');
+  it('connects nothing when an input in the chain is missing', async () => {
+    await save(1, birthInput(1));
     await save(3, 'third');
+    const { connect, connections } = scriptedConnect();
 
-    const replay = replayDriverChain({
-      client: scripted.client,
-      cwd: '/work/deck',
-      turnsDir,
-      agentId: AGENT_ID,
-      through: 3,
-    });
+    const replay = replayDriverChain({ ...chain(3), connect });
 
     await expect(replay).rejects.toBeInstanceOf(TurnInputMissingError);
     await expect(replay).rejects.toMatchObject({
@@ -261,56 +404,45 @@ describe('Driver replay', () => {
       seq: 2,
       path: turnFile(turnDir(turnsDir, AGENT_ID, 2), 'input'),
     });
-    expect(scripted.sessions).toEqual([]);
+    expect(connections).toEqual([]);
   });
 
-  it('rejects when a prompt fails and still writes nothing', async () => {
-    await save(1, 'birth');
+  it('closes its client and removes its directory when a prompt fails', async () => {
+    await save(1, birthInput(1));
     await save(2, 'poke');
-    scripted.reply(say(resultText(BIRTH)), { fail: 'agent died' });
-
-    await expect(
-      replayDriverChain({
-        client: scripted.client,
-        cwd: '/work/deck',
-        turnsDir,
-        agentId: AGENT_ID,
-        through: 2,
-      }),
-    ).rejects.toThrow('agent died');
-    expect(await snapshot(turnsDir)).toEqual({
-      [turnFile(turnDir(turnsDir, AGENT_ID, 1), 'input')]: 'birth',
-      [turnFile(turnDir(turnsDir, AGENT_ID, 2), 'input')]: 'poke',
+    const files = await snapshot(turnsDir);
+    const { connect, connections } = scriptedConnect(say(resultText(BIRTH)), {
+      fail: 'agent died',
     });
+
+    await expect(replayDriverChain({ ...chain(2), connect })).rejects.toThrow(
+      'agent died',
+    );
+    expect(connections[0]?.closed).toBe(true);
+    expect(await pathExists(connections[0]?.setup.cwd ?? '')).toBe(false);
+    expect(await snapshot(turnsDir)).toEqual(files);
   });
 
-  it('reads only turns 1..n', async () => {
-    await save(1, 'birth', 'reply one');
-    await save(2, 'poke');
-    await save(3, 'later');
+  it('runs in a cwd the caller names and leaves it in place', async () => {
+    await save(1, birthInput(1));
+    const cwd = await mkdtemp(join(tmpdir(), 'qd-replay-cwd-'));
+    try {
+      const { connect, connections } = scriptedConnect(say(resultText(BIRTH)));
 
-    expect(
-      await readTurnChain({ turnsDir, agentId: AGENT_ID, through: 2 }),
-    ).toEqual([
-      {
-        seq: 1,
-        dir: turnDir(turnsDir, AGENT_ID, 1),
-        input: 'birth',
-        output: 'reply one',
-      },
-      {
-        seq: 2,
-        dir: turnDir(turnsDir, AGENT_ID, 2),
-        input: 'poke',
-        output: null,
-      },
-    ]);
+      await replayDriverChain({ ...chain(1), connect, cwd });
+
+      expect(connections[0]?.setup.cwd).toBe(cwd);
+      expect(connections[0]?.agent.sessions[0]?.cwd).toBe(cwd);
+      expect(await pathExists(cwd)).toBe(true);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
   });
 
   it.each([0, -1, 1.5, Number.NaN])('refuses n = %s', async (through) => {
-    await expect(
-      readTurnChain({ turnsDir, agentId: AGENT_ID, through }),
-    ).rejects.toBeInstanceOf(RangeError);
+    await expect(readTurnChain(chain(through))).rejects.toBeInstanceOf(
+      RangeError,
+    );
   });
 
   it.each(['../other', 'not-a-uuid', ''])(
@@ -323,8 +455,46 @@ describe('Driver replay', () => {
   );
 });
 
+describe('REPLAY_PERMISSIONS', () => {
+  const request = (options: PermissionOption[]) => ({
+    sessionId: 'replay-1',
+    toolCall: { toolCallId: 'call-1', title: 'git push' },
+    options,
+  });
+
+  it('picks a reject option and never an allow one', async () => {
+    await expect(
+      REPLAY_PERMISSIONS(
+        request([
+          { optionId: 'yes', name: 'Allow', kind: 'allow_once' },
+          { optionId: 'always', name: 'Always', kind: 'allow_always' },
+          { optionId: 'never', name: 'Never', kind: 'reject_always' },
+        ]),
+      ),
+    ).resolves.toEqual({ outcome: { outcome: 'selected', optionId: 'never' } });
+  });
+
+  it('cancels when there is nothing to reject with', async () => {
+    await expect(
+      REPLAY_PERMISSIONS(
+        request([{ optionId: 'yes', name: 'Allow', kind: 'allow_once' }]),
+      ),
+    ).resolves.toEqual(CANCELLED_PERMISSION);
+  });
+});
+
+describe('isBirthInput', () => {
+  it('tells a birth input from the prompts that follow it', () => {
+    expect(isBirthInput(birthInput(3))).toBe(true);
+    expect(isBirthInput('heron reported QD12.')).toBe(false);
+    expect(
+      isBirthInput(repromptText('no JSON', DRIVER_TURN_INSTRUCTIONS)),
+    ).toBe(false);
+  });
+});
+
 describe('replayCommand', () => {
-  it('prints the command the dashboard shows for turns 1..n', () => {
+  it('prints the command the dashboard shows for a turn', () => {
     expect(
       replayCommand({ project: 'commander', agentId: AGENT_ID, through: 7 }),
     ).toBe(`${REPLAY_COMMAND} commander ${AGENT_ID} 7`);
