@@ -42,8 +42,8 @@ import {
 
 const exec = promisify(execFile);
 
-const ORIGIN = 'git@github.com:legion/quarterdeck.git';
-const PR = 'https://github.com/legion/quarterdeck/pull/23';
+const ORIGIN = 'git@github.com:example-org/quarterdeck.git';
+const PR = 'https://github.com/example-org/quarterdeck/pull/23';
 const HEAD = '0123456789abcdef0123456789abcdef01234567';
 const NEXT = 'fedcba9876543210fedcba9876543210fedcba98';
 const HOUR = 3_600_000;
@@ -56,7 +56,11 @@ const RULES: MergeGate = {
 };
 
 const ready = (): PullRequest => ({
-  repository: { hostname: 'github.com', owner: 'legion', name: 'quarterdeck' },
+  repository: {
+    hostname: 'github.com',
+    owner: 'example-org',
+    name: 'quarterdeck',
+  },
   base: 'main',
   defaultBranch: 'main',
   state: 'open',
@@ -609,7 +613,7 @@ describe('review gate', () => {
     expect(await mergeCards()).toEqual([]);
     expect(await status(ticketId)).toBe('bounced');
     expect((await gateEvents(GATE_EVENTS.bounced))[0]?.payload).toEqual({
-      reason: `the pull request ${foreign} is not in this project's repository github.com/legion/quarterdeck; open it there and report again`,
+      reason: `the pull request ${foreign} is not in this project's repository github.com/example-org/quarterdeck; open it there and report again`,
       pr: foreign,
       head: HEAD,
     });

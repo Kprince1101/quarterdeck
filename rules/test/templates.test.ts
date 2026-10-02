@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_RULES_DIR } from '@quarterdeck/rules';
+import { PRIVATE_NAMES } from './private-names.js';
 
 const ROOT = resolve(import.meta.dirname, '../..');
 const TEMPLATES = ['charter.md', 'reviewer.md'];
@@ -10,7 +11,6 @@ const NAME_SOURCES = ['SPEC.md', 'LICENSE.md', 'TRADEMARK.md'];
 const MID_SENTENCE_CAPITALISED = /(?<=[a-z0-9,'"(/-] *)\b[A-Z][A-Za-z0-9]*\b/g;
 
 const NAMES_NOT_CAPITALISED_IN_SOURCES = [
-  'commander',
   'harness',
   'Claude',
   'Anthropic',
@@ -32,11 +32,7 @@ const QUARTERDECK_VOCABULARY = new Set([
 ]);
 
 const REQUIRED_NAMES = [
-  'Legion',
-  'NAIC',
-  'commander',
   'harness',
-  'Supabase',
   'Vercel',
   'Amazon',
   'Anthropic',
@@ -49,7 +45,7 @@ const REQUIRED_NAMES = [
 ];
 
 const PROBE =
-  "You are the Driver of Legion's Quarterdeck crew, running on Kiro and Claude for the NAIC commander repo.";
+  "You are the Driver of Amazon's Quarterdeck crew, running on Kiro and Claude for the Vercel harness repo.";
 
 const read = (path: string) => readFileSync(path, 'utf8');
 
@@ -69,8 +65,15 @@ const sourceNames = () =>
       ) ?? [],
   );
 
+const byLowerCase = (names: string[]) =>
+  new Map(names.map((name) => [name.toLowerCase(), name])).values();
+
 const NAMES = [
-  ...new Set([...sourceNames(), ...NAMES_NOT_CAPITALISED_IN_SOURCES]),
+  ...byLowerCase([
+    ...PRIVATE_NAMES,
+    ...NAMES_NOT_CAPITALISED_IN_SOURCES,
+    ...sourceNames(),
+  ]),
 ]
   .filter((name) => !QUARTERDECK_VOCABULARY.has(name))
   .toSorted();
@@ -85,17 +88,24 @@ describe('charter and reviewer templates', () => {
 
   it('flags every name in a leaky charter line', () => {
     expect(leaks(PROBE)).toEqual([
+      'Amazon',
       'Claude',
       'Kiro',
-      'Legion',
-      'NAIC',
-      'commander',
+      'Vercel',
+      'harness',
     ]);
+  });
+
+  it('flags every private name', () => {
+    const flagged = leaks(PRIVATE_NAMES.join(' ').toUpperCase());
+    expect(flagged.map((name) => name.toLowerCase()).toSorted()).toEqual(
+      PRIVATE_NAMES.toSorted(),
+    );
   });
 
   it('matches names case-insensitively on word boundaries', () => {
     expect(leaks('run on KIRO with gemini')).toEqual(['Gemini', 'Kiro']);
-    expect(leaks('a harnessed commanderless crew')).toEqual([]);
+    expect(leaks('a harnessed Kiroless crew')).toEqual([]);
   });
 
   it.each(TEMPLATES)('%s names no person, company or product', (file) => {

@@ -14,7 +14,7 @@ import {
   ticketRow,
 } from './fixtures.ts';
 
-const PR = 'https://github.com/legion/quarterdeck/pull/19';
+const PR = 'https://github.com/example-org/quarterdeck/pull/19';
 const HEAD = '0123456789abcdef0123456789abcdef01234567';
 
 describe('bus report', () => {
@@ -116,7 +116,7 @@ describe('bus report', () => {
       const ticketId = await assigned(status);
       await store.db.query(
         'update tickets set pr_url = $2, head_sha = $3 where id = $1',
-        [ticketId, 'https://github.com/legion/quarterdeck/pull/1', HEAD],
+        [ticketId, 'https://github.com/example-org/quarterdeck/pull/1', HEAD],
       );
 
       const reply = await callTool(client, 'report', {

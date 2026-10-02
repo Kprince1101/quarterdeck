@@ -13,7 +13,7 @@ import {
   ticketRow,
 } from './fixtures.ts';
 
-const PR = 'https://github.com/legion/quarterdeck/pull/19';
+const PR = 'https://github.com/example-org/quarterdeck/pull/19';
 const HEAD = '0123456789abcdef0123456789abcdef01234567';
 
 describe('bus verdict', () => {

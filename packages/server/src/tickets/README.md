@@ -64,8 +64,8 @@ export default ({ project }) => ({
 ```ts
 import { loadTicketSource, openTicketSource } from '@quarterdeck/server';
 
-const tracker = await loadTicketSource('tracker', { project: 'commander' });
-const source = await openTicketSource(store, { project: 'commander', plugin }); // local when plugin is undefined
+const tracker = await loadTicketSource('tracker', { project: 'example' });
+const source = await openTicketSource(store, { project: 'example', plugin }); // local when plugin is undefined
 ```
 
 `loadTicketSource` throws `TicketSourcePluginError` when the name is refused, the folder or file is missing, the folder is reached through a symlink, the file resolves outside the folder, the module fails to import, its default export is not a function, throws, or returns something without all four methods. Once loaded, anything a method throws becomes a `TicketSourceError` naming the plugin and the method, with the original as `cause`, and a `listApproved` result is checked: a list of `{ ref, title, body? }` with a non-blank title and no ref twice (`body` defaults to `''`, `title` is trimmed). Node caches the module, so an edited plugin takes effect on the next start.

@@ -284,7 +284,7 @@ export const parsePullRequest = (url: string, json: string): PullRequest => {
 
 const exec = promisify(execFile);
 
-const commandError = (command: string, err: unknown): Error => {
+const execError = (command: string, err: unknown): Error => {
   const stderr = (err as { stderr?: unknown }).stderr;
   let detail = String(err);
   if (typeof stderr === 'string' && stderr.trim() !== '')
@@ -298,7 +298,7 @@ export const runGh: GhRunner = async (args) => {
     const { stdout } = await exec('gh', args, { maxBuffer: 16 * 1024 * 1024 });
     return stdout;
   } catch (err) {
-    throw commandError(`gh ${args.slice(0, 2).join(' ')}`, err);
+    throw execError(`gh ${args.slice(0, 2).join(' ')}`, err);
   }
 };
 
@@ -307,7 +307,7 @@ export const runGit: GitRunner = async (args) => {
     const { stdout } = await exec('git', args);
     return stdout;
   } catch (err) {
-    throw commandError(`git ${args.join(' ')}`, err);
+    throw execError(`git ${args.join(' ')}`, err);
   }
 };
 

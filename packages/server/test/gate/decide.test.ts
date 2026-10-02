@@ -14,11 +14,11 @@ import type { TicketFacts } from '../../src/gate/facts.js';
 
 const PROJECT: RepositoryRef = {
   hostname: 'github.com',
-  owner: 'legion',
+  owner: 'example-org',
   name: 'quarterdeck',
 };
 
-const PR = 'https://github.com/legion/quarterdeck/pull/23';
+const PR = 'https://github.com/example-org/quarterdeck/pull/23';
 const HEAD = '0123456789abcdef0123456789abcdef01234567';
 const OTHER = 'fedcba9876543210fedcba9876543210fedcba98';
 
@@ -279,7 +279,7 @@ describe('merge step', () => {
     });
     expect(mergeStep(APPROVAL, fork, 'merge', RULES)).toEqual({
       kind: 'bounce',
-      reason: `the pull request ${PR} is not in this project's repository github.com/legion/quarterdeck; open it there and report again`,
+      reason: `the pull request ${PR} is not in this project's repository github.com/example-org/quarterdeck; open it there and report again`,
     });
   });
 
@@ -287,7 +287,7 @@ describe('merge step', () => {
     const shouty = pull({
       repository: {
         hostname: 'GitHub.com',
-        owner: 'Legion',
+        owner: 'Example-Org',
         name: 'QuarterDeck',
       },
     });
@@ -334,7 +334,7 @@ describe('merge step', () => {
     ).toEqual({
       kind: 'bounce',
       reason:
-        'github.com/legion/quarterdeck has no default branch to merge into; set mergeGate.base',
+        'github.com/example-org/quarterdeck has no default branch to merge into; set mergeGate.base',
     });
   });
 });
@@ -344,7 +344,7 @@ describe('foreign pull request', () => {
     expect(foreignPullRequest(PR, PROJECT)).toBeUndefined();
     expect(
       foreignPullRequest(
-        'https://GITHUB.com/Legion/Quarterdeck/pull/7',
+        'https://GITHUB.com/Example-Org/Quarterdeck/pull/7',
         PROJECT,
       ),
     ).toBeUndefined();
@@ -353,17 +353,17 @@ describe('foreign pull request', () => {
   it('names another owner, repository or host', () => {
     for (const url of [
       'https://github.com/mallory/quarterdeck/pull/23',
-      'https://github.com/legion/commander/pull/23',
-      'https://ghe.example.com/legion/quarterdeck/pull/23',
+      'https://github.com/example-org/example/pull/23',
+      'https://ghe.example.com/example-org/quarterdeck/pull/23',
     ])
       expect(foreignPullRequest(url, PROJECT)).toBe(
-        `the pull request ${url} is not in this project's repository github.com/legion/quarterdeck; open it there and report again`,
+        `the pull request ${url} is not in this project's repository github.com/example-org/quarterdeck; open it there and report again`,
       );
   });
 
   it('names a URL that is not a pull request', () => {
     expect(
-      foreignPullRequest('https://github.com/legion/quarterdeck', PROJECT),
+      foreignPullRequest('https://github.com/example-org/quarterdeck', PROJECT),
     ).toContain('is not a GitHub pull request URL');
   });
 });

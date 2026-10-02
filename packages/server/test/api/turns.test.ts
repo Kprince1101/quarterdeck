@@ -97,32 +97,32 @@ describe('turn.read', { timeout: TIMEOUT }, () => {
     await t.send('project.create', { project });
     store = await t.store(project);
     turnsDir = projectTurnsDir(project, join(t.homeDir, '.quarterdeck'));
-    const newt = await insertAgent('newt', 'driver');
+    const driver1 = await insertAgent('driver-1', 'driver');
     const heron = await insertAgent('heron', 'driver');
     const otter = await insertAgent('otter', 'builder');
     const stray = await insertAgent('stray', 'driver');
-    await roundStarted(newt, 1);
-    await roundStarted(newt, 2);
+    await roundStarted(driver1, 1);
+    await roundStarted(driver1, 2);
     await roundStarted(heron, 2);
     const result = { summary: 'assigned QD1', actions: [] };
-    turns.birth = await save(newt, {
+    turns.birth = await save(driver1, {
       seq: 1,
-      input: birthInput('newt', 1),
+      input: birthInput('driver-1', 1),
       output: 'born',
       bornAt: new Date('2026-01-01'),
     });
-    turns.second = await save(newt, {
+    turns.second = await save(driver1, {
       seq: 2,
       input: 'gull reported QD1.',
       output: '```json\n{}\n```',
       result,
     });
-    turns.reborn = await save(newt, {
+    turns.reborn = await save(driver1, {
       seq: 3,
-      input: birthInput('newt', 2),
+      input: birthInput('driver-1', 2),
       bornAt: new Date('2026-01-02'),
     });
-    turns.earlier = await save(newt, { seq: 4, input: 'still round 2' });
+    turns.earlier = await save(driver1, { seq: 4, input: 'still round 2' });
     turns.later = await save(heron, {
       seq: 1,
       input: birthInput('heron', 2),

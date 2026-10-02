@@ -134,7 +134,7 @@ describe('wrap-up', { timeout: TIMEOUT }, () => {
   };
 
   it('asks the Driver for proposals in its round session, listing entries by id', async () => {
-    const kept = await addNote('Reviews go to thimble.');
+    const kept = await addNote('Reviews go to reviewer-1.');
     const pinned = await addNote('PRs need tests.', true);
     const round = await openRound();
     scripted.reply(
@@ -165,7 +165,7 @@ describe('wrap-up', { timeout: TIMEOUT }, () => {
       }),
     );
     expect(prompt?.text).toContain(`### ${pinned} (pinned)\n\nPRs need tests.`);
-    expect(prompt?.text).toContain(`### ${kept}\n\nReviews go to thimble.`);
+    expect(prompt?.text).toContain(`### ${kept}\n\nReviews go to reviewer-1.`);
     expect(prompt?.text).toContain('Round 3 has settled');
     expect(prompt?.text).toContain(CHARTER);
   });

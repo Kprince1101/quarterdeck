@@ -107,7 +107,7 @@ describe('round cleanup', { timeout: TIMEOUT }, () => {
       sessionId: 'pike-session',
       worktreePath: '/wt/pike-1',
     });
-    await insertAgent(store, { name: 'thimble', role: 'reviewer', roundId });
+    await insertAgent(store, { name: 'reviewer-1', role: 'reviewer', roundId });
     await insertAgent(store, { name: 'okapi', roundId: other });
 
     const cleanup = await cleanUpRound({
@@ -130,7 +130,7 @@ describe('round cleanup', { timeout: TIMEOUT }, () => {
       lark: 'retired',
       okapi: 'idle',
       pike: 'retired',
-      thimble: 'idle',
+      'reviewer-1': 'idle',
     });
     expect(sessions.closed).toEqual(['pike-session', 'driver-session']);
     expect(worktrees.removed).toEqual([{ path: '/wt/pike-1', force: false }]);
@@ -158,7 +158,7 @@ describe('round cleanup', { timeout: TIMEOUT }, () => {
     });
     const builder = await insertAgent(store, { name: 'pike', roundId });
     const reviewer = await insertAgent(store, {
-      name: 'thimble',
+      name: 'reviewer-1',
       role: 'reviewer',
     });
     const ask = await insertCard(store, { agentId: builder });
@@ -197,7 +197,10 @@ describe('round cleanup', { timeout: TIMEOUT }, () => {
     expect(expired[0]).toMatchObject({ roundId, reason: 'ended' });
     expect(cleanup.retired).toEqual([driver]);
     expect(cleanup.discardCards).toEqual([]);
-    expect(await statuses()).toMatchObject({ pike: 'idle', thimble: 'idle' });
+    expect(await statuses()).toMatchObject({
+      pike: 'idle',
+      'reviewer-1': 'idle',
+    });
   });
 
   it('kills a round: reopens only the tickets its own builders hold', async () => {

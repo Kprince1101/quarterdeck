@@ -19,7 +19,7 @@ import {
 
 const exec = promisify(execFile);
 
-const PR = 'https://github.com/legion/quarterdeck/pull/23';
+const PR = 'https://github.com/example-org/quarterdeck/pull/23';
 const HEAD = '0123456789abcdef0123456789abcdef01234567';
 
 interface Who {
@@ -64,8 +64,8 @@ const reply = (shape: Shape = {}): string =>
       repository: {
         pullRequest: {
           repository: {
-            nameWithOwner: shape.nameWithOwner ?? 'legion/quarterdeck',
-            url: shape.repoUrl ?? 'https://github.com/legion/quarterdeck',
+            nameWithOwner: shape.nameWithOwner ?? 'example-org/quarterdeck',
+            url: shape.repoUrl ?? 'https://github.com/example-org/quarterdeck',
             defaultBranchRef: defaultBranchOf(shape),
           },
           baseRefName: shape.base ?? 'main',
@@ -98,7 +98,7 @@ describe('gh pull request host', () => {
   it('parses a pull request URL', () => {
     expect(parsePullRequestUrl(PR)).toEqual({
       hostname: 'github.com',
-      owner: 'legion',
+      owner: 'example-org',
       name: 'quarterdeck',
       number: 23,
     });
@@ -109,8 +109,8 @@ describe('gh pull request host', () => {
 
   it('refuses a URL that is not a pull request', () => {
     for (const url of [
-      'https://github.com/legion/quarterdeck/issues/23',
-      'https://github.com/legion/quarterdeck',
+      'https://github.com/example-org/quarterdeck/issues/23',
+      'https://github.com/example-org/quarterdeck',
       'not a url',
     ])
       expect(() => parsePullRequestUrl(url)).toThrow(
@@ -122,7 +122,7 @@ describe('gh pull request host', () => {
     expect(parsePullRequest(PR, reply())).toEqual({
       repository: {
         hostname: 'github.com',
-        owner: 'legion',
+        owner: 'example-org',
         name: 'quarterdeck',
       },
       base: 'main',
@@ -193,8 +193,8 @@ describe('gh pull request host', () => {
     const pr = parsePullRequest(
       PR,
       reply({
-        nameWithOwner: 'Legion/Quarterdeck',
-        repoUrl: 'https://GHE.example.com/Legion/Quarterdeck',
+        nameWithOwner: 'Example-Org/Quarterdeck',
+        repoUrl: 'https://GHE.example.com/Example-Org/Quarterdeck',
         base: 'release/1.0',
         defaultBranch: null,
       }),
@@ -202,7 +202,7 @@ describe('gh pull request host', () => {
 
     expect(pr.repository).toEqual({
       hostname: 'ghe.example.com',
-      owner: 'Legion',
+      owner: 'Example-Org',
       name: 'Quarterdeck',
     });
     expect(pr.base).toBe('release/1.0');
@@ -277,7 +277,7 @@ describe('gh pull request host', () => {
         '-f',
         `query=${PULL_REQUEST_QUERY}`,
         '-f',
-        'owner=legion',
+        'owner=example-org',
         '-f',
         'name=quarterdeck',
         '-F',
@@ -312,19 +312,19 @@ describe('gh pull request host', () => {
 describe('project repository', () => {
   const QUARTERDECK = {
     hostname: 'github.com',
-    owner: 'legion',
+    owner: 'example-org',
     name: 'quarterdeck',
   };
 
   it('parses https, ssh and scp-style remotes', () => {
     for (const remote of [
-      'https://github.com/legion/quarterdeck.git',
-      'https://github.com/legion/quarterdeck',
-      'https://token@github.com/legion/quarterdeck.git/\n',
-      'ssh://git@github.com/legion/quarterdeck.git',
-      'ssh://git@github.com:22/legion/quarterdeck',
-      'git@github.com:legion/quarterdeck.git',
-      'git@GitHub.com:legion/quarterdeck',
+      'https://github.com/example-org/quarterdeck.git',
+      'https://github.com/example-org/quarterdeck',
+      'https://token@github.com/example-org/quarterdeck.git/\n',
+      'ssh://git@github.com/example-org/quarterdeck.git',
+      'ssh://git@github.com:22/example-org/quarterdeck',
+      'git@github.com:example-org/quarterdeck.git',
+      'git@GitHub.com:example-org/quarterdeck',
     ])
       expect(parseRemoteUrl(remote)).toEqual(QUARTERDECK);
   });
@@ -345,7 +345,7 @@ describe('project repository', () => {
     expect(
       sameRepository(QUARTERDECK, {
         hostname: 'GitHub.com',
-        owner: 'Legion',
+        owner: 'Example-Org',
         name: 'Quarterdeck',
       }),
     ).toBe(true);
@@ -358,7 +358,7 @@ describe('project repository', () => {
     const calls: string[][] = [];
     const run: GitRunner = async (args) => {
       calls.push(args);
-      return 'git@github.com:legion/quarterdeck.git\n';
+      return 'git@github.com:example-org/quarterdeck.git\n';
     };
 
     expect(await originRepository('/repos/quarterdeck', run)).toEqual(
@@ -382,7 +382,7 @@ describe('project repository', () => {
         'remote',
         'add',
         'origin',
-        'https://github.com/legion/quarterdeck.git',
+        'https://github.com/example-org/quarterdeck.git',
       ]);
       expect(await originRepository(root)).toEqual(QUARTERDECK);
     } finally {

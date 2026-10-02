@@ -12,8 +12,8 @@ import {
 describe('store paths', () => {
   it('keeps one Postgres data dir per project under ~/.quarterdeck', () => {
     expect(quarterdeckHome()).toBe(join(homedir(), '.quarterdeck'));
-    expect(projectDataDir('commander')).toBe(
-      join(homedir(), '.quarterdeck', 'commander', 'pg'),
+    expect(projectDataDir('example')).toBe(
+      join(homedir(), '.quarterdeck', 'example', 'pg'),
     );
   });
 
@@ -22,16 +22,16 @@ describe('store paths', () => {
   });
 
   it('keeps turn files next to the data dir', () => {
-    expect(projectTurnsDir('commander')).toBe(
-      join(homedir(), '.quarterdeck', 'commander', 'turns'),
+    expect(projectTurnsDir('example')).toBe(
+      join(homedir(), '.quarterdeck', 'example', 'turns'),
     );
     expect(projectTurnsDir('qd-2', '/tmp/qd')).toBe('/tmp/qd/qd-2/turns');
     expect(() => projectTurnsDir('../escape')).toThrow('Invalid project slug');
   });
 
   it('keeps builder worktrees next to the data dir', () => {
-    expect(projectWorktreesDir('commander')).toBe(
-      join(homedir(), '.quarterdeck', 'commander', 'worktrees'),
+    expect(projectWorktreesDir('example')).toBe(
+      join(homedir(), '.quarterdeck', 'example', 'worktrees'),
     );
     expect(projectWorktreesDir('qd-2', '/tmp/qd')).toBe(
       '/tmp/qd/qd-2/worktrees',

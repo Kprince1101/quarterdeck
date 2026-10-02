@@ -44,9 +44,9 @@ Checks the three agent runtimes and `gh`: installed, which version, and signed i
 ```
 kiro-cli: 1.20.1, not signed in
   Sign in: kiro-cli login
-claude: 2.1.30, signed in (legion@example.com)
+claude: 2.1.30, signed in (user@example.com)
 gemini: 0.9.0, signed in (Google account)
-gh: 2.81.0, signed in (legion on github.com)
+gh: 2.81.0, signed in (example-org on github.com)
 
 1 of 4 need attention. Run the commands above, then quarterdeck doctor again.
 ```
@@ -60,7 +60,7 @@ gh: 2.81.0, signed in (legion on github.com)
 
 Quarterdeck runs claude through npx, so a standalone `claude` is not needed and not checked; the claude commands work without one. The claude probes run offline, from a neutral folder, with `npm_config_registry` set to the public registry, as the agent does. If npx has not fetched the pinned package yet, doctor says so instead of starting the 240 MB download itself. Each probe gets 15 seconds.
 
-`test/doctor.test.ts` runs every check against fake binaries on `PATH`. kiro-cli is only faked signed out; the signed-in path needs Legion's real `kiro-cli`:
+`test/doctor.test.ts` runs every check against fake binaries on `PATH`. kiro-cli is only faked signed out; the signed-in path needs a real, signed-in `kiro-cli`:
 
 ```sh
 QUARTERDECK_LIVE=1 npx vitest run packages/cli/test/doctor-live.test.ts
@@ -75,7 +75,7 @@ quarterdeck replay <round> [n] [--project <slug>] [--runtime kiro|claude|gemini]
 Sends a round's saved Driver prompts again, turns 1 to `n` of the round (1 is the birth; all of them by default), in one new session, and prints each reply as it arrives. This is the command the Driver widget prints (`replayCommand`). It is for seeing how the Driver reads a turn now, for example after changing the charter or the runtime.
 
 ```
-Replaying round 3 of commander: Driver newt (7d0f3a4e-2b1c-4c5d-9e8f-0a1b2c3d4e5f), turns 1 to 2 of 5, on kiro.
+Replaying round 3 of example: Driver driver-1 (7d0f3a4e-2b1c-4c5d-9e8f-0a1b2c3d4e5f), turns 1 to 2 of 5, on kiro.
 Nothing is saved. The agent has no Quarterdeck tools and every permission is refused.
 
 --- Turn 1 of 2 ---

@@ -9,7 +9,7 @@ The stream has no server of its own. The HTTP API mounts it on its server:
 ```ts
 import { attachStream, openStore } from '@quarterdeck/server';
 
-const store = await openStore({ project: 'commander' });
+const store = await openStore({ project: 'example' });
 const stream = attachStream(httpServer, {
   store,
   token: api.token,

@@ -41,7 +41,7 @@ The session connection fails closed. If it ends or errors for any reason other t
 ```ts
 import { openStore } from '@quarterdeck/server';
 
-const store = await openStore({ project: 'commander' });
+const store = await openStore({ project: 'example' });
 await store.db.query('select * from tickets where project_id = $1', [
   store.projectId,
 ]);

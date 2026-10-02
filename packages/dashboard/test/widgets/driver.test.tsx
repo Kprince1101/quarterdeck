@@ -28,7 +28,7 @@ const PROJECT_ID = '00000000-0000-4000-8000-000000000001';
 const ROUND_1 = '00000000-0000-4000-8000-000000000011';
 const ROUND_2 = '00000000-0000-4000-8000-000000000012';
 const ROUND_3 = '00000000-0000-4000-8000-000000000013';
-const NEWT = '00000000-0000-4000-8000-000000000021';
+const DRIVER_1 = '00000000-0000-4000-8000-000000000021';
 const KITE = '00000000-0000-4000-8000-000000000022';
 const OTTER = '00000000-0000-4000-8000-000000000023';
 const AT = '2026-10-01T12:00:00.000Z';
@@ -76,7 +76,7 @@ const turn = (id: number, agentId: string, seq: number): TurnRow => ({
   endedAt: AT,
 });
 
-const RUNNING = { ...turn(12, NEWT, 2), stopReason: null, endedAt: null };
+const RUNNING = { ...turn(12, DRIVER_1, 2), stopReason: null, endedAt: null };
 
 const SNAPSHOT: StreamMessage = {
   type: 'snapshot',
@@ -97,11 +97,16 @@ const SNAPSHOT: StreamMessage = {
     ],
     rounds: [round(ROUND_1, 1, 'ended'), round(ROUND_2, 2, 'active')],
     agents: [
-      agent(NEWT, 'newt', 'driver', ROUND_2),
+      agent(DRIVER_1, 'driver-1', 'driver', ROUND_2),
       agent(KITE, 'kite', 'driver', ROUND_1),
       agent(OTTER, 'otter', 'builder', ROUND_2),
     ],
-    turns: [turn(5, KITE, 1), turn(11, NEWT, 1), RUNNING, turn(20, OTTER, 1)],
+    turns: [
+      turn(5, KITE, 1),
+      turn(11, DRIVER_1, 1),
+      RUNNING,
+      turn(20, OTTER, 1),
+    ],
   },
   machine: { pausedAt: null },
 };
@@ -114,7 +119,7 @@ const READS: Record<number, Partial<TurnReadResult>> = {
 
 const readOf = (turnId: number): TurnReadResult => ({
   turnId,
-  agentId: NEWT,
+  agentId: DRIVER_1,
   seq: 1,
   input: `input ${turnId}`,
   output: `output ${turnId}`,
@@ -219,8 +224,8 @@ describe('Driver widget', () => {
     ]);
     expect(textOf(container, '.qd-driver-goal')).toBe('Goal 2.');
     expect(turnButtons(container).map((b) => b.textContent)).toEqual([
-      'Turn 2newt · running',
-      'Turn 1newt · end_turn',
+      'Turn 2driver-1 · running',
+      'Turn 1driver-1 · end_turn',
     ]);
     expect(turnButtons(container)[0]?.getAttribute('aria-pressed')).toBe(
       'true',
@@ -329,7 +334,7 @@ describe('Driver widget', () => {
     });
     expect(reads).toEqual([12, 12]);
     expect(turnButtons(container)[0]?.textContent).toBe(
-      'Turn 2newt · end_turn',
+      'Turn 2driver-1 · end_turn',
     );
     unmount();
   });
