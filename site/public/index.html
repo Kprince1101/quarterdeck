@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quarterdeck for Kiro</title>
+    <meta
+      name="description"
+      content="Run a crew of Kiro and Claude Code agents from one local board. No API keys, no account, no telemetry."
+    />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Quarterdeck <span>for Kiro</span></h1>
+        <p class="pitch">
+          Run a crew of Kiro and Claude Code agents from one local board.
+        </p>
+      </header>
+
+      <p class="detail">
+        One process on your machine. It starts agents through their own CLIs,
+        hands them tickets, reviews their pull requests, merges the ones that
+        pass, and stops for you only when a decision is irreversible or
+        product-shaped.
+      </p>
+
+      <ul class="promises">
+        <li>No API keys</li>
+        <li>No account</li>
+        <li>No telemetry</li>
+        <li>Your data in one folder</li>
+      </ul>
+
+      <section class="install" aria-label="Install">
+        <pre><code id="install-line">npx quarterdeck up</code></pre>
+      </section>
+
+      <figure class="screenshot" data-slot="screenshot">
+        <div
+          class="screenshot-frame"
+          role="img"
+          aria-label="Dashboard screenshot coming soon"
+        >
+          Dashboard screenshot
+        </div>
+        <figcaption>
+          The dashboard at localhost: Board, Planner, Driver, Notebook, Events.
+        </figcaption>
+      </figure>
+    </main>
+
+    <footer>
+      <p>
+        MIT licensed. &copy; Kristopher Prince. &ldquo;Kiro&rdquo; is a
+        trademark of Amazon.com, Inc. or its affiliates. Quarterdeck is not
+        affiliated with or endorsed by Amazon.
+      </p>
+    </footer>
+  </body>
+</html>
