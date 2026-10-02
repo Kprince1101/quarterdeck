@@ -92,6 +92,7 @@ const SNAPSHOT: StreamMessage = {
         createdAt: AT,
         updatedAt: AT,
         archivedAt: null,
+        pausedAt: null,
       },
     ],
     rounds: [round(ROUND_1, 1, 'ended'), round(ROUND_2, 2, 'active')],

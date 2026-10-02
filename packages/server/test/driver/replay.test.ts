@@ -230,6 +230,7 @@ describe('Driver replay', () => {
           charter: '# Driver charter',
           turnsDir,
           budget: { hours: 5, capTokens: null, holdAtFraction: 0.8 },
+          pause: { hold: (_subject, run) => run() },
         });
         await round.birth;
         await round.turn('heron reported QD12.');

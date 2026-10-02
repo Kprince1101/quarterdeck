@@ -3,6 +3,12 @@ import { getErrorMessage, loadRule } from '@quarterdeck/rules';
 import type { CardHuman } from '../acp/permissions/index.js';
 import { createAgentLifecycle, gitWorktrees } from '../agents/index.js';
 import {
+  PauseDroppedError,
+  pauseLabel,
+  type PauseGuard,
+  type PauseSubject,
+} from '../pause/index.js';
+import {
   publishEvent,
   type PublishInput,
   type Store,
@@ -47,6 +53,7 @@ export interface PlannerOptions {
   store: Store;
   bus: PlannerBus;
   openStores: () => readonly Store[];
+  pause: PauseGuard;
   adapters?: PlannerAdapters;
   homeDir?: string;
   cardHuman?: CardHuman;
@@ -121,6 +128,7 @@ export const startPlanner = async (
   let running: Promise<void> | undefined;
   let again = false;
   let closing = false;
+  let holding: AbortController | undefined;
 
   const refuse = (intent: PlannerIntent, error: string): Promise<void> =>
     store.db.transaction(async (tx) => {
@@ -180,7 +188,7 @@ export const startPlanner = async (
     }
   };
 
-  const handleMessage = async (intent: PlannerIntent): Promise<void> => {
+  const converse = async (intent: PlannerIntent): Promise<void> => {
     const active = await ensureConversation(intent);
     if (!active) return;
     try {
@@ -193,6 +201,25 @@ export const startPlanner = async (
     } catch (err) {
       await endConversation('failed');
       await refuse(intent, getErrorMessage(err));
+    }
+  };
+
+  const handleMessage = async (intent: PlannerIntent): Promise<void> => {
+    const stop = new AbortController();
+    holding = stop;
+    const subject: PauseSubject = {
+      operation: 'planner.turn',
+      label: pauseLabel('message', intent.text ?? ''),
+    };
+    if (conversation) subject.agentId = conversation.agent.id;
+    try {
+      await options.pause.hold(subject, () => converse(intent), {
+        signal: stop.signal,
+      });
+    } catch (err) {
+      if (!(err instanceof PauseDroppedError && stop.signal.aborted)) throw err;
+    } finally {
+      holding = undefined;
     }
   };
 
@@ -248,7 +275,10 @@ export const startPlanner = async (
 
   const onEvent = (event: StoreEvent): void => {
     if (!PLANNER_INTENT_KINDS.includes(event.kind)) return;
-    if (event.kind === PLANNER_NEW) stopSignInWaits();
+    if (event.kind === PLANNER_NEW) {
+      stopSignInWaits();
+      holding?.abort();
+    }
     if (event.kind === PLANNER_NEW && conversation)
       cancelTurn(conversation).catch(onError);
     drain().catch(onError);
@@ -262,6 +292,7 @@ export const startPlanner = async (
     closing = true;
     await subscription.close();
     stopSignInWaits();
+    holding?.abort();
     if (conversation) await cancelTurn(conversation).catch(onError);
     await running?.catch(() => undefined);
     await endConversation('shutdown');

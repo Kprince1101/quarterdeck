@@ -105,6 +105,7 @@ describe('wrap-up', { timeout: TIMEOUT }, () => {
       charter: CHARTER,
       turnsDir,
       budget: { hours: 5, capTokens: null, holdAtFraction: 0.8 },
+      pause: { hold: (_subject, run) => run() },
     });
     await round.birth;
     return round;

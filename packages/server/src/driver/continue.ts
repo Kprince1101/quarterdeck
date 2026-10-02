@@ -1,5 +1,6 @@
 import type { Agent } from '../agents/index.js';
 import { assertLaunchBudget } from '../budget/index.js';
+import { pauseLabel, type PauseSubject } from '../pause/index.js';
 import type { PublishInput } from '../store/index.js';
 import {
   builderTarget,
@@ -15,7 +16,7 @@ export { BUILDER_CONTINUED_EVENT };
 
 export type ContinueContext = Pick<
   BuilderContext,
-  'store' | 'sessions' | 'turnsDir' | 'budget'
+  'store' | 'sessions' | 'turnsDir' | 'budget' | 'pause'
 >;
 
 export interface ContinueRequest {
@@ -29,20 +30,16 @@ export interface Continuation {
   turn: Promise<TurnRecord>;
 }
 
-export const continueBuilder = async (
+const sendContinue = async (
   ctx: ContinueContext,
-  request: ContinueRequest,
+  builderId: string,
+  prompt: string,
 ): Promise<Continuation> => {
-  const prompt = request.prompt.trim();
-  if (prompt === '') throw new Error('A continue prompt cannot be empty');
-  await assertLaunchBudget(ctx.store, ctx.budget, {
-    agentId: request.builderId,
+  await assertLaunchBudget(ctx.store, ctx.budget, { agentId: builderId });
+  const { builder, ticketId } = await claimBuilder(ctx.store, builderId, {
+    free: false,
+    session: true,
   });
-  const { builder, ticketId } = await claimBuilder(
-    ctx.store,
-    request.builderId,
-    { free: false, session: true },
-  );
   const target = await withClaim(ctx.store, builder.id, async () => {
     const found = builderTarget(ctx, builder, ticketId);
     const head = await worktreeHead(builder.worktreePath);
@@ -57,4 +54,20 @@ export const continueBuilder = async (
     return found;
   });
   return { builder, ticketId, turn: promptBuilder(target, prompt) };
+};
+
+export const continueBuilder = async (
+  ctx: ContinueContext,
+  request: ContinueRequest,
+): Promise<Continuation> => {
+  const prompt = request.prompt.trim();
+  if (prompt === '') throw new Error('A continue prompt cannot be empty');
+  const subject: PauseSubject = {
+    operation: 'continue',
+    label: pauseLabel('continue', prompt),
+    agentId: request.builderId,
+  };
+  return ctx.pause.hold(subject, () =>
+    sendContinue(ctx, request.builderId, prompt),
+  );
 };

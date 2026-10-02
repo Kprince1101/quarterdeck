@@ -31,6 +31,7 @@ export const SHIPPED_MIGRATIONS = [
   '0006_card_context',
   '0008_ticket_proposals',
   '0012_turns_ended_at',
+  '0015_project_pause',
   '0018_notebook_proposals',
 ];
 

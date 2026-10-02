@@ -9,6 +9,7 @@ import {
   type BirthRequest,
 } from '../agents/index.js';
 import { assertLaunchBudget } from '../budget/index.js';
+import { pauseLabel, type PauseSubject } from '../pause/index.js';
 import { publishEvent } from '../store/index.js';
 import { buildAssignmentPrompt } from './assignment-prompt.js';
 import {
@@ -264,12 +265,30 @@ const handOver = async (
   };
 };
 
+const launchSubject = (
+  verb: string,
+  ticket: BuilderTicket,
+  builderId: string | undefined,
+): PauseSubject => {
+  const subject: PauseSubject = {
+    operation: 'launch',
+    label: pauseLabel(verb, ticket.title),
+    ticketId: ticket.id,
+  };
+  if (builderId !== undefined) subject.agentId = builderId;
+  return subject;
+};
+
 export const assignTicket = async (
   ctx: BuilderContext,
   request: AssignRequest,
 ): Promise<Assignment> => {
   const ticket = await findApprovedTicket(ctx.store, request.ticketId);
-  return handOver(ctx, ticket, request.builderId, null);
+  const subject = launchSubject('assign', ticket, request.builderId);
+  return ctx.pause.hold(subject, async () => {
+    const approved = await findApprovedTicket(ctx.store, ticket.id);
+    return handOver(ctx, approved, request.builderId, null);
+  });
 };
 
 export const reassignTickets = async (
@@ -282,7 +301,14 @@ export const reassignTickets = async (
   const tickets = await heldTickets(ctx.store, retiredId);
   const assignments: Assignment[] = [];
   for (const ticket of tickets) {
-    assignments.push(await handOver(ctx, ticket, undefined, retiredId));
+    const subject = launchSubject('reassign', ticket, undefined);
+    const assignment = await ctx.pause.hold(subject, async () => {
+      const held = await heldTickets(ctx.store, retiredId);
+      const current = held.find((row) => row.id === ticket.id);
+      if (current === undefined) return undefined;
+      return handOver(ctx, current, undefined, retiredId);
+    });
+    if (assignment !== undefined) assignments.push(assignment);
   }
   return assignments;
 };

@@ -20,6 +20,8 @@ External Postgres must be 15 or newer (`0001_init` uses `unique nulls not distin
 
 `~/.quarterdeck/<project>/worktrees/<builder>-<ticket>/` is the git worktree a builder works a ticket in (`projectWorktreesDir`; see [driver](../driver/README.md#builders)), `<ticket>` being the first 8 characters of the ticket id. Each is registered with the project's repository. Retiring the builder removes it; wiping the project deletes the folder, unsaved work included, and `git worktree prune` in the repository then drops the stale registration.
 
+`~/.quarterdeck/pause.json` exists only while everything is paused (`pause.all`; see [pause](../pause/README.md)) and holds `{ "pausedAt": "<iso>" }`. Deleting it lifts the global pause. It is the same on both backends, and wiping projects leaves it alone.
+
 `~/.quarterdeck/sock/<hash>.sock` (or `$TMPDIR/quarterdeck-<uid>/<hash>.sock` when the home path is too long) is a project's bus MCP socket; see [bus](../bus/README.md#socket-path). It holds no data, exists only while the server is up, and is removed on shutdown. This is the same on both backends.
 
 `~/.quarterdeck/plugins/<name>.mjs` is a ticket-source plugin you put there yourself; see [tickets](../tickets/README.md#plugins). It holds code, not data, and Quarterdeck only reads it. This is the same on both backends.

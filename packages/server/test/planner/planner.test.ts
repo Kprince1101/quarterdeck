@@ -26,6 +26,7 @@ import {
 } from './fixtures.ts';
 
 const CHARTER_HEADING = '# Driver charter';
+const settle = (check: () => unknown) => vi.waitFor(check, { timeout: 10_000 });
 
 describe('Planner', { timeout: TIMEOUT }, () => {
   let t: TestApi;
@@ -49,6 +50,20 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     (await p.events())
       .filter((event) => event.kind === 'planner.reply')
       .map((event) => event.payload);
+
+  const pauseEvents = async (p: PlannerProject) => {
+    const { rows } = await p.store.db.query<{
+      kind: string;
+      agentId: string | null;
+      payload: Record<string, unknown>;
+    }>(
+      `select kind, agent_id as "agentId", payload from events
+       where project_id = $1 and kind like 'pause.%' and not (payload ? 'status')
+       order by id`,
+      [p.store.projectId],
+    );
+    return rows;
+  };
 
   beforeAll(async () => {
     t = await startTestApi();
@@ -274,9 +289,7 @@ describe('Planner', { timeout: TIMEOUT }, () => {
       );
       return rows;
     };
-    await vi.waitFor(async () => expect(await open()).toHaveLength(1), {
-      timeout: 10_000,
-    });
+    await settle(async () => expect(await open()).toHaveLength(1));
     const [card] = await open();
     if (!card) throw new Error('no open sign-in card');
     return card;
@@ -504,13 +517,118 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     await p.fake.clients[0]?.closed;
     const late = await p.send('planner.message', { text: 'still there?' });
     await p.planner().drain();
-    await vi.waitFor(async () => {
+    await settle(async () => {
       expect((await p.events()).at(-1)?.payload).toEqual({
         reason: 'shutdown',
         intentId: null,
       });
     });
     expect(await p.intent(late.body.id)).toMatchObject({ status: 'pending' });
+    expect(p.errors).toEqual([]);
+  });
+
+  it('holds a message while the project is paused and answers it on unpause', async () => {
+    const p = await open();
+    await p.start();
+    expect((await p.send('pause.set', { paused: true })).status).toBe(200);
+    const sent = await p.send('planner.message', { text: 'plan the login' });
+    await settle(async () => {
+      expect(await pauseEvents(p)).toHaveLength(1);
+    });
+
+    expect(await pauseEvents(p)).toEqual([
+      {
+        kind: 'pause.held',
+        agentId: null,
+        payload: {
+          operation: 'planner.turn',
+          label: 'message: plan the login',
+          scopes: ['project'],
+        },
+      },
+    ]);
+    expect(await p.agents()).toEqual([]);
+    expect(await p.intent(sent.body.id)).toMatchObject({ status: 'pending' });
+
+    await p.send('pause.set', { paused: false });
+    await settle(async () => {
+      expect(await p.intent(sent.body.id)).toMatchObject({ status: 'applied' });
+    });
+    await p.planner().drain();
+
+    expect(await replies(p)).toHaveLength(1);
+    expect((await pauseEvents(p)).map((event) => event.kind)).toEqual([
+      'pause.held',
+      'pause.replayed',
+    ]);
+  });
+
+  it('holds a message for a paused Planner and sends it on resume', async () => {
+    const p = await open();
+    await p.start();
+    await say(p, 'hello');
+    const [agent] = await p.agents();
+    const agentId = agent?.id ?? '';
+    expect((await p.send('agent.pause', { agentId })).status).toBe(200);
+
+    const sent = await p.send('planner.message', { text: 'still there?' });
+    await settle(async () => {
+      expect(await pauseEvents(p)).toHaveLength(1);
+    });
+    expect((await pauseEvents(p))[0]).toMatchObject({
+      agentId,
+      payload: { scopes: ['agent'] },
+    });
+
+    expect((await p.send('agent.resume', { agentId })).status).toBe(200);
+    await settle(async () => {
+      expect(await p.intent(sent.body.id)).toMatchObject({ status: 'applied' });
+    });
+    await p.planner().drain();
+    expect(await replies(p)).toHaveLength(2);
+    expect((await p.agents())[0]?.status).toBe('idle');
+  });
+
+  it('drops a held message when a new conversation starts', async () => {
+    const p = await open();
+    await p.start();
+    await p.send('pause.set', { paused: true });
+    const held = await p.send('planner.message', { text: 'one' });
+    await settle(async () => {
+      expect(await pauseEvents(p)).toHaveLength(1);
+    });
+
+    const cleared = await p.send('planner.new');
+    await settle(async () => {
+      expect(await p.intent(cleared.body.id)).toMatchObject({
+        status: 'applied',
+      });
+    });
+
+    expect(await p.intent(held.body.id)).toEqual({
+      status: 'rejected',
+      result: { error: 'superseded by a new conversation' },
+    });
+    expect((await pauseEvents(p)).map((event) => event.kind)).toEqual([
+      'pause.held',
+      'pause.dropped',
+    ]);
+    expect(await p.agents()).toEqual([]);
+    expect(p.errors).toEqual([]);
+  });
+
+  it('drops a held message on close and leaves it pending', async () => {
+    const p = await open();
+    await p.start();
+    await p.send('pause.set', { paused: true });
+    const held = await p.send('planner.message', { text: 'one' });
+    await settle(async () => {
+      expect(await pauseEvents(p)).toHaveLength(1);
+    });
+
+    await p.planner().close();
+
+    expect(await p.intent(held.body.id)).toMatchObject({ status: 'pending' });
     expect(p.errors).toEqual([]);
   });
 });
