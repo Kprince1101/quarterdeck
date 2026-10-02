@@ -3,6 +3,7 @@ import type {
   ProjectRow,
   RoundRow,
   SnapshotTables,
+  TicketRow,
 } from '@quarterdeck/server/stream-schema';
 
 export const NO_REVIEWER = 'none';
@@ -18,6 +19,13 @@ const REFRESHED_ROLES: ReadonlySet<AgentRow['role']> = new Set([
   'reviewer',
 ]);
 
+const ACTIVE_TICKET_STATUSES: ReadonlySet<TicketRow['status']> = new Set([
+  'assigned',
+  'in_progress',
+  'in_review',
+  'bounced',
+]);
+
 export interface ProjectOption {
   value: string;
   label: string;
@@ -27,6 +35,7 @@ export interface RoundView {
   id: string;
   label: string;
   goal: string;
+  reopenCount: number;
 }
 
 export interface ProjectPanel {
@@ -55,9 +64,31 @@ const optionLabel = ({ name, archivedAt }: ProjectRow): string => {
   return `${name} (archived)`;
 };
 
+const activeTickets = (tickets: readonly TicketRow[]): TicketRow[] =>
+  tickets.filter(
+    ({ status, assigneeId }) =>
+      assigneeId !== null && ACTIVE_TICKET_STATUSES.has(status),
+  );
+
+const reopenCountOf = (
+  roundId: string,
+  agents: readonly AgentRow[],
+  active: readonly TicketRow[],
+): number => {
+  const builders = new Set(
+    agents
+      .filter((agent) => agent.roundId === roundId && agent.role === 'builder')
+      .map(({ id }) => id),
+  );
+  return active.filter(({ assigneeId }) => builders.has(assigneeId ?? ''))
+    .length;
+};
+
 const openRound = (
   rounds: readonly RoundRow[],
   projectId: string,
+  agents: readonly AgentRow[],
+  active: readonly TicketRow[],
 ): RoundView | null => {
   const [round] = rounds
     .filter((row) => row.projectId === projectId && row.status !== 'ended')
@@ -67,11 +98,26 @@ const openRound = (
     id: round.id,
     label: `Round ${round.number} · ${round.status}`,
     goal: round.goal,
+    reopenCount: reopenCountOf(round.id, agents, active),
   };
 };
 
 const isLive = ({ status }: AgentRow): boolean =>
   !FINISHED_STATUSES.has(status);
+
+const idleWithoutTicket = (
+  agents: readonly AgentRow[],
+  active: readonly TicketRow[],
+): string[] => {
+  const holders = new Set(active.map(({ assigneeId }) => assigneeId));
+  return agents
+    .filter(
+      ({ id, role, status }) =>
+        REFRESHED_ROLES.has(role) && status === 'idle' && !holders.has(id),
+    )
+    .toSorted((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .map(({ id }) => id);
+};
 
 const reviewerOf = (agents: readonly AgentRow[]): string => {
   const names = agents
@@ -89,20 +135,18 @@ const projectPanel = (
   const agents = tables.agents.filter(
     ({ projectId }) => projectId === project.id,
   );
+  const active = activeTickets(
+    tables.tickets.filter(({ projectId }) => projectId === project.id),
+  );
   return {
     id: project.id,
     slug: project.slug,
     name: project.name,
     isArchived: project.archivedAt !== null,
-    round: openRound(tables.rounds, project.id),
+    round: openRound(tables.rounds, project.id, agents, active),
     reviewer: reviewerOf(agents),
     retiredCount: agents.filter(({ status }) => status === 'retired').length,
-    idleAgentIds: agents
-      .filter(
-        ({ role, status }) => REFRESHED_ROLES.has(role) && status === 'idle',
-      )
-      .toSorted((a, b) => a.createdAt.localeCompare(b.createdAt))
-      .map(({ id }) => id),
+    idleAgentIds: idleWithoutTicket(agents, active),
   };
 };
 

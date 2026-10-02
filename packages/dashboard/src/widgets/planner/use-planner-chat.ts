@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { IntentClient } from '../../api/index.js';
-import { useIntentRequest } from '../notebook/use-intent-request.js';
+import { useIntentRequest } from '../use-intent-request.js';
 import type { PendingMessage, ProjectChoice } from './planner-model.js';
 
 export interface PlannerChat {

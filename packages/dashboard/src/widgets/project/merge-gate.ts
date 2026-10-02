@@ -21,11 +21,19 @@ export interface GateToggles {
 }
 
 const GATE_LABELS: Record<GateKey, string> = {
-  requireCopilotReview: 'Copilot',
-  autoMerge: 'Auto-merge',
+  requireCopilotReview: 'Copilot review (all projects)',
+  autoMerge: 'Auto-merge (all projects)',
 };
 
 const GATE_KEYS = Object.keys(GATE_LABELS) as GateKey[];
+
+const CONFIRMED_WHEN_ON: ReadonlySet<GateKey> = new Set(['autoMerge']);
+
+export const AUTO_MERGE_WARNING =
+  'Turn on auto-merge for every project on this machine? Approved pull requests will squash-merge to GitHub with no merge card.';
+
+export const needsConfirm = (key: GateKey, value: boolean): boolean =>
+  value && CONFIRMED_WHEN_ON.has(key);
 
 interface GateValues {
   machine: MergeGate;
@@ -93,12 +101,16 @@ const layerGate = (layer: Record<string, unknown>): Record<string, unknown> => {
   return {};
 };
 
-export const toggledLayer = (rule: RuleView, key: GateKey): string => {
+export const gateLayer = (
+  rule: RuleView,
+  key: GateKey,
+  value: boolean,
+): string => {
   const { machine, effective } = gateValues(rule);
   if (machine[key] !== effective[key]) {
     throw new Error(`mergeGate.${key} is pinned by this project's repo layer`);
   }
   const layer = machineLayer(rule);
-  const mergeGate = { ...layerGate(layer), [key]: !machine[key] };
+  const mergeGate = { ...layerGate(layer), [key]: value };
   return `${JSON.stringify({ ...layer, mergeGate }, null, 2)}\n`;
 };

@@ -3,6 +3,7 @@ import type {
   ProjectRow,
   RoundRow,
   SnapshotTables,
+  TicketRow,
 } from '@quarterdeck/server/stream-schema';
 import { emptyTables } from '../../../src/api/index.js';
 
@@ -18,6 +19,10 @@ export const IDLE_DRIVER_ID = '00000000-0000-4000-8000-0000000000c4';
 export const RETIRED_ID = '00000000-0000-4000-8000-0000000000c5';
 export const KILLED_REVIEWER_ID = '00000000-0000-4000-8000-0000000000c6';
 export const SITE_RETIRED_ID = '00000000-0000-4000-8000-0000000000c7';
+export const BUSY_BUILDER_ID = '00000000-0000-4000-8000-0000000000c8';
+
+const ticketId = (n: number): string =>
+  `00000000-0000-4000-8000-0000000000d${n}`;
 
 const AT = '2026-10-01T12:00:00.000Z';
 
@@ -75,6 +80,27 @@ export const agent = (
   ...overrides,
 });
 
+export const ticket = (
+  n: number,
+  assigneeId: string | null,
+  status: TicketRow['status'],
+): TicketRow => ({
+  id: ticketId(n),
+  projectId: DECK_ID,
+  roundId: ROUND_ID,
+  assigneeId,
+  title: `Ticket ${n}`,
+  body: '',
+  status,
+  dependsOn: [],
+  source: 'local',
+  externalId: null,
+  prUrl: null,
+  headSha: null,
+  createdAt: AT,
+  updatedAt: AT,
+});
+
 export const projectTables = (): SnapshotTables => ({
   ...emptyTables(),
   projects: [
@@ -89,10 +115,22 @@ export const projectTables = (): SnapshotTables => ({
   agents: [
     agent(IDLE_REVIEWER_ID, 'tern', { role: 'reviewer', createdAt: at(3) }),
     agent(IDLE_BUILDER_ID, 'quill', { createdAt: at(1) }),
-    agent(WORKING_BUILDER_ID, 'heron', { status: 'working' }),
-    agent(IDLE_DRIVER_ID, 'kite', { role: 'driver' }),
-    agent(RETIRED_ID, 'gull', { status: 'retired' }),
+    agent(BUSY_BUILDER_ID, 'plover', { roundId: ROUND_ID, createdAt: at(2) }),
+    agent(WORKING_BUILDER_ID, 'heron', {
+      roundId: ROUND_ID,
+      status: 'working',
+    }),
+    agent(IDLE_DRIVER_ID, 'kite', { role: 'driver', roundId: ROUND_ID }),
+    agent(RETIRED_ID, 'gull', { roundId: ROUND_ID, status: 'retired' }),
     agent(KILLED_REVIEWER_ID, 'skua', { role: 'reviewer', status: 'killed' }),
     agent(SITE_RETIRED_ID, 'wren', { projectId: SITE_ID, status: 'retired' }),
+  ],
+  tickets: [
+    ticket(1, BUSY_BUILDER_ID, 'in_progress'),
+    ticket(2, WORKING_BUILDER_ID, 'in_review'),
+    ticket(3, RETIRED_ID, 'bounced'),
+    ticket(4, IDLE_BUILDER_ID, 'done'),
+    ticket(5, null, 'open'),
+    ticket(6, IDLE_DRIVER_ID, 'assigned'),
   ],
 });

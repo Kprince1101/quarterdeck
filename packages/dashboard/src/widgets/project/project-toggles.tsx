@@ -3,6 +3,7 @@ import type { ProjectPanel } from './project-model.js';
 import {
   useMergeGateToggles,
   type GateToggleView,
+  type MergeGateTogglesView,
 } from './use-merge-gate-toggles.js';
 import { usePauseControls } from './use-pause-controls.js';
 
@@ -30,16 +31,43 @@ interface PanelProps {
   panel: ProjectPanel;
 }
 
+interface AutoMergeConfirmProps {
+  gates: MergeGateTogglesView;
+}
+
+const AutoMergeConfirm = ({ gates }: AutoMergeConfirmProps) => (
+  <div
+    className="qd-project-confirm"
+    role="group"
+    aria-label="Confirm auto-merge"
+  >
+    <p className="qd-project-warning">{gates.autoMergeWarning}</p>
+    <div className="qd-project-actions">
+      <button
+        type="button"
+        className="qd-project-danger"
+        onClick={gates.handleConfirmAutoMerge}
+      >
+        Turn on auto-merge
+      </button>
+      <button type="button" onClick={gates.handleCancelAutoMerge}>
+        Cancel
+      </button>
+    </div>
+  </div>
+);
+
 const MergeGateToggles = ({ panel }: PanelProps) => {
-  const { toggles, error } = useMergeGateToggles(panel);
+  const gates = useMergeGateToggles(panel);
   return (
     <>
       <div className="qd-project-actions">
-        {toggles.map((toggle) => (
+        {gates.toggles.map((toggle) => (
           <GateToggleBox key={toggle.key} toggle={toggle} />
         ))}
       </div>
-      <RequestError error={error} />
+      {gates.isConfirmingAutoMerge && <AutoMergeConfirm gates={gates} />}
+      <RequestError error={gates.error} />
     </>
   );
 };

@@ -3,6 +3,7 @@ import { useDeck } from '../../deck/deck.js';
 import { valueOf } from '../../grid/dom.js';
 import { useIntentRequest } from '../use-intent-request.js';
 import type { ProjectPanel } from './project-model.js';
+import { useConfirm } from './use-confirm.js';
 
 interface RoundTarget {
   project: string;
@@ -20,15 +21,26 @@ export interface RoundControlsView {
   canStart: boolean;
   isPending: boolean;
   error: string | null;
+  isConfirmingKill: boolean;
+  showRoundActions: boolean;
+  killConfirmLabel: string;
   handleGoalChange: (event: ChangeEvent<HTMLInputElement>) => void;
   handleStart: () => void;
   handleEnd: () => void;
   handleKill: () => void;
+  handleConfirmKill: () => void;
+  handleCancelKill: () => void;
 }
+
+const ticketCount = (count: number): string => {
+  if (count === 1) return '1 ticket';
+  return `${count} tickets`;
+};
 
 export const useRoundControls = (panel: ProjectPanel): RoundControlsView => {
   const { intents } = useDeck();
   const { isPending, error, run } = useIntentRequest();
+  const kill = useConfirm();
   const [goal, setGoal] = useState('');
   const { round } = panel;
   const sendForRound = (send: RoundSender) => {
@@ -44,6 +56,9 @@ export const useRoundControls = (panel: ProjectPanel): RoundControlsView => {
     canStart: goal.trim() !== '' && !isPending,
     isPending,
     error,
+    isConfirmingKill: kill.isConfirming,
+    showRoundActions: kill.isAsking,
+    killConfirmLabel: `Kill round? This reopens ${ticketCount(round?.reopenCount ?? 0)}`,
     handleGoalChange: (event) => {
       setGoal(valueOf(event.currentTarget));
     },
@@ -57,8 +72,11 @@ export const useRoundControls = (panel: ProjectPanel): RoundControlsView => {
     handleEnd: () => {
       sendForRound(intents.round.end);
     },
-    handleKill: () => {
+    handleKill: kill.handleAsk,
+    handleConfirmKill: () => {
+      kill.settle();
       sendForRound(intents.round.kill);
     },
+    handleCancelKill: kill.handleCancel,
   };
 };

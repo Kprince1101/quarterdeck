@@ -90,6 +90,19 @@
   opacity: 0.5;
 }
 
+.qd-project-confirm {
+  display: grid;
+  gap: var(--qd-space-2);
+  padding: var(--qd-space-2) var(--qd-space-3);
+  border: 1px solid var(--qd-danger);
+  border-radius: var(--qd-radius);
+}
+
+.qd-project-warning {
+  margin: 0;
+  font-size: var(--qd-text-sm);
+}
+
 .qd-project-toggle {
   display: flex;
   align-items: center;

@@ -11,8 +11,11 @@ import {
   OLD_ID,
   ROUND_ID,
   SITE_ID,
+  BUSY_BUILDER_ID,
+  RETIRED_ID,
   projectTables,
   round,
+  ticket,
 } from './fixtures.js';
 
 describe('project model', () => {
@@ -50,11 +53,39 @@ describe('project model', () => {
         id: ROUND_ID,
         label: 'Round 2 · active',
         goal: 'Ship the project widget',
+        reopenCount: 3,
       },
       reviewer: 'tern',
       retiredCount: 1,
       idleAgentIds: [IDLE_BUILDER_ID, IDLE_REVIEWER_ID],
     });
+  });
+
+  it('never refreshes an idle agent that still holds an active ticket', () => {
+    const tables = projectTables();
+    const ids = () => buildProject(tables, DECK_ID).panel?.idleAgentIds;
+    expect(ids()).not.toContain(BUSY_BUILDER_ID);
+    tables.tickets = tables.tickets.map((row) => {
+      if (row.assigneeId !== BUSY_BUILDER_ID) return row;
+      return { ...row, status: 'done' };
+    });
+    expect(ids()).toEqual([IDLE_BUILDER_ID, BUSY_BUILDER_ID, IDLE_REVIEWER_ID]);
+    tables.tickets.push(ticket(7, IDLE_REVIEWER_ID, 'assigned'));
+    tables.tickets.push(ticket(8, IDLE_BUILDER_ID, 'bounced'));
+    expect(ids()).toEqual([BUSY_BUILDER_ID]);
+  });
+
+  it('counts the tickets a kill would reopen: active ones held by the round builders, retired or not', () => {
+    const tables = projectTables();
+    const reopen = () =>
+      buildProject(tables, DECK_ID).panel?.round?.reopenCount;
+    expect(reopen()).toBe(3);
+    tables.tickets.push(ticket(7, IDLE_BUILDER_ID, 'assigned'));
+    expect(reopen()).toBe(3);
+    tables.tickets = tables.tickets.filter(
+      ({ assigneeId }) => assigneeId !== RETIRED_ID,
+    );
+    expect(reopen()).toBe(2);
   });
 
   it('takes the newest unended round, planning included', () => {

@@ -24,9 +24,14 @@ import {
   OLD_ID,
   ROUND_ID,
   SITE_ID,
+  BUSY_BUILDER_ID,
   projectTables,
   round,
+  ticket,
 } from './fixtures.js';
+
+const COPILOT = 'Copilot review (all projects)';
+const AUTO_MERGE = 'Auto-merge (all projects)';
 
 interface Sent {
   url: string;
@@ -181,12 +186,46 @@ describe('Project widget', () => {
     expect(names(roundSection)).toEqual(['End round', 'Kill round']);
     click(button(roundSection, 'End round'));
     await settle();
-    click(button(roundSection, 'Kill round'));
-    await settle();
     expect(sentTo(sent)).toEqual([
       ['round.end', { project: 'deck', roundId: ROUND_ID }],
+    ]);
+    unmount();
+  });
+
+  it('sends nothing on one click of Kill round and asks with the reopen count', async () => {
+    const { container, sent, unmount } = mount(projectTables());
+    const roundSection = () => section(container, 'Round');
+    click(button(roundSection(), 'Kill round'));
+    await settle();
+    expect(sent).toEqual([]);
+    expect(names(roundSection())).toEqual([
+      'Kill round? This reopens 3 tickets',
+      'Cancel',
+    ]);
+    click(button(roundSection(), 'Cancel'));
+    expect(names(roundSection())).toEqual(['End round', 'Kill round']);
+    expect(sent).toEqual([]);
+
+    click(button(roundSection(), 'Kill round'));
+    click(button(roundSection(), 'Kill round? This reopens 3 tickets'));
+    await settle();
+    expect(sentTo(sent)).toEqual([
       ['round.kill', { project: 'deck', roundId: ROUND_ID }],
     ]);
+    expect(names(roundSection())).toEqual(['End round', 'Kill round']);
+    unmount();
+  });
+
+  it('counts the reopened tickets from the stream', () => {
+    const tables = projectTables();
+    tables.tickets = tables.tickets.filter(
+      ({ assigneeId }) => assigneeId === BUSY_BUILDER_ID,
+    );
+    const { container, unmount } = mount(tables);
+    click(button(section(container, 'Round'), 'Kill round'));
+    expect(names(section(container, 'Round'))[0]).toBe(
+      'Kill round? This reopens 1 ticket',
+    );
     unmount();
   });
 
@@ -247,13 +286,13 @@ describe('Project widget', () => {
     unmount();
   });
 
-  it('shows Copilot and Auto-merge from the loaded lifecycle rule, labelled machine-wide', async () => {
+  it('shows Copilot and Auto-merge from the loaded lifecycle rule, labelled for all projects', async () => {
     const { container, asked, unmount } = mount(projectTables());
     await settle();
     expect(asked).toEqual(['deck']);
     expect(gates(container)).toEqual([
-      ['Copilot', false, false],
-      ['Auto-merge', false, false],
+      [COPILOT, false, false],
+      [AUTO_MERGE, false, false],
     ]);
     const machinePath = `${HOME}/rules.local.lifecycle.json`;
     expect(gate(container, 'requireCopilotReview').getAttribute('title')).toBe(
@@ -292,8 +331,52 @@ describe('Project widget', () => {
       mergeGate: { requireChecksPassing: false, requireCopilotReview: true },
     });
     expect(gates(container)).toEqual([
-      ['Copilot', true, false],
-      ['Auto-merge', false, false],
+      [COPILOT, true, false],
+      [AUTO_MERGE, false, false],
+    ]);
+    unmount();
+  });
+
+  it('asks before turning Auto-merge on and writes only once confirmed', async () => {
+    const machine = JSON.stringify({ stuckAfterMinutes: 45 });
+    const { container, sent, unmount } = mount(
+      projectTables(),
+      200,
+      {},
+      { machine },
+    );
+    await settle();
+    const toggles = () => section(container, 'Toggles');
+    click(find(gate(container, 'autoMerge'), 'input'));
+    await settle();
+    expect(sent).toEqual([]);
+    expect(gates(container)).toEqual([
+      [COPILOT, false, true],
+      [AUTO_MERGE, false, true],
+    ]);
+    expect(textOf(toggles(), '.qd-project-warning')).toBe(
+      'Turn on auto-merge for every project on this machine? Approved pull requests will squash-merge to GitHub with no merge card.',
+    );
+
+    click(button(toggles(), 'Cancel'));
+    expect(toggles().querySelector('.qd-project-confirm')).toBeNull();
+    expect(gates(container)).toEqual([
+      [COPILOT, false, false],
+      [AUTO_MERGE, false, false],
+    ]);
+    expect(sent).toEqual([]);
+
+    click(find(gate(container, 'autoMerge'), 'input'));
+    click(button(toggles(), 'Turn on auto-merge'));
+    await settle();
+    expect(JSON.parse(writtenContent(sent))).toEqual({
+      stuckAfterMinutes: 45,
+      mergeGate: { autoMerge: true },
+    });
+    expect(toggles().querySelector('.qd-project-confirm')).toBeNull();
+    expect(gates(container)).toEqual([
+      [COPILOT, false, false],
+      [AUTO_MERGE, true, false],
     ]);
     unmount();
   });
@@ -313,18 +396,19 @@ describe('Project widget', () => {
     );
     await settle();
     expect(gates(container)).toEqual([
-      ['Copilot', false, false],
-      ['Auto-merge', true, false],
+      [COPILOT, false, false],
+      [AUTO_MERGE, true, false],
     ]);
     click(find(gate(container, 'autoMerge'), 'input'));
     await settle();
+    expect(container.querySelector('.qd-project-confirm')).toBeNull();
     expect(JSON.parse(writtenContent(sent))).toEqual({
       autoEndSettleSeconds: 300,
       mergeGate: { autoMerge: false },
     });
     expect(gates(container)).toEqual([
-      ['Copilot', false, false],
-      ['Auto-merge', false, false],
+      [COPILOT, false, false],
+      [AUTO_MERGE, false, false],
     ]);
     unmount();
   });
@@ -343,8 +427,8 @@ describe('Project widget', () => {
     );
     await settle();
     expect(gates(container)).toEqual([
-      ['Copilot', true, true],
-      ['Auto-merge', false, true],
+      [COPILOT, true, true],
+      [AUTO_MERGE, false, true],
     ]);
     expect(gate(container, 'autoMerge').getAttribute('title')).toContain(
       `This project's repo layer (${REPO}/.quarterdeck/rules.local.lifecycle.json) pins it`,
@@ -374,7 +458,7 @@ describe('Project widget', () => {
     unmount();
   });
 
-  it('shows the reviewer and retired count and retires every idle builder and reviewer', async () => {
+  it('shows the reviewer and retired count and retires only idle builders and reviewers with no active ticket', async () => {
     const { container, sent, unmount } = mount(projectTables());
     const agents = section(container, 'Agents');
     expect(textOf(agents, '[data-field="reviewer"]')).toBe('tern');
@@ -385,6 +469,23 @@ describe('Project widget', () => {
       ['agent.retire', { project: 'deck', agentId: IDLE_BUILDER_ID }],
       ['agent.retire', { project: 'deck', agentId: IDLE_REVIEWER_ID }],
     ]);
+    expect(JSON.stringify(sent)).not.toContain(BUSY_BUILDER_ID);
+    unmount();
+  });
+
+  it('counts an idle builder again once its ticket is done', () => {
+    const tables = projectTables();
+    const { container, unmount } = mount(tables);
+    act(() => {
+      FakeSocket.opened[0]?.deliver({
+        type: 'change',
+        table: 'tickets',
+        op: 'update',
+        id: '00000000-0000-4000-8000-0000000000d1',
+        row: ticket(1, BUSY_BUILDER_ID, 'done'),
+      });
+    });
+    expect(names(section(container, 'Agents'))).toEqual(['Refresh agents (3)']);
     unmount();
   });
 

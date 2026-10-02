@@ -1,7 +1,7 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react';
 import { useDeck } from '../../deck/deck.js';
 import { valueOf } from '../../grid/dom.js';
-import { useIntentRequest } from '../notebook/use-intent-request.js';
+import { useIntentRequest } from '../use-intent-request.js';
 import type { Proposal } from './planner-model.js';
 
 export interface ProposalDraft {

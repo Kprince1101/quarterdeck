@@ -9,29 +9,50 @@ interface RoundViewProps {
   controls: RoundControlsView;
 }
 
+const RoundActions = ({ controls }: RoundViewProps) => (
+  <div className="qd-project-actions">
+    <button
+      type="button"
+      disabled={controls.isPending}
+      onClick={controls.handleEnd}
+    >
+      End round
+    </button>
+    <button
+      type="button"
+      className="qd-project-danger"
+      disabled={controls.isPending}
+      onClick={controls.handleKill}
+    >
+      Kill round
+    </button>
+  </div>
+);
+
+const KillConfirm = ({ controls }: RoundViewProps) => (
+  <div className="qd-project-actions">
+    <button
+      type="button"
+      className="qd-project-danger"
+      disabled={controls.isPending}
+      onClick={controls.handleConfirmKill}
+    >
+      {controls.killConfirmLabel}
+    </button>
+    <button type="button" onClick={controls.handleCancelKill}>
+      Cancel
+    </button>
+  </div>
+);
+
 const OpenRound = ({ controls }: RoundViewProps) => (
   <>
     <p className="qd-project-round">
       <span className="qd-project-round-label">{controls.roundLabel}</span>
       <span className="qd-project-goal">{controls.roundGoal}</span>
     </p>
-    <div className="qd-project-actions">
-      <button
-        type="button"
-        disabled={controls.isPending}
-        onClick={controls.handleEnd}
-      >
-        End round
-      </button>
-      <button
-        type="button"
-        className="qd-project-danger"
-        disabled={controls.isPending}
-        onClick={controls.handleKill}
-      >
-        Kill round
-      </button>
-    </div>
+    {controls.showRoundActions && <RoundActions controls={controls} />}
+    {controls.isConfirmingKill && <KillConfirm controls={controls} />}
   </>
 );
 
