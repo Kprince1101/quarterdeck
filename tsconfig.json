@@ -1,13 +1,9 @@
 {
   "extends": "legion-toolkit/tsconfig/node.json",
   "compilerOptions": {
-    "noEmit": true
+    "noEmit": true,
+    "jsx": "react-jsx"
   },
-  "include": [
-    "test/**/*.ts",
-    "packages/*/src/**/*.ts",
-    "rules/**/*.ts",
-    "site/**/*.ts"
-  ],
+  "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules", "**/dist"]
 }
