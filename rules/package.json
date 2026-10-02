@@ -15,6 +15,11 @@
       "@quarterdeck/source": "./src/schemas.ts",
       "types": "./dist/schemas.d.ts",
       "default": "./dist/schemas.js"
+    },
+    "./merge": {
+      "@quarterdeck/source": "./src/merge.ts",
+      "types": "./dist/merge.d.ts",
+      "default": "./dist/merge.js"
     }
   },
   "files": [
