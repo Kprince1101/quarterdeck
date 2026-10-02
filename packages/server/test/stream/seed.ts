@@ -4,6 +4,7 @@ export const CLEAR_TABLES = [
   'events',
   'turns',
   'cards',
+  'notebook_proposals',
   'notebook',
   'charter_proposals',
   'budget',
@@ -58,7 +59,7 @@ export const seedEveryTable = async (store: Store): Promise<void> => {
      values ($1, $2, 1, 'build the socket', 1200, now())`,
     [agentId, ticketId],
   );
-  await insert(
+  const entryId = await insert(
     store,
     `insert into notebook (project_id, round_id, author_id, body, pinned)
      values ($1, $2, $3, 'keep the socket read-only', true)`,
@@ -66,9 +67,16 @@ export const seedEveryTable = async (store: Store): Promise<void> => {
   );
   await insert(
     store,
-    `insert into charter_proposals (project_id, agent_id, body, rationale)
-     values ($1, $2, 'be terse', 'less noise')`,
-    [project, agentId],
+    `insert into notebook_proposals
+       (project_id, round_id, agent_id, op, entry_id, body, rationale)
+     values ($1, $2, $3, 'update', $4, 'keep the socket strictly read-only', 'sharper')`,
+    [project, roundId, agentId, entryId],
+  );
+  await insert(
+    store,
+    `insert into charter_proposals (project_id, round_id, agent_id, body, rationale)
+     values ($1, $2, $3, 'be terse', 'less noise')`,
+    [project, roundId, agentId],
   );
   await insert(
     store,

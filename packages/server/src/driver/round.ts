@@ -24,7 +24,11 @@ import {
   RoundEndedError,
   RoundNotFoundError,
 } from './errors.js';
-import { DRIVER_TURN_FORMAT, type DriverTurnResult } from './result.js';
+import {
+  DRIVER_TURN_FORMAT,
+  type DriverTurnResult,
+  type TurnFormat,
+} from './result.js';
 import { runTurn, type TurnOutcome, type TurnTarget } from './turns.js';
 
 export const ROUND_STARTED_EVENT = 'driver.round_started';
@@ -57,6 +61,7 @@ export interface DriverRound {
   notebook: readonly NotebookEntry[];
   birth: Promise<DriverTurnOutcome>;
   turn: (input: string) => Promise<DriverTurnOutcome>;
+  turnAs: <T>(input: string, format: TurnFormat<T>) => Promise<TurnOutcome<T>>;
 }
 
 const findRound = async (store: Store, roundId: string): Promise<Round> => {
@@ -152,14 +157,16 @@ const launchRound = async (
     turnsDir: options.turnsDir,
   };
   const enqueue = serialize();
-  const heldTurn = (label: string, input: string) =>
+  const heldTurn = <T>(label: string, input: string, format: TurnFormat<T>) =>
     enqueue(() =>
       options.pause.hold(
         { operation: 'driver.turn', label, agentId: agent.id },
-        () => runTurn(target, input, DRIVER_TURN_FORMAT),
+        () => runTurn(target, input, format),
       ),
     );
-  const turn = (input: string) => heldTurn(pauseLabel('turn', input), input);
+  const turnAs = <T>(input: string, format: TurnFormat<T>) =>
+    heldTurn(pauseLabel('turn', input), input, format);
+  const turn = (input: string) => turnAs(input, DRIVER_TURN_FORMAT);
   const birthInput = buildBirthInput({
     agent,
     round,
@@ -167,9 +174,13 @@ const launchRound = async (
     notebook,
     instructions: DRIVER_TURN_FORMAT.instructions,
   });
-  const birth = heldTurn(`birth turn, round ${round.number}`, birthInput);
+  const birth = heldTurn(
+    `birth turn, round ${round.number}`,
+    birthInput,
+    DRIVER_TURN_FORMAT,
+  );
   birth.catch(() => undefined);
-  return { agent, round, sessionId, notebook, birth, turn };
+  return { agent, round, sessionId, notebook, birth, turn, turnAs };
 };
 
 export const openDriverRound = async (

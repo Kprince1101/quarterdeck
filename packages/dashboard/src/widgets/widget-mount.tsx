@@ -1,9 +1,16 @@
-import { EventsPanel } from './starter/events-panel.js';
-import { TablesPanel } from './starter/tables-panel.js';
+import { WidgetGrid } from '../grid/widget-grid.js';
+import type { GridLayout } from '../grid/layout.js';
+import type { WidgetRegistry } from './registry.js';
+import { WIDGETS } from './widgets.js';
 
-export const WidgetMount = () => (
-  <div className="qd-widgets" data-widget-mount="">
-    <TablesPanel />
-    <EventsPanel />
-  </div>
+export interface WidgetMountProps {
+  registry?: WidgetRegistry | undefined;
+  initialLayout?: GridLayout | undefined;
+}
+
+export const WidgetMount = ({
+  registry = WIDGETS,
+  initialLayout,
+}: WidgetMountProps) => (
+  <WidgetGrid registry={registry} initialLayout={initialLayout} />
 );

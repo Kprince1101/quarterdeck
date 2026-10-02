@@ -11,6 +11,7 @@ const STYLESHEETS = [
   'theme/tokens.css',
   'shell/shell.css',
   'widgets/widgets.css',
+  'grid/grid.css',
 ];
 
 const defined = [...TOKENS_CSS.matchAll(/(--qd-[\w-]+)\s*:/g)].map(
