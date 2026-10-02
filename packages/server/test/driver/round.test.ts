@@ -21,6 +21,7 @@ import {
   STUCK_SURFACED_EVENT,
   TURN_EVENTS,
   flagIfStuck,
+  markStuckFlagsSurfaced,
   openDriverRound,
   unsurfacedStuckFlags,
   turnDir,
@@ -464,7 +465,7 @@ describe('Driver turn loop', () => {
 
   const stall = async (builderId: string, ticketId: string, head: string) => {
     const builder = { id: builderId, name: 'builder-idle' };
-    for (let i = 0; i < STUCK_AFTER_CONTINUES; i += 1) {
+    for (let i = 0; i <= STUCK_AFTER_CONTINUES; i += 1) {
       await store.publish({
         kind: 'builder.continued',
         agentId: builderId,
@@ -475,16 +476,20 @@ describe('Driver turn loop', () => {
     return flagIfStuck(store, builder, ticketId, head);
   };
 
+  const insertTicket = async (): Promise<string> => {
+    const { rows } = await store.db.query<{ id: string }>(
+      `insert into tickets (project_id, title) values ($1, 'QD9 widget')
+       returning id`,
+      [store.projectId],
+    );
+    return rows[0]?.id ?? '';
+  };
+
   it(
     'surfaces each stuck flag in the next Driver turn input, once',
     async () => {
       const builderId = await insertAgent('builder');
-      const { rows } = await store.db.query<{ id: string }>(
-        `insert into tickets (project_id, title) values ($1, 'QD9 widget')
-         returning id`,
-        [store.projectId],
-      );
-      const ticketId = rows[0]?.id ?? '';
+      const ticketId = await insertTicket();
       expect(await stall(builderId, ticketId, 'a'.repeat(40))).toBe(true);
       expect(
         await flagIfStuck(
@@ -497,6 +502,7 @@ describe('Driver turn loop', () => {
       scripted.reply(
         say(resultText(RESULT)),
         say(resultText(RESULT)),
+        say('Working on it', { stopReason: 'cancelled' }),
         say('Partial thought', { fail: 'agent crashed' }),
         say(resultText(RESULT)),
       );
@@ -513,14 +519,14 @@ describe('Driver turn loop', () => {
       expect(scripted.prompts[1]?.text).toBe('heron reported QD1.');
 
       expect(await stall(builderId, ticketId, 'b'.repeat(40))).toBe(true);
+      expect((await round.turn('crane is idle.')).status).toBe('stopped');
       await expect(round.turn('thimble approved QD1.')).rejects.toThrow(
         'agent crashed',
       );
       await round.turn('try again');
-      const [failed, retried] = scripted.prompts
-        .slice(2)
-        .map((prompt) => prompt.text);
-      for (const text of [failed, retried]) {
+      const resent = scripted.prompts.slice(2).map((prompt) => prompt.text);
+      expect(resent).toHaveLength(3);
+      for (const text of resent) {
         expect(text).toContain('# Stuck builders');
         expect(text).toContain(`at ${'b'.repeat(40)}.`);
         expect(text).not.toContain('a'.repeat(40));
@@ -532,6 +538,20 @@ describe('Driver turn loop', () => {
     },
     TIMEOUT,
   );
+
+  it('keeps a flag older than one already surfaced unsurfaced', async () => {
+    const driverId = await insertAgent();
+    const builderId = await insertAgent('builder');
+    const ticketId = await insertTicket();
+    await stall(builderId, ticketId, 'a'.repeat(40));
+    await stall(builderId, ticketId, 'b'.repeat(40));
+    const [older, newer] = await unsurfacedStuckFlags(store);
+    if (!older || !newer) throw new Error('expected two flags');
+
+    await markStuckFlagsSurfaced(store, { id: driverId }, [newer]);
+
+    expect(await unsurfacedStuckFlags(store)).toEqual([older]);
+  });
 
   const signInCards = async () => {
     const { rows } = await store.db.query<{

@@ -10,6 +10,8 @@ export const STUCK_SURFACED_EVENT = 'driver.stuck_surfaced';
 
 export const STUCK_AFTER_CONTINUES = 3;
 
+const HEADS_COMPARED = STUCK_AFTER_CONTINUES + 1;
+
 export interface StuckFlag {
   eventId: number;
   builderId: string;
@@ -54,7 +56,7 @@ const recentHeads = async (
       builderId,
       ticketId,
       BUILDER_CONTINUED_EVENT,
-      STUCK_AFTER_CONTINUES,
+      HEADS_COMPARED,
     ],
   );
   return rows.map((row) => row.head);
@@ -85,7 +87,7 @@ export const flagIfStuck = async (
 ): Promise<boolean> => {
   if (head === null) return false;
   const heads = await recentHeads(store, builder.id, ticketId);
-  if (heads.length < STUCK_AFTER_CONTINUES) return false;
+  if (heads.length < HEADS_COMPARED) return false;
   if (heads.some((seen) => seen !== head)) return false;
   if (await alreadyFlagged(store, builder.id, ticketId, head)) return false;
   const event: PublishInput = {
@@ -108,10 +110,11 @@ export const unsurfacedStuckFlags = async (
      from events e
      left join tickets t on t.id = e.ticket_id
      where e.project_id = $1 and e.kind = $2
-       and e.id > coalesce((
-         select max((payload->>'through')::int8) from events
-         where project_id = $1 and kind = $3
-       ), 0)
+       and not exists (
+         select 1 from events s
+         where s.project_id = $1 and s.kind = $3
+           and s.payload->'flags' @> to_jsonb(e.id)
+       )
      order by e.id`,
     [store.projectId, BUILDER_STUCK_EVENT, STUCK_SURFACED_EVENT],
   );
@@ -123,15 +126,11 @@ export const markStuckFlagsSurfaced = async (
   driver: Pick<Agent, 'id'>,
   flags: readonly StuckFlag[],
 ): Promise<void> => {
-  const last = flags.at(-1);
-  if (last === undefined) return;
+  if (flags.length === 0) return;
   await store.publish({
     kind: STUCK_SURFACED_EVENT,
     agentId: driver.id,
-    payload: {
-      through: last.eventId,
-      flags: flags.map((flag) => flag.eventId),
-    },
+    payload: { flags: flags.map((flag) => flag.eventId) },
   });
 };
 
@@ -146,7 +145,7 @@ const flagLine = (flag: StuckFlag): string => {
 export const stuckSection = (flags: readonly StuckFlag[]): string =>
   [
     '# Stuck builders',
-    `Each of these builders was continued ${STUCK_AFTER_CONTINUES} times at the same commit and made no new one. Another continue like the last ones is unlikely to help: give it a concrete next step, re-assign its ticket, or raise a card.`,
+    `Each of these builders ran ${STUCK_AFTER_CONTINUES} continues in a row without making a commit. Another continue like the last ones is unlikely to help: give it a concrete next step, re-assign its ticket, or raise a card.`,
     flags.map(flagLine).join('\n'),
   ].join('\n\n');
 

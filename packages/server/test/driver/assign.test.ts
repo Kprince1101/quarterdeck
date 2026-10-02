@@ -482,7 +482,7 @@ describe('builder assignment and continue', () => {
   );
 
   it(
-    'flags a builder stuck on its third continue at the same head, once per head',
+    'flags a builder stuck after three continues made no commit, once per head',
     async () => {
       const ticketId = await insertTicket();
       const { builder, worktreePath } = await assignAndSettle(ticketId);
@@ -495,6 +495,7 @@ describe('builder assignment and continue', () => {
         await continuation.turn;
       };
 
+      await continueAndSettle();
       await continueAndSettle();
       await continueAndSettle();
       expect(await events(BUILDER_STUCK_EVENT)).toEqual([]);
@@ -514,6 +515,7 @@ describe('builder assignment and continue', () => {
 
       git(worktreePath, 'commit', '--quiet', '--allow-empty', '-m', 'work');
       const moved = git(worktreePath, 'rev-parse', 'HEAD');
+      await continueAndSettle();
       await continueAndSettle();
       await continueAndSettle();
       expect(await events(BUILDER_STUCK_EVENT)).toHaveLength(1);

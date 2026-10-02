@@ -159,7 +159,8 @@ export const openDriverRound = async (
         withStuckFlags(input, flags),
         DRIVER_TURN_FORMAT,
       );
-      await markStuckFlagsSurfaced(store, agent, flags);
+      if (outcome.status !== 'stopped')
+        await markStuckFlagsSurfaced(store, agent, flags);
       return outcome;
     });
   const birthInput = buildBirthInput({
