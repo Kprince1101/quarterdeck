@@ -82,9 +82,9 @@ export interface Replay {
 }
 
 export interface ReplayCommandParts {
-  project: string;
-  agentId: string;
-  through: number;
+  round: number;
+  through?: number;
+  project?: string;
 }
 
 const assertAgentId = (agentId: string): string => {
@@ -94,13 +94,23 @@ const assertAgentId = (agentId: string): string => {
   return agentId;
 };
 
+const isPositive = (value: number): boolean =>
+  Number.isSafeInteger(value) && value >= 1;
+
 const assertThrough = (through: number): number => {
-  if (!Number.isSafeInteger(through) || through < 1) {
+  if (!isPositive(through)) {
     throw new RangeError(
       `A replay runs turns up to n with n a positive integer, not ${through}`,
     );
   }
   return through;
+};
+
+const assertRound = (round: number): number => {
+  if (!isPositive(round)) {
+    throw new RangeError(`A round is a positive integer, not ${round}`);
+  }
+  return round;
 };
 
 const readOptional = async (path: string): Promise<string | null> => {
@@ -216,10 +226,13 @@ export const replayDriverChain = async (
   }
 };
 
-export const replayCommand = (parts: ReplayCommandParts): string =>
-  [
-    REPLAY_COMMAND,
-    assertProjectSlug(parts.project),
-    assertAgentId(parts.agentId),
-    String(assertThrough(parts.through)),
-  ].join(' ');
+export const replayCommand = (parts: ReplayCommandParts): string => {
+  const words = [REPLAY_COMMAND, String(assertRound(parts.round))];
+  if (parts.through !== undefined) {
+    words.push(String(assertThrough(parts.through)));
+  }
+  if (parts.project !== undefined) {
+    words.push('--project', assertProjectSlug(parts.project));
+  }
+  return words.join(' ');
+};
