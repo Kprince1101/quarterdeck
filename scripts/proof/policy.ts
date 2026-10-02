@@ -12,7 +12,6 @@ export interface ScrubNames {
 const REFUSED_COMMANDS: readonly RegExp[] = [
   /\bgh\s[^;&|]*\bpr\s+merge\b/,
   /\bgh\s[^;&|]*\bapi\b[^;&|]*\/merge\b/,
-  /\bgit\s(?:[^;&|]*\s)?(?:-c|--config-env)(?:\s|=|$)/,
   /\bgit\s[^;&|]*\bconfig\b[^;&|]*\balias\./,
   /--force\b/,
   /\brm\b[^;&|]*\s(?:-[a-z]*r|--recursive\b)/i,
@@ -22,13 +21,22 @@ const REFUSED_COMMANDS: readonly RegExp[] = [
   /\breset\s+--hard\b/,
 ];
 
-const DEFAULT_BRANCHES = new Set(['main', 'master', 'HEAD']);
-const REFUSED_PUSH_OPTIONS =
-  /^--(?:force|mirror|all|delete|tags|follow-tags|receive-pack|exec|prune)/;
-const REFUSED_PUSH_FLAGS = /^-[a-zA-Z]*[fd]/;
+const PROTECTED_BRANCHES = new Set(['HEAD', 'main', 'master']);
+const BRANCH_NAME = /^[A-Za-z0-9._/-]+$/;
+const SAFE_PUSH_OPTIONS = new Set([
+  '--set-upstream',
+  '--quiet',
+  '--verbose',
+  '--dry-run',
+  '--porcelain',
+]);
+const SAFE_PUSH_FLAGS = /^-[uqvn]+$/;
+const SHELL_QUOTING = /['"\\$`]/;
+const GIT_SUBCOMMAND = /^[a-z][a-z-]*$/;
+const BRANCH_MOVERS = new Set(['switch', 'checkout', 'branch', 'update-ref']);
 const GIT_OPTIONS_WITH_VALUE = new Set(['-C', '-c']);
+const CONFIG_OVERRIDE = /^(?:-c|--config-env)(?:=|$)|^-c./;
 const COMMAND_SEPARATOR = /&&|\|\||[;&|\n]|:\s/;
-const QUOTES = /^['"]+|['"]+$/g;
 const TRAILING_PUNCTUATION = /[.,:]+$/;
 
 const UNRESOLVED_PATHS: readonly RegExp[] = [
@@ -45,14 +53,24 @@ const API_TOKEN = /#token=[\w-]+/g;
 const escapeRegExp = (text: string): string =>
   text.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const shellWords = (segment: string): string[] =>
+interface GitCall {
+  subcommand: string;
+  args: string[];
+  quoted: boolean;
+  overridesConfig: boolean;
+}
+
+const rawWords = (segment: string): string[] =>
   segment
     .trim()
     .split(/\s+/)
-    .map((word) =>
-      word.replaceAll(QUOTES, '').replace(TRAILING_PUNCTUATION, ''),
-    )
+    .map((word) => word.replace(TRAILING_PUNCTUATION, ''))
     .filter((word) => word !== '');
+
+const unquoted = (word: string): string => word.replaceAll(/['"\\]/g, '');
+
+const isGit = (word: string): boolean =>
+  unquoted(word).split('/').at(-1) === 'git';
 
 const gitSubcommandAt = (words: readonly string[], start: number): number => {
   let index = start;
@@ -65,40 +83,67 @@ const gitSubcommandAt = (words: readonly string[], start: number): number => {
   return index;
 };
 
-export const pushArguments = (segment: string): string[][] => {
-  const words = shellWords(segment);
+export const gitCalls = (segment: string): GitCall[] => {
+  const words = rawWords(segment);
   return words.flatMap((word, git) => {
-    if (word !== 'git') return [];
-    const subcommand = gitSubcommandAt(words, git + 1);
-    if (words[subcommand] !== 'push') return [];
-    return [words.slice(subcommand + 1)];
+    if (!isGit(word)) return [];
+    const at = gitSubcommandAt(words, git + 1);
+    const subcommand = words[at] ?? '';
+    const args = words.slice(at + 1);
+    const quoted = [word, subcommand, ...args].some((part) =>
+      SHELL_QUOTING.test(part),
+    );
+    const overridesConfig = words
+      .slice(git + 1, at)
+      .some((option) => CONFIG_OVERRIDE.test(unquoted(option)));
+    return [{ subcommand, args, quoted, overridesConfig }];
   });
 };
 
-const destinationOf = (refspec: string): string =>
-  (refspec.split(':').at(-1) ?? '').replace(/^refs\/heads\//, '');
+const branchOf = (ref: string): string => ref.replace(/^refs\/heads\//, '');
 
-const isRefusedRefspec = (refspec: string): boolean =>
-  refspec.startsWith('+') ||
-  refspec.startsWith(':') ||
-  DEFAULT_BRANCHES.has(destinationOf(refspec));
+const isPlainBranch = (ref: string): boolean =>
+  BRANCH_NAME.test(ref) && !PROTECTED_BRANCHES.has(branchOf(ref));
 
-export const isRefusedPush = (args: readonly string[]): boolean => {
-  const options = args.filter((arg) => arg.startsWith('-'));
-  if (
-    options.some(
-      (option) =>
-        REFUSED_PUSH_OPTIONS.test(option) || REFUSED_PUSH_FLAGS.test(option),
-    )
-  )
-    return true;
-  const [, ...refspecs] = args.filter((arg) => !arg.startsWith('-'));
-  if (refspecs.length === 0) return true;
-  return refspecs.some(isRefusedRefspec);
+const isAllowedRefspec = (refspec: string): boolean =>
+  refspec.split(':').length <= 2 && refspec.split(':').every(isPlainBranch);
+
+const isSafePushOption = (option: string): boolean =>
+  SAFE_PUSH_OPTIONS.has(option) || SAFE_PUSH_FLAGS.test(option);
+
+export const isAllowedPush = (args: readonly string[]): boolean => {
+  if (!args.filter((arg) => arg.startsWith('-')).every(isSafePushOption))
+    return false;
+  const [remote, ...refspecs] = args.filter((arg) => !arg.startsWith('-'));
+  if (remote === undefined || !BRANCH_NAME.test(remote)) return false;
+  if (refspecs.length === 0) return false;
+  return refspecs.every(isAllowedRefspec);
 };
 
-const refusesPush = (question: string): boolean =>
-  question.split(COMMAND_SEPARATOR).flatMap(pushArguments).some(isRefusedPush);
+const namesProtectedBranch = (args: readonly string[]): boolean =>
+  args.some((arg) =>
+    arg
+      .replace(/^\+/, '')
+      .split(':')
+      .some((ref) => PROTECTED_BRANCHES.has(branchOf(ref)) && ref !== 'HEAD'),
+  );
+
+const isRefusedGitCall = ({
+  subcommand,
+  args,
+  quoted,
+  overridesConfig,
+}: GitCall): boolean => {
+  if (overridesConfig) return true;
+  if (!GIT_SUBCOMMAND.test(subcommand) && subcommand !== '') return true;
+  if (subcommand === 'push') return quoted || !isAllowedPush(args);
+  if (BRANCH_MOVERS.has(subcommand))
+    return quoted || namesProtectedBranch(args);
+  return false;
+};
+
+const refusesGit = (question: string): boolean =>
+  question.split(COMMAND_SEPARATOR).flatMap(gitCalls).some(isRefusedGitCall);
 
 const RECOMMENDED_CWD = /should do this in (\/.*)\.$/;
 
@@ -119,7 +164,7 @@ export const permissionAnswer = (
     return 'deny';
   const spaced = question.replaceAll(/\s+/g, ' ');
   if (REFUSED_COMMANDS.some((pattern) => pattern.test(spaced))) return 'deny';
-  if (refusesPush(question)) return 'deny';
+  if (refusesGit(question)) return 'deny';
   if (UNRESOLVED_PATHS.some((pattern) => pattern.test(question))) return 'deny';
   const paths = (question.match(ABSOLUTE_PATH) ?? []).map((path) =>
     posix.normalize(path),

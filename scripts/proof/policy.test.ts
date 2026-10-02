@@ -82,11 +82,51 @@ describe('permissionAnswer', () => {
   it('allows a push of a feature branch', () => {
     for (const command of [
       'git push -u origin docs/fix-typo',
-      'git push -q -u origin docs/fix-typo 2>&1 | tail -2',
-      'git -C /tmp/qdp-1/wt push origin HEAD:docs/fix-typo',
-      'cd /tmp/qdp-1/wt && git commit -qam "docs: fix push" && git push origin fix',
+      'git push -q --set-upstream origin docs/fix-typo',
+      'git -C /tmp/qdp-1/wt push origin fix:docs/fix-typo',
+      'git push origin refs/heads/fix',
+      'cd /tmp/qdp-1/wt && git commit -qam "docs: fix typo" && git push origin fix',
     ])
       expect(asked(command)).toBe('allow');
+  });
+
+  it('allows switching to, creating and listing other branches', () => {
+    for (const command of [
+      'git switch -c docs/fix-typo',
+      'git checkout -b docs/fix-typo origin/main',
+      'git checkout HEAD -- README.md',
+      'git branch --show-current',
+    ])
+      expect(asked(command)).toBe('allow');
+  });
+
+  it('denies moving or checking out main or master', () => {
+    for (const command of [
+      'git switch main',
+      'git switch -C master',
+      'git checkout main',
+      'git checkout -B main origin/main',
+      'git branch -f main HEAD',
+      'git branch -M fix master',
+      'git update-ref refs/heads/main HEAD',
+      'git update-ref refs/heads/master abc123',
+      'git checkout ma\\in',
+      'git switch "main"',
+    ])
+      expect(asked(command)).toBe('deny');
+  });
+
+  it('denies a push whose text is quoted or escaped', () => {
+    for (const command of [
+      'git pu\\sh origin main',
+      "git push origin ma'in'",
+      'git push origin "fix"',
+      'git "push" origin fix',
+      'g\\it push origin main',
+      "sh -c 'git push origin main'",
+      'git push origin fix\\',
+    ])
+      expect(asked(command)).toBe('deny');
   });
 
   it('denies a push to the default branch, a forced or deleting refspec, or a bulk push', () => {
@@ -95,7 +135,21 @@ describe('permissionAnswer', () => {
       'git push origin master',
       'git push origin HEAD:main',
       'git push origin feature:refs/heads/main',
+      'git push origin main:feature',
+      'git push origin refs/heads/master:feature',
       'git push origin HEAD',
+      'git push origin HEAD:feature',
+      'git push origin @',
+      'git push origin @:feature',
+      'git push origin feature@{1}:feature',
+      'git push origin feature~1:feature',
+      'git push origin feature^:feature',
+      'git push origin refs/heads/*:refs/heads/*',
+      'git push origin *',
+      'git push origin a:b:c',
+      'git push origin fix 2>&1 | tail -2',
+      'git push --no-verify origin fix',
+      'git push --push-option=x origin fix',
       'git push origin +HEAD:feature',
       'git push origin :feature',
       'git push',

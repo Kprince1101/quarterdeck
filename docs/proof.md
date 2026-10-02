@@ -27,23 +27,47 @@ It needs a signed-in claude and gh (`quarterdeck doctor`). The round's pull requ
 - the wipe does not name the project;
 - `data.summary` still answers, or the project folder is still there.
 
-**Rerunning the script means auto-approving arbitrary commands inside the repository and the temp home.** The agents run `npm`, `npx`, `node`, `git` and anything else they choose there, and the script's policy (below) allows any of it that is not on its short deny list. Run it only on a machine and an account you are willing to let a coding agent use that way, and watch it.
+**Rerunning the script means auto-approving arbitrary commands inside the repository and the temp home.** The agents run `npm`, `npx`, `node`, `git` and anything else they choose there. The script's policy (below) allows any of it except pushes outside its allowlist and what is on its deny list. Run it only on a machine and an account you are willing to let a coding agent use that way, and watch it.
+
+**Before anyone reruns the proof, turn on branch protection for `main`:**
+
+- require a pull request with an approving review;
+- require the status checks (`validate`, `store-postgres`, `clean-machine`);
+- allow no direct pushes or force pushes.
+
+The card policy is a text check written for one supervised run. It is not a security boundary, and GitHub's protection is what keeps an agent's push off `main` if the policy misses one.
 
 Before `init`, the script writes two machine-layer rules into the temp home:
 
 - `rules.local.lifecycle.json`: `mergeGate.autoMerge: true` (the gate merges on its own once the reviewer approves and checks pass) and `autoEndSettleSeconds: 60`.
-- `rules.local.permissions.json`: `rules/examples/hardened.permissions.json`, plus `edit`, `git add`, `git commit`, `git switch`, `git checkout -b`, `gh pr create`, `gh pr view` and `gh pr diff` allowed, `* --force*` at ask, and `gh pr merge*` denied. `git push` is not allowed by the rules, so every push becomes a card.
+- `rules.local.permissions.json`: `rules/examples/hardened.permissions.json`, plus these allows:
+  - `edit`;
+  - `git add` and `git commit`;
+  - `gh pr create`, `gh pr view` and `gh pr diff`.
 
-Anything the rules leave at `ask` becomes an `agent.permission` card. The script answers those cards from the card's text, the way the operator would. It denies:
+  It also sets `* --force*` to ask and denies `gh pr merge*`. The rules allow no `git push`, `git switch` or `git checkout`, so every push and branch change becomes a card.
+
+Anything the rules leave at `ask` becomes an `agent.permission` card. The script answers those cards from the card's text, the way the operator would.
+
+A `git push` is allowed only if all of these hold:
+
+- its text has no quotes, backslashes, `$` or backticks;
+- its options are only `-u`, `-q`, `-v`, `-n`, `--set-upstream`, `--quiet`, `--verbose`, `--dry-run` or `--porcelain`;
+- it names a remote and at least one refspec;
+- every refspec is a plain branch name matching `^[A-Za-z0-9._/-]+$`, or `<src>:<dst>` with both sides matching it;
+- neither side is `HEAD`, `main` or `master`, after `refs/heads/` is stripped.
+
+So `+`, `:`, `@`, `*`, `~` and `^` refspecs, redirections and any other option all mean a deny.
+
+The script also denies:
 
 - a request whose working directory is outside the repository or the temp home. The policy's canonical `cwd` comes from the card's recommendation, and a card without one is denied;
-
+- any `git` call whose subcommand is quoted or escaped;
+- `git switch`, `git checkout`, `git branch` or `git update-ref` that names `main` or `master` (bare or as `refs/heads/…`), or whose text is quoted or escaped;
+- any `git -c …` or `git --config-env …` before the subcommand, and any `git config` that sets an `alias.`, since an alias can hide a push;
 - `gh pr merge` however it is spaced or flagged, and `gh api` calls to a pull request's `merge` endpoint;
-- any `git push` that has no refspec, whose refspec names `main`, `master` or `HEAD` (bare, as `<src>:<dst>`, or as `refs/heads/…`), or that starts with `+` or `:`;
-- any `git -c …` or `git --config-env …`, and any `git config` that sets an `alias.`, since an alias can hide a push;
-- any `git push` that uses `--force*`, `-f`, `-d`, `--mirror`, `--all`, `--delete`, `--tags`, `--follow-tags`, `--receive-pack`, `--exec` or `--prune`;
-- recursive `rm` in any flag form (`-r`, `-R`, `-rf`, `-fr`, `--recursive`, or `-r` after other flags), plus `sudo`, `curl`/`wget` and `reset --hard`;
-- any absolute path outside the repository or the temp home, and anything it cannot resolve from the text: a `..` segment, `~`, a `$` variable or substitution, or a backtick.
+- `--force` anywhere, recursive `rm` in any flag form (`-r`, `-R`, `-rf`, `-fr`, `--recursive`, or `-r` after other flags), `sudo`, `curl`/`wget` and `reset --hard`;
+- any absolute path outside the repository or the temp home (including `/` itself), and anything it cannot resolve from the text: a `..` segment, `~`, a `$` variable or substitution, or a backtick.
 
 It allows everything else, and logs every answer. Any other kind of card waits for a person. None came up.
 

@@ -136,8 +136,6 @@ const writeMachineRules = async (): Promise<void> => {
       { kind: 'edit', decision: 'allow' },
       executeAllow('git add *'),
       executeAllow('git commit *'),
-      executeAllow('git switch *'),
-      executeAllow('git checkout -b *'),
       executeAllow('gh pr create *'),
       executeAllow('gh pr view *'),
       executeAllow('gh pr diff *'),
