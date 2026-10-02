@@ -181,31 +181,35 @@ describe('agent lifecycle', () => {
     expect(retry.name).toBe('crane');
   });
 
-  it('reports both errors when a failed birth cannot be retired', async () => {
-    const doomed = await openTestStore('doomed');
-    const agents = createAgentLifecycle({
-      naming: PAIR,
-      sessions: {
-        open: async () => {
-          await doomed.close();
-          throw new Error('kiro-cli crashed');
+  it(
+    'reports both errors when a failed birth cannot be retired',
+    async () => {
+      const doomed = await openTestStore('doomed');
+      const agents = createAgentLifecycle({
+        naming: PAIR,
+        sessions: {
+          open: async () => {
+            await doomed.close();
+            throw new Error('kiro-cli crashed');
+          },
+          close: () => Promise.resolve(),
         },
-        close: () => Promise.resolve(),
-      },
-      worktrees: fakeWorktrees(),
-      openStores: () => [doomed],
-      budget: () => Promise.resolve(NO_CAP),
-    });
+        worktrees: fakeWorktrees(),
+        openStores: () => [doomed],
+        budget: () => Promise.resolve(NO_CAP),
+      });
 
-    const failure = await agents
-      .birth({ store: doomed, role: 'builder', runtime: 'kiro' })
-      .catch((err: unknown) => err);
+      const failure = await agents
+        .birth({ store: doomed, role: 'builder', runtime: 'kiro' })
+        .catch((err: unknown) => err);
 
-    expect(failure).toBeInstanceOf(AggregateError);
-    const { errors } = failure as AggregateError;
-    expect(errors).toHaveLength(2);
-    expect(errors[0]).toEqual(new Error('kiro-cli crashed'));
-  });
+      expect(failure).toBeInstanceOf(AggregateError);
+      const { errors } = failure as AggregateError;
+      expect(errors).toHaveLength(2);
+      expect(errors[0]).toEqual(new Error('kiro-cli crashed'));
+    },
+    TIMEOUT,
+  );
 
   const birthWithWorktree = async (agents: AgentLifecycle) => {
     const agent = await agents.birth({

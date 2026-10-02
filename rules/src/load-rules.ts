@@ -4,7 +4,7 @@ import { extname, resolve } from 'node:path';
 import { z } from 'zod';
 import { getErrorMessage, isMissingFile, RulesError } from './errors.js';
 import { tightenRepoBudget } from './budget-layers.js';
-import { mergeRepoLifecycle } from './merge-gate-layer.js';
+import { mergeRepoLifecycle } from './lifecycle-layer.js';
 import { mergeLayer } from './merge-layer.js';
 import { RULE_SCHEMAS, type RuleName, type Rules } from './schemas.js';
 

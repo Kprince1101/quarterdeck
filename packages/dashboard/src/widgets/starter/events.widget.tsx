@@ -1,6 +1,6 @@
 import type { StreamEvent } from '@quarterdeck/server/stream-schema';
-import { Panel } from '../../shell/shell.js';
-import { useEventsPanel } from './use-events-panel.js';
+import { defineWidget } from '../registry.js';
+import { useEventsWidget } from './use-events-widget.js';
 
 interface EventListProps {
   events: StreamEvent[];
@@ -21,11 +21,15 @@ const EventList = ({ events, isEmpty }: EventListProps) => {
   );
 };
 
-export const EventsPanel = () => {
-  const { newestFirst, isEmpty } = useEventsPanel();
-  return (
-    <Panel title="Events">
-      <EventList events={newestFirst} isEmpty={isEmpty} />
-    </Panel>
-  );
+export const EventsWidget = () => {
+  const { newestFirst, isEmpty } = useEventsWidget();
+  return <EventList events={newestFirst} isEmpty={isEmpty} />;
 };
+
+export default defineWidget({
+  type: 'events',
+  title: 'Events',
+  component: EventsWidget,
+  size: { w: 8, h: 12 },
+  minSize: { w: 3, h: 3 },
+});

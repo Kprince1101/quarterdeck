@@ -7,6 +7,7 @@ export interface CliIo {
   err: (line: string) => void;
   homeDir: string;
   cwd: string;
+  env: NodeJS.ProcessEnv;
   prompter: Prompter | undefined;
   untilStopped: () => Promise<void>;
 }

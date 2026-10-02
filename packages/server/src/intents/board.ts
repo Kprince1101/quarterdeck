@@ -27,6 +27,11 @@ export const BOARD_INTENTS = {
   }),
   'notebook.pin': inProject({ entryId: idSchema, pinned: z.boolean() }),
   'notebook.remove': inProject({ entryId: idSchema }),
+  'notebook.decide': inProject({
+    proposalId: idSchema,
+    decision: z.enum(['accepted', 'rejected']),
+    body: textSchema.optional(),
+  }),
   'charter.decide': inProject({
     proposalId: idSchema,
     decision: z.enum(['accepted', 'rejected']),

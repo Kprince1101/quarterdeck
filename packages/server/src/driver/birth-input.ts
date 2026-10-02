@@ -28,7 +28,7 @@ export const readActiveNotebook = async (
 ): Promise<NotebookEntry[]> => {
   const { rows } = await db.query<NotebookEntry>(
     `select id, body, pinned from notebook
-     where project_id = $1
+     where project_id = $1 and retired_at is null
      order by pinned desc, created_at, id`,
     [projectId],
   );
@@ -53,6 +53,10 @@ const notebookSection = (notebook: readonly NotebookEntry[]): string => {
 
 const goalSection = (goal: string): string =>
   goal.trim() || 'No goal is set for this round.';
+
+const BIRTH_LINE = /^You are .+, the Driver of this project for round \d+\.\n/;
+
+export const isBirthInput = (input: string): boolean => BIRTH_LINE.test(input);
 
 export const buildBirthInput = (parts: BirthInputParts): string =>
   [

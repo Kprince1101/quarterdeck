@@ -31,6 +31,7 @@ export const STORE_TABLES = [
   'turns',
   'events',
   'notebook',
+  'notebook_proposals',
   'charter_proposals',
   'budget',
   'layouts',

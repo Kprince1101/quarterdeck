@@ -21,7 +21,11 @@ import {
   RoundEndedError,
   RoundNotFoundError,
 } from './errors.js';
-import { DRIVER_TURN_FORMAT, type DriverTurnResult } from './result.js';
+import {
+  DRIVER_TURN_FORMAT,
+  type DriverTurnResult,
+  type TurnFormat,
+} from './result.js';
 import { runTurn, type TurnOutcome, type TurnTarget } from './turns.js';
 
 export const ROUND_STARTED_EVENT = 'driver.round_started';
@@ -54,6 +58,7 @@ export interface DriverRound {
   notebook: readonly NotebookEntry[];
   birth: Promise<DriverTurnOutcome>;
   turn: (input: string) => Promise<DriverTurnOutcome>;
+  turnAs: <T>(input: string, format: TurnFormat<T>) => Promise<TurnOutcome<T>>;
 }
 
 const findRound = async (store: Store, roundId: string): Promise<Round> => {
@@ -150,8 +155,9 @@ export const openDriverRound = async (
     turnsDir: options.turnsDir,
   };
   const enqueue = serialize();
-  const turn = (input: string) =>
-    enqueue(() => runTurn(target, input, DRIVER_TURN_FORMAT));
+  const turnAs = <T>(input: string, format: TurnFormat<T>) =>
+    enqueue(() => runTurn(target, input, format));
+  const turn = (input: string) => turnAs(input, DRIVER_TURN_FORMAT);
   const birthInput = buildBirthInput({
     agent,
     round,
@@ -161,5 +167,5 @@ export const openDriverRound = async (
   });
   const birth = turn(birthInput);
   birth.catch(() => undefined);
-  return { agent, round, sessionId, notebook, birth, turn };
+  return { agent, round, sessionId, notebook, birth, turn, turnAs };
 };
