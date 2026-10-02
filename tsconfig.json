@@ -10,6 +10,7 @@
     "node_modules",
     "**/dist",
     "packages/server/test",
+    "scripts/proof",
     "packages/dashboard/src",
     "packages/dashboard/test"
   ]
