@@ -35,7 +35,11 @@ export const startDeck = async (project: string): Promise<Deck> => {
     project,
     store,
     serve: async (port = 0) => {
-      const stream = await serveStream({ store, port });
+      const stream = await serveStream({
+        store,
+        port,
+        home: api.stores.dataHome,
+      });
       served.push(stream);
       return stream;
     },

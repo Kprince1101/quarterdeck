@@ -80,10 +80,15 @@ const apply = (
     state,
   );
 
-const snapshot = (cursor: number, agents: AgentRow[] = []): StreamMessage => ({
+const snapshot = (
+  cursor: number,
+  agents: AgentRow[] = [],
+  pausedAt: string | null = null,
+): StreamMessage => ({
   type: 'snapshot',
   cursor,
   tables: { ...emptyTables(), agents },
+  machine: { pausedAt },
 });
 
 describe('stream state', () => {
@@ -107,6 +112,19 @@ describe('stream state', () => {
     expect(state.cursor).toBe(7);
     expect(state.error).toBeNull();
     expect(state.tables.agents).toEqual([agent(AGENT)]);
+  });
+
+  it('takes the machine pause from the snapshot and from machine messages', () => {
+    expect(initialStreamState.machine).toEqual({ pausedAt: null });
+    const paused = apply([snapshot(0, [], AT)]);
+    expect(paused.machine).toEqual({ pausedAt: AT });
+    const resumed = apply(
+      [{ type: 'machine', machine: { pausedAt: null } }],
+      paused,
+    );
+    expect(resumed.machine).toEqual({ pausedAt: null });
+    expect(resumed.tables).toBe(paused.tables);
+    expect(resumed.cursor).toBe(paused.cursor);
   });
 
   it('appends events in order, advances the cursor and keeps the newest', () => {

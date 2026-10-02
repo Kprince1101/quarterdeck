@@ -42,6 +42,7 @@ const snapshot = (): StreamMessage => ({
   type: 'snapshot',
   cursor: 0,
   tables: { ...emptyTables(), projects: PROJECTS },
+  machine: { pausedAt: null },
 });
 
 const arrive = (event: StreamEvent): StreamMessage => ({

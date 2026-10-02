@@ -77,6 +77,7 @@ const SNAPSHOT: StreamMessage = {
       },
     ],
   },
+  machine: { pausedAt: null },
 };
 
 const reply = (intent: string, result: unknown): Response =>

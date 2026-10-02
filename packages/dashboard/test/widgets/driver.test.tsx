@@ -103,6 +103,7 @@ const SNAPSHOT: StreamMessage = {
     ],
     turns: [turn(5, KITE, 1), turn(11, NEWT, 1), RUNNING, turn(20, OTTER, 1)],
   },
+  machine: { pausedAt: null },
 };
 
 const READS: Record<number, Partial<TurnReadResult>> = {

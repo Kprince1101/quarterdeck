@@ -1,4 +1,7 @@
+import { mkdtemp, rm } from 'node:fs/promises';
 import type { IncomingMessage } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import {
   afterAll,
@@ -10,6 +13,7 @@ import {
   vi,
 } from 'vitest';
 import { WebSocket, type ClientOptions } from 'ws';
+import { setGlobalPause } from '../../src/pause/index.js';
 import { IN_MEMORY, openStore } from '../../src/store/index.js';
 import type { Store } from '../../src/store/index.js';
 import {
@@ -48,6 +52,7 @@ describe.each(TEST_BACKENDS)('websocket stream on $name', (backend) => {
   let database: TestDatabase;
   let store: Store;
   let served: ServedStream;
+  let home: string;
   const clients: Client[] = [];
 
   const connect = (query = '', options?: ClientOptions): Promise<Client> =>
@@ -106,9 +111,11 @@ describe.each(TEST_BACKENDS)('websocket stream on $name', (backend) => {
 
   beforeAll(async () => {
     database = await backend.create();
+    home = await mkdtemp(join(tmpdir(), 'qd-stream-home-'));
     store = await openStore({ project: 'deck', ...database.storeOptions });
     served = await serveStream({
       store,
+      home,
       tail: TAIL,
       allowedOrigins: [DASHBOARD_ORIGIN],
     });
@@ -118,6 +125,7 @@ describe.each(TEST_BACKENDS)('websocket stream on $name', (backend) => {
     await served.close();
     await store.close();
     await database.drop();
+    await rm(home, { recursive: true, force: true });
   });
 
   afterEach(async () => {
@@ -190,6 +198,38 @@ describe.each(TEST_BACKENDS)('websocket stream on $name', (backend) => {
     ]);
     expect(changes[0]?.row).toMatchObject({ id: ticket?.id, title: 'QD6b' });
     expect(changes[2]).toMatchObject({ id: ticket?.id, row: null });
+  });
+
+  it('sends the machine pause in the snapshot and after each pause.all', async () => {
+    const client = await ready(await connect());
+    expect(client.snapshot().machine).toEqual({ pausedAt: null });
+
+    await setGlobalPause(home, true);
+    await store.publish({ kind: 'pause.all' });
+    await store.publish({ kind: 'notebook.add' });
+    await vi.waitFor(() => expect(client.eventKinds()).toHaveLength(2));
+    const machines = () =>
+      client.messages().flatMap((message) => {
+        if (message.type !== 'machine') return [];
+        return [message.machine.pausedAt];
+      });
+    expect(machines()).toEqual([expect.any(String)]);
+    const [pausedAt] = machines();
+
+    const again = await ready(await connect());
+    expect(again.snapshot().machine).toEqual({ pausedAt });
+
+    await setGlobalPause(home, false);
+    await store.publish({ kind: 'pause.all' });
+    await vi.waitFor(() => expect(machines()).toEqual([pausedAt, null]));
+    expect(client.messages().map(({ type }) => type)).toEqual([
+      'snapshot',
+      'event',
+      'machine',
+      'event',
+      'event',
+      'machine',
+    ]);
   });
 
   it('replays only the last few events to a fresh client', async () => {

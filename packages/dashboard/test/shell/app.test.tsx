@@ -28,6 +28,7 @@ const SNAPSHOT: StreamMessage = {
   type: 'snapshot',
   cursor: 0,
   tables: emptyTables(),
+  machine: { pausedAt: null },
 };
 
 const event = (id: number, kind: string): StreamMessage => {
@@ -104,6 +105,33 @@ describe('dashboard shell', () => {
       expect(all(panel, ':scope > .qd-panel-body')).toHaveLength(1);
       expect(panel.getAttribute('aria-label')).toBeTruthy();
     });
+    unmount();
+  });
+
+  it('registers the Board widget', () => {
+    const { container, unmount } = render(<App stream={stream} />);
+    deliver(
+      snapshotWith(
+        layoutRow({
+          columns: 12,
+          rows: 12,
+          items: [
+            {
+              id: 'board-1',
+              widget: 'board',
+              x: 0,
+              y: 0,
+              w: 12,
+              h: 12,
+              hidden: false,
+            },
+          ],
+        }),
+      ),
+    );
+    const board = textOf(container, '[aria-label="Board"]');
+    expect(board).toContain('deck');
+    expect(board).toContain('Pause all');
     unmount();
   });
 
