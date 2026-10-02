@@ -788,6 +788,56 @@ describe('builder assignment and continue', () => {
   );
 
   it(
+    'skips a held re-assignment whose ticket was reopened during the pause',
+    async () => {
+      const reopened = await insertTicket({ title: 'QD1' });
+      const first = await assignAndSettle(reopened);
+      const kept = await insertTicket({
+        title: 'QD2',
+        status: 'assigned',
+        assigneeId: first.builder.id,
+      });
+      await lifecycle.retire(store, first.builder.id);
+      await pauseProject(true);
+      scripted.reply(say('Picking it up.'));
+
+      const reassigning = reassignTickets(ctx, first.builder.id);
+      await settle(async () => {
+        expect(await events('pause.held')).toHaveLength(1);
+      });
+      expect((await events('pause.held'))[0]?.ticketId).toBe(reopened);
+      await store.db.query(
+        `update tickets set status = 'open', assignee_id = null where id = $1`,
+        [reopened],
+      );
+      await pauseProject(false);
+      const assignments = await reassigning;
+      await Promise.all(assignments.map((assignment) => assignment.turn));
+
+      expect(assignments).toHaveLength(1);
+      expect(assignments[0]).toMatchObject({
+        born: true,
+        previousAssigneeId: first.builder.id,
+        ticket: { id: kept },
+      });
+      expect(await agentCount()).toBe(2);
+      expect(sessions.opened).toHaveLength(2);
+      expect(await ticketRow(reopened)).toEqual({
+        status: 'open',
+        assigneeId: null,
+      });
+      expect(await ticketRow(kept)).toEqual({
+        status: 'assigned',
+        assigneeId: assignments[0]?.builder.id,
+      });
+      expect(
+        (await events(TICKET_ASSIGNED_EVENT)).map((event) => event.ticketId),
+      ).toEqual([reopened, kept]);
+    },
+    TIMEOUT,
+  );
+
+  it(
     'applies assign and continue actions from a Driver turn result',
     async () => {
       const ticketId = await insertTicket();

@@ -302,11 +302,13 @@ export const reassignTickets = async (
   const assignments: Assignment[] = [];
   for (const ticket of tickets) {
     const subject = launchSubject('reassign', ticket, undefined);
-    assignments.push(
-      await ctx.pause.hold(subject, () =>
-        handOver(ctx, ticket, undefined, retiredId),
-      ),
-    );
+    const assignment = await ctx.pause.hold(subject, async () => {
+      const held = await heldTickets(ctx.store, retiredId);
+      const current = held.find((row) => row.id === ticket.id);
+      if (current === undefined) return undefined;
+      return handOver(ctx, current, undefined, retiredId);
+    });
+    if (assignment !== undefined) assignments.push(assignment);
   }
   return assignments;
 };

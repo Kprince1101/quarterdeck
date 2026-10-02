@@ -197,7 +197,7 @@ await continueBuilder(ctx, { builderId, prompt: 'CI failed on lint; fix it.' });
 await reassignTickets(ctx, retiredBuilderId);
 ```
 
-`pause` is the project's [pause](../pause/README.md) guard. An assignment or re-assignment is held as `launch` (with the builder, when one is named, and the ticket), and a continue as `continue` (with the builder), while any of them is paused; the call resolves once it has been replayed and run. An assignment re-reads the ticket when it runs, so one cancelled or taken while held throws `TicketNotAssignableError` then.
+`pause` is the project's [pause](../pause/README.md) guard. An assignment or re-assignment is held as `launch` (with the builder, when one is named, and the ticket), and a continue as `continue` (with the builder), while any of them is paused; the call resolves once it has been replayed and run. An assignment re-reads the ticket when it runs, so one cancelled or taken while held throws `TicketNotAssignableError` then. A re-assignment re-reads the retired builder's tickets when it runs and skips, without birthing a builder, a ticket that was reopened, cancelled or handed on while held; the rest still go.
 
 `sessions` must be the `SessionHost` the lifecycle was made with. Its `open(agent)` opens the session with `agent.worktreePath` as the `cwd` (and the bus as an MCP server, as for the Driver); `client(sessionId)` returns the ACP client a live session prompts through, or `undefined` once it is gone.
 
