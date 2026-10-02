@@ -41,6 +41,7 @@ src/widgets/planner/         Planner: the conversation, proposals to approve, ed
 src/widgets/rules/           Rules: edit rules.local.* with validation, a diff and provenance
 src/widgets/project/         Project: round Start/End/Kill, pause, Copilot and auto-merge (machine lifecycle layer), reviewer, retired count, Refresh agents, archive
 src/widgets/usage/           Usage: this project's tokens in the budget window and the share of budget.window.capTokens
+src/widgets/agents/          Agents: state, ticket, held tickets; Pause/Poke/Kill/Retire/Reset
 src/grid/                    the grid: layout JSON, actions, drag, resize, keyboard, tray
 src/layouts/                 DeckLayout: the saved layout, the preset bar, writes to the server
 src/theme/tokens.css         dark theme tokens (--qd-*) and the page base

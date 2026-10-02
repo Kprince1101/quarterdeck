@@ -1,0 +1,116 @@
+.qd-agents {
+  display: grid;
+  gap: var(--qd-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.qd-agent {
+  display: grid;
+  gap: var(--qd-space-2);
+  padding: var(--qd-space-2) var(--qd-space-3);
+  border: 1px solid var(--qd-line);
+  border-radius: var(--qd-radius);
+  background: var(--qd-surface-raised);
+}
+
+.qd-agent-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--qd-space-2);
+}
+
+.qd-agent-name {
+  font-weight: 600;
+}
+
+.qd-agent-role,
+.qd-agent-project,
+.qd-agent-since,
+.qd-agent-label {
+  color: var(--qd-faint);
+  font-size: var(--qd-text-sm);
+}
+
+.qd-agent-role,
+.qd-agent-project {
+  font-family: var(--qd-mono);
+}
+
+.qd-agent-state {
+  margin-left: auto;
+  font-family: var(--qd-mono);
+  font-size: var(--qd-text-sm);
+  color: var(--qd-muted);
+}
+
+.qd-agent[data-status='working'] .qd-agent-state {
+  color: var(--qd-ok);
+}
+
+.qd-agent[data-status='paused'] .qd-agent-state,
+.qd-agent[data-status='stuck'] .qd-agent-state {
+  color: var(--qd-warn);
+}
+
+.qd-agent[data-status='killed'] .qd-agent-state,
+.qd-agent[data-killing='true'] .qd-agent-state {
+  color: var(--qd-danger);
+}
+
+.qd-agent-work {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.qd-agent-held {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--qd-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.qd-agent-held li {
+  display: flex;
+  gap: var(--qd-space-1);
+  padding: 0 var(--qd-space-2);
+  border: 1px solid var(--qd-line);
+  border-radius: var(--qd-radius);
+  font-size: var(--qd-text-sm);
+}
+
+.qd-agent-held-status {
+  color: var(--qd-faint);
+  font-family: var(--qd-mono);
+}
+
+.qd-agent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--qd-space-2);
+}
+
+.qd-agent-actions button {
+  padding: var(--qd-space-1) var(--qd-space-2);
+  border: 1px solid var(--qd-line);
+  border-radius: var(--qd-radius);
+  background: var(--qd-surface);
+  color: var(--qd-fg);
+  font: inherit;
+  font-size: var(--qd-text-sm);
+  cursor: pointer;
+}
+
+.qd-agent-actions button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.qd-agent-actions [data-action='kill'] {
+  border-color: var(--qd-danger);
+  color: var(--qd-danger);
+}
