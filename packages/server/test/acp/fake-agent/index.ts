@@ -6,6 +6,10 @@ export {
   FAKE_AGENT_ENTRY,
   fakeAgentLaunch,
 } from './launch.ts';
-export { expectedLongOutput, longOutputLine } from './long-output.ts';
+export {
+  expectedLargeOutput,
+  expectedLongOutput,
+  longOutputLine,
+} from './long-output.ts';
 export { resolveScenario } from './scenarios.ts';
 export type * from './types.ts';

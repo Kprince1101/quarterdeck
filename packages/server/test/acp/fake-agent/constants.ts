@@ -11,6 +11,10 @@ export const FAKE_READ_PATH = '/fake/project/README.md';
 export const FAKE_READ_CONTENT = '# Fake project\n';
 export const LONG_OUTPUT_CHUNKS = 400;
 export const LONG_OUTPUT_LINE_WIDTH = 120;
+export const LARGE_OUTPUT_TOOL_CALL_ID = 'fake-large-read-1';
+export const LARGE_OUTPUT_PATH = '/fake/project/large.txt';
+export const LARGE_OUTPUT_LINES = 8400;
+export const LARGE_OUTPUT_MIN_BYTES = 1024 * 1024;
 export const WAITING_TEXT = 'waiting for cancel';
 
 export const FAKE_SCENARIOS: readonly FakeScenario[] = [
@@ -18,6 +22,7 @@ export const FAKE_SCENARIOS: readonly FakeScenario[] = [
   'tool_call',
   'permission',
   'long_output',
+  'large_output',
   'wait_for_cancel',
 ];
 

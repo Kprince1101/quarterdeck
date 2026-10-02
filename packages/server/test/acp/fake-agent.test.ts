@@ -10,7 +10,9 @@ import {
   FAKE_AGENT_ENTRY,
   FAKE_AGENT_NAME,
   FAKE_AUTH_METHOD_ID,
+  expectedLargeOutput,
   fakeAgentLaunch,
+  LARGE_OUTPUT_MIN_BYTES,
   parseFakeAgentArgs,
   resolveScenario,
   toFakeAgentArgs,
@@ -82,10 +84,39 @@ describe('fake agent scenarios', () => {
     ['tool_call', 'tool_call'],
     ['  permission\n', 'permission'],
     ['long_output', 'long_output'],
+    ['large_output', 'large_output'],
     ['wait_for_cancel', 'wait_for_cancel'],
     ['anything else', 'echo'],
   ])('resolves %j to %s', (text, scenario) => {
     expect(resolveScenario(text)).toBe(scenario);
+  });
+});
+
+describe('fake agent large output', () => {
+  it('is a single payload of at least 1 MB', () => {
+    expect(Buffer.byteLength(expectedLargeOutput())).toBeGreaterThanOrEqual(
+      LARGE_OUTPUT_MIN_BYTES,
+    );
+  });
+
+  it('sends the payload as one tool call update', async () => {
+    const { agent, updates } = connect();
+    await initialize(agent);
+    const { sessionId } = await agent.request('session/new', {
+      cwd: '/fake',
+      mcpServers: [],
+    });
+    await agent.request('session/prompt', {
+      sessionId,
+      prompt: [{ type: 'text', text: 'large_output' }],
+    });
+    expect(updates.map((update) => update.sessionUpdate)).toEqual([
+      'tool_call',
+      'tool_call_update',
+    ]);
+    expect(JSON.stringify(updates[1]).length).toBeGreaterThanOrEqual(
+      LARGE_OUTPUT_MIN_BYTES,
+    );
   });
 });
 

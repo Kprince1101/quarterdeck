@@ -14,9 +14,11 @@ import {
   FAKE_READ_PATH,
   FAKE_SCENARIOS,
   FAKE_TOOL_CALL_ID,
+  LARGE_OUTPUT_PATH,
+  LARGE_OUTPUT_TOOL_CALL_ID,
   WAITING_TEXT,
 } from './constants.ts';
-import { longOutputLines } from './long-output.ts';
+import { expectedLargeOutput, longOutputLines } from './long-output.ts';
 import { delay, waitForAbort } from './timing.ts';
 import type { FakeScenario, FakeScenarioHandler, FakeTurn } from './types.ts';
 
@@ -137,6 +139,29 @@ const longOutput: FakeScenarioHandler = async (turn) => {
   return 'end_turn';
 };
 
+const largeOutput: FakeScenarioHandler = async (turn) => {
+  await send(turn, {
+    sessionUpdate: 'tool_call',
+    toolCallId: LARGE_OUTPUT_TOOL_CALL_ID,
+    title: 'Read large.txt',
+    kind: 'read',
+    status: 'pending',
+    locations: [{ path: LARGE_OUTPUT_PATH }],
+  });
+  await send(turn, {
+    sessionUpdate: 'tool_call_update',
+    toolCallId: LARGE_OUTPUT_TOOL_CALL_ID,
+    status: 'completed',
+    content: [
+      {
+        type: 'content',
+        content: { type: 'text', text: expectedLargeOutput() },
+      },
+    ],
+  });
+  return 'end_turn';
+};
+
 const waitForCancel: FakeScenarioHandler = async (turn) => {
   await sendText(turn, WAITING_TEXT);
   await waitForAbort(turn.signal);
@@ -148,6 +173,7 @@ const SCENARIO_HANDLERS: Record<FakeScenario, FakeScenarioHandler> = {
   tool_call: toolCall,
   permission,
   long_output: longOutput,
+  large_output: largeOutput,
   wait_for_cancel: waitForCancel,
 };
 

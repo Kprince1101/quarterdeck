@@ -58,7 +58,9 @@ const connectReference = async (
     })
     .onRequest('session/request_permission', async ({ params }) => ({
       outcome: await Promise.race([
-        hooks.decidePermission(params),
+        hooks
+          .decidePermission(params)
+          .catch((): RequestPermissionOutcome => ({ outcome: 'cancelled' })),
         cancelledWhenAborted(turnSignal(params.sessionId)),
       ]),
     }))

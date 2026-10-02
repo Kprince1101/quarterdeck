@@ -3,17 +3,23 @@ import { tmpdir } from 'node:os';
 import type {
   AuthMethod,
   RequestPermissionOutcome,
+  StopReason,
 } from '@agentclientprotocol/sdk';
 import {
   FAKE_AUTH_METHOD_ID,
   FAKE_PERMISSION_OPTIONS,
   FAKE_PERMISSION_TOOL_CALL_ID,
   FAKE_TOOL_CALL_ID,
+  LARGE_OUTPUT_MIN_BYTES,
+  LARGE_OUTPUT_TOOL_CALL_ID,
   LONG_OUTPUT_CHUNKS,
   WAITING_TEXT,
 } from '../fake-agent/constants.ts';
 import { fakeAgentLaunch } from '../fake-agent/launch.ts';
-import { expectedLongOutput } from '../fake-agent/long-output.ts';
+import {
+  expectedLargeOutput,
+  expectedLongOutput,
+} from '../fake-agent/long-output.ts';
 import type { FakeAgentOptions, FakeScenario } from '../fake-agent/types.ts';
 import { createRecorder, withTimeout } from './recorder.ts';
 import type { Recorder } from './recorder.ts';
@@ -24,7 +30,12 @@ import type {
   PermissionDecider,
   SessionOpening,
 } from './types.ts';
-import { agentChunks, agentText, toolCallStatuses } from './updates.ts';
+import {
+  agentChunks,
+  agentText,
+  toolCallStatuses,
+  toolCallText,
+} from './updates.ts';
 
 interface CheckContext {
   connection: ConformanceConnection;
@@ -44,6 +55,14 @@ const refuseUnexpected: PermissionDecider = (request) =>
   );
 
 const neverDecide: PermissionDecider = () => new Promise(() => {});
+
+const failingRules: PermissionDecider = () =>
+  Promise.reject(new Error('rules lookup failed'));
+
+const FAIL_CLOSED_STOP_REASONS: readonly StopReason[] = [
+  'cancelled',
+  'end_turn',
+];
 
 const selectOption =
   (optionId: string): PermissionDecider =>
@@ -209,6 +228,41 @@ const honoursRejection: ConformanceCheck = {
     ),
 };
 
+const failsClosedOnRulesError: ConformanceCheck = {
+  name: 'fails closed when the rules lookup errors',
+  run: (adapter) =>
+    withAdapter(
+      adapter,
+      { decide: failingRules },
+      async ({ connection, recorder }) => {
+        const sessionId = await openReadySession(connection);
+        const stopReason = await promptTo(connection, sessionId, 'permission');
+        const statuses = toolCallStatuses(
+          recorder.updates,
+          sessionId,
+          FAKE_PERMISSION_TOOL_CALL_ID,
+        );
+        assert.ok(
+          !agentText(recorder.updates, sessionId).includes(
+            'permission granted',
+          ),
+          'a rules error must never reach the agent as an allow',
+        );
+        assert.ok(
+          !statuses.includes('completed'),
+          'a rules error must never let the tool complete',
+        );
+        assert.ok(
+          FAIL_CLOSED_STOP_REASONS.includes(stopReason),
+          `a rules error must cancel or reject, not stop with ${stopReason}`,
+        );
+        if (stopReason === 'end_turn') {
+          assert.deepEqual(statuses, ['pending', 'failed']);
+        }
+      },
+    ),
+};
+
 const cancelsRunningTurn: ConformanceCheck = {
   name: 'cancels a running turn and reports the cancelled stop reason',
   run: (adapter) =>
@@ -260,6 +314,34 @@ const deliversLongOutput: ConformanceCheck = {
     }),
 };
 
+const deliversLargeMessage: ConformanceCheck = {
+  name: 'delivers a single message over 1 MB intact',
+  run: (adapter) =>
+    withAdapter(adapter, {}, async ({ connection, recorder }) => {
+      const sessionId = await openReadySession(connection);
+      const stopReason = await promptTo(connection, sessionId, 'large_output');
+      assert.equal(stopReason, 'end_turn');
+      assert.deepEqual(
+        toolCallStatuses(
+          recorder.updates,
+          sessionId,
+          LARGE_OUTPUT_TOOL_CALL_ID,
+        ),
+        ['pending', 'completed'],
+      );
+      const text = toolCallText(
+        recorder.updates,
+        sessionId,
+        LARGE_OUTPUT_TOOL_CALL_ID,
+      );
+      assert.ok(
+        text.length >= LARGE_OUTPUT_MIN_BYTES,
+        `large tool output was cut to ${text.length} bytes`,
+      );
+      assert.ok(text === expectedLargeOutput(), 'large tool output changed');
+    }),
+};
+
 const surfacesSignIn: ConformanceCheck = {
   name: 'surfaces auth required and never signs in on its own',
   run: (adapter) =>
@@ -291,9 +373,11 @@ export const CHECKS = {
   surfacesToolCalls,
   routesPermissionToRules,
   honoursRejection,
+  failsClosedOnRulesError,
   cancelsRunningTurn,
   cancelsPendingPermission,
   deliversLongOutput,
+  deliversLargeMessage,
   surfacesSignIn,
 } satisfies Record<string, ConformanceCheck>;
 
