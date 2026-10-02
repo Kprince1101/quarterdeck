@@ -147,6 +147,12 @@
         lower <code>holdAtFraction</code> and the longer <code>hours</code>. The
         rest of <code>budget</code> merges like any other layer.
       </p>
+      <h3>Environment</h3>
+      <p>
+        <code>env.json</code> is machine-only: its repo layer is ignored, so a
+        repository can never hand its agents more of your environment. See
+        <a href="#env">env.json</a>.
+      </p>
 
       <h2 id="permissions">permissions.json</h2>
       <p>
@@ -358,8 +364,10 @@
       </p>
       <p>
         <code>pass</code> lists more names. Values always come from the server's
-        environment; the rule holds names only. The default is empty. This
-        <code>&lt;repo&gt;/.quarterdeck/rules.local.env.json</code> gives one
+        environment; the rule holds names only. The default is empty. Only the
+        machine layer can add names: agents can write to a repository, so a
+        <code>&lt;repo&gt;/.quarterdeck/rules.local.env.json</code> is ignored.
+        This <code>~/.quarterdeck/rules.local.env.json</code> gives every
         project's agents <code>AWS_PROFILE</code>:
       </p>
       <pre><code>{ "pass": ["AWS_PROFILE"] }</code></pre>

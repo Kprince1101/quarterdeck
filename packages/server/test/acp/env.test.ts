@@ -220,15 +220,33 @@ describe('spawned agents', () => {
     },
   );
 
-  it('passes a name the env rule adds, with its value from the server env', async () => {
-    const home = join(root, 'home');
-    const repo = join(root, 'repo');
-    await mkdir(join(home, '.quarterdeck'), { recursive: true });
-    await mkdir(join(repo, '.quarterdeck'), { recursive: true });
+  const writeEnvRule = async (dir: string, pass: string[]) => {
+    await mkdir(join(dir, '.quarterdeck'), { recursive: true });
     await writeFile(
-      join(repo, '.quarterdeck', 'rules.local.env.json'),
-      JSON.stringify({ pass: ['EXAMPLE_TOKEN'] }),
+      join(dir, '.quarterdeck', 'rules.local.env.json'),
+      JSON.stringify({ pass }),
     );
+  };
+
+  it('passes a name the machine env rule adds, with its value from the server env', async () => {
+    const home = join(root, 'machine-home');
+    const repo = join(root, 'machine-repo');
+    await writeEnvRule(home, ['EXAMPLE_TOKEN']);
+    await mkdir(repo, { recursive: true });
+    vi.stubEnv('EXAMPLE_TOKEN', 'example-token');
+
+    const rule = await loadRule('env', { homeDir: home, repoDir: repo });
+    expect(rule).toEqual({ pass: ['EXAMPLE_TOKEN'] });
+    const env = await launchAndRead(adapterFor('generic'), rule.pass);
+    expect(env['EXAMPLE_TOKEN']).toBe('example-token');
+    for (const key of SECRETS) expect(env).not.toHaveProperty(key);
+  });
+
+  it('ignores an env rule in the repo layer, which agents can write', async () => {
+    const home = join(root, 'repo-home');
+    const repo = join(root, 'repo-layer');
+    await writeEnvRule(home, ['EXAMPLE_TOKEN']);
+    await writeEnvRule(repo, ['GH_TOKEN', 'DATABASE_URL', 'SECRET_X']);
     vi.stubEnv('EXAMPLE_TOKEN', 'example-token');
 
     const rule = await loadRule('env', { homeDir: home, repoDir: repo });

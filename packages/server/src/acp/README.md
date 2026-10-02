@@ -40,4 +40,6 @@ Claude Code on Bedrock or Vertex, for example, needs more (`CLAUDE_CODE_USE_BEDR
 
 ### The env rule
 
-`rules/env.json` holds `{ "pass": [] }`. A `rules.local.env.json` on the machine or in a project's repo lists more names, merged like the other rules (the last layer that sets `pass` wins). The rule holds names only; values always come from the server's environment. The Planner loads it with the project's repo and passes it as `launch.env.pass`.
+`rules/env.json` holds `{ "pass": [] }`. Only the machine layer, `~/.quarterdeck/rules.local.env.json`, can list more names. `env` is in `TIGHTEN_ONLY_RULES`, so `loadRule('env', ...)` ignores `<repo>/.quarterdeck/rules.local.env.json`: agents can write to the repo (and a builder's PR can land a file there), and that file must never hand the next agent `GH_TOKEN` or `DATABASE_URL`. The rule holds names only; values always come from the server's environment. The Planner loads it and passes it as `launch.env.pass`.
+
+`spawn('taskkill', ...)` in `client/process-tree.ts` gets `childEnv()` too, so every `spawn` in `src/acp` passes an env from `childEnv` (the grep test counts them).

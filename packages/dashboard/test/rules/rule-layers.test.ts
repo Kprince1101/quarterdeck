@@ -71,6 +71,15 @@ describe('checkDraft', () => {
     expect(check.repoError).toBeNull();
     expect(check.effective).toMatchObject({ default: 'ask' });
   });
+
+  it('ignores a repo env layer and says so, keeping the machine names', () => {
+    const rule = ruleView('env', { repo: '{ "pass": ["GH_TOKEN"] }' }, REPO);
+    const check = checkDraft(rule, '{ "pass": ["EXAMPLE_TOKEN"] }');
+    expect(check.error).toBeNull();
+    expect(check.repoError).toContain(rule.repo?.path);
+    expect(check.repoError).toContain('Only the machine layer');
+    expect(check.effective).toEqual({ pass: ['EXAMPLE_TOKEN'] });
+  });
 });
 
 describe('initialDraft', () => {

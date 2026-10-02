@@ -52,4 +52,19 @@ describe('packages/server/src/acp', () => {
   it('hands process.env as a whole only to childEnv', async () => {
     expect(await offending(WHOLE, [ENV_MODULE])).toEqual([]);
   });
+
+  it('gives every spawn an env from childEnv', async () => {
+    const counts: Record<string, { spawns: number; envs: number }> = {};
+    for (const path of await sources()) {
+      const text = await readFile(path, 'utf8');
+      const spawns = text.match(/\bspawn(Sync)?\(/g)?.length ?? 0;
+      if (spawns === 0) continue;
+      const envs = text.match(/\benv: childEnv\(/g)?.length ?? 0;
+      counts[relative(ACP_SRC, path)] = { spawns, envs };
+    }
+    expect(Object.keys(counts).length).toBeGreaterThan(0);
+    expect(
+      Object.entries(counts).filter(([, count]) => count.envs !== count.spawns),
+    ).toEqual([]);
+  });
 });

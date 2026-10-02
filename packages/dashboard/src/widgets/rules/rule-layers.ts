@@ -12,7 +12,11 @@ import {
 import { z } from 'zod';
 import type { RuleView } from '../../api/index.js';
 import { getErrorMessage } from '../../lib/errors.js';
-import { EMPTY_JSON_LAYER, REPO_TIGHTEN_ONLY_KEYS } from './constants.js';
+import {
+  EMPTY_JSON_LAYER,
+  REPO_ENV_IGNORED,
+  REPO_TIGHTEN_ONLY_KEYS,
+} from './constants.js';
 
 export type LayerName = 'defaults' | 'machine' | 'repo';
 
@@ -64,6 +68,7 @@ const validate = (name: RuleName, path: string, value: unknown): unknown => {
 
 const repoLayerOf = (rule: RuleView, path: string, text: string): unknown => {
   const parsed = parseLayer(rule, path, text);
+  if (rule.name === 'env') throw new RulesError(path, REPO_ENV_IGNORED);
   if (rule.name !== 'permissions') return parsed;
   const result = repoPermissionsSchema.safeParse(parsed);
   if (!result.success) {

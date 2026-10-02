@@ -485,16 +485,21 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     }
   });
 
-  it('passes the names the project env rule adds to the Planner', async () => {
-    const p = await open();
-    await mkdir(join(p.repoDir, '.quarterdeck'), { recursive: true });
-    await writeFile(
-      join(p.repoDir, '.quarterdeck', 'rules.local.env.json'),
-      JSON.stringify({ pass: ['EXAMPLE_TOKEN'] }),
-    );
-    await p.start();
-    await say(p, 'hello');
-    expect(p.fake.launches[0]?.env).toEqual({ pass: ['EXAMPLE_TOKEN'] });
+  it('passes the names the machine env rule adds to the Planner, never the repo layer', async () => {
+    await writeMachineRule(t.homeDir, 'env.json', { pass: ['EXAMPLE_TOKEN'] });
+    try {
+      const p = await open();
+      await mkdir(join(p.repoDir, '.quarterdeck'), { recursive: true });
+      await writeFile(
+        join(p.repoDir, '.quarterdeck', 'rules.local.env.json'),
+        JSON.stringify({ pass: ['GH_TOKEN'] }),
+      );
+      await p.start();
+      await say(p, 'hello');
+      expect(p.fake.launches[0]?.env).toEqual({ pass: ['EXAMPLE_TOKEN'] });
+    } finally {
+      await rm(join(t.homeDir, '.quarterdeck', 'rules.local.env.json'));
+    }
   });
 
   it('retires a Planner left over from an earlier run when it starts', async () => {
