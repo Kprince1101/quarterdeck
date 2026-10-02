@@ -4,23 +4,26 @@ import {
   useMemo,
   useReducer,
   useRef,
-  type ComponentType,
   type CSSProperties,
   type RefObject,
 } from 'react';
-import type { WidgetProps, WidgetRegistry } from '../widgets/registry.js';
+import type { WidgetRegistry } from '../widgets/registry.js';
 import type { GridAction } from './actions.js';
 import { defaultLayout } from './default-layout.js';
 import { focus, measure } from './dom.js';
-import { createGridReducer, type GridState } from './grid-state.js';
+import { createGridReducer, initialGridState } from './grid-state.js';
 import { itemLabels } from './labels.js';
 import type { GridItem, GridLayout } from './layout.js';
+import { panesOf, type PaneView } from './panes.js';
 import { cellSizeOf, type CellSize } from './steps.js';
+import { useGridSync, type LayoutListener } from './use-grid-sync.js';
 import { useGridTray, type GridTrayView } from './use-grid-tray.js';
 
 export interface WidgetGridProps {
   registry: WidgetRegistry;
   initialLayout?: GridLayout | undefined;
+  syncedLayout?: GridLayout | null | undefined;
+  onLayoutChange?: LayoutListener | undefined;
 }
 
 export interface GridControls {
@@ -35,7 +38,8 @@ export interface CellView {
   id: string;
   label: string;
   item: GridItem;
-  Widget: ComponentType<WidgetProps>;
+  panes: PaneView[];
+  stacked: boolean;
   style: CSSProperties;
 }
 
@@ -59,12 +63,14 @@ const cellViews = (
   return layout.items.flatMap((item) => {
     const definition = registry.get(item.widget);
     if (item.hidden || definition === undefined) return [];
+    const panes = panesOf(item, registry);
     return [
       {
         id: item.id,
         label: labels.get(item.id) ?? definition.title,
         item,
-        Widget: definition.component,
+        panes,
+        stacked: panes.length > 1,
         style: {
           gridColumn: spanOf(item.x, item.w),
           gridRow: spanOf(item.y, item.h),
@@ -79,20 +85,20 @@ const useGridState = (
   initialLayout: GridLayout | undefined,
 ) => {
   const reducer = useMemo(() => createGridReducer(registry), [registry]);
-  return useReducer(reducer, undefined, (): GridState => ({
-    layout: initialLayout ?? defaultLayout(registry),
-    announcement: '',
-  }));
+  return useReducer(reducer, undefined, () =>
+    initialGridState(initialLayout ?? defaultLayout(registry)),
+  );
 };
 
 export const useWidgetGrid = ({
   registry,
   initialLayout,
+  syncedLayout,
+  onLayoutChange,
 }: WidgetGridProps): WidgetGridView => {
-  const [{ layout, announcement }, dispatch] = useGridState(
-    registry,
-    initialLayout,
-  );
+  const [state, dispatch] = useGridState(registry, initialLayout);
+  useGridSync({ state, dispatch, syncedLayout, onLayoutChange });
+  const { layout, announcement } = state;
   const gridRef = useRef<HTMLDivElement>(null);
   const trayRef = useRef<HTMLElement>(null);
   const helpId = useId();

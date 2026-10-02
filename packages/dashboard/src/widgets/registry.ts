@@ -1,3 +1,4 @@
+import { WIDGET_TYPE } from '@quarterdeck/server/layouts';
 import type { ComponentType } from 'react';
 
 export interface WidgetSize {
@@ -24,7 +25,6 @@ export interface WidgetModule {
   default?: unknown;
 }
 
-const WIDGET_TYPE = /^[a-z][a-z0-9-]*$/;
 const SMALLEST: WidgetSize = { w: 1, h: 1 };
 
 export const defineWidget = (definition: WidgetDefinition): WidgetDefinition =>

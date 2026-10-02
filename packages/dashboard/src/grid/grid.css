@@ -119,6 +119,24 @@
   outline-offset: 1px;
 }
 
+.qd-widget-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qd-space-3);
+}
+
+.qd-widget-pane + .qd-widget-pane {
+  padding-top: var(--qd-space-3);
+  border-top: 1px solid var(--qd-line);
+}
+
+.qd-widget-pane-title {
+  margin: 0 0 var(--qd-space-2);
+  font-size: var(--qd-text-sm);
+  font-weight: 600;
+  color: var(--qd-muted);
+}
+
 .qd-visually-hidden {
   position: absolute;
   width: 1px;

@@ -36,6 +36,4 @@ export {
   WIPE_ALL_CONFIRMATION,
   WORKSPACE_INTENTS,
   type WorkspaceIntentName,
-  layoutItemSchema,
-  layoutSpecSchema,
 } from './workspace.js';

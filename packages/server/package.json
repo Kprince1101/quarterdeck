@@ -16,6 +16,11 @@
       "types": "./dist/intents/index.d.ts",
       "default": "./dist/intents/index.js"
     },
+    "./layouts": {
+      "@quarterdeck/source": "./src/layouts/index.ts",
+      "types": "./dist/layouts/index.d.ts",
+      "default": "./dist/layouts/index.js"
+    },
     "./stream-schema": {
       "@quarterdeck/source": "./src/stream/schema.ts",
       "types": "./dist/stream/schema.d.ts",

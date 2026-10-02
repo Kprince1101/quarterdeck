@@ -4,20 +4,23 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WIPE_ALL_CONFIRMATION } from '../../src/intents/index.js';
+import { LAYOUT_PRESETS, parseGridLayout } from '../../src/layouts/index.js';
 import { TIMEOUT, startTestApi, type TestApi } from './harness.js';
 
 const BOARD_LAYOUT = {
   columns: 12,
+  rows: 12,
   items: [
-    { id: 'board', widget: 'board', x: 0, y: 0, w: 8, h: 6 },
+    { id: 'board', widget: 'board', x: 0, y: 0, w: 8, h: 6, hidden: false },
     {
       id: 'side',
-      widget: 'tabs',
+      widget: 'planner',
       x: 8,
       y: 0,
       w: 4,
       h: 6,
-      config: { tabs: ['planner', 'driver', 'notebook'] },
+      hidden: false,
+      tabs: ['driver', 'notebook'],
     },
   ],
 };
@@ -103,17 +106,17 @@ describe('workspace intents', { timeout: TIMEOUT }, () => {
         spec: BOARD_LAYOUT,
       });
       expect(saved.status).toBe(200);
-      const narrower = { ...BOARD_LAYOUT, columns: 10 };
+      const shorter = { ...BOARD_LAYOUT, rows: 6 };
       await t.send('layout.save', {
         project: 'deck',
         name: 'default',
-        spec: narrower,
+        spec: shorter,
       });
       const store = await t.store('deck');
-      const { rows } = await store.db.query<{ spec: { columns: number } }>(
+      const { rows } = await store.db.query<{ spec: { rows: number } }>(
         'select spec from layouts',
       );
-      expect(rows.map((row) => row.spec.columns)).toEqual([10]);
+      expect(rows.map((row) => row.spec.rows)).toEqual([6]);
       expect(
         (await t.send('layout.delete', { project: 'deck', name: 'default' }))
           .status,
@@ -129,9 +132,55 @@ describe('workspace intents', { timeout: TIMEOUT }, () => {
       const res = await t.send('layout.save', {
         project: 'deck',
         name: 'dupes',
-        spec: { columns: 12, items: [item, item] },
+        spec: { ...BOARD_LAYOUT, items: [item, { ...item, x: 8 }] },
       });
       expect(res.status).toBe(400);
+    });
+
+    it('refuses a layout the grid could not show', async () => {
+      const [board, side] = BOARD_LAYOUT.items;
+      const overlapping = await t.send('layout.save', {
+        project: 'deck',
+        name: 'bad',
+        spec: { ...BOARD_LAYOUT, items: [board, { ...side, x: 4 }] },
+      });
+      expect(overlapping.status).toBe(400);
+      const outside = await t.send('layout.save', {
+        project: 'deck',
+        name: 'bad',
+        spec: { ...BOARD_LAYOUT, rows: 4 },
+      });
+      expect(outside.status).toBe(400);
+    });
+
+    it('resets a layout to a shipped preset', async () => {
+      await t.send('layout.save', {
+        project: 'deck',
+        name: 'dashboard',
+        spec: BOARD_LAYOUT,
+      });
+      const res = await t.send('layout.reset', {
+        project: 'deck',
+        name: 'dashboard',
+        preset: 'ops',
+      });
+      expect(res).toMatchObject({
+        status: 200,
+        body: { result: { name: 'dashboard', preset: 'ops' } },
+      });
+      const store = await t.store('deck');
+      const { rows } = await store.db.query<{ spec: unknown }>(
+        "select spec from layouts where name = 'dashboard'",
+      );
+      expect(rows.map((row) => parseGridLayout(row.spec))).toEqual([
+        LAYOUT_PRESETS.ops,
+      ]);
+      const unknown = await t.send('layout.reset', {
+        project: 'deck',
+        name: 'dashboard',
+        preset: 'cockpit',
+      });
+      expect(unknown.status).toBe(400);
     });
   });
 
