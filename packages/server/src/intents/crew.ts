@@ -14,6 +14,7 @@ export const CREW_INTENTS = {
   'agent.retire': agentTarget,
   'agent.message': inProject({ agentId: idSchema, text: textSchema }),
   'planner.message': inProject({ text: textSchema }),
+  'planner.new': inProject({}),
 };
 
 export type CrewIntentName = keyof typeof CREW_INTENTS;

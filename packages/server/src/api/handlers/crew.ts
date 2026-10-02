@@ -64,4 +64,5 @@ export const CREW_HANDLERS: IntentHandlers<CrewIntentName> = {
     queueInProject(ctx, name, input, requireUnretiredAgent(input.agentId)),
   'agent.message': queueForAgent,
   'planner.message': queue,
+  'planner.new': queue,
 };

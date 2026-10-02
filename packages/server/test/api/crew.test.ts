@@ -34,6 +34,7 @@ describe(
       ['round.start', { goal: 'ship QD6' }],
       ['pause.set', { paused: true }],
       ['planner.message', { text: 'split the API ticket' }],
+      ['planner.new', {}],
     ])('%s is stored as a pending intent', async (name, body) => {
       const res = await t.send(name, { project, ...body });
       expect(res).toMatchObject({

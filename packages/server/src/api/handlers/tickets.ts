@@ -3,9 +3,20 @@ import type { IntentHandlers } from '../context.js';
 import { badRequest, conflict } from '../http-error.js';
 import { applyInProject, findRow } from '../record.js';
 
-type TicketIntentName = 'ticket.create' | 'ticket.update' | 'ticket.cancel';
+type TicketIntentName =
+  | 'ticket.create'
+  | 'ticket.update'
+  | 'ticket.cancel'
+  | 'ticket.approve'
+  | 'ticket.reject';
 
-const CLOSED_STATUSES = new Set(['done', 'cancelled']);
+interface TicketEdits {
+  title?: string | undefined;
+  body?: string | undefined;
+  dependsOn?: string[] | undefined;
+}
+
+const CLOSED_STATUSES = new Set(['done', 'cancelled', 'rejected']);
 const CANCELLABLE_STATUSES = new Set(['open', 'bounced']);
 
 const assertDependencies = async (
@@ -39,6 +50,57 @@ const ticketStatus = async (
   return ticket.status;
 };
 
+const requireProposed = async (
+  tx: Queryable,
+  projectId: string,
+  ticketId: string,
+) => {
+  const status = await ticketStatus(tx, projectId, ticketId);
+  if (status !== 'proposed') {
+    throw conflict(`ticket ${ticketId} is ${status}, not proposed`);
+  }
+};
+
+const editTicket = async (
+  tx: Queryable,
+  projectId: string,
+  ticketId: string,
+  edits: TicketEdits,
+) => {
+  if (edits.dependsOn?.includes(ticketId)) {
+    throw badRequest('a ticket cannot depend on itself');
+  }
+  await assertDependencies(tx, projectId, edits.dependsOn);
+  await tx.query(
+    `update tickets set
+       title = coalesce($2, title),
+       body = coalesce($3, body),
+       depends_on = coalesce($4::uuid[], depends_on)
+     where id = $1`,
+    [
+      ticketId,
+      edits.title ?? null,
+      edits.body ?? null,
+      edits.dependsOn ?? null,
+    ],
+  );
+};
+
+const assertDependenciesApproved = async (tx: Queryable, ticketId: string) => {
+  const { rows } = await tx.query<{ id: string; status: string }>(
+    `select d.id, d.status from tickets t
+     join tickets d on d.id = any(t.depends_on)
+     where t.id = $1 and d.status in ('proposed', 'rejected')
+     order by d.created_at`,
+    [ticketId],
+  );
+  if (rows.length === 0) return;
+  const blocking = rows.map((row) => `${row.id} (${row.status})`).join(', ');
+  throw conflict(
+    `ticket ${ticketId} depends on tickets that are not approved: ${blocking}`,
+  );
+};
+
 export const TICKET_HANDLERS: IntentHandlers<TicketIntentName> = {
   'ticket.create': (ctx, input, name) =>
     applyInProject(ctx, name, input, async (tx, projectId) => {
@@ -58,23 +120,7 @@ export const TICKET_HANDLERS: IntentHandlers<TicketIntentName> = {
       if (CLOSED_STATUSES.has(status)) {
         throw conflict(`ticket ${input.ticketId} is ${status}`);
       }
-      if (input.dependsOn?.includes(input.ticketId)) {
-        throw badRequest('a ticket cannot depend on itself');
-      }
-      await assertDependencies(tx, projectId, input.dependsOn);
-      await tx.query(
-        `update tickets set
-           title = coalesce($2, title),
-           body = coalesce($3, body),
-           depends_on = coalesce($4::uuid[], depends_on)
-         where id = $1`,
-        [
-          input.ticketId,
-          input.title ?? null,
-          input.body ?? null,
-          input.dependsOn ?? null,
-        ],
-      );
+      await editTicket(tx, projectId, input.ticketId, input);
       return { ticketId: input.ticketId };
     }),
   'ticket.cancel': (ctx, input, name) =>
@@ -89,5 +135,23 @@ export const TICKET_HANDLERS: IntentHandlers<TicketIntentName> = {
         input.ticketId,
       ]);
       return { ticketId: input.ticketId, status: 'cancelled' };
+    }),
+  'ticket.approve': (ctx, input, name) =>
+    applyInProject(ctx, name, input, async (tx, projectId) => {
+      await requireProposed(tx, projectId, input.ticketId);
+      await editTicket(tx, projectId, input.ticketId, input);
+      await assertDependenciesApproved(tx, input.ticketId);
+      await tx.query(`update tickets set status = 'open' where id = $1`, [
+        input.ticketId,
+      ]);
+      return { ticketId: input.ticketId, status: 'open' };
+    }),
+  'ticket.reject': (ctx, input, name) =>
+    applyInProject(ctx, name, input, async (tx, projectId) => {
+      await requireProposed(tx, projectId, input.ticketId);
+      await tx.query(`update tickets set status = 'rejected' where id = $1`, [
+        input.ticketId,
+      ]);
+      return { ticketId: input.ticketId, status: 'rejected' };
     }),
 };
