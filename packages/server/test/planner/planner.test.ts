@@ -10,7 +10,12 @@ import {
   vi,
 } from 'vitest';
 import { PLANNER_BRIEF } from '../../src/planner/index.js';
-import { WAITING_TEXT } from '../acp/fake-agent/index.ts';
+import {
+  SIGNED_IN,
+  SIGN_IN_CARD,
+  SIGN_IN_EVENTS,
+} from '../../src/signin/index.js';
+import { SIGNED_IN_AGAIN_TEXT, WAITING_TEXT } from '../acp/fake-agent/index.ts';
 import { startTestApi, type TestApi } from '../api/harness.ts';
 import { callTool, connectClient } from '../bus/fixtures.ts';
 import {
@@ -256,27 +261,129 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     expect(p.fake.launches).toEqual([]);
   });
 
-  it('surfaces sign-in instead of signing in, and frees the name', async () => {
+  const signInCard = async (p: PlannerProject) => {
+    const open = async () => {
+      const { rows } = await p.store.db.query<{
+        id: string;
+        agentId: string;
+        recommendation: string;
+      }>(
+        `select id, agent_id as "agentId", recommendation from cards
+         where project_id = $1 and kind = $2 and status = 'open'`,
+        [p.store.projectId, SIGN_IN_CARD],
+      );
+      return rows;
+    };
+    await vi.waitFor(async () => expect(await open()).toHaveLength(1));
+    const [card] = await open();
+    if (!card) throw new Error('no open sign-in card');
+    return card;
+  };
+
+  const authEvents = async (p: PlannerProject) => {
+    const { rows } = await p.store.db.query<{
+      kind: string;
+      payload: Record<string, unknown>;
+    }>(
+      `select kind, payload from events
+       where project_id = $1 and kind = any($2::text[]) order by id`,
+      [p.store.projectId, Object.values(SIGN_IN_EVENTS)],
+    );
+    return rows;
+  };
+
+  it('waits on a sign-in card when the runtime is not signed in, then opens the session', async () => {
     const p = await open({ fake: { requireAuth: true } });
     await p.start();
-    const intentId = await say(p, 'hello');
+    const sent = await p.send('planner.message', { text: 'hello' });
+    const draining = p.planner().drain();
 
-    const error =
-      "The Planner's runtime (kiro) is not signed in. Sign in with its own CLI, then send your message again.";
-    expect(await p.intent(intentId)).toEqual({
-      status: 'rejected',
-      result: { error },
+    const card = await signInCard(p);
+    const [agent] = await p.agents();
+    expect(card).toMatchObject({
+      agentId: agent?.id,
+      recommendation: 'kiro-cli login',
     });
+    p.fake.options.requireAuth = false;
+    expect(
+      (await p.send('card.answer', { cardId: card.id, answer: SIGNED_IN }))
+        .status,
+    ).toBe(200);
+    await draining;
+
+    expect(await p.intent(sent.body.id)).toMatchObject({ status: 'applied' });
+    expect((await p.agents()).map((row) => row.status)).toEqual(['idle']);
+    expect(p.fake.launches).toHaveLength(2);
+    await p.fake.clients[0]?.closed;
+    expect((await authEvents(p)).map((event) => event.kind)).toEqual([
+      SIGN_IN_EVENTS.required,
+      SIGN_IN_EVENTS.resumed,
+    ]);
+    expect((await replies(p)).map((reply) => reply['stopReason'])).toEqual([
+      'end_turn',
+    ]);
+  });
+
+  it('refuses the message with the command when sign-in is declined, and frees the name', async () => {
+    const p = await open({ fake: { requireAuth: true } });
+    await p.start();
+    const sent = await p.send('planner.message', { text: 'hello' });
+    const draining = p.planner().drain();
+
+    const card = await signInCard(p);
+    await p.send('card.decline', { cardId: card.id });
+    await draining;
+
+    const outcome = await p.intent(sent.body.id);
+    expect(outcome.status).toBe('rejected');
+    expect(JSON.stringify(outcome.result)).toContain('`kiro-cli login`');
     expect((await p.agents()).map((agent) => agent.status)).toEqual([
       'retired',
     ]);
-    await p.fake.clients[0]?.closed;
     const { rows } = await p.store.db.query(
       `select count(*)::int as n from events
        where project_id = $1 and kind = 'agent.birth_failed'`,
       [p.store.projectId],
     );
     expect(rows).toEqual([{ n: 1 }]);
+  });
+
+  it('resends a message whose sign-in lapsed mid-conversation once the card is answered', async () => {
+    const p = await open();
+    await p.start();
+    await say(p, 'hello');
+    const sent = await p.send('planner.message', { text: 'sign_in_lapsed' });
+    const draining = p.planner().drain();
+
+    const card = await signInCard(p);
+    expect((await authEvents(p))[0]?.payload).toMatchObject({
+      cardId: card.id,
+      operation: 'session/prompt',
+    });
+    await p.send('card.answer', { cardId: card.id, answer: SIGNED_IN });
+    await draining;
+
+    expect(await p.intent(sent.body.id)).toMatchObject({ status: 'applied' });
+    const [, second] = await replies(p);
+    expect(second).toMatchObject({ seq: 2, text: SIGNED_IN_AGAIN_TEXT });
+    expect(p.fake.launches).toHaveLength(1);
+  });
+
+  it('stops waiting on sign-in when the human starts a new conversation', async () => {
+    const p = await open({ fake: { requireAuth: true } });
+    await p.start();
+    const sent = await p.send('planner.message', { text: 'hello' });
+    const draining = p.planner().drain();
+    const card = await signInCard(p);
+
+    await p.send('planner.new');
+    await draining;
+    await p.planner().drain();
+
+    const outcome = await p.intent(sent.body.id);
+    expect(outcome.status).toBe('rejected');
+    expect(JSON.stringify(outcome.result)).toContain('the card stays open');
+    expect((await signInCard(p)).id).toBe(card.id);
   });
 
   it('ends the conversation when the agent process dies mid-turn, and the next message starts afresh', async () => {

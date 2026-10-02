@@ -1,5 +1,4 @@
-import { getErrorMessage, loadRule, type Runtime } from '@quarterdeck/rules';
-import { isAuthRequiredError } from '../acp/client/index.js';
+import { getErrorMessage, loadRule } from '@quarterdeck/rules';
 import type { CardHuman } from '../acp/permissions/index.js';
 import {
   createAgentLifecycle,
@@ -7,6 +6,7 @@ import {
   type Agent,
   type AgentLifecycle,
 } from '../agents/index.js';
+import { withSignIn } from '../signin/index.js';
 import { publishEvent, type Store } from '../store/index.js';
 import { collectReply } from './reply.js';
 import {
@@ -18,6 +18,7 @@ import {
 } from './rows.js';
 import {
   createPlannerSessionHost,
+  plannerSignInGate,
   type PlannerAdapters,
   type PlannerBus,
   type PlannerSession,
@@ -35,6 +36,7 @@ export interface PlannerContext {
   cardHuman: CardHuman;
   homeDir: string;
   openStores: () => readonly Store[];
+  signInSignal: () => AbortSignal;
 }
 
 export interface Conversation {
@@ -52,18 +54,6 @@ export interface ConversationSite {
   repoPath: string;
 }
 
-export class PlannerSignInError extends Error {
-  readonly runtime: Runtime;
-
-  constructor(runtime: Runtime) {
-    super(
-      `The Planner's runtime (${runtime}) is not signed in. Sign in with its own CLI, then send your message again.`,
-    );
-    this.name = 'PlannerSignInError';
-    this.runtime = runtime;
-  }
-}
-
 export const startConversation = async (
   ctx: PlannerContext,
   site: ConversationSite,
@@ -76,9 +66,11 @@ export const startConversation = async (
   ]);
   const host = createPlannerSessionHost({
     ...site,
+    store: ctx.store,
     bus: ctx.bus,
     adapters: ctx.adapters,
     cardHuman: ctx.cardHuman,
+    signInSignal: ctx.signInSignal,
   });
   const lifecycle = createAgentLifecycle({
     naming,
@@ -87,26 +79,20 @@ export const startConversation = async (
     openStores: ctx.openStores,
     budget: async () => (await loadRule('lifecycle', rules)).budget.window,
   });
-  const { runtime } = models.planner;
-  try {
-    const agent = await lifecycle.birth({
-      store: ctx.store,
-      role: 'planner',
-      runtime,
-    });
-    return {
-      agent,
-      charter,
-      host,
-      lifecycle,
-      turns: 0,
-      reported: new Set(),
-      inTurn: false,
-    };
-  } catch (err) {
-    if (isAuthRequiredError(err)) throw new PlannerSignInError(runtime);
-    throw err;
-  }
+  const agent = await lifecycle.birth({
+    store: ctx.store,
+    role: 'planner',
+    runtime: models.planner.runtime,
+  });
+  return {
+    agent,
+    charter,
+    host,
+    lifecycle,
+    turns: 0,
+    reported: new Set(),
+    inTurn: false,
+  };
 };
 
 const openSession = (conversation: Conversation): PlannerSession => {
@@ -163,8 +149,15 @@ export const runTurn = async (
   conversation.turns += 1;
   const reply = collectReply(session);
   conversation.inTurn = true;
-  const response = await session.client
-    .prompt(session.sessionId, prompt)
+  const gate = plannerSignInGate(
+    ctx.store,
+    conversation.agent,
+    ctx.signInSignal(),
+    () => session.client.agent.authMethods,
+  );
+  const response = await withSignIn(gate, 'session/prompt', () =>
+    session.client.prompt(session.sessionId, prompt),
+  )
     .catch(async (err: unknown) => {
       await finishTurn(ctx, conversation, turnId, {
         kind: PLANNER_FAILED_EVENT,

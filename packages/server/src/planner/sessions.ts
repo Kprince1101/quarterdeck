@@ -1,3 +1,4 @@
+import type { AuthMethod } from '@agentclientprotocol/sdk';
 import type { Runtime } from '@quarterdeck/rules';
 import type { Agent, SessionHost } from '../agents/index.js';
 import type { AcpClient } from '../acp/client/index.js';
@@ -12,6 +13,8 @@ import {
   type RuntimeAdapter,
 } from '../acp/runtimes/index.js';
 import type { BusHost } from '../bus/index.js';
+import { withSignIn, type SignInGate } from '../signin/index.js';
+import type { Store } from '../store/index.js';
 
 export type PlannerBus = Pick<BusHost, 'launch' | 'revoke'>;
 
@@ -33,20 +36,36 @@ export interface PlannerSession {
 }
 
 export interface PlannerSessionSite {
+  store: Store;
   slug: string;
   repoPath: string;
   bus: PlannerBus;
   adapters: PlannerAdapters;
   cardHuman: CardHuman;
+  signInSignal: () => AbortSignal;
 }
 
 export interface PlannerSessionHost extends SessionHost {
   current: () => PlannerSession | undefined;
 }
 
-const connectPlanner = async (
+export const plannerSignInGate = (
+  store: Store,
+  agent: Pick<Agent, 'id' | 'runtime'>,
+  signal: AbortSignal,
+  authMethods: () => readonly AuthMethod[] | undefined,
+): SignInGate => ({
+  store,
+  agentId: agent.id,
+  runtime: agent.runtime,
+  authMethods,
+  signal,
+});
+
+const connectOnce = async (
   site: PlannerSessionSite,
   agent: Agent,
+  connected: { client?: AcpClient },
 ): Promise<PlannerSession> => {
   const bus = await site.bus.launch(agent.id);
   const client = await site.adapters[agent.runtime].connect(
@@ -65,6 +84,7 @@ const connectPlanner = async (
       }),
     },
   );
+  connected.client = client;
   try {
     const { sessionId } = await client.newSession({
       cwd: site.repoPath,
@@ -75,6 +95,22 @@ const connectPlanner = async (
     await client.close();
     throw err;
   }
+};
+
+const connectPlanner = (
+  site: PlannerSessionSite,
+  agent: Agent,
+): Promise<PlannerSession> => {
+  const connected: { client?: AcpClient } = {};
+  const gate = plannerSignInGate(
+    site.store,
+    agent,
+    site.signInSignal(),
+    () => connected.client?.agent.authMethods,
+  );
+  return withSignIn(gate, 'session/new', () =>
+    connectOnce(site, agent, connected),
+  );
 };
 
 export const createPlannerSessionHost = (

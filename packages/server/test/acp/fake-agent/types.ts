@@ -13,7 +13,8 @@ export type FakeScenario =
   | 'wait_for_cancel'
   | 'describe_session'
   | 'describe_mode'
-  | 'crash';
+  | 'crash'
+  | 'sign_in_lapsed';
 
 export type FakeAgentFlag =
   | 'supportsLoad'

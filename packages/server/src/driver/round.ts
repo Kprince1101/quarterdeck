@@ -8,6 +8,7 @@ import {
 import { findAgent, firstRow, recordEvent } from '../agents/rows.js';
 import { assertLaunchBudget } from '../budget/index.js';
 import type { BusHost } from '../bus/index.js';
+import { withSignIn } from '../signin/index.js';
 import type { Store } from '../store/index.js';
 import {
   buildBirthInput,
@@ -29,7 +30,7 @@ const ENDED: ReadonlySet<AgentStatus> = new Set(['ended', 'killed', 'retired']);
 
 export type DriverClient = Pick<
   AcpClient,
-  'newSession' | 'prompt' | 'subscribe'
+  'agent' | 'newSession' | 'prompt' | 'subscribe'
 >;
 
 export interface DriverRoundOptions {
@@ -121,11 +122,18 @@ export const openDriverRound = async (
   const round = await findRound(store, options.roundId);
   const driver = await findDriver(store, options.agentId);
   await assertLaunchBudget(store, options.budget, { agentId: driver.id });
-  const bus = await options.bus.launch(driver.id);
-  const { sessionId } = await client.newSession({
-    cwd: options.cwd,
-    mcpServers: [bus],
-  });
+  const gate = {
+    store,
+    agentId: driver.id,
+    runtime: driver.runtime,
+    authMethods: () => client.agent.authMethods,
+  };
+  const { sessionId } = await withSignIn(gate, 'session/new', async () =>
+    client.newSession({
+      cwd: options.cwd,
+      mcpServers: [await options.bus.launch(driver.id)],
+    }),
+  );
   const notebook = await readActiveNotebook(store.db, store.projectId);
   const agent = await attachRoundSession(
     store,

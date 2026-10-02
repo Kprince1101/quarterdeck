@@ -23,7 +23,15 @@ The Planner applies the pending intents the HTTP API records, oldest first, one 
 4. The Planner proposes tickets with the bus tool `propose` (see [bus](../bus/README.md#proposetitle-body-dependson)).
 5. `planner.new` retires the agent: its session is closed, its process group stopped, its bus token revoked and its name freed. The next message births a new agent. If a turn is running when `planner.new` arrives it is cancelled first, and messages queued before the `planner.new` are rejected with `superseded by a new conversation`. Proposals stay on the board whatever happens to the conversation.
 
-A message is refused (intent `rejected` with `{ error }`, plus a `planner.failed` event) when the project has no `repo_path`, when the runtime is not signed in (`PlannerSignInError`; Quarterdeck never signs in for you), or when the agent cannot be born, including when the budget holds the birth (`BudgetHeldError`; see [budget](../budget/README.md)). If a turn fails, for example because the agent process died, the conversation ends and the next message starts a fresh one.
+When the runtime is not signed in, opening the session or sending a prompt raises a sign-in card with the command to run. The conversation waits on that card. Once the person answers it, the session opens with a fresh process, or the prompt is sent again (see [signin](../signin/README.md)). Quarterdeck never signs in for you. A `planner.new` or `close()` stops the wait.
+
+A message is refused (intent `rejected` with `{ error }`, plus a `planner.failed` event) in these cases:
+
+- the project has no `repo_path`;
+- the sign-in card is declined or expires (`SignInRequiredError`, whose message names the command);
+- the wait for sign-in is stopped;
+- the budget holds the birth (`BudgetHeldError`; see [budget](../budget/README.md));
+- the agent cannot be born. If a turn fails, for example because the agent process died, the conversation ends and the next message starts a fresh one.
 
 When the Planner starts it retires any Planner agent still live from an earlier run, because that agent's process is gone. `close()` cancels a running turn and retires the conversation.
 

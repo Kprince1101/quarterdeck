@@ -17,6 +17,7 @@ import {
   FAKE_TOOL_CALL_ID,
   LARGE_OUTPUT_PATH,
   LARGE_OUTPUT_TOOL_CALL_ID,
+  SIGNED_IN_AGAIN_TEXT,
   WAITING_TEXT,
 } from './constants.ts';
 import { expectedLargeOutput, longOutputLines } from './long-output.ts';
@@ -193,6 +194,17 @@ const crash: FakeScenarioHandler = async (turn) => {
   return 'refusal';
 };
 
+const lapsedSessions = new WeakSet<FakeTurn['setup']>();
+
+const signInLapsed: FakeScenarioHandler = async (turn) => {
+  if (!lapsedSessions.has(turn.setup)) {
+    lapsedSessions.add(turn.setup);
+    throw RequestError.authRequired();
+  }
+  await sendText(turn, SIGNED_IN_AGAIN_TEXT);
+  return 'end_turn';
+};
+
 const SCENARIO_HANDLERS: Record<FakeScenario, FakeScenarioHandler> = {
   echo,
   tool_call: toolCall,
@@ -203,6 +215,7 @@ const SCENARIO_HANDLERS: Record<FakeScenario, FakeScenarioHandler> = {
   describe_session: describeSession,
   describe_mode: describeMode,
   crash,
+  sign_in_lapsed: signInLapsed,
 };
 
 export const resolveScenario = (text: string): FakeScenario =>
