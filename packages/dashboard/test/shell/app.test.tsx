@@ -109,7 +109,25 @@ describe('dashboard shell', () => {
 
   it('registers the Driver widget', () => {
     const { container, unmount } = render(<App stream={stream} />);
-    showOnly(container, ['Driver'], click);
+    deliver(
+      snapshotWith(
+        layoutRow({
+          columns: 12,
+          rows: 12,
+          items: [
+            {
+              id: 'driver-1',
+              widget: 'driver',
+              x: 0,
+              y: 0,
+              w: 12,
+              h: 12,
+              hidden: false,
+            },
+          ],
+        }),
+      ),
+    );
     expect(textOf(container, '[aria-label="Driver"]')).toContain(
       'No rounds yet.',
     );
