@@ -46,7 +46,11 @@ export {
   type SweepReason,
 } from './processes.js';
 export { findAgent } from './rows.js';
-export type { RetireHosts, RetireOptions } from './retire.js';
+export {
+  AGENT_RETIRED_EVENT,
+  type RetireHosts,
+  type RetireOptions,
+} from './retire.js';
 export type { SessionHost } from './sessions.js';
 export {
   WORKPLACE_EVENTS,

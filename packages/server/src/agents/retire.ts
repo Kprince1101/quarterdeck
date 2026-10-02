@@ -13,6 +13,8 @@ import type { SessionHost } from './sessions.js';
 import { WORKPLACE_EVENTS, detachWorktree } from './workplace.js';
 import type { WorktreeHost } from './worktrees.js';
 
+export const AGENT_RETIRED_EVENT = 'agent.retired';
+
 export interface RetireOptions {
   discardCardId?: string;
   intentId?: string;
@@ -84,7 +86,7 @@ export const retireAgent = async (
   return markRetired(
     store,
     cleared,
-    'agent.retired',
+    AGENT_RETIRED_EVENT,
     intentPayload(options.intentId),
   );
 };

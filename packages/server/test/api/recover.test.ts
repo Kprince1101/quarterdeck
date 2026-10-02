@@ -3,10 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { startApiServer, type ApiServer } from '../../src/api/index.js';
-import {
-  PAUSE_DROPPED_EVENT,
-  PAUSE_HELD_EVENT,
-} from '../../src/lifecycle/index.js';
+import { PAUSE_EVENTS } from '../../src/pause/index.js';
 import { openStore, quarterdeckHome } from '../../src/store/index.js';
 import { TIMEOUT } from './harness.js';
 
@@ -39,7 +36,7 @@ describe(
         [store.projectId],
       );
       await store.publish({
-        kind: PAUSE_HELD_EVENT,
+        kind: PAUSE_EVENTS.held,
         payload: {
           operation: 'launch',
           label: 'assign: QD5i',
@@ -75,9 +72,9 @@ describe(
 
         for (const project of ['deck', 'yard']) {
           expect(await kinds(project)).toEqual([
-            PAUSE_HELD_EVENT,
+            PAUSE_EVENTS.held,
             'card.expired',
-            PAUSE_DROPPED_EVENT,
+            PAUSE_EVENTS.dropped,
           ]);
         }
       },
@@ -95,9 +92,9 @@ describe(
       });
 
       expect(await kinds('deck')).toEqual([
-        PAUSE_HELD_EVENT,
+        PAUSE_EVENTS.held,
         'card.expired',
-        PAUSE_DROPPED_EVENT,
+        PAUSE_EVENTS.dropped,
       ]);
       expect(await kinds('deck')).toHaveLength(3);
       expect(errors).toEqual([]);

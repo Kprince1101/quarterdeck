@@ -15,7 +15,12 @@ import { INTENT_HANDLERS } from '../../src/api/index.js';
 
 const INTENTS_DIR = resolve(import.meta.dirname, '../../src/intents');
 const BROWSER_SAFE_IMPORT = /^(zod|@quarterdeck\/rules\/schemas|\.\.?\/)/;
-const GLOBAL_INTENTS = new Set(['rules.write', 'rules.reset', 'wipe.all']);
+const GLOBAL_INTENTS = new Set([
+  'rules.write',
+  'rules.reset',
+  'wipe.all',
+  'pause.all',
+]);
 
 const importsOf = (source: string): string[] =>
   [...source.matchAll(/from '([^']+)'/g)].map((match) => match[1] ?? '');
@@ -53,7 +58,7 @@ describe('intent registry', () => {
     expect(ruleNameSchema.options).toEqual(RULE_NAMES);
   });
 
-  it('scopes every intent but machine rules and wipe.all to a project', () => {
+  it('scopes every intent but machine rules, wipe.all and pause.all to a project', () => {
     const unscoped = INTENT_NAMES.filter((name) =>
       INTENTS[name]
         .safeParse({})

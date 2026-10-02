@@ -18,6 +18,7 @@ const round = await openDriverRound({
   charter: await loadRule('charter', { repoDir: repoPath }),
   turnsDir: projectTurnsDir('commander'),
   budget: (await loadRule('lifecycle', { repoDir: repoPath })).budget.window,
+  pause, // the project's PauseGate
 });
 const birth = await round.birth;
 const next = await round.turn('heron reported QD12: <report>');
@@ -34,6 +35,8 @@ const next = await round.turn('heron reported QD12: <report>');
 The birth input (`buildBirthInput`) is the Driver's name and round number, the charter, the round's goal, the notebook entries and the turn result format. The next round gets a new session and a new birth input, carrying the notebook as it is then.
 
 `round.turn(input)` queues one more turn in the round's session. Turns run one at a time, in the order they were asked for, the birth turn first. A turn that rejects does not stop the ones queued after it. `round.turnAs(input, format)` queues a turn in the same line that expects another `TurnFormat`; the [wrap-up](../round-end/README.md#wrap-up) uses it.
+
+Both steps go through the [pause](../pause/README.md) guard (`pause`). The launch (steps 1 to 4) is held as `launch` while the Driver, the project or everything is paused, and opens on unpause after checking the round and the Driver again. Each turn, the birth turn included, is held as `driver.turn` when it reaches the front of the queue; the turns behind it wait in order.
 
 ## Turn results
 
@@ -77,7 +80,7 @@ Each ACP prompt, birth and re-prompt included, is one `turns` row (`seq` counts 
 
 A prompt that throws still gets `output.md` and `updates.jsonl` with what arrived before it failed, and its row gets `ended_at` with a null `stop_reason`.
 
-While a prompt runs the agent is `working`; afterwards it is `idle` again. Only an `idle` or `working` agent is moved, so a pause or kill set meanwhile stands.
+While a prompt runs the agent is `working`; afterwards it is `idle` again. Only an `idle` or `working` agent is moved, so a pause or kill set meanwhile stands. A pause does not cancel a running prompt; it holds the next one.
 
 ## Replay
 
@@ -187,11 +190,14 @@ const ctx: BuilderContext = {
   worktreesDir: projectWorktreesDir('commander'),
   turnsDir: projectTurnsDir('commander'),
   budget, // (await loadRule('lifecycle', { repoDir: repoPath })).budget.window
+  pause, // the project's PauseGate
 };
 const assignment = await assignTicket(ctx, { ticketId });
 await continueBuilder(ctx, { builderId, prompt: 'CI failed on lint; fix it.' });
 await reassignTickets(ctx, retiredBuilderId);
 ```
+
+`pause` is the project's [pause](../pause/README.md) guard. An assignment or re-assignment is held as `launch` (with the builder, when one is named, and the ticket), and a continue as `continue` (with the builder), while any of them is paused; the call resolves once it has been replayed and run. An assignment re-reads the ticket when it runs, so one cancelled or taken while held throws `TicketNotAssignableError` then. A re-assignment re-reads the retired builder's tickets when it runs and skips, without birthing a builder, a ticket that was reopened, cancelled or handed on while held; the rest still go.
 
 `sessions` must be the `SessionHost` the lifecycle was made with. Its `open(agent)` opens the session with `agent.worktreePath` as the `cwd` (and the bus as an MCP server, as for the Driver); `client(sessionId)` returns the ACP client a live session prompts through, or `undefined` once it is gone.
 
@@ -212,7 +218,7 @@ The ticket then becomes `assigned` to the builder, the builder `working`, and `t
 
 ### Continuing
 
-`continueBuilder(ctx, { builderId, prompt })` sends an `idle` builder with a session one more prompt in that session, filed under the ticket it holds if any, and records `builder.continued` with `{ name, prompt, head }`, where `head` is the commit its worktree is at (`worktreeHead`; `null` without a worktree). A builder that is not idle, not a builder or has no session throws `BuilderNotAvailableError`; a session the host no longer knows throws `BuilderSessionLostError` and leaves the builder `idle`. `continuation.turn` settles like `assignment.turn`.
+`continueBuilder(ctx, { builderId, prompt })` sends an `idle` builder with a session one more prompt in that session, filed under the ticket it holds if any, and records `builder.continued` with `{ name, prompt, head }`, where `head` is the commit its worktree is at (`worktreeHead`; `null` without a worktree). A builder that is not idle (a `paused` one is held instead, until it resumes), not a builder or has no session throws `BuilderNotAvailableError`; a session the host no longer knows throws `BuilderSessionLostError` and leaves the builder `idle`. `continuation.turn` settles like `assignment.turn`.
 
 ### Stuck
 

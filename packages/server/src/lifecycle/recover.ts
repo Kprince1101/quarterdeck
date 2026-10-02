@@ -5,6 +5,7 @@ import {
   type SweepOutcome,
 } from '../agents/index.js';
 import { expireOverdueCards } from '../bus/cards.js';
+import { PAUSE_EVENTS } from '../pause/index.js';
 import {
   publishEvent,
   type PublishInput,
@@ -14,9 +15,7 @@ import {
 
 export const RESTART_REASON = 'restart';
 
-export const PAUSE_HELD_EVENT = 'pause.held';
-export const PAUSE_DROPPED_EVENT = 'pause.dropped';
-const PAUSE_SETTLED_EVENTS = ['pause.replayed', PAUSE_DROPPED_EVENT];
+const PAUSE_SETTLED_EVENTS = [PAUSE_EVENTS.replayed, PAUSE_EVENTS.dropped];
 
 export interface ReapedAgent {
   agentId: string;
@@ -84,14 +83,14 @@ const orphanedHolds = async (
            and s.payload ->> 'heldEventId' = h.id::text
        )
      order by h.id`,
-    [projectId, PAUSE_HELD_EVENT, PAUSE_SETTLED_EVENTS],
+    [projectId, PAUSE_EVENTS.held, PAUSE_SETTLED_EVENTS],
   );
   return rows;
 };
 
 const droppedEvent = (hold: OrphanedHold): PublishInput => {
   const event: PublishInput = {
-    kind: PAUSE_DROPPED_EVENT,
+    kind: PAUSE_EVENTS.dropped,
     payload: {
       operation: hold.operation,
       label: hold.label,

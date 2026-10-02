@@ -8,6 +8,11 @@ import {
 import { findAgent, firstRow, recordEvent } from '../agents/rows.js';
 import { assertLaunchBudget } from '../budget/index.js';
 import type { BusHost } from '../bus/index.js';
+import {
+  pauseLabel,
+  type PauseGuard,
+  type PauseSubject,
+} from '../pause/index.js';
 import { withSignIn } from '../signin/index.js';
 import type { Store } from '../store/index.js';
 import {
@@ -52,6 +57,7 @@ export interface DriverRoundOptions {
   charter: string;
   turnsDir: string;
   budget: BudgetWindow;
+  pause: PauseGuard;
 }
 
 export type DriverTurnOutcome = TurnOutcome<DriverTurnResult>;
@@ -125,7 +131,7 @@ const serialize = () => {
   };
 };
 
-export const openDriverRound = async (
+const launchRound = async (
   options: DriverRoundOptions,
 ): Promise<DriverRound> => {
   const { store, client } = options;
@@ -160,10 +166,17 @@ export const openDriverRound = async (
     turnsDir: options.turnsDir,
   };
   const enqueue = serialize();
+  const heldTurn = <T>(label: string, run: () => Promise<T>) =>
+    enqueue(() =>
+      options.pause.hold(
+        { operation: 'driver.turn', label, agentId: agent.id },
+        run,
+      ),
+    );
   const turnAs = <T>(input: string, format: TurnFormat<T>) =>
-    enqueue(() => runTurn(target, input, format));
-  const turn = (input: string) =>
-    enqueue(async () => {
+    heldTurn(pauseLabel('turn', input), () => runTurn(target, input, format));
+  const flaggedTurn = (label: string, input: string) =>
+    heldTurn(label, async () => {
       const flags = await unsurfacedStuckFlags(store);
       const outcome = await runTurn(
         target,
@@ -174,6 +187,7 @@ export const openDriverRound = async (
         await markStuckFlagsSurfaced(store, agent, flags);
       return outcome;
     });
+  const turn = (input: string) => flaggedTurn(pauseLabel('turn', input), input);
   const birthInput = buildBirthInput({
     agent,
     round,
@@ -181,7 +195,20 @@ export const openDriverRound = async (
     notebook,
     instructions: DRIVER_TURN_FORMAT.instructions,
   });
-  const birth = turn(birthInput);
+  const birth = flaggedTurn(`birth turn, round ${round.number}`, birthInput);
   birth.catch(() => undefined);
   return { agent, round, sessionId, notebook, birth, turn, turnAs };
+};
+
+export const openDriverRound = async (
+  options: DriverRoundOptions,
+): Promise<DriverRound> => {
+  const round = await findRound(options.store, options.roundId);
+  const driver = await findDriver(options.store, options.agentId);
+  const subject: PauseSubject = {
+    operation: 'launch',
+    label: `${driver.name}, round ${round.number}`,
+    agentId: driver.id,
+  };
+  return options.pause.hold(subject, () => launchRound(options));
 };

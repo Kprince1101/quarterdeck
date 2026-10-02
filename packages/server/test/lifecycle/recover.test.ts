@@ -1,10 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { PROCESS_SWEPT_EVENT } from '../../src/agents/index.js';
-import {
-  PAUSE_DROPPED_EVENT,
-  PAUSE_HELD_EVENT,
-  recoverProject,
-} from '../../src/lifecycle/index.js';
+import { recoverProject } from '../../src/lifecycle/index.js';
+import { PAUSE_EVENTS } from '../../src/pause/index.js';
 import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
 import {
   CLEAR_ROUND_TABLES,
@@ -68,7 +65,7 @@ describe('recovering a project at startup', { timeout: TIMEOUT }, () => {
       expiredCards: [],
       droppedPauses: [],
     });
-    expect(await eventPayloads(store, PAUSE_DROPPED_EVENT)).toEqual([]);
+    expect(await eventPayloads(store, PAUSE_EVENTS.dropped)).toEqual([]);
   });
 
   it.skipIf(IS_WINDOWS)(
@@ -139,7 +136,7 @@ describe('recovering a project at startup', { timeout: TIMEOUT }, () => {
     const agentId = await insertAgent(store, { name: 'wren' });
     const ticketId = await insertTicket(store, 'open');
     const orphan = await store.publish({
-      kind: PAUSE_HELD_EVENT,
+      kind: PAUSE_EVENTS.held,
       agentId,
       ticketId,
       payload: {
@@ -148,7 +145,7 @@ describe('recovering a project at startup', { timeout: TIMEOUT }, () => {
         scopes: ['project'],
       },
     });
-    const replayed = await publish(PAUSE_HELD_EVENT, {
+    const replayed = await publish(PAUSE_EVENTS.held, {
       operation: 'continue',
       label: 'continue: fix lint',
       scopes: ['agent'],
@@ -158,12 +155,12 @@ describe('recovering a project at startup', { timeout: TIMEOUT }, () => {
       label: 'continue: fix lint',
       heldEventId: replayed.id,
     });
-    const dropped = await publish(PAUSE_HELD_EVENT, {
+    const dropped = await publish(PAUSE_EVENTS.held, {
       operation: 'driver.turn',
       label: 'turn: go',
       scopes: ['global'],
     });
-    await publish(PAUSE_DROPPED_EVENT, {
+    await publish(PAUSE_EVENTS.dropped, {
       operation: 'driver.turn',
       label: 'turn: go',
       heldEventId: dropped.id,
@@ -180,7 +177,7 @@ describe('recovering a project at startup', { timeout: TIMEOUT }, () => {
     }>(
       `select agent_id as "agentId", ticket_id as "ticketId", payload
        from events where kind = $1 and payload ->> 'reason' = 'restart'`,
-      [PAUSE_DROPPED_EVENT],
+      [PAUSE_EVENTS.dropped],
     );
     expect(rows).toEqual([
       {

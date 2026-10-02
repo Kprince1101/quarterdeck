@@ -162,6 +162,7 @@ describe('End and Kill from the dashboard', { timeout: TIMEOUT }, () => {
       charter: await loadRule('charter', { homeDir: t.homeDir, repoDir }),
       turnsDir,
       budget: { hours: 5, capTokens: null, holdAtFraction: 0.8 },
+      pause: { hold: (_subject, run) => run() },
     });
     await round.birth;
     const driver: RoundDriver = {

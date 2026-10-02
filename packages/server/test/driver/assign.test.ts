@@ -11,6 +11,7 @@ import {
   describe,
   expect,
   it,
+  vi,
 } from 'vitest';
 import {
   WorktreeDirtyError,
@@ -37,6 +38,11 @@ import {
   worktreeHead,
   type BuilderContext,
 } from '../../src/driver/index.js';
+import {
+  PauseDroppedError,
+  startPauseGate,
+  type PauseGate,
+} from '../../src/pause/index.js';
 import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
 import {
   fakeBuilderSessions,
@@ -50,6 +56,7 @@ import {
 } from './scripted-agent.js';
 
 const TIMEOUT = 30_000;
+const settle = (check: () => unknown) => vi.waitFor(check, { timeout: 10_000 });
 const BIRDS: Naming = { theme: 'birds', names: ['crane', 'heron', 'ibis'] };
 const NO_CAP: BudgetWindow = { hours: 5, capTokens: null, holdAtFraction: 0.8 };
 
@@ -84,6 +91,7 @@ describe('builder assignment and continue', () => {
   let repo: string;
   let base: string;
   let ctx: BuilderContext;
+  let pauseGate: PauseGate;
 
   beforeAll(async () => {
     store = await openStore({ project: 'deck', dataDir: IN_MEMORY });
@@ -101,6 +109,7 @@ describe('builder assignment and continue', () => {
     base = git(repo, 'rev-parse', 'HEAD');
     scripted = await startScriptedAgent();
     sessions = fakeBuilderSessions(scripted.client);
+    pauseGate = await startPauseGate({ store, home: root });
     lifecycle = createAgentLifecycle({
       naming: BIRDS,
       sessions,
@@ -120,6 +129,7 @@ describe('builder assignment and continue', () => {
       worktreesDir: join(root, 'worktrees'),
       turnsDir: join(root, 'turns'),
       budget: NO_CAP,
+      pause: pauseGate,
     };
   });
 
@@ -128,13 +138,31 @@ describe('builder assignment and continue', () => {
   };
 
   afterEach(async () => {
+    await pauseGate.close();
     await scripted.client.close();
     await rm(root, { recursive: true, force: true });
     await store.db.exec(
       `delete from events; delete from turns; delete from cards;
-       delete from tickets; delete from agents;`,
+       delete from tickets; delete from agents;
+       update projects set paused_at = null;`,
     );
   });
+
+  const pauseProject = async (paused: boolean) => {
+    await store.db.query(
+      `update projects set paused_at = case when $2::boolean then now() end
+       where id = $1`,
+      [store.projectId, paused],
+    );
+    await store.publish({ kind: 'pause.set' });
+  };
+
+  const setAgentStatus = async (agentId: string, status: string) => {
+    await store.db.query('update agents set status = $2 where id = $1', [
+      agentId,
+      status,
+    ]);
+  };
 
   const insertTicket = async (seed: TicketSeed = {}): Promise<string> => {
     const { rows } = await store.db.query<{ id: string }>(
@@ -366,10 +394,9 @@ describe('builder assignment and continue', () => {
       await expect(
         assignTicket(ctx, { ticketId: next, builderId: reviewer }),
       ).rejects.toThrow('its role is reviewer');
-      await store.db.query(
-        `update agents set status = 'paused' where id = $1`,
-        [builder.id],
-      );
+      await store.db.query(`update agents set status = 'stuck' where id = $1`, [
+        builder.id,
+      ]);
       await store.db.query(`update tickets set status = 'done' where id = $1`, [
         held,
       ]);
@@ -579,6 +606,133 @@ describe('builder assignment and continue', () => {
   );
 
   it(
+    'holds an assignment while the project is paused and launches it on unpause',
+    async () => {
+      const ticketId = await insertTicket();
+      await pauseProject(true);
+      scripted.reply(say('On it.'));
+
+      const assigning = assignTicket(ctx, { ticketId });
+      await settle(async () => {
+        expect(await events('pause.held')).toHaveLength(1);
+      });
+
+      expect(await events('pause.held')).toEqual([
+        {
+          agentId: null,
+          ticketId,
+          payload: {
+            operation: 'launch',
+            label: 'assign: QD9 widget',
+            scopes: ['project'],
+          },
+        },
+      ]);
+      expect(await agentCount()).toBe(0);
+      expect(sessions.opened).toEqual([]);
+      expect(await ticketRow(ticketId)).toEqual({
+        status: 'open',
+        assigneeId: null,
+      });
+
+      await pauseProject(false);
+      const assignment = await assigning;
+      await assignment.turn;
+
+      expect(assignment).toMatchObject({
+        born: true,
+        ticket: { id: ticketId },
+      });
+      expect(await events('pause.replayed')).toEqual([
+        {
+          agentId: null,
+          ticketId,
+          payload: {
+            operation: 'launch',
+            label: 'assign: QD9 widget',
+            heldEventId: expect.any(Number),
+          },
+        },
+      ]);
+      expect(scripted.prompts).toHaveLength(1);
+    },
+    TIMEOUT,
+  );
+
+  it(
+    'holds a continue while its builder is paused and sends it on resume',
+    async () => {
+      const ticketId = await insertTicket();
+      const { builder } = await assignAndSettle(ticketId);
+      await setAgentStatus(builder.id, 'paused');
+      scripted.reply(say('Rebased.'));
+
+      const continuing = continueBuilder(ctx, {
+        builderId: builder.id,
+        prompt: 'Rebase on main.\nThen push.',
+      });
+      await settle(async () => {
+        expect(await events('pause.held')).toHaveLength(1);
+      });
+
+      expect(await events('pause.held')).toEqual([
+        {
+          agentId: builder.id,
+          ticketId: null,
+          payload: {
+            operation: 'continue',
+            label: 'continue: Rebase on main.',
+            scopes: ['agent'],
+          },
+        },
+      ]);
+      await pauseGate.replay();
+      expect(pauseGate.held()).toHaveLength(1);
+      expect(scripted.prompts).toHaveLength(1);
+
+      await setAgentStatus(builder.id, 'idle');
+      await store.publish({ kind: 'agent.resume', agentId: builder.id });
+      const continuation = await continuing;
+
+      expect((await continuation.turn).text).toBe('Rebased.');
+      expect(scripted.prompts[1]?.text).toBe('Rebase on main.\nThen push.');
+      expect(await events('pause.replayed')).toHaveLength(1);
+      expect(pauseGate.held()).toEqual([]);
+    },
+    TIMEOUT,
+  );
+
+  it(
+    'leaves a ticket unassigned when its held assignment is dropped',
+    async () => {
+      const ticketId = await insertTicket();
+      await pauseProject(true);
+
+      const assigning = assignTicket(ctx, { ticketId });
+      await settle(async () => {
+        expect(pauseGate.held()).toHaveLength(1);
+      });
+      await pauseGate.close();
+
+      await expect(assigning).rejects.toBeInstanceOf(PauseDroppedError);
+      expect(await events('pause.dropped')).toEqual([
+        {
+          agentId: null,
+          ticketId,
+          payload: {
+            operation: 'launch',
+            label: 'assign: QD9 widget',
+            heldEventId: expect.any(Number),
+            reason: 'closed',
+          },
+        },
+      ]);
+      expect(await agentCount()).toBe(0);
+    },
+    TIMEOUT,
+  );
+
+  it(
     're-assigns a retired builder’s tickets to a new builder',
     async () => {
       const ticketId = await insertTicket();
@@ -654,6 +808,56 @@ describe('builder assignment and continue', () => {
         status: 'assigned',
         assigneeId: next?.builder.id,
       });
+    },
+    TIMEOUT,
+  );
+
+  it(
+    'skips a held re-assignment whose ticket was reopened during the pause',
+    async () => {
+      const reopened = await insertTicket({ title: 'QD1' });
+      const first = await assignAndSettle(reopened);
+      const kept = await insertTicket({
+        title: 'QD2',
+        status: 'assigned',
+        assigneeId: first.builder.id,
+      });
+      await lifecycle.retire(store, first.builder.id);
+      await pauseProject(true);
+      scripted.reply(say('Picking it up.'));
+
+      const reassigning = reassignTickets(ctx, first.builder.id);
+      await settle(async () => {
+        expect(await events('pause.held')).toHaveLength(1);
+      });
+      expect((await events('pause.held'))[0]?.ticketId).toBe(reopened);
+      await store.db.query(
+        `update tickets set status = 'open', assignee_id = null where id = $1`,
+        [reopened],
+      );
+      await pauseProject(false);
+      const assignments = await reassigning;
+      await Promise.all(assignments.map((assignment) => assignment.turn));
+
+      expect(assignments).toHaveLength(1);
+      expect(assignments[0]).toMatchObject({
+        born: true,
+        previousAssigneeId: first.builder.id,
+        ticket: { id: kept },
+      });
+      expect(await agentCount()).toBe(2);
+      expect(sessions.opened).toHaveLength(2);
+      expect(await ticketRow(reopened)).toEqual({
+        status: 'open',
+        assigneeId: null,
+      });
+      expect(await ticketRow(kept)).toEqual({
+        status: 'assigned',
+        assigneeId: assignments[0]?.builder.id,
+      });
+      expect(
+        (await events(TICKET_ASSIGNED_EVENT)).map((event) => event.ticketId),
+      ).toEqual([reopened, kept]);
     },
     TIMEOUT,
   );

@@ -7,8 +7,6 @@ export {
   type LifecycleIntentsOptions,
 } from './intents.js';
 export {
-  PAUSE_DROPPED_EVENT,
-  PAUSE_HELD_EVENT,
   RESTART_REASON,
   dropOrphanedPauses,
   reapAgentProcesses,

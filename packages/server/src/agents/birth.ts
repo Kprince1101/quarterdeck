@@ -47,7 +47,9 @@ const attachSession = async (
   sessionId: string,
 ): Promise<Agent> => {
   const { rows } = await store.db.query<Agent>(
-    `update agents set session_id = $2, status = 'idle'
+    `update agents
+     set session_id = $2,
+         status = case when status = 'paused' then status else 'idle' end
      where id = $1
      returning ${AGENT_COLUMNS}`,
     [agent.id, sessionId],

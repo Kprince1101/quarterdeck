@@ -21,10 +21,11 @@ round.kill ─▶ cleanup + tickets reopened ─▶ round.ended (reason: killed)
 | no open tickets   | No ticket of the project is `open`, `assigned`, `in_progress`, `in_review`, `bounced` or `blocked` (`OPEN_TICKET_STATUSES`). `proposed` tickets wait for the human, not the crew. |
 | no running agents | No agent of the project is `starting`, `working` or `stuck` (`RUNNING_AGENT_STATUSES`). A turn in flight, the Driver's own included, keeps the round going.                       |
 | no open cards     | No card of the project is `open`.                                                                                                                                                 |
+| not paused        | Neither the project nor everything is [paused](../pause/README.md) (`pausedScopes`, read under `home`, the 4th argument, default `~/.quarterdeck`).                               |
 
 ## The settle timer
 
-`startAutoEnd({ store, roundId, settleSeconds, end, schedule?, onError? })` checks the round when it starts and on every change to `rounds`, `tickets`, `agents` and `cards` (`store.watch`).
+`startAutoEnd({ store, roundId, settleSeconds, end, schedule?, home?, onError? })` checks the round when it starts, on every change to `rounds`, `tickets`, `agents` and `cards` (`store.watch`), and on every `pause.set` and `pause.all` event.
 
 - Settled and no timer: arm one for `settleSeconds` and record `round.settling` with `{ roundId, settleSeconds, rearmed: false }`.
 - Not settled: disarm the timer, if any. The next time it settles the timer starts from zero.

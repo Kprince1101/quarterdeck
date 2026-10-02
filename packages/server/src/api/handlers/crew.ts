@@ -7,6 +7,7 @@ import type {
 } from '../context.js';
 import { conflict } from '../http-error.js';
 import { findRow, queueInProject } from '../record.js';
+import { PAUSE_HANDLERS } from './pause.js';
 
 type AgentIntentName = Extract<CrewIntentName, `agent.${string}`>;
 type RoundIntentName = Extract<CrewIntentName, 'round.end' | 'round.kill'>;
@@ -47,7 +48,9 @@ const requireOpenRound =
     }
   };
 
-const queue: IntentHandler<CrewIntentName> = (ctx, input, name) =>
+type QueuedIntentName = Exclude<CrewIntentName, 'pause.all'>;
+
+const queue: IntentHandler<QueuedIntentName> = (ctx, input, name) =>
   queueInProject(ctx, name, input);
 
 const queueForRound: IntentHandler<RoundIntentName> = (ctx, input, name) =>
@@ -66,9 +69,7 @@ export const CREW_HANDLERS: IntentHandlers<CrewIntentName> = {
   'round.start': queue,
   'round.end': queueForRound,
   'round.kill': queueForRound,
-  'pause.set': queue,
-  'agent.pause': queueForAgent,
-  'agent.resume': queueForAgent,
+  ...PAUSE_HANDLERS,
   'agent.end': queueForAgent,
   'agent.kill': queueForAgent,
   'agent.retire': queueForUnretiredAgent,

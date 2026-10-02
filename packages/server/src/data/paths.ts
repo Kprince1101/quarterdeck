@@ -10,6 +10,7 @@ import type {
   DataPathScope,
 } from '../intents/index.js';
 import { pathExists } from '../lib/fs.js';
+import { globalPausePath } from '../pause/state.js';
 import {
   dataDirLockPath,
   projectDataDir,
@@ -80,6 +81,7 @@ export const dataPaths = ({
     ...repoRuleFiles(repoPath),
     ...ruleFiles(homeDir, 'machine'),
     entry('Ticket plugins', ticketPluginsDir(home), 'directory', 'machine'),
+    entry('Global pause', globalPausePath(home), 'file', 'machine'),
     entry('Bus sockets', busSocketDir(home), 'directory', 'machine'),
     entry('Kiro runtime', defaultKiroProcessDir(home), 'directory', 'machine'),
     entry('Gemini runtime', defaultGeminiDir(home), 'directory', 'machine'),

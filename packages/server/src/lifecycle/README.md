@@ -49,11 +49,11 @@ The server runs it each time it opens a project store (`ProjectStores.get` and `
 
 ## API
 
-| Export                                                                 | What it does                                |
-| ---------------------------------------------------------------------- | ------------------------------------------- |
-| `startLifecycleIntents(options)`                                       | See [Intents](#intents).                    |
-| `LIFECYCLE_EVENTS`, `DISCARD_REFUSED`                                  | `agent.retire_held`, `agent.intent_failed`. |
-| `AGENT_KILL`, `AGENT_RETIRE`, `AGENT_RESET`, `LIFECYCLE_INTENT_KINDS`  | The intent kinds it applies.                |
-| `recoverProject(store, options)`                                       | See [Recovery](#recovery).                  |
-| `reapAgentProcesses`, `expireOverdueCards` (bus), `dropOrphanedPauses` | The three recovery steps on their own.      |
-| `RESTART_REASON`, `PAUSE_HELD_EVENT`, `PAUSE_DROPPED_EVENT`            | `restart`, `pause.held`, `pause.dropped`.   |
+| Export                                                                 | What it does                                                                 |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `startLifecycleIntents(options)`                                       | See [Intents](#intents).                                                     |
+| `LIFECYCLE_EVENTS`, `DISCARD_REFUSED`                                  | `agent.retire_held`, `agent.intent_failed`.                                  |
+| `AGENT_KILL`, `AGENT_RETIRE`, `AGENT_RESET`, `LIFECYCLE_INTENT_KINDS`  | The intent kinds it applies.                                                 |
+| `recoverProject(store, options)`                                       | See [Recovery](#recovery).                                                   |
+| `reapAgentProcesses`, `expireOverdueCards` (bus), `dropOrphanedPauses` | The three recovery steps on their own.                                       |
+| `RESTART_REASON`                                                       | `restart`. The pause events are [`PAUSE_EVENTS`](../pause/README.md#events). |

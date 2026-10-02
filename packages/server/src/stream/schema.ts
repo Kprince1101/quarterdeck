@@ -22,6 +22,7 @@ export const projectRowSchema = z.object({
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   archivedAt: timestampSchema.nullable(),
+  pausedAt: timestampSchema.nullable(),
 });
 
 export const roundRowSchema = z.object({

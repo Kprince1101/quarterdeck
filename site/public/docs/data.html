@@ -44,6 +44,7 @@
     turns/&lt;agent-id&gt;/&lt;seq&gt;/      one folder per agent turn
     worktrees/&lt;builder&gt;-&lt;ticket&gt;/  a builder's git worktree
   plugins/&lt;name&gt;.mjs             ticket-source plugins you add yourself
+  pause.json                     only while everything is paused
   sock/&lt;hash&gt;.sock               a project's bus socket, while running
   kiro/                          where kiro-cli runs
   gemini/                        where gemini runs, and its locked settings
@@ -112,6 +113,13 @@
             <td>
               Ticket-source plugins you put there yourself. Code, not data:
               Quarterdeck only reads them, and wiping leaves them.
+            </td>
+          </tr>
+          <tr>
+            <td><code>~/.quarterdeck/pause.json</code></td>
+            <td>
+              Exists only while everything is paused, and holds when the pause
+              began. Deleting it lifts the pause. Wiping leaves it.
             </td>
           </tr>
           <tr>
