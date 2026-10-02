@@ -53,7 +53,9 @@ export const useProjectPicker = (
         isPicked,
         isDisabled: isFull && !isPicked,
         handleToggle: () => {
-          setPicked(togglePick(shownIds, project.id));
+          setPicked((current) =>
+            togglePick(current ?? shownIds, shownIds, project.id),
+          );
         },
       };
     });

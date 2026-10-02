@@ -60,13 +60,14 @@ export const shownProjectIds = (
 };
 
 export const togglePick = (
+  picked: readonly string[],
   shown: readonly string[],
   id: string,
   cap: number = BOARD_PROJECT_CAP,
 ): string[] => {
-  if (shown.includes(id)) return shown.filter((picked) => picked !== id);
-  if (shown.length >= cap) return [...shown];
-  return [...shown, id];
+  if (picked.includes(id)) return picked.filter((other) => other !== id);
+  if (shown.length >= cap) return [...picked];
+  return [...picked, id];
 };
 
 const byRoleThenName = (a: AgentRow, b: AgentRow): number =>

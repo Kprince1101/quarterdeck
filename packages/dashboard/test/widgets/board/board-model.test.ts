@@ -49,7 +49,7 @@ describe('board projects', () => {
     ]);
   });
 
-  it('drops picked projects that are no longer listed', () => {
+  it('shows only the picks that are listed', () => {
     const listed = listedProjects(PROJECTS, false);
     expect(shownProjectIds(listed, [projectId(3), projectId(4)])).toEqual([
       projectId(4),
@@ -58,11 +58,24 @@ describe('board projects', () => {
 
   it('toggles a pick but never past the cap', () => {
     const shown = [projectId(1), projectId(2)];
-    expect(togglePick(shown, projectId(1), 2)).toEqual([projectId(2)]);
-    expect(togglePick(shown, projectId(3), 2)).toEqual(shown);
-    expect(togglePick(shown, projectId(3), 3)).toEqual([
+    expect(togglePick(shown, shown, projectId(1), 2)).toEqual([projectId(2)]);
+    expect(togglePick(shown, shown, projectId(3), 2)).toEqual(shown);
+    expect(togglePick(shown, shown, projectId(3), 3)).toEqual([
       ...shown,
       projectId(3),
+    ]);
+  });
+
+  it('keeps a hidden pick while toggling the shown ones', () => {
+    const picked = [projectId(3), projectId(4)];
+    const shown = shownProjectIds(listedProjects(PROJECTS, false), picked);
+    const added = togglePick(picked, shown, projectId(1));
+    expect(added).toEqual([projectId(3), projectId(4), projectId(1)]);
+    const removed = togglePick(added, shown, projectId(4));
+    expect(removed).toEqual([projectId(3), projectId(1)]);
+    expect(shownProjectIds(listedProjects(PROJECTS, true), removed)).toEqual([
+      projectId(3),
+      projectId(1),
     ]);
   });
 });

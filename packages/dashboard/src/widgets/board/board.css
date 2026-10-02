@@ -109,6 +109,12 @@
   gap: var(--qd-space-2);
 }
 
+.qd-board-paused {
+  margin: 0;
+  color: var(--qd-warn);
+  font-weight: 600;
+}
+
 .qd-board-button {
   font: inherit;
   color: var(--qd-fg);

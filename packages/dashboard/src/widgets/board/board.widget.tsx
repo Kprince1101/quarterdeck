@@ -7,22 +7,31 @@ import './board.css';
 
 const PauseControls = ({ pause }: { pause: PauseAllView }) => (
   <div className="qd-board-pause">
-    <button
-      type="button"
-      className="qd-board-button"
-      disabled={pause.isPending}
-      onClick={pause.handlePauseAll}
-    >
-      Pause all
-    </button>
-    <button
-      type="button"
-      className="qd-board-button"
-      disabled={pause.isPending}
-      onClick={pause.handleResumeAll}
-    >
-      Resume all
-    </button>
+    {pause.isPausedEverywhere && (
+      <p className="qd-board-paused" title={pause.pausedSince}>
+        Paused everywhere
+      </p>
+    )}
+    {pause.showPauseAll && (
+      <button
+        type="button"
+        className="qd-board-button"
+        disabled={pause.isPending}
+        onClick={pause.handlePauseAll}
+      >
+        Pause all
+      </button>
+    )}
+    {pause.showResumeAll && (
+      <button
+        type="button"
+        className="qd-board-button"
+        disabled={pause.isPending}
+        onClick={pause.handleResumeAll}
+      >
+        Resume all
+      </button>
+    )}
     <output className="qd-board-outcome" data-tone={pause.outcomeTone}>
       {pause.hasOutcome && pause.outcomeText}
     </output>

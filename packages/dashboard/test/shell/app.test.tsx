@@ -24,6 +24,7 @@ const SNAPSHOT: StreamMessage = {
   type: 'snapshot',
   cursor: 0,
   tables: emptyTables(),
+  machine: { pausedAt: null },
 };
 
 const event = (id: number, kind: string): StreamMessage => {

@@ -44,13 +44,17 @@ const mount = (client = intentsAnswering(200, {}).client) =>
     </DeckProvider>,
   );
 
+const PAUSED_AT = '2026-10-01T13:00:00.000Z';
+
 const snapshot = (
   projects: ProjectRow[],
   agents: AgentRow[] = [],
+  pausedAt: string | null = null,
 ): StreamMessage => ({
   type: 'snapshot',
   cursor: 0,
   tables: { ...emptyTables(), projects, agents },
+  machine: { pausedAt },
 });
 
 const deliver = (message: StreamMessage) => {
@@ -216,6 +220,53 @@ describe('board widget', () => {
     unmount();
   });
 
+  it('keeps an archived pick while archived projects are hidden', () => {
+    const { container, unmount } = mount();
+    deliver(
+      snapshot([
+        project(1, 'Live'),
+        project(2, 'Next'),
+        project(3, 'Old', { archivedAt: '2026-09-01T00:00:00.000Z' }),
+      ]),
+    );
+    const toggle = find(container, '.qd-board-archived input');
+    click(toggle);
+    click(option(container, 2));
+    expect(shownNames(container)).toEqual(['Live', 'Old']);
+
+    click(toggle);
+    expect(shownNames(container)).toEqual(['Live']);
+    click(option(container, 2));
+    expect(shownNames(container)).toEqual(['Live', 'Next']);
+
+    click(toggle);
+    expect(shownNames(container)).toEqual(['Live', 'Next', 'Old']);
+    unmount();
+  });
+
+  it('shows the global pause and offers only the button that changes it', () => {
+    const { container, unmount } = mount();
+    const buttons = () =>
+      all(container, '.qd-board-pause button').map(
+        ({ textContent }) => textContent,
+      );
+    deliver(snapshot([project(1, 'Deck')]));
+    expect(container.querySelector('.qd-board-paused')).toBeNull();
+    expect(buttons()).toEqual(['Pause all']);
+
+    deliver({ type: 'machine', machine: { pausedAt: PAUSED_AT } });
+    expect(textOf(container, '.qd-board-paused')).toBe('Paused everywhere');
+    expect(find(container, '.qd-board-paused').getAttribute('title')).toBe(
+      PAUSED_AT,
+    );
+    expect(buttons()).toEqual(['Resume all']);
+
+    deliver({ type: 'machine', machine: { pausedAt: null } });
+    expect(container.querySelector('.qd-board-paused')).toBeNull();
+    expect(buttons()).toEqual(['Pause all']);
+    unmount();
+  });
+
   it('sends pause.all and reports what the server reached', async () => {
     const { sent, client } = intentsAnswering(200, {
       intent: 'pause.all',
@@ -231,7 +282,7 @@ describe('board widget', () => {
     const outcome = () => find(container, '.qd-board-outcome');
 
     click(buttonNamed(container, 'Pause all'));
-    expect(isDisabled(buttonNamed(container, 'Resume all'))).toBe(true);
+    expect(isDisabled(buttonNamed(container, 'Pause all'))).toBe(true);
     await vi.waitFor(() => {
       expect(outcome().textContent).toBe(
         'Paused 1 project. Not reached: yard (locked).',
@@ -240,6 +291,7 @@ describe('board widget', () => {
     expect(outcome().getAttribute('data-tone')).toBe('failed');
     expect(isDisabled(buttonNamed(container, 'Pause all'))).toBe(false);
 
+    deliver(snapshot([], [], PAUSED_AT));
     click(buttonNamed(container, 'Resume all'));
     await vi.waitFor(() => {
       expect(sent).toHaveLength(2);
@@ -254,10 +306,10 @@ describe('board widget', () => {
   it('says so when pause.all is refused', async () => {
     const { client } = intentsAnswering(500, { error: 'Internal error' });
     const { container, unmount } = mount(client);
-    click(buttonNamed(container, 'Resume all'));
+    click(buttonNamed(container, 'Pause all'));
     await vi.waitFor(() => {
       expect(textOf(container, '.qd-board-outcome')).toBe(
-        'Could not resume all: Internal error',
+        'Could not pause all: Internal error',
       );
     });
     unmount();

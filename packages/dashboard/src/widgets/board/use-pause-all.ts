@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import type { IntentClient } from '../../api/index.js';
+import type { IntentClient, MachineState } from '../../api/index.js';
 import {
   pauseFailure,
   pauseOutcome,
@@ -9,6 +9,10 @@ import {
 
 export interface PauseAllView {
   isPending: boolean;
+  isPausedEverywhere: boolean;
+  pausedSince: string | undefined;
+  showPauseAll: boolean;
+  showResumeAll: boolean;
   hasOutcome: boolean;
   outcomeText: string;
   outcomeTone: PauseOutcomeTone | undefined;
@@ -16,7 +20,10 @@ export interface PauseAllView {
   handleResumeAll: () => void;
 }
 
-export const usePauseAll = (intents: IntentClient): PauseAllView => {
+export const usePauseAll = (
+  intents: IntentClient,
+  machine: MachineState,
+): PauseAllView => {
   const [isPending, setPending] = useState(false);
   const [outcome, setOutcome] = useState<PauseOutcome | null>(null);
 
@@ -44,8 +51,14 @@ export const usePauseAll = (intents: IntentClient): PauseAllView => {
     void send(false);
   }, [send]);
 
+  const isPausedEverywhere = machine.pausedAt !== null;
+
   return {
     isPending,
+    isPausedEverywhere,
+    pausedSince: machine.pausedAt ?? undefined,
+    showPauseAll: !isPausedEverywhere,
+    showResumeAll: isPausedEverywhere,
     hasOutcome: outcome !== null,
     outcomeText: outcome?.text ?? '',
     outcomeTone: outcome?.tone,

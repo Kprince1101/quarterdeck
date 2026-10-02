@@ -26,7 +26,7 @@ export interface BoardWidgetView {
 export const useBoardWidget = (): BoardWidgetView => {
   const { stream, intents } = useDeck();
   const picker = useProjectPicker(stream.tables.projects);
-  const pause = usePauseAll(intents);
+  const pause = usePauseAll(intents, stream.machine);
   const projects = useMemo(
     () =>
       projectLiveness(

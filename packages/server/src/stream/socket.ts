@@ -8,8 +8,14 @@ import type { AddressInfo } from 'node:net';
 import type { Duplex } from 'node:stream';
 import { WebSocket, WebSocketServer } from 'ws';
 import { reporter } from '../store/events.js';
+import { quarterdeckHome } from '../store/index.js';
 import type { StoreEvent, Store, TableChange } from '../store/index.js';
-import { STREAM_AFTER_PARAM, STREAM_PATH } from './schema.js';
+import { MACHINE_EVENT_KINDS, readMachineState } from './machine.js';
+import {
+  STREAM_AFTER_PARAM,
+  STREAM_PATH,
+  type MachineState,
+} from './schema.js';
 import { readSnapshot, tailCursor, type SnapshotRows } from './snapshot.js';
 
 export const STREAM_HOST = '127.0.0.1';
@@ -30,6 +36,7 @@ const MAX_INBOUND_BYTES = 1024;
 
 export interface StreamOptions {
   store: Store;
+  home?: string;
   tail?: number;
   turnsPerAgent?: number;
   maxBufferedBytes?: number;
@@ -55,9 +62,15 @@ export interface ServedStream {
 }
 
 type Outgoing =
-  | { type: 'snapshot'; cursor: number; tables: SnapshotRows }
+  | {
+      type: 'snapshot';
+      cursor: number;
+      tables: SnapshotRows;
+      machine: MachineState;
+    }
   | { type: 'event'; event: StoreEvent }
-  | ({ type: 'change' } & TableChange);
+  | ({ type: 'change' } & TableChange)
+  | { type: 'machine'; machine: MachineState };
 
 const jsonValue = (_: string, value: unknown): unknown => {
   if (typeof value === 'bigint') return Number(value);
@@ -111,6 +124,7 @@ const parseAfter = (url: URL): number | undefined | null => {
 
 export const createStream = (options: StreamOptions): Stream => {
   const { store } = options;
+  const home = options.home ?? quarterdeckHome();
   const tail = options.tail ?? STREAM_TAIL;
   const maxBuffered = options.maxBufferedBytes ?? MAX_BUFFERED_BYTES;
   const allowedOrigins = new Set(options.allowedOrigins);
@@ -174,6 +188,8 @@ export const createStream = (options: StreamOptions): Stream => {
     const sendEvent = async (event: StoreEvent): Promise<void> => {
       if (behind()) return;
       await write({ type: 'event', event });
+      if (!MACHINE_EVENT_KINDS.has(event.kind)) return;
+      await write({ type: 'machine', machine: await readMachineState(home) });
     };
 
     try {
@@ -189,8 +205,9 @@ export const createStream = (options: StreamOptions): Stream => {
       if (!(await keep(() => watcher.close()))) return;
       const after = requested ?? (await tailCursor(store, tail));
       const tables = await readSnapshot(store, options.turnsPerAgent);
+      const machine = await readMachineState(home);
       if (!open) return;
-      await write({ type: 'snapshot', cursor: after, tables });
+      await write({ type: 'snapshot', cursor: after, tables, machine });
       if (!open) return;
       live = true;
       pending.splice(0).forEach(sendChange);

@@ -107,11 +107,14 @@ describe('dashboard on a live server', () => {
         expect(textOf(container, '.qd-board-project h3')).toBe(deck.project);
       });
 
+      expect(container.querySelector('.qd-board-paused')).toBeNull();
+
       pressNamed(container, 'Pause all');
       await vi.waitFor(() => {
         expect(textOf(container, '.qd-board-outcome')).toBe(
           'Paused 1 project.',
         );
+        expect(textOf(container, '.qd-board-paused')).toBe('Paused everywhere');
       });
       expect(await isGloballyPaused(deck.api.stores.dataHome)).toBe(true);
 
@@ -120,6 +123,7 @@ describe('dashboard on a live server', () => {
         expect(textOf(container, '.qd-board-outcome')).toBe(
           'Resumed 1 project.',
         );
+        expect(container.querySelector('.qd-board-paused')).toBeNull();
       });
       expect(await isGloballyPaused(deck.api.stores.dataHome)).toBe(false);
       unmount();
