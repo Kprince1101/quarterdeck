@@ -27,6 +27,7 @@ import type {
   SnapshotMessage,
   StreamMessage,
 } from '../../src/stream/index.js';
+import { TEST_BACKENDS, type TestDatabase } from '../store/backends.js';
 import { CLEAR_TABLES, seedEveryTable } from './seed.js';
 
 const TIMEOUT = 30_000;
@@ -43,7 +44,8 @@ interface Client {
   closed: Promise<number>;
 }
 
-describe('websocket stream', () => {
+describe.each(TEST_BACKENDS)('websocket stream on $name', (backend) => {
+  let database: TestDatabase;
   let store: Store;
   let served: ServedStream;
   const clients: Client[] = [];
@@ -103,7 +105,8 @@ describe('websocket stream', () => {
   };
 
   beforeAll(async () => {
-    store = await openStore({ project: 'deck', dataDir: IN_MEMORY });
+    database = await backend.create();
+    store = await openStore({ project: 'deck', ...database.storeOptions });
     served = await serveStream({
       store,
       tail: TAIL,
@@ -114,6 +117,7 @@ describe('websocket stream', () => {
   afterAll(async () => {
     await served.close();
     await store.close();
+    await database.drop();
   });
 
   afterEach(async () => {
@@ -264,110 +268,116 @@ describe('websocket stream', () => {
   });
 });
 
-describe('websocket stream with a long history', () => {
-  let store: Store;
+describe.each(TEST_BACKENDS)(
+  'websocket stream with a long history on $name',
+  (backend) => {
+    let database: TestDatabase;
+    let store: Store;
 
-  beforeAll(async () => {
-    store = await openStore({ project: 'deck', dataDir: IN_MEMORY });
-  }, TIMEOUT);
+    beforeAll(async () => {
+      database = await backend.create();
+      store = await openStore({ project: 'deck', ...database.storeOptions });
+    }, TIMEOUT);
 
-  afterAll(async () => {
-    await store.close();
-  });
-
-  afterEach(async () => {
-    await store.db.exec(CLEAR_TABLES);
-  });
-
-  const listen = (url: string, stallMs = 0) => {
-    const ws = new WebSocket(url);
-    const messages: StreamMessage[] = [];
-    const closes: number[] = [];
-    ws.once('upgrade', (response) => {
-      if (stallMs === 0) return;
-      response.socket.pause();
-      setTimeout(() => response.socket.resume(), stallMs);
+    afterAll(async () => {
+      await store.close();
+      await database.drop();
     });
-    ws.on('message', (data) => {
-      messages.push(streamMessageSchema.parse(JSON.parse(String(data))));
+
+    afterEach(async () => {
+      await store.db.exec(CLEAR_TABLES);
     });
-    ws.on('close', (code) => closes.push(code));
-    const kinds = () =>
-      messages
-        .filter((message) => message.type === 'event')
-        .map((message) => message.event.kind);
-    return { ws, messages, closes, kinds };
-  };
 
-  it(
-    'sends a bounded snapshot and keeps the client past 8 MB of turns',
-    async () => {
-      const {
-        rows: [agent],
-      } = await store.db.query<{ id: string }>(
-        `insert into agents (project_id, name, role)
-         values ($1, 'pangolin', 'builder') returning id`,
-        [store.projectId],
-      );
-      await store.db.query(
-        `insert into turns (agent_id, seq, prompt)
-         select $1, n, repeat('x', 4096) from generate_series(1, 3000) as n`,
-        [agent?.id],
-      );
-      for (let n = 0; n < 50; n += 1) {
-        await store.publish({ kind: `history-${n}` });
-      }
-      const served = await serveStream({ store });
-      const client = listen(served.url);
-
-      await vi.waitFor(() => expect(client.kinds()).toHaveLength(50), {
-        timeout: 10_000,
+    const listen = (url: string, stallMs = 0) => {
+      const ws = new WebSocket(url);
+      const messages: StreamMessage[] = [];
+      const closes: number[] = [];
+      ws.once('upgrade', (response) => {
+        if (stallMs === 0) return;
+        response.socket.pause();
+        setTimeout(() => response.socket.resume(), stallMs);
       });
-      await store.publish({ kind: 'live' });
-      await vi.waitFor(() => expect(client.kinds().at(-1)).toBe('live'));
+      ws.on('message', (data) => {
+        messages.push(streamMessageSchema.parse(JSON.parse(String(data))));
+      });
+      ws.on('close', (code) => closes.push(code));
+      const kinds = () =>
+        messages
+          .filter((message) => message.type === 'event')
+          .map((message) => message.event.kind);
+      return { ws, messages, closes, kinds };
+    };
 
-      const [snapshot] = client.messages;
-      if (snapshot?.type !== 'snapshot') throw new Error('no snapshot');
-      expect(snapshot.tables.turns).toHaveLength(SNAPSHOT_TURNS_PER_AGENT);
-      expect(snapshot.tables.turns.map((turn) => turn.seq).at(-1)).toBe(3000);
-      expect(snapshot.tables.turns[0]).not.toHaveProperty('prompt');
-      expect(client.closes).toEqual([]);
-      client.ws.terminate();
-      await served.close();
-    },
-    TIMEOUT,
-  );
+    it(
+      'sends a bounded snapshot and keeps the client past 8 MB of turns',
+      async () => {
+        const {
+          rows: [agent],
+        } = await store.db.query<{ id: string }>(
+          `insert into agents (project_id, name, role)
+         values ($1, 'pangolin', 'builder') returning id`,
+          [store.projectId],
+        );
+        await store.db.query(
+          `insert into turns (agent_id, seq, prompt)
+         select $1, n, repeat('x', 4096) from generate_series(1, 3000) as n`,
+          [agent?.id],
+        );
+        for (let n = 0; n < 50; n += 1) {
+          await store.publish({ kind: `history-${n}` });
+        }
+        const served = await serveStream({ store });
+        const client = listen(served.url);
 
-  it(
-    'never drops a client for the size of its snapshot',
-    async () => {
-      await store.db.query(
-        `insert into notebook (project_id, body) values ($1, repeat('n', $2))`,
-        [store.projectId, NOTE_BYTES],
-      );
-      for (const kind of ['one', 'two', 'three']) {
-        await store.publish({ kind });
-      }
-      const served = await serveStream({ store, maxBufferedBytes: 1024 });
-      const client = listen(served.url, 300);
+        await vi.waitFor(() => expect(client.kinds()).toHaveLength(50), {
+          timeout: 10_000,
+        });
+        await store.publish({ kind: 'live' });
+        await vi.waitFor(() => expect(client.kinds().at(-1)).toBe('live'));
 
-      await vi.waitFor(() =>
-        expect(client.kinds()).toEqual(['one', 'two', 'three']),
-      );
-      await store.publish({ kind: 'four' });
-      await vi.waitFor(() => expect(client.kinds().at(-1)).toBe('four'));
+        const [snapshot] = client.messages;
+        if (snapshot?.type !== 'snapshot') throw new Error('no snapshot');
+        expect(snapshot.tables.turns).toHaveLength(SNAPSHOT_TURNS_PER_AGENT);
+        expect(snapshot.tables.turns.map((turn) => turn.seq).at(-1)).toBe(3000);
+        expect(snapshot.tables.turns[0]).not.toHaveProperty('prompt');
+        expect(client.closes).toEqual([]);
+        client.ws.terminate();
+        await served.close();
+      },
+      TIMEOUT,
+    );
 
-      const [snapshot] = client.messages;
-      expect(snapshot?.type === 'snapshot' && snapshot.tables.notebook).toEqual(
-        [expect.objectContaining({ body: 'n'.repeat(NOTE_BYTES) })],
-      );
-      expect(client.closes).toEqual([]);
-      client.ws.terminate();
-      await served.close();
-    },
-    TIMEOUT,
-  );
-});
+    it(
+      'never drops a client for the size of its snapshot',
+      async () => {
+        await store.db.query(
+          `insert into notebook (project_id, body) values ($1, repeat('n', $2))`,
+          [store.projectId, NOTE_BYTES],
+        );
+        for (const kind of ['one', 'two', 'three']) {
+          await store.publish({ kind });
+        }
+        const served = await serveStream({ store, maxBufferedBytes: 1024 });
+        const client = listen(served.url, 300);
+
+        await vi.waitFor(() =>
+          expect(client.kinds()).toEqual(['one', 'two', 'three']),
+        );
+        await store.publish({ kind: 'four' });
+        await vi.waitFor(() => expect(client.kinds().at(-1)).toBe('four'));
+
+        const [snapshot] = client.messages;
+        expect(
+          snapshot?.type === 'snapshot' && snapshot.tables.notebook,
+        ).toEqual([expect.objectContaining({ body: 'n'.repeat(NOTE_BYTES) })]);
+        expect(client.closes).toEqual([]);
+        client.ws.terminate();
+        await served.close();
+      },
+      TIMEOUT,
+    );
+  },
+);
 
 describe('websocket stream upgrades', () => {
   let store: Store;

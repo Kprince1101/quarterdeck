@@ -1,4 +1,4 @@
-import type { Transaction } from '@electric-sql/pglite';
+import type { Queryable } from '../store/index.js';
 import type {
   IntentName,
   IntentReply,
@@ -32,7 +32,7 @@ const toJson = (value: unknown): string | null => {
 };
 
 const recordIntent = async (
-  tx: Transaction,
+  tx: Queryable,
   projectId: string,
   name: IntentName,
   input: ProjectInput,
@@ -119,7 +119,7 @@ export const unrecorded = (
 ): IntentReply => ({ intent: name, status: 'applied', id: null, result });
 
 export const findRow = async <Row>(
-  tx: Transaction,
+  tx: Queryable,
   sql: string,
   params: unknown[],
   missing: string,

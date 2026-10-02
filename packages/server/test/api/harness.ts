@@ -22,9 +22,15 @@ export interface TestApi {
 
 export const startTestApi = async (
   allowedOrigins: string[] = [],
+  databaseUrl?: string,
 ): Promise<TestApi> => {
   const homeDir = await mkdtemp(join(tmpdir(), 'qd-api-'));
-  const api = await startApiServer({ port: 0, homeDir, allowedOrigins });
+  const api = await startApiServer({
+    port: 0,
+    homeDir,
+    allowedOrigins,
+    databaseUrl,
+  });
   const send = async (name: string, body: unknown, init: RequestInit = {}) => {
     const res = await fetch(`${api.url}/api/intents/${name}`, {
       method: 'POST',

@@ -1,11 +1,21 @@
 export {
   IN_MEMORY,
   STORE_TABLES,
+  configuredDatabaseUrl,
   openStore,
   type Store,
+  type StoreBackend,
   type StoreOptions,
   type StoreTable,
 } from './store.js';
+export {
+  deleteProjectRows,
+  listProjectSlugs,
+  projectRowExists,
+  wipePostgresProject,
+} from './catalog.js';
+export type { Db, Queryable, Results, Unlisten } from './db.js';
+export { ProjectOpenError, StoreConnectionLostError } from './errors.js';
 export {
   EVENTS_CHANNEL,
   EVENT_BATCH,
@@ -39,3 +49,10 @@ export {
   type Migration,
 } from './migrate.js';
 export { assertProjectSlug, projectDataDir, quarterdeckHome } from './paths.js';
+export {
+  connectPostgres,
+  createPostgresPool,
+  redactUrl,
+  type PostgresPool,
+} from './postgres.js';
+export { MIN_SERVER_VERSION_NUM, assertServerVersion } from './version.js';

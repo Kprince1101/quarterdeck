@@ -1,4 +1,4 @@
-import type { PGlite } from '@electric-sql/pglite';
+import type { Db, LiveFeed, Queryable } from './db.js';
 import { reporter } from './events.js';
 
 export const CHANGES_CHANNEL = 'quarterdeck_changes';
@@ -39,14 +39,14 @@ export interface Watcher {
   close: () => Promise<void>;
 }
 
+export interface ChangeWatcher extends Watcher, LiveFeed {}
+
 interface Notice {
   table: string;
   op: ChangeOp;
   id: string | number;
   project_id: string | null;
 }
-
-type Queryable = Pick<PGlite, 'query'>;
 
 const TURN_COLUMNS = `id, agent_id, ticket_id, seq, stop_reason, input_tokens,
   output_tokens, transcript_path, started_at, ended_at`;
@@ -132,12 +132,16 @@ export const readRow = async (
 };
 
 export const watchChanges = async (
-  db: PGlite,
+  db: Db,
   projectId: string,
   handler: ChangeHandler,
   options: WatchOptions = {},
-): Promise<Watcher> => {
-  const report = reporter(options.onError);
+): Promise<ChangeWatcher> => {
+  const reportTo = reporter(options.onError);
+  let failed = false;
+  const report = (err: unknown): void => {
+    if (!failed) reportTo(err);
+  };
   let closed = false;
 
   const deliver = async (payload: string): Promise<void> => {
@@ -161,11 +165,18 @@ export const watchChanges = async (
     await tail;
   };
   let closing: Promise<void> | undefined;
+  const close = (): Promise<void> => {
+    closing ??= shutdown();
+    return closing;
+  };
 
   return {
-    close: () => {
-      closing ??= shutdown();
-      return closing;
+    close,
+    fail: (err) => {
+      if (closing) return closing;
+      report(err);
+      failed = true;
+      return close();
     },
   };
 };

@@ -46,7 +46,7 @@ The snapshot is always sent whole, and nothing follows it until it has been writ
 
 ## Resuming
 
-Connect with `?after=<id>`, where `id` is the last event the client handled (or the snapshot's `cursor` if it saw none). Events after it are replayed, then live ones follow, so a reconnect loses no event. Without `after`, the stream replays the last `STREAM_TAIL` (200) events. `after=0` replays the whole log. Table changes have no cursor: every connection, including a resumed one, starts with a fresh snapshot, and changes made during the snapshot read are sent after it.
+Connect with `?after=<id>`, where `id` is the last event the client handled (or the snapshot's `cursor` if it saw none). Events after it are replayed, then live ones follow, so a reconnect loses no event. Without `after`, the stream replays the last `STREAM_TAIL` (200) events. `after=0` replays the whole log. Table changes have no cursor: every connection, including a resumed one, starts with a fresh snapshot, and changes made during the snapshot read are sent after it. The snapshot reads every table in one `repeatable read, read only` transaction, so on external Postgres all its tables come from the same moment.
 
 ## Closing
 

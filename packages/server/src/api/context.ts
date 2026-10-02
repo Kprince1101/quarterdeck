@@ -1,4 +1,4 @@
-import type { Transaction } from '@electric-sql/pglite';
+import type { Queryable } from '../store/index.js';
 import type {
   IntentName,
   IntentPayload,
@@ -23,7 +23,7 @@ export type IntentHandlers<N extends IntentName> = {
 };
 
 export type ProjectWork = (
-  tx: Transaction,
+  tx: Queryable,
   projectId: string,
 ) => Promise<IntentResult | null>;
 
@@ -33,11 +33,8 @@ export interface StagedWork {
 }
 
 export type StagedProjectWork = (
-  tx: Transaction,
+  tx: Queryable,
   projectId: string,
 ) => Promise<StagedWork>;
 
-export type ProjectCheck = (
-  tx: Transaction,
-  projectId: string,
-) => Promise<void>;
+export type ProjectCheck = (tx: Queryable, projectId: string) => Promise<void>;

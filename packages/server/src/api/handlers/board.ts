@@ -1,4 +1,4 @@
-import type { Transaction } from '@electric-sql/pglite';
+import type { Queryable } from '../../store/index.js';
 import type { BoardIntentName } from '../../intents/index.js';
 import type {
   ApiContext,
@@ -19,7 +19,7 @@ import { TICKET_HANDLERS } from './tickets.js';
 
 type CardIntentName = 'card.answer' | 'card.decline';
 
-const openCard = async (tx: Transaction, projectId: string, cardId: string) => {
+const openCard = async (tx: Queryable, projectId: string, cardId: string) => {
   const card = await findRow<{ status: string; options: unknown }>(
     tx,
     `select status, options from cards
@@ -46,7 +46,7 @@ const assertChoice = (options: unknown, answer: string) => {
 };
 
 const settleCard = async (
-  tx: Transaction,
+  tx: Queryable,
   cardId: string,
   status: 'answered' | 'declined',
   answer: string | null,
@@ -71,7 +71,7 @@ const answerCard: IntentHandler<CardIntentName> = (ctx, input, name) =>
 
 const stageCharter = async (
   ctx: ApiContext,
-  tx: Transaction,
+  tx: Queryable,
   projectId: string,
   body: string,
 ): Promise<StagedWork> => {

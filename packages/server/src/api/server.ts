@@ -15,6 +15,7 @@ export interface ApiServerOptions {
   port?: number;
   homeDir?: string;
   allowedOrigins?: string[];
+  databaseUrl?: string | undefined;
 }
 
 export interface ApiServer {
@@ -28,7 +29,10 @@ export const startApiServer = async (
   options: ApiServerOptions = {},
 ): Promise<ApiServer> => {
   const homeDir = options.homeDir ?? homedir();
-  const stores = createProjectStores(quarterdeckHome(homeDir));
+  const stores = createProjectStores(
+    quarterdeckHome(homeDir),
+    options.databaseUrl,
+  );
   const ctx: ApiContext = { stores, homeDir };
   let guard = localGuard(0);
   const server = createServer((req, res) => {

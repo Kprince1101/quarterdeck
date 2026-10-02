@@ -4,16 +4,35 @@ import { hasErrorCode } from '../lib/errors.js';
 import { pathExists } from '../lib/fs.js';
 import { PROJECT_SLUG } from '../lib/slug.js';
 import { lockDataDir } from '../store/lock.js';
-import { openStore, projectDataDir, type Store } from '../store/index.js';
+import {
+  configuredDatabaseUrl,
+  createPostgresPool,
+  listProjectSlugs,
+  openStore,
+  projectDataDir,
+  projectRowExists,
+  redactUrl,
+  wipePostgresProject,
+  type Store,
+} from '../store/index.js';
 import { asLockConflict, conflict, notFound } from './http-error.js';
 
 export interface ProjectStores {
   dataHome: string;
+  location: string;
   get: (project: string) => Promise<Store>;
   create: (project: string) => Promise<Store>;
   wipe: (project: string) => Promise<void>;
   wipeAll: () => Promise<string[]>;
   closeAll: () => Promise<void>;
+}
+
+interface ProjectCatalog {
+  location: string;
+  exists: (project: string) => Promise<boolean>;
+  list: () => Promise<string[]>;
+  wipe: (project: string) => Promise<void>;
+  close: () => Promise<void>;
 }
 
 const projectDirs = async (dataHome: string): Promise<string[]> => {
@@ -29,17 +48,57 @@ const projectDirs = async (dataHome: string): Promise<string[]> => {
   }
 };
 
-export const createProjectStores = (dataHome: string): ProjectStores => {
+const directoryCatalog = (dataHome: string): ProjectCatalog => ({
+  location: dataHome,
+  exists: (project) =>
+    pathExists(join(projectDataDir(project, dataHome), 'PG_VERSION')),
+  list: () => projectDirs(dataHome),
+  wipe: async (project) => {
+    const pgDir = projectDataDir(project, dataHome);
+    const lock = await lockDataDir(`${pgDir}.lock`, project);
+    try {
+      await rm(join(dataHome, project), { recursive: true, force: true });
+    } finally {
+      await lock.release();
+    }
+  },
+  close: () => Promise.resolve(),
+});
+
+const postgresCatalog = (url: string): ProjectCatalog => {
+  const pool = createPostgresPool(url);
+  return {
+    location: redactUrl(url),
+    exists: (project) => projectRowExists(pool, project),
+    list: () => listProjectSlugs(pool),
+    wipe: async (project) => {
+      await wipePostgresProject(url, project);
+    },
+    close: () => pool.close(),
+  };
+};
+
+const chooseCatalog = (
+  dataHome: string,
+  databaseUrl: string | undefined,
+): ProjectCatalog => {
+  if (databaseUrl === undefined) return directoryCatalog(dataHome);
+  return postgresCatalog(databaseUrl);
+};
+
+export const createProjectStores = (
+  dataHome: string,
+  databaseUrl?: string,
+): ProjectStores => {
+  const url = configuredDatabaseUrl(databaseUrl);
+  const catalog = chooseCatalog(dataHome, url);
   const open = new Map<string, Promise<Store>>();
 
-  const dataDirExists = (project: string) =>
-    pathExists(join(projectDataDir(project, dataHome), 'PG_VERSION'));
-
   const exists = async (project: string) =>
-    open.has(project) || dataDirExists(project);
+    open.has(project) || catalog.exists(project);
 
   const openProject = (project: string) =>
-    openStore({ project, home: dataHome });
+    openStore({ project, home: dataHome, databaseUrl: url });
 
   const claim = (
     project: string,
@@ -57,7 +116,7 @@ export const createProjectStores = (dataHome: string): ProjectStores => {
     open.get(project) ?? claim(project, openProject);
 
   const openNew = async (project: string): Promise<Store> => {
-    if (await dataDirExists(project)) {
+    if (await catalog.exists(project)) {
       throw conflict(`project ${project} already exists`);
     }
     return openProject(project);
@@ -71,23 +130,16 @@ export const createProjectStores = (dataHome: string): ProjectStores => {
     await store?.close();
   };
 
-  const wipeDir = async (project: string) => {
+  const wipeProject = async (project: string) => {
     await release(project);
-    const pgDir = projectDataDir(project, dataHome);
-    const lock = await lockDataDir(`${pgDir}.lock`, project).catch(
-      (err: unknown) => {
-        throw asLockConflict(err);
-      },
-    );
-    try {
-      await rm(join(dataHome, project), { recursive: true, force: true });
-    } finally {
-      await lock.release();
-    }
+    await catalog.wipe(project).catch((err: unknown) => {
+      throw asLockConflict(err);
+    });
   };
 
   return {
     dataHome,
+    location: catalog.location,
     get: async (project) => {
       if (!(await exists(project))) {
         throw notFound(`project ${project} does not exist`);
@@ -104,15 +156,16 @@ export const createProjectStores = (dataHome: string): ProjectStores => {
       if (!(await exists(project))) {
         throw notFound(`project ${project} does not exist`);
       }
-      await wipeDir(project);
+      await wipeProject(project);
     },
     wipeAll: async () => {
-      const projects = await projectDirs(dataHome);
-      for (const project of projects) await wipeDir(project);
+      const projects = await catalog.list();
+      for (const project of projects) await wipeProject(project);
       return projects;
     },
     closeAll: async () => {
       await Promise.all([...open.keys()].map(release));
+      await catalog.close();
     },
   };
 };

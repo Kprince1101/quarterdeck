@@ -8,17 +8,18 @@ import {
   vi,
 } from 'vitest';
 import {
-  IN_MEMORY,
   STORE_TABLES,
   WATCHED_TABLES,
   openStore,
   readRows,
 } from '../../src/store/index.js';
 import type { Store, TableChange, Watcher } from '../../src/store/index.js';
+import { TEST_BACKENDS, type TestDatabase } from './backends.js';
 
 const TIMEOUT = 30_000;
 
-describe('store table changes', () => {
+describe.each(TEST_BACKENDS)('store table changes on $name', (backend) => {
+  let database: TestDatabase;
   let store: Store;
   const open: Watcher[] = [];
 
@@ -51,11 +52,13 @@ describe('store table changes', () => {
   };
 
   beforeAll(async () => {
-    store = await openStore({ project: 'deck', dataDir: IN_MEMORY });
+    database = await backend.create();
+    store = await openStore({ project: 'deck', ...database.storeOptions });
   }, TIMEOUT);
 
   afterAll(async () => {
     await store.close();
+    await database.drop();
   });
 
   afterEach(async () => {

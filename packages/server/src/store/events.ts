@@ -1,4 +1,4 @@
-import type { PGlite, Transaction } from '@electric-sql/pglite';
+import type { Db, LiveFeed, Queryable } from './db.js';
 
 export const EVENTS_CHANNEL = 'quarterdeck_events';
 
@@ -33,6 +33,8 @@ export interface Subscription {
   close: () => Promise<void>;
 }
 
+export interface EventSubscription extends Subscription, LiveFeed {}
+
 const EVENT_COLUMNS = `id, project_id as "projectId", agent_id as "agentId",
   ticket_id as "ticketId", kind, payload, created_at as "createdAt"`;
 
@@ -51,7 +53,7 @@ export const reporter =
   };
 
 export const publishEvent = async (
-  db: PGlite | Transaction,
+  db: Queryable,
   projectId: string,
   input: PublishInput,
 ): Promise<StoreEvent> => {
@@ -72,10 +74,7 @@ export const publishEvent = async (
   return event;
 };
 
-const latestEventId = async (
-  db: PGlite,
-  projectId: string,
-): Promise<number> => {
+const latestEventId = async (db: Db, projectId: string): Promise<number> => {
   const { rows } = await db.query<{ id: number }>(
     'select coalesce(max(id), 0)::int8 as id from events where project_id = $1',
     [projectId],
@@ -84,7 +83,7 @@ const latestEventId = async (
 };
 
 const eventsAfter = async (
-  db: PGlite,
+  db: Db,
   projectId: string,
   cursor: number,
 ): Promise<StoreEvent[]> => {
@@ -99,12 +98,16 @@ const eventsAfter = async (
 };
 
 export const subscribeEvents = async (
-  db: PGlite,
+  db: Db,
   projectId: string,
   handler: EventHandler,
   options: SubscribeOptions = {},
-): Promise<Subscription> => {
-  const report = reporter(options.onError);
+): Promise<EventSubscription> => {
+  const reportTo = reporter(options.onError);
+  let failed = false;
+  const report = (err: unknown): void => {
+    if (!failed) reportTo(err);
+  };
   let cursor = options.after ?? (await latestEventId(db, projectId));
   let closed = false;
   let queued = false;
@@ -145,14 +148,21 @@ export const subscribeEvents = async (
     await tail;
   };
   let closing: Promise<void> | undefined;
+  const close = (): Promise<void> => {
+    closing ??= shutdown();
+    return closing;
+  };
 
   return {
     get cursor() {
       return cursor;
     },
-    close: () => {
-      closing ??= shutdown();
-      return closing;
+    close,
+    fail: (err) => {
+      if (closing) return closing;
+      report(err);
+      failed = true;
+      return close();
     },
   };
 };

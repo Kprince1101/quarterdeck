@@ -1,8 +1,5 @@
-import type { PGlite, Transaction } from '@electric-sql/pglite';
-import type { Store } from '../store/index.js';
+import type { Queryable, Store } from '../store/index.js';
 import { AGENT_COLUMNS, AgentNotFoundError, type Agent } from './agent.js';
-
-export type Queryable = Pick<PGlite | Transaction, 'query'>;
 
 export const firstRow = (rows: Agent[], agentId: string): Agent => {
   const [agent] = rows;

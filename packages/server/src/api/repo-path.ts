@@ -1,11 +1,11 @@
 import { stat } from 'node:fs/promises';
-import type { Transaction } from '@electric-sql/pglite';
+import type { Queryable } from '../store/index.js';
 import { hasErrorCode } from '../lib/errors.js';
 import { badRequest, conflict } from './http-error.js';
 import { findRow } from './record.js';
 
 export const requireRepoPath = async (
-  tx: Transaction,
+  tx: Queryable,
   projectId: string,
 ): Promise<string> => {
   const project = await findRow<{ slug: string; repo_path: string | null }>(
