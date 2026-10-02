@@ -21,6 +21,7 @@ import { DeckProvider } from '../../src/deck/deck.js';
 import { DriverWidget } from '../../src/widgets/driver/driver.widget.js';
 import { FAKE_WEBSOCKET, FakeSocket } from '../api/fake-socket.js';
 import { choose, click } from '../grid/events.js';
+import { typeInto, type DomElement } from '../primitives/dom.js';
 import { all, render, textOf, type PageElement } from '../shell/page.js';
 
 const PROJECT_ID = '00000000-0000-4000-8000-000000000001';
@@ -256,6 +257,34 @@ describe('Driver widget', () => {
       'npx quarterdeck replay 2 1 --project deck',
     );
     expect(textOf(container, '[aria-live="polite"]')).toBe('');
+    unmount();
+  });
+
+  it('replays through an earlier turn of the round', async () => {
+    const { container, unmount } = await mount();
+    const field = container.querySelector('.qd-driver-through input');
+    if (field === null) throw new Error('no turn field');
+    expect(field.getAttribute('max')).toBe('2');
+    const through = field as unknown as DomElement;
+
+    typeInto(through, '1');
+    expect(textOf(container, '.qd-driver-command code')).toBe(
+      'npx quarterdeck replay 2 1 --project deck',
+    );
+
+    typeInto(through, '3');
+    expect(container.querySelector('.qd-driver-command')).toBeNull();
+    expect(textOf(container, '.qd-driver-replay')).toContain(
+      'Turn is a whole number from 1 to 2.',
+    );
+
+    typeInto(through, '0');
+    expect(container.querySelector('.qd-driver-command')).toBeNull();
+
+    await pick(container, 11);
+    expect(textOf(container, '.qd-driver-command code')).toBe(
+      'npx quarterdeck replay 2 1 --project deck',
+    );
     unmount();
   });
 

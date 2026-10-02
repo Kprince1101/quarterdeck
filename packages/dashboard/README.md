@@ -97,7 +97,7 @@ The grid draws the `Panel` (title, move, duplicate, hide, resize), so the compon
 
 ## The Driver widget
 
-The Driver widget shows one round at a time: the active round, or the newest if none is active, until another is picked in the Round picker. It lists the turns of the round's Driver agents from the stream, newest first, so it holds each Driver's latest 20. Selecting a turn sends `turn.read` (see [the API](../server/src/api/README.md)) for its input, output and result, and reads it again when the turn ends. The replay command is `replayCommand({ round, through: n, project })` from `@quarterdeck/server/replay-command`, with `round` and `n` from `turn.read`, and a Copy button puts it on the clipboard. A turn whose session a later Driver session replaced gets no command, since `quarterdeck replay` runs only the latest.
+The Driver widget shows one round at a time: the active round, or the newest if none is active, until another is picked in the Round picker. It lists the turns of the round's Driver agents from the stream, newest first, so it holds each Driver's latest 20. Selecting a turn sends `turn.read` (see [the API](../server/src/api/README.md)) for its input, output and result, and reads it again when the turn ends. The replay command is `replayCommand({ round, through: n, project })` from `@quarterdeck/server/replay-command`, with `round` and `n` from `turn.read`, and a Copy button puts it on the clipboard. The turn field next to it starts at the selected turn's `n` and takes any whole number from 1 to it, so a round longer than the 20 listed turns can still be replayed through an earlier turn. A turn whose session a later Driver session replaced gets no command, since `quarterdeck replay` runs only the latest.
 
 ## The grid
 

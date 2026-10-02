@@ -1,8 +1,12 @@
 import { turnDir, turnFile } from '../../driver/files.js';
-import { findTurnSession } from '../../driver/replay-round.js';
+import {
+  findTurnSession,
+  type RoundAgents,
+} from '../../driver/replay-round.js';
+import { ROUND_STARTED_EVENT } from '../../driver/round.js';
 import type { ReadIntentName, TurnReadResult } from '../../intents/index.js';
 import { readTextIfExists } from '../../lib/fs.js';
-import { projectTurnsDir } from '../../store/index.js';
+import { projectTurnsDir, type Store } from '../../store/index.js';
 import type { IntentHandler, IntentHandlers } from '../context.js';
 import { findRow, unrecorded } from '../record.js';
 
@@ -12,11 +16,31 @@ interface TurnPrompt {
   prompt: string;
 }
 
+const parseResult = (text: string): TurnReadResult['result'] => {
+  try {
+    return JSON.parse(text) as TurnReadResult['result'];
+  } catch {
+    return null;
+  }
+};
+
 const readResult = async (path: string): Promise<TurnReadResult['result']> => {
   const text = await readTextIfExists(path);
   if (text === null) return null;
-  return JSON.parse(text) as TurnReadResult['result'];
+  return parseResult(text);
 };
+
+const roundAgents =
+  (store: Store): RoundAgents =>
+  async (round) => {
+    const { rows } = await store.db.query<{ agentId: string }>(
+      `select distinct agent_id as "agentId" from events
+       where project_id = $1 and kind = $2 and agent_id is not null
+         and payload ->> 'round' = $3`,
+      [store.projectId, ROUND_STARTED_EVENT, String(round)],
+    );
+    return rows.map((row) => row.agentId);
+  };
 
 const readTurn: IntentHandler<'turn.read'> = async (ctx, input, name) => {
   const store = await ctx.stores.get(input.project);
@@ -33,7 +57,7 @@ const readTurn: IntentHandler<'turn.read'> = async (ctx, input, name) => {
   const [output, result, session] = await Promise.all([
     readTextIfExists(turnFile(dir, 'output')),
     readResult(turnFile(dir, 'result')),
-    findTurnSession(turnsDir, turn.agentId, turn.seq),
+    findTurnSession(turnsDir, turn.agentId, turn.seq, roundAgents(store)),
   ]);
   const read: TurnReadResult = {
     turnId: input.turnId,

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   DRIVER_TURN_INSTRUCTIONS,
+  ROUND_STARTED_EVENT,
   buildBirthInput,
   turnDir,
   turnFile,
@@ -27,6 +28,7 @@ interface SavedTurn {
   input: string;
   output?: string;
   result?: unknown;
+  rawResult?: string;
   bornAt?: Date;
 }
 
@@ -59,6 +61,9 @@ describe('turn.read', { timeout: TIMEOUT }, () => {
     if (turn.result !== undefined) {
       await writeFile(turnFile(dir, 'result'), JSON.stringify(turn.result));
     }
+    if (turn.rawResult !== undefined) {
+      await writeFile(turnFile(dir, 'result'), turn.rawResult);
+    }
     const { rows } = await store.db.query<{ id: number }>(
       `insert into turns (agent_id, seq, prompt, transcript_path)
        values ($1, $2, $3, $4) returning id`,
@@ -66,6 +71,13 @@ describe('turn.read', { timeout: TIMEOUT }, () => {
     );
     return Number(rows[0]?.id);
   };
+
+  const roundStarted = (agentId: string, round: number) =>
+    store.publish({
+      kind: ROUND_STARTED_EVENT,
+      agentId,
+      payload: { roundId: crypto.randomUUID(), round },
+    });
 
   const read = async (turnId: number) => {
     const res = await t.send('turn.read', { project, turnId });
@@ -88,6 +100,10 @@ describe('turn.read', { timeout: TIMEOUT }, () => {
     const newt = await insertAgent('newt', 'driver');
     const heron = await insertAgent('heron', 'driver');
     const otter = await insertAgent('otter', 'builder');
+    const stray = await insertAgent('stray', 'driver');
+    await roundStarted(newt, 1);
+    await roundStarted(newt, 2);
+    await roundStarted(heron, 2);
     const result = { summary: 'assigned QD1', actions: [] };
     turns.birth = await save(newt, {
       seq: 1,
@@ -113,6 +129,17 @@ describe('turn.read', { timeout: TIMEOUT }, () => {
       bornAt: new Date('2026-01-03'),
     });
     turns.builder = await save(otter, { seq: 1, input: 'build QD1' });
+    turns.malformed = await save(otter, {
+      seq: 2,
+      input: 'build QD2',
+      output: 'half a reply',
+      rawResult: '{"summary": ',
+    });
+    await save(stray, {
+      seq: 1,
+      input: birthInput('stray', 2),
+      bornAt: new Date('2026-01-04'),
+    });
   }, TIMEOUT);
 
   afterAll(async () => {
@@ -159,6 +186,21 @@ describe('turn.read', { timeout: TIMEOUT }, () => {
       round: 2,
       n: 1,
       latestSession: true,
+    });
+  });
+
+  it('weighs only the sessions of agents that started the round', async () => {
+    expect(await read(turns.later ?? 0)).toMatchObject({
+      round: 2,
+      latestSession: true,
+    });
+  });
+
+  it('gives a null result for a result.json it cannot parse', async () => {
+    expect(await read(turns.malformed ?? 0)).toMatchObject({
+      input: 'build QD2',
+      output: 'half a reply',
+      result: null,
     });
   });
 

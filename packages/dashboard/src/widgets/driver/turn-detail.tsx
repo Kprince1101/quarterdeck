@@ -2,6 +2,7 @@ import type { TurnReadResult } from '@quarterdeck/server/intents';
 import { replayCommand } from '@quarterdeck/server/replay-command';
 import type { DriverTurn } from './driver-turns.js';
 import { useCopy, type CopyState } from './use-copy.js';
+import { useThroughCommand } from './use-through-command.js';
 import type { TurnDetail } from './use-turn-detail.js';
 
 const COPY_NOTES: Record<CopyState, string> = {
@@ -25,6 +26,39 @@ const CopyCommand = ({ command }: { command: string }) => {
   );
 };
 
+interface ThroughCommandProps {
+  project: string;
+  round: number;
+  last: number;
+}
+
+const ThroughCommand = ({ project, round, last }: ThroughCommandProps) => {
+  const { text, through, handleChange } = useThroughCommand(last);
+  return (
+    <div className="qd-driver-replay">
+      <label className="qd-driver-through">
+        Replay round {round} through turn{' '}
+        <input
+          type="number"
+          min={1}
+          max={last}
+          step={1}
+          value={text}
+          onChange={handleChange}
+        />
+      </label>
+      {through === null && (
+        <p className="qd-driver-error">
+          Turn is a whole number from 1 to {last}.
+        </p>
+      )}
+      {through !== null && (
+        <CopyCommand command={replayCommand({ round, through, project })} />
+      )}
+    </div>
+  );
+};
+
 interface ReplayCommandProps {
   project: string;
   read: TurnReadResult;
@@ -43,8 +77,11 @@ const ReplayCommand = ({ project, read }: ReplayCommandProps) => {
     );
   }
   return (
-    <CopyCommand
-      command={replayCommand({ round: read.round, through: read.n, project })}
+    <ThroughCommand
+      key={read.turnId}
+      project={project}
+      round={read.round}
+      last={read.n}
     />
   );
 };

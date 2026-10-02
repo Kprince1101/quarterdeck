@@ -138,6 +138,8 @@ It refuses a round or `n` that is not a positive integer and a project that is n
 
 `findRoundSessions(turnsDir, round)` finds a round's Driver sessions from the turn files alone, so it works while `quarterdeck up` has the store open. It reads each agent folder's first input; a Driver's is a birth input (`readBirth` gives the Driver's name and round from its first line). Each birth starts a session that runs through the turns after it, up to the next birth. It resolves to the sessions of `round`, oldest birth first (by `input.md`'s modification time), each with `agentId`, `driverName`, `firstSeq`, `lastSeq` and `bornAt`. A round has more than one when its Driver session was opened again or another Driver took the round over.
 
+`findTurnSession(turnsDir, agentId, seq, roundAgents)` places one turn: the session of `agentId` that holds `seq`, its `n` (`seq - firstSeq + 1`) and whether it is the round's latest session, the one the CLI replays. It returns `null` for a turn outside a Driver session. For `latest` it reads only the sessions of `agentId` and of the agents `roundAgents(round)` names, not every agent folder; `turn.read` passes the agents with a `driver.round_started` event for that round.
+
 ## Events
 
 | `kind`                 | Payload                                   |

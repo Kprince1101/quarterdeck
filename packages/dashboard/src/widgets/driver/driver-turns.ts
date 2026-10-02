@@ -10,6 +10,16 @@ export interface DriverTurn {
   driver: AgentRow;
 }
 
+const WHOLE_NUMBER = /^[1-9]\d*$/;
+
+export const parseThrough = (text: string, last: number): number | null => {
+  const trimmed = text.trim();
+  if (!WHOLE_NUMBER.test(trimmed)) return null;
+  const through = Number(trimmed);
+  if (through > last) return null;
+  return through;
+};
+
 export const roundsNewestFirst = (rounds: readonly RoundRow[]): RoundRow[] =>
   rounds.toSorted((a, b) => b.number - a.number);
 

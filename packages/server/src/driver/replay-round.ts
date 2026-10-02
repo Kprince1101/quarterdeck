@@ -78,15 +78,15 @@ const agentSessions = async (
   return sessions;
 };
 
-export const findRoundSessions = async (
+const roundSessionsOf = async (
   turnsDir: string,
+  agentIds: readonly string[],
   round: number,
 ): Promise<RoundSession[]> => {
-  const agents = (await subdirs(turnsDir)).filter((name) =>
-    AGENT_DIR.test(name),
-  );
   const sessions = await Promise.all(
-    agents.map((agentId) => agentSessions(turnsDir, agentId)),
+    agentIds
+      .filter((agentId) => AGENT_DIR.test(agentId))
+      .map((agentId) => agentSessions(turnsDir, agentId)),
   );
   return sessions
     .flat()
@@ -97,11 +97,19 @@ export const findRoundSessions = async (
     );
 };
 
+export const findRoundSessions = async (
+  turnsDir: string,
+  round: number,
+): Promise<RoundSession[]> =>
+  roundSessionsOf(turnsDir, await subdirs(turnsDir), round);
+
 export interface TurnSession {
   session: RoundSession;
   n: number;
   latest: boolean;
 }
+
+export type RoundAgents = (round: number) => Promise<readonly string[]>;
 
 const sameSession = (a: RoundSession, b: RoundSession | undefined): boolean =>
   b !== undefined && a.agentId === b.agentId && a.firstSeq === b.firstSeq;
@@ -110,12 +118,14 @@ export const findTurnSession = async (
   turnsDir: string,
   agentId: string,
   seq: number,
+  roundAgents: RoundAgents,
 ): Promise<TurnSession | null> => {
   const session = (await agentSessions(turnsDir, agentId)).find(
     (candidate) => candidate.firstSeq <= seq && seq <= candidate.lastSeq,
   );
   if (session === undefined) return null;
-  const round = await findRoundSessions(turnsDir, session.round);
+  const agentIds = new Set([agentId, ...(await roundAgents(session.round))]);
+  const round = await roundSessionsOf(turnsDir, [...agentIds], session.round);
   return {
     session,
     n: seq - session.firstSeq + 1,

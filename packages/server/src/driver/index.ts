@@ -112,6 +112,7 @@ export {
   findRoundSessions,
   findTurnSession,
   type RoundSession,
+  type RoundAgents,
   type TurnSession,
 } from './replay-round.js';
 export {
