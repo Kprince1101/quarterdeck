@@ -1,5 +1,6 @@
 import type { IntentErrorReply, IntentIssue } from '../intents/index.js';
 import { hasErrorCode } from '../lib/errors.js';
+import { ProjectOpenError } from '../store/index.js';
 
 export class HttpError extends Error {
   readonly status: number;
@@ -35,6 +36,7 @@ export const notFound = (message: string) => new HttpError(404, message);
 export const conflict = (message: string) => new HttpError(409, message);
 
 export const asLockConflict = (err: unknown): unknown => {
+  if (err instanceof ProjectOpenError) return conflict(err.message);
   if (err instanceof Error && hasErrorCode(err.cause, 'EEXIST')) {
     return conflict(err.message);
   }

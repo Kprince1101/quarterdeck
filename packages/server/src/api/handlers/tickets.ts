@@ -1,4 +1,4 @@
-import type { Transaction } from '@electric-sql/pglite';
+import type { Queryable } from '../../store/index.js';
 import type { IntentHandlers } from '../context.js';
 import { badRequest, conflict } from '../http-error.js';
 import { applyInProject, findRow } from '../record.js';
@@ -9,7 +9,7 @@ const CLOSED_STATUSES = new Set(['done', 'cancelled']);
 const CANCELLABLE_STATUSES = new Set(['open', 'bounced']);
 
 const assertDependencies = async (
-  tx: Transaction,
+  tx: Queryable,
   projectId: string,
   dependsOn: string[] | undefined,
 ) => {
@@ -25,7 +25,7 @@ const assertDependencies = async (
 };
 
 const ticketStatus = async (
-  tx: Transaction,
+  tx: Queryable,
   projectId: string,
   ticketId: string,
 ): Promise<string> => {

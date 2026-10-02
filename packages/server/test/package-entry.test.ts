@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FAKE_AGENT_NAME, fakeAgentLaunch } from './acp/fake-agent/index.ts';
 import { isAlive } from './acp/process-check.ts';
+import { SHIPPED_MIGRATIONS } from './store/backends.js';
 
 interface EntryReport {
   migrated: string[];
@@ -86,12 +87,7 @@ describe('@quarterdeck/server package entry', () => {
       expect(result.status).toBe(0);
       const report = JSON.parse(result.stdout) as EntryReport;
       expect(report).toMatchObject({
-        migrated: [
-          '0001_init',
-          '0002_agent_names',
-          '0003_intents',
-          '0004_table_changes',
-        ],
+        migrated: SHIPPED_MIGRATIONS,
         kind: 'entry',
         agent: FAKE_AGENT_NAME,
         events: ['spawned', 'closed', 'exit'],

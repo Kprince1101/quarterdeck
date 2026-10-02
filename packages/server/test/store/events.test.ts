@@ -10,8 +10,9 @@ import {
   it,
   vi,
 } from 'vitest';
-import { EVENT_BATCH, IN_MEMORY, openStore } from '../../src/store/index.js';
+import { EVENT_BATCH, openStore } from '../../src/store/index.js';
 import type { StoreEvent, Subscription, Store } from '../../src/store/index.js';
+import { TEST_BACKENDS, type TestDatabase } from './backends.js';
 
 const TIMEOUT = 30_000;
 
@@ -24,7 +25,8 @@ const collect = () => {
   return { events, kinds, handler };
 };
 
-describe('store event bus', () => {
+describe.each(TEST_BACKENDS)('store event bus on $name', (backend) => {
+  let database: TestDatabase;
   let store: Store;
   const open: Subscription[] = [];
 
@@ -35,11 +37,13 @@ describe('store event bus', () => {
   };
 
   beforeAll(async () => {
-    store = await openStore({ project: 'deck', dataDir: IN_MEMORY });
+    database = await backend.create();
+    store = await openStore({ project: 'deck', ...database.storeOptions });
   }, TIMEOUT);
 
   afterAll(async () => {
     await store.close();
+    await database.drop();
   });
 
   afterEach(async () => {

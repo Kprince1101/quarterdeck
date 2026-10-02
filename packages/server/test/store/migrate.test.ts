@@ -1,21 +1,24 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PGlite } from '@electric-sql/pglite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { loadMigrations, migrate } from '../../src/store/index.js';
+import { loadMigrations, migrate, type Db } from '../../src/store/index.js';
+import { TEST_BACKENDS, type TestDatabase } from './backends.js';
 
-describe('migrate', () => {
+describe.each(TEST_BACKENDS)('migrate on $name', (backend) => {
   let dir = '';
-  let db: PGlite;
+  let database: TestDatabase;
+  let db: Db;
 
   beforeEach(async () => {
     dir = mkdtempSync(join(tmpdir(), 'qd-migrations-'));
-    db = await PGlite.create();
+    database = await backend.create();
+    db = await database.connect();
   });
 
   afterEach(async () => {
     await db.close();
+    await database.drop();
     rmSync(dir, { recursive: true, force: true });
   });
 
@@ -43,6 +46,17 @@ describe('migrate', () => {
 
     const { rows } = await db.query<{ n: number }>('select n from log');
     expect(rows.map((row) => row.n)).toEqual([1, 2, 3]);
+  });
+
+  it('applies each migration once when two openers migrate at the same time', async () => {
+    write('0001_a.sql', 'create table log (n int);');
+    write('0002_b.sql', 'insert into log values (2);');
+
+    const runs = await Promise.all([migrate(db, dir), migrate(db, dir)]);
+
+    expect(runs.flat().toSorted()).toEqual(['0001_a', '0002_b']);
+    const { rows } = await db.query<{ n: number }>('select n from log');
+    expect(rows).toEqual([{ n: 2 }]);
   });
 
   it.each(['0002_AddX.sql', '2_x.sql', '0003-dash.sql'])(

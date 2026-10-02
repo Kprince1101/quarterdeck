@@ -4,11 +4,18 @@ import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   EVENTS_CHANNEL,
-  IN_MEMORY,
   STORE_TABLES,
+  deleteProjectRows,
   openStore,
 } from '../../src/store/index.js';
 import type { Store } from '../../src/store/index.js';
+import {
+  SHIPPED_MIGRATIONS,
+  TEST_BACKENDS,
+  nextPayload,
+  type TestDatabase,
+} from './backends.js';
+import { projectRowCounts, seedProject } from './seed.js';
 
 const TIMEOUT = 30_000;
 
@@ -27,14 +34,10 @@ describe('openStore on disk', () => {
     'creates the project data dir, migrates once and persists across restarts',
     async () => {
       const first = await openStore({ project: 'deck', home });
-      expect(first.dataDir).toBe(join(home, 'deck', 'pg'));
-      expect(existsSync(join(first.dataDir, 'PG_VERSION'))).toBe(true);
-      expect(first.migrated).toEqual([
-        '0001_init',
-        '0002_agent_names',
-        '0003_intents',
-        '0004_table_changes',
-      ]);
+      expect(first.backend).toBe('pglite');
+      expect(first.location).toBe(join(home, 'deck', 'pg'));
+      expect(existsSync(join(first.location, 'PG_VERSION'))).toBe(true);
+      expect(first.migrated).toEqual(SHIPPED_MIGRATIONS);
       await first.db.query(
         'insert into notebook (project_id, body) values ($1, $2)',
         [first.projectId, 'remember this'],
@@ -61,15 +64,74 @@ describe('openStore on disk', () => {
   });
 });
 
-describe('store schema', () => {
+describe.each(TEST_BACKENDS)('store schema on $name', (backend) => {
+  let database: TestDatabase;
   let store: Store;
 
   beforeAll(async () => {
-    store = await openStore({ project: 'deck', dataDir: IN_MEMORY });
+    database = await backend.create();
+    store = await openStore({ project: 'deck', ...database.storeOptions });
   }, TIMEOUT);
 
   afterAll(async () => {
     await store.close();
+    await database.drop();
+  });
+
+  it('deletes one project from every store table and leaves the rest', async () => {
+    const { rows } = await store.db.query<{ id: string; slug: string }>(
+      `insert into projects (slug, name)
+       values ('hold', 'hold'), ('keep', 'keep') returning id, slug`,
+    );
+    const ids = Object.fromEntries(rows.map((row) => [row.slug, row.id]));
+    const hold = ids['hold'] ?? '';
+    const keep = ids['keep'] ?? '';
+    await seedProject(store.db, hold);
+    await seedProject(store.db, keep);
+    const everyTable = (n: number) =>
+      Object.fromEntries(STORE_TABLES.map((table) => [table, n]));
+    expect(await projectRowCounts(store.db, hold)).toEqual(everyTable(1));
+
+    await store.db.transaction((tx) => deleteProjectRows(tx, hold));
+
+    expect(await projectRowCounts(store.db, hold)).toEqual(everyTable(0));
+    expect(await projectRowCounts(store.db, keep)).toEqual(everyTable(1));
+    await store.db.query('delete from projects where id = $1', [keep]);
+  });
+
+  it('gives events consecutive ids', async () => {
+    const first = await store.publish({ kind: 'one' });
+    const second = await store.publish({ kind: 'two' });
+    expect(second.id).toBe(first.id + 1);
+    await store.db.query('delete from events where project_id = $1', [
+      store.projectId,
+    ]);
+  });
+
+  it('reports which backend it opened', () => {
+    expect(store.backend).toBe(backend.name);
+  });
+
+  it('returns the same JS values on every backend', async () => {
+    const { rows } = await store.db.query(
+      `select 42::int8 as small_int8, 9007199254740993::int8 as big_int8,
+              7::int4 as int4, 1.5::numeric(12, 4) as numeric,
+              '{"a":[1]}'::jsonb as jsonb, true as bool,
+              '2026-10-01T00:00:00Z'::timestamptz as at,
+              array['8f0c1e9a-5b7d-4c2e-9a1f-3d6b8e2c4a10']::uuid[] as ids`,
+    );
+    expect(rows).toEqual([
+      {
+        small_int8: 42,
+        big_int8: 9_007_199_254_740_993n,
+        int4: 7,
+        numeric: '1.5000',
+        jsonb: { a: [1] },
+        bool: true,
+        at: new Date('2026-10-01T00:00:00Z'),
+        ids: ['8f0c1e9a-5b7d-4c2e-9a1f-3d6b8e2c4a10'],
+      },
+    ]);
   });
 
   afterEach(async () => {
@@ -125,10 +187,7 @@ describe('store schema', () => {
   });
 
   it('notifies the events channel on every event insert', async () => {
-    const payloads: string[] = [];
-    const unlisten = await store.db.listen(EVENTS_CHANNEL, (payload) => {
-      payloads.push(payload);
-    });
+    const { payload, unlisten } = await nextPayload(store.db, EVENTS_CHANNEL);
     const {
       rows: [event],
     } = await store.db.query<{ id: number }>(
@@ -136,11 +195,39 @@ describe('store schema', () => {
        values ($1, 'ticket.created', '{"title":"QD2a"}') returning id`,
       [store.projectId],
     );
+    const received = JSON.parse(await payload) as unknown;
     await unlisten();
 
-    expect(payloads.map((payload) => JSON.parse(payload) as unknown)).toEqual([
-      { id: event?.id, project_id: store.projectId, kind: 'ticket.created' },
-    ]);
+    expect(received).toEqual({
+      id: event?.id,
+      project_id: store.projectId,
+      kind: 'ticket.created',
+    });
+  });
+
+  it('commits a transaction as a unit and rolls it back on error', async () => {
+    await store.db.transaction(async (tx) => {
+      await tx.query(`insert into rounds (project_id, number) values ($1, 1)`, [
+        store.projectId,
+      ]);
+    });
+    await expect(
+      store.db.transaction(async (tx) => {
+        await tx.query(
+          `insert into rounds (project_id, number) values ($1, 2)`,
+          [store.projectId],
+        );
+        await tx.query(
+          `insert into rounds (project_id, number) values ($1, 1)`,
+          [store.projectId],
+        );
+      }),
+    ).rejects.toThrow(/unique/);
+    const { rows } = await store.db.query<{ number: number }>(
+      'select number from rounds where project_id = $1',
+      [store.projectId],
+    );
+    expect(rows).toEqual([{ number: 1 }]);
   });
 
   it('maintains updated_at on every table that has one', async () => {

@@ -15,6 +15,7 @@ export const readSnapshot = (
   turnsPerAgent = SNAPSHOT_TURNS_PER_AGENT,
 ): Promise<SnapshotRows> =>
   store.db.transaction(async (tx) => {
+    await tx.exec('set transaction isolation level repeatable read, read only');
     const tables = await Promise.all(
       WATCHED_TABLES.map(
         async (table) =>
