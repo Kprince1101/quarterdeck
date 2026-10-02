@@ -6,6 +6,8 @@ The Quarterdeck store: one in-process [PGlite](https://pglite.dev) Postgres per 
 
 `~/.quarterdeck/<project>/pg` is the Postgres data dir for one project. Deleting that folder deletes the project's state; the next `openStore` recreates it empty.
 
+`~/.quarterdeck/<project>/bus.sock` is the bus MCP socket (see [bus](../bus/README.md)). It holds no data, exists only while the server is up, and is removed on shutdown.
+
 `~/.quarterdeck/<project>/pg.lock` holds the pid of the process that has the project open. PGlite takes no lock of its own, and two processes on one data dir silently lose each other's writes, so `openStore` creates this file exclusively and throws `project <p> is already open (pid N)` while that pid is alive. A lock left by a dead pid is reclaimed. `close()` removes it, as does a failed open. `IN_MEMORY` stores are not locked.
 
 ## API
