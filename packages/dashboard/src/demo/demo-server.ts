@@ -1,3 +1,4 @@
+import type { WipeResult } from '@quarterdeck/server/intents';
 import type { RoundRow } from '@quarterdeck/server/stream-schema';
 import { createIntentClient } from '../api/intents.js';
 import { createRulesReader } from '../api/rules.js';
@@ -13,7 +14,12 @@ import {
   type DemoBeat,
   type DemoScriptOptions,
 } from './demo-script.js';
-import { DEMO_LIFECYCLE, PLANNER_ASK, seedProject } from './demo-seed.js';
+import {
+  DEMO_LIFECYCLE,
+  DEMO_PROJECT,
+  PLANNER_ASK,
+  seedProject,
+} from './demo-seed.js';
 import { demoWebSocket } from './demo-socket.js';
 import { createDemoStore, demoId, type DemoStore } from './demo-store.js';
 import { createDemoWorld, type DemoWorld } from './demo-world.js';
@@ -116,18 +122,10 @@ export const createDemoServer = (
     timers.add(timer);
   };
 
-  const intent = createDemoIntents({
-    world,
-    rules,
-    planner,
-    reads,
-    startRound: (goal) => world.startRound(goal),
-    later,
-  });
-  const fetch = demoFetch({
-    intent,
-    rules: (project) => rules.view(project, DEMO_REPO_PATH),
-  });
+  const clearTimers = (): void => {
+    timers.forEach((timer) => clearTimeout(timer));
+    timers.clear();
+  };
 
   const seed = (): void => {
     lag = SEED_LAG_MS;
@@ -152,6 +150,32 @@ export const createDemoServer = (
   };
   seed();
 
+  const wipe = (): WipeResult => {
+    const stopped = store
+      .rows('agents')
+      .filter((agent) => !world.isGone(agent))
+      .map((agent) => ({ project: DEMO_PROJECT, agent: agent.name }));
+    clearTimers();
+    store.reset();
+    world.turnText.clear();
+    seed();
+    return { wiped: [DEMO_PROJECT], stopped };
+  };
+
+  const intent = createDemoIntents({
+    world,
+    rules,
+    planner,
+    reads,
+    startRound: (goal) => world.startRound(goal),
+    later,
+    wipe,
+  });
+  const fetch = demoFetch({
+    intent,
+    rules: (project) => rules.view(project, DEMO_REPO_PATH),
+  });
+
   return {
     store,
     world,
@@ -168,8 +192,7 @@ export const createDemoServer = (
     stop: () => {
       clearInterval(interval);
       interval = undefined;
-      timers.forEach((timer) => clearTimeout(timer));
-      timers.clear();
+      clearTimers();
     },
   };
 };

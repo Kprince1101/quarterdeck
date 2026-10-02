@@ -45,6 +45,7 @@ export interface DemoStore {
   events: () => readonly StreamEvent[];
   machine: () => MachineState;
   setMachine: (machine: MachineState) => void;
+  reset: () => void;
   connect: (after: number | null, listener: DemoListener) => () => void;
 }
 
@@ -67,6 +68,8 @@ export const createDemoStore = ({
   const log: StreamEvent[] = [];
   const listeners = new Set<DemoListener>();
   let ids = 0;
+  let lastEventId = 0;
+  let wipedThrough = 0;
   let machine: MachineState = { pausedAt: null };
 
   const broadcast = (message: StreamMessage): void => {
@@ -128,8 +131,9 @@ export const createDemoStore = ({
       change(table, id, null, 'delete');
     },
     emit: (kind, fields = {}) => {
+      lastEventId += 1;
       const event: StreamEvent = {
-        id: log.length + 1,
+        id: lastEventId,
         projectId,
         agentId: fields.agentId ?? null,
         ticketId: fields.ticketId ?? null,
@@ -147,8 +151,20 @@ export const createDemoStore = ({
       machine = next;
       broadcast({ type: 'machine', machine });
     },
+    reset: () => {
+      Object.assign(tables, emptyTables());
+      log.length = 0;
+      wipedThrough = lastEventId;
+      broadcast({
+        type: 'snapshot',
+        cursor: lastEventId,
+        tables: emptyTables(),
+        machine,
+      });
+    },
     connect: (after, listener) => {
-      const cursor = after ?? Math.max(0, log.length - DEMO_STREAM_TAIL);
+      const cursor =
+        after ?? Math.max(wipedThrough, lastEventId - DEMO_STREAM_TAIL);
       const snapshot: SnapshotMessage = {
         type: 'snapshot',
         cursor,

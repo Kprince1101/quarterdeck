@@ -14,6 +14,7 @@ export const DEMO_LAYOUT: GridLayout = {
     {
       id: 'project-1',
       widget: 'project',
+      tabs: ['agents'],
       x: 3,
       y: 0,
       w: 4,

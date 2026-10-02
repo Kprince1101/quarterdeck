@@ -1,3 +1,4 @@
+import { wipeResultSchema } from '@quarterdeck/server/intents';
 import { parseGridLayout, presetLayout } from '@quarterdeck/server/layouts';
 import {
   streamMessageSchema,
@@ -510,11 +511,85 @@ describe('demo server', () => {
     const server = createDemoServer();
     const { intents } = parts(server);
     await expect(
-      intents.wipe.all({ confirm: 'wipe everything' }),
+      intents.project.create({ project: 'ferry' }),
     ).rejects.toMatchObject({
       status: 501,
       message: expect.stringContaining('demo'),
     });
+  });
+
+  it('queues a message to a live agent and refuses a finished one', async () => {
+    const server = createDemoServer();
+    const { intents, store } = parts(server);
+    const live = store.rows('agents').find((a) => a.status === 'working');
+    const reply = await intents.agent.message({
+      project,
+      agentId: live?.id ?? '',
+      text: 'Still with us?',
+    });
+    expect(reply).toMatchObject({ status: 'pending', result: null });
+    expect(store.events().at(-1)).toMatchObject({
+      kind: 'agent.message',
+      payload: { intentId: reply.id, status: 'pending' },
+    });
+    const retired = store.rows('agents').find((a) => a.status === 'retired');
+    await expect(
+      intents.agent.message({
+        project,
+        agentId: retired?.id ?? '',
+        text: 'Hello?',
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('wipes the in-page world and starts the demo over', async () => {
+    const server = createDemoServer();
+    const { intents, store } = parts(server);
+    const connection = openStream({
+      url: DEMO_STREAM_URL,
+      WebSocket: server.sources.stream?.WebSocket,
+    });
+    await vi.waitFor(() => {
+      expect(connection.state.status).toBe('live');
+    });
+    stepUntil(server, () => store.rows('rounds').length === 3);
+    await intents.notebook.add({ project, body: 'Gone after the wipe' });
+    const live = store
+      .rows('agents')
+      .filter((agent) => !server.world.isGone(agent))
+      .map((agent) => ({ project, agent: agent.name }));
+    const lastBefore = store.events().at(-1)?.id ?? 0;
+
+    const reply = await intents.wipe.project({ project, confirm: project });
+    expect(reply).toMatchObject({ status: 'applied', id: null });
+    expect(wipeResultSchema.parse(reply.result)).toEqual({
+      wiped: [project],
+      stopped: live,
+    });
+    expect(store.rows('rounds').map((round) => round.number)).toEqual([1, 2]);
+    expect(store.rows('notebook').map((entry) => entry.body)).not.toContain(
+      'Gone after the wipe',
+    );
+    expect(store.events()[0]?.id).toBeGreaterThan(lastBefore);
+    expect(connection.state.tables).toEqual(
+      Object.fromEntries(
+        Object.keys(connection.state.tables).map((table) => [
+          table,
+          store.rows(table as 'projects'),
+        ]),
+      ),
+    );
+    expect(connection.state.cursor).toBe(store.events().at(-1)?.id);
+
+    server.step();
+    expect(connection.state.cursor).toBe(store.events().at(-1)?.id);
+    connection.close();
+
+    await expect(
+      intents.wipe.project({ project: 'ferry', confirm: 'ferry' }),
+    ).rejects.toMatchObject({ status: 404 });
+    const all = await intents.wipe.all({ confirm: 'wipe everything' });
+    expect(all.result).toMatchObject({ wiped: [project] });
   });
 });
 

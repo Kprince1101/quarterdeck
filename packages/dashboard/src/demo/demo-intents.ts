@@ -4,6 +4,7 @@ import type {
   IntentReply,
   IntentResult,
   IntentStatus,
+  WipeResult,
 } from '@quarterdeck/server/intents';
 import { presetLayout } from '@quarterdeck/server/layouts';
 import type {
@@ -33,6 +34,7 @@ export interface DemoIntentContext {
   reads: DemoReads;
   startRound: (goal: string) => RoundRow;
   later: (ms: number, work: () => void) => void;
+  wipe: () => WipeResult;
 }
 
 type Handler<N extends IntentName> = (
@@ -49,6 +51,8 @@ const UNRECORDED: ReadonlySet<IntentName> = new Set([
   'usage.read',
   'rules.write',
   'rules.reset',
+  'wipe.project',
+  'wipe.all',
 ]);
 
 const refuse = (status: number, message: string): never => {
@@ -211,7 +215,10 @@ export const createDemoIntents = (
       const agent = world.resetAgent(unretiredAgent(input.agentId));
       return reply('applied', { agentId: agent.id, status: agent.status });
     },
-    'agent.message': notInDemo('Messaging an agent'),
+    'agent.message': (input, reply) => {
+      liveAgent(input.agentId);
+      return reply('pending', null);
+    },
     'planner.message': (input, reply) => {
       const answer = reply('pending', null);
       const intentId = answer.id ?? '';
@@ -391,8 +398,13 @@ export const createDemoIntents = (
       store.remove('layouts', row.id);
       return reply('applied', { name: input.name });
     },
-    'wipe.project': notInDemo('Wiping'),
-    'wipe.all': notInDemo('Wiping'),
+    'wipe.project': (input, reply) => {
+      if (input.project !== DEMO_PROJECT) {
+        refuse(NOT_FOUND, `project ${input.project} does not exist`);
+      }
+      return reply('applied', ctx.wipe());
+    },
+    'wipe.all': (_input, reply) => reply('applied', ctx.wipe()),
     'data.summary': (_input, reply) => reply('applied', reads.summary()),
     'data.rows': (input, reply) =>
       reply('applied', reads.page(input.table, input.offset, input.limit)),
