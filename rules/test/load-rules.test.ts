@@ -103,8 +103,37 @@ describe('rules loader', () => {
     expect(lifecycle.budget).toEqual({
       maxTokensPerTicket: 500,
       warnAtFraction: 0.8,
+      window: { hours: 5, capTokens: null, holdAtFraction: 0.8 },
     });
     expect(lifecycle.stuckAfterMinutes).toBe(30);
+  });
+
+  it('ships no window cap and lets a local layer set one', async () => {
+    expect((await loadRule('lifecycle', sandbox)).budget.window.capTokens).toBe(
+      null,
+    );
+    await writeLocalJson(sandbox.homeDir, 'lifecycle.json', {
+      budget: { window: { capTokens: 1_000_000 } },
+    });
+
+    const lifecycle = await loadRule('lifecycle', sandbox);
+
+    expect(lifecycle.budget.window).toEqual({
+      hours: 5,
+      capTokens: 1_000_000,
+      holdAtFraction: 0.8,
+    });
+  });
+
+  it('rejects a window cap that is not a positive integer', async () => {
+    const path = await writeLocalJson(sandbox.repoDir, 'lifecycle.json', {
+      budget: { window: { capTokens: 0 } },
+    });
+
+    await expect(loadRule('lifecycle', sandbox)).rejects.toMatchObject({
+      path,
+      message: expect.stringContaining('budget.window.capTokens'),
+    });
   });
 
   it('lets the repo layer win over the home layer', async () => {

@@ -3,7 +3,12 @@
   "stuckAfterMinutes": 30,
   "budget": {
     "maxTokensPerTicket": 2000000,
-    "warnAtFraction": 0.8
+    "warnAtFraction": 0.8,
+    "window": {
+      "hours": 5,
+      "capTokens": null,
+      "holdAtFraction": 0.8
+    }
   },
   "mergeGate": {
     "requireReviewerApproval": true,

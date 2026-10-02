@@ -60,6 +60,11 @@ export const lifecycleSchema = z.strictObject({
   budget: z.strictObject({
     maxTokensPerTicket: z.number().int().positive(),
     warnAtFraction: z.number().gt(0).lt(1),
+    window: z.strictObject({
+      hours: z.number().int().positive(),
+      capTokens: z.number().int().positive().nullable(),
+      holdAtFraction: z.number().gt(0).lte(1),
+    }),
   }),
   mergeGate: z.strictObject({
     requireReviewerApproval: z.boolean(),
@@ -103,6 +108,7 @@ export type TighteningRule = z.infer<typeof tighteningRuleSchema>;
 export type RepoPermissions = z.infer<typeof repoPermissionsSchema>;
 export type Naming = z.infer<typeof namingSchema>;
 export type Lifecycle = z.infer<typeof lifecycleSchema>;
+export type BudgetWindow = Lifecycle['budget']['window'];
 export type Runtime = z.infer<typeof runtimeSchema>;
 export type RoleModel = z.infer<typeof roleModelSchema>;
 export type Models = z.infer<typeof modelsSchema>;
