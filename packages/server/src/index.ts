@@ -5,6 +5,7 @@ export * from './acp/runtimes/index.js';
 export * from './agents/index.js';
 export * from './budget/index.js';
 export * from './bus/index.js';
+export * from './data/index.js';
 export * from './driver/index.js';
 export * from './gate/index.js';
 export * from './pause/index.js';
