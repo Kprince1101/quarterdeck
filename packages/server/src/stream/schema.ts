@@ -56,8 +56,6 @@ export const agentRowSchema = z.object({
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   endedAt: timestampSchema.nullable(),
-  pid: z.int().positive().nullable(),
-  pidStartedAt: timestampSchema.nullable(),
 });
 
 export const ticketRowSchema = z.object({
@@ -74,6 +72,7 @@ export const ticketRowSchema = z.object({
     'in_progress',
     'in_review',
     'bounced',
+    'blocked',
     'done',
     'cancelled',
     'rejected',

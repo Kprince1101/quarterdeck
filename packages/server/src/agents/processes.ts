@@ -67,7 +67,8 @@ export const sweepAgentProcess = async (
   if (!recorded) return 'none';
   const outcome = await stopOwnTree(recorded, graceMs);
   await store.db.transaction(async (tx) => {
-    await forgetAgentProcess(tx, agent.id, recorded.pid);
+    if (outcome !== 'unverified')
+      await forgetAgentProcess(tx, agent.id, recorded.pid);
     if (!LOGGED_OUTCOMES.has(outcome)) return;
     await recordEvent(tx, agent, PROCESS_SWEPT_EVENT, {
       name: agent.name,

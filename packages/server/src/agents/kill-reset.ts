@@ -1,4 +1,5 @@
-import type { Store } from '../store/index.js';
+import { getErrorMessage } from '../lib/errors.js';
+import { publishEvent, type Queryable, type Store } from '../store/index.js';
 import { AGENT_COLUMNS, type Agent, type AgentStatus } from './agent.js';
 import { sweepAgentProcess, type SweepOutcome } from './processes.js';
 import { findAgent, firstRow, intentPayload, recordEvent } from './rows.js';
@@ -6,12 +7,15 @@ import type { SessionHost } from './sessions.js';
 
 export const AGENT_KILLED_EVENT = 'agent.killed';
 export const AGENT_RESET_EVENT = 'agent.session_reset';
+export const TICKET_BLOCKED_EVENT = 'ticket.blocked';
 
 export const FINISHED_AGENT_STATUSES: readonly AgentStatus[] = [
   'ended',
   'killed',
   'retired',
 ];
+
+export const BLOCKED_ON_KILL: readonly string[] = ['assigned', 'in_progress'];
 
 const RUNNING_STATUSES: readonly AgentStatus[] = [
   'starting',
@@ -40,18 +44,68 @@ export class AgentFinishedError extends Error {
   }
 }
 
-const markKilled = async (store: Store, agentId: string): Promise<Agent> => {
-  const { rows } = await store.db.query<Agent>(
-    `update agents
-     set status = 'killed', ended_at = coalesce(ended_at, now())
-     where id = $1 and project_id = $2 and status <> all($3::text[])
-     returning ${AGENT_COLUMNS}`,
-    [agentId, store.projectId, FINISHED_AGENT_STATUSES],
+interface BlockedTicket {
+  id: string;
+  previousStatus: string;
+}
+
+interface StoppedSession {
+  sweep: SweepOutcome;
+  failures: unknown[];
+}
+
+const blockHeldTickets = async (tx: Queryable, agent: Agent): Promise<void> => {
+  const { rows } = await tx.query<BlockedTicket>(
+    `with held as (
+       select id, status from tickets
+       where project_id = $1 and assignee_id = $2 and status = any($3::text[])
+       for update
+     )
+     update tickets t set status = 'blocked'
+     from held where t.id = held.id
+     returning t.id, held.status as "previousStatus"`,
+    [agent.projectId, agent.id, BLOCKED_ON_KILL],
   );
-  const [killed] = rows;
-  if (killed) return killed;
-  throw new AgentFinishedError(await findAgent(store, agentId));
+  for (const ticket of rows) {
+    await publishEvent(tx, agent.projectId, {
+      kind: TICKET_BLOCKED_EVENT,
+      agentId: agent.id,
+      ticketId: ticket.id,
+      payload: {
+        name: agent.name,
+        previousStatus: ticket.previousStatus,
+        reason: 'killed',
+      },
+    });
+  }
 };
+
+const finishedError = async (
+  tx: Queryable,
+  projectId: string,
+  agentId: string,
+): Promise<AgentFinishedError> => {
+  const { rows } = await tx.query<Agent>(
+    `select ${AGENT_COLUMNS} from agents where id = $1 and project_id = $2`,
+    [agentId, projectId],
+  );
+  return new AgentFinishedError(firstRow(rows, agentId));
+};
+
+const markKilled = (store: Store, agentId: string): Promise<Agent> =>
+  store.db.transaction(async (tx) => {
+    const { rows } = await tx.query<Agent>(
+      `update agents
+       set status = 'killed', ended_at = coalesce(ended_at, now())
+       where id = $1 and project_id = $2 and status <> all($3::text[])
+       returning ${AGENT_COLUMNS}`,
+      [agentId, store.projectId, FINISHED_AGENT_STATUSES],
+    );
+    const [killed] = rows;
+    if (!killed) throw await finishedError(tx, store.projectId, agentId);
+    await blockHeldTickets(tx, killed);
+    return killed;
+  });
 
 const closeQuietly = async (
   sessions: SessionHost,
@@ -71,7 +125,7 @@ const stopSession = async (
   hosts: ControlHosts,
   agent: Agent,
   reason: 'kill' | 'reset',
-): Promise<SweepOutcome> => {
+): Promise<StoppedSession> => {
   const failures = await closeQuietly(hosts.sessions, agent.sessionId);
   const sweep = await sweepAgentProcess(
     store,
@@ -79,8 +133,13 @@ const stopSession = async (
     reason,
     hosts.killGraceMs,
   );
-  if (failures.length > 0) throw failures[0];
-  return sweep;
+  return { sweep, failures };
+};
+
+const closeErrorPayload = (failures: unknown[]): Record<string, string> => {
+  const [failure] = failures;
+  if (failures.length === 0) return {};
+  return { closeError: getErrorMessage(failure) };
 };
 
 export const killAgent = async (
@@ -90,11 +149,12 @@ export const killAgent = async (
   options: ControlOptions = {},
 ): Promise<Agent> => {
   const killed = await markKilled(store, agentId);
-  const sweep = await stopSession(store, hosts, killed, 'kill');
+  const { sweep, failures } = await stopSession(store, hosts, killed, 'kill');
   await recordEvent(store.db, killed, AGENT_KILLED_EVENT, {
     name: killed.name,
     sessionId: killed.sessionId,
     sweep,
+    ...closeErrorPayload(failures),
     ...intentPayload(options.intentId),
   });
   return killed;
@@ -108,7 +168,8 @@ export const resetAgent = async (
 ): Promise<Agent> => {
   const agent = await findAgent(store, agentId);
   if (agent.status === 'retired') throw new AgentFinishedError(agent);
-  const sweep = await stopSession(store, hosts, agent, 'reset');
+  const { sweep, failures } = await stopSession(store, hosts, agent, 'reset');
+  if (failures.length > 0) throw failures[0];
   return store.db.transaction(async (tx) => {
     const { rows } = await tx.query<Agent>(
       `update agents

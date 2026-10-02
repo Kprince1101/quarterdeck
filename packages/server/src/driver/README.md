@@ -216,7 +216,7 @@ The Driver sees each flag once. Every `round.turn`, the birth included (not `rou
 
 ### Re-assigning on retire
 
-`reassignTickets(ctx, agentId)` hands every ticket a retired builder still holds (`assigned`, `in_progress`, `in_review`, `bounced`) to a new builder, one at a time, in a new worktree. `in_review` and `bounced` keep their status; the others become `assigned`. The prompt names an open pull request if the ticket has one, so the new builder carries it on. An agent that is not `retired` throws `AgentNotRetiredError`; retire it first, which removes its worktree or raises the discard card.
+`reassignTickets(ctx, agentId)` hands every ticket a retired builder still holds (`assigned`, `in_progress`, `in_review`, `bounced`, and `blocked`, which a kill leaves behind) to a new builder, one at a time, in a new worktree. `in_review` and `bounced` keep their status; the others become `assigned`. The prompt names an open pull request if the ticket has one, so the new builder carries it on. An agent that is not `retired` throws `AgentNotRetiredError`; retire it first, which removes its worktree or raises the discard card.
 
 ### Actions
 

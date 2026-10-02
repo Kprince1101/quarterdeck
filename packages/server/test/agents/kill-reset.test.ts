@@ -3,11 +3,12 @@ import {
   AGENT_RESET_EVENT,
   AgentFinishedError,
   PROCESS_SWEPT_EVENT,
+  TICKET_BLOCKED_EVENT,
   createAgentLifecycle,
   trackAgentProcess,
   type AgentLifecycle,
 } from '../../src/agents/index.js';
-import type { Store } from '../../src/store/index.js';
+import { readRows, type Store } from '../../src/store/index.js';
 import {
   GRACE_MS,
   IS_WINDOWS,
@@ -21,6 +22,7 @@ import {
   CLEAR_ROUND_TABLES,
   eventPayloads,
   insertAgent,
+  insertTicket,
   lenientSessions,
 } from '../round-end/fixtures.js';
 import { TIMEOUT, fakeWorktrees, openTestStore } from './fixtures.js';
@@ -52,6 +54,14 @@ describe('kill, reset and retire', { timeout: TIMEOUT }, () => {
       openStores: () => [store],
       killGraceMs: GRACE_MS,
     });
+  };
+
+  const ticketStatus = async (ticketId: string) => {
+    const { rows } = await store.db.query<{ status: string }>(
+      'select status from tickets where id = $1',
+      [ticketId],
+    );
+    return rows[0]?.status;
   };
 
   const agentRow = async (agentId: string) => {
@@ -155,7 +165,7 @@ describe('kill, reset and retire', { timeout: TIMEOUT }, () => {
     },
   );
 
-  it('still sweeps and stays killed when closing the session fails', async () => {
+  it('records the kill with the close error when closing the session fails', async () => {
     setUp();
     sessions.close = () => Promise.reject(new Error('connection stuck'));
     const agentId = await insertAgent(store, {
@@ -164,11 +174,88 @@ describe('kill, reset and retire', { timeout: TIMEOUT }, () => {
       sessionId: 'session-wren',
     });
 
-    await expect(lifecycle.kill(store, agentId)).rejects.toThrow(
-      'connection stuck',
-    );
+    const killed = await lifecycle.kill(store, agentId, { intentId: 'i-4' });
+
+    expect(killed.status).toBe('killed');
     expect((await agentRow(agentId))?.status).toBe('killed');
-    expect(await eventPayloads(store, 'agent.killed')).toEqual([]);
+    expect(await eventPayloads(store, 'agent.killed')).toEqual([
+      {
+        name: 'wren',
+        sessionId: 'session-wren',
+        sweep: 'none',
+        closeError: 'connection stuck',
+        intentId: 'i-4',
+      },
+    ]);
+  });
+
+  it('blocks the tickets a killed agent was working, with ticket.blocked', async () => {
+    setUp();
+    const agentId = await insertAgent(store, {
+      name: 'wren',
+      status: 'working',
+    });
+    const other = await insertAgent(store, { name: 'lark', status: 'working' });
+    const assigned = await insertTicket(store, 'assigned', agentId);
+    const working = await insertTicket(store, 'in_progress', agentId);
+    const review = await insertTicket(store, 'in_review', agentId);
+    const done = await insertTicket(store, 'done', agentId);
+    const elsewhere = await insertTicket(store, 'in_progress', other);
+
+    await lifecycle.kill(store, agentId);
+
+    expect(
+      await Promise.all(
+        [assigned, working, review, done, elsewhere].map((id) =>
+          ticketStatus(id),
+        ),
+      ),
+    ).toEqual(['blocked', 'blocked', 'in_review', 'done', 'in_progress']);
+    const { rows } = await store.db.query<{
+      ticketId: string;
+      agentId: string;
+      payload: unknown;
+    }>(
+      `select ticket_id as "ticketId", agent_id as "agentId", payload
+       from events where kind = $1 order by id`,
+      [TICKET_BLOCKED_EVENT],
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows).toEqual(
+      expect.arrayContaining(
+        [
+          [assigned, 'assigned'],
+          [working, 'in_progress'],
+        ].map(([ticketId, previousStatus]) => ({
+          ticketId,
+          agentId,
+          payload: { name: 'wren', previousStatus, reason: 'killed' },
+        })),
+      ),
+    );
+  });
+
+  it('leaves tickets alone when the kill is refused', async () => {
+    setUp();
+    const agentId = await insertAgent(store, { name: 'wren', status: 'ended' });
+    const ticketId = await insertTicket(store, 'in_progress', agentId);
+
+    await expect(lifecycle.kill(store, agentId)).rejects.toBeInstanceOf(
+      AgentFinishedError,
+    );
+    expect(await ticketStatus(ticketId)).toBe('in_progress');
+  });
+
+  it('keeps process ids out of the stream rows', async () => {
+    setUp();
+    const agentId = await insertAgent(store, { name: 'wren' });
+    await giveProcess(store, agentId, { pid: 4242, startedAt: new Date() });
+
+    const [row] = await readRows(store.db, store.projectId, 'agents');
+
+    expect(row).toMatchObject({ id: agentId, name: 'wren' });
+    expect(Object.keys(row ?? {})).not.toContain('pid');
+    expect(Object.keys(row ?? {})).not.toContain('pidStartedAt');
   });
 
   it.each([

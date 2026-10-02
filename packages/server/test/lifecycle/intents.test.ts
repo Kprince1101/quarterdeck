@@ -148,6 +148,33 @@ describe('lifecycle intents', { timeout: TIMEOUT }, () => {
     ]);
   });
 
+  it('applies a kill whose session would not close, naming the error', async () => {
+    await start();
+    sessions.close = () => Promise.reject(new Error('connection stuck'));
+    const agentId = await insertAgent(store, {
+      name: 'wren',
+      status: 'working',
+      sessionId: 'session-wren',
+    });
+
+    const intentId = await queue('agent.kill', agentId);
+    await settled(intentId);
+
+    expect(await intentRow(intentId)).toEqual({
+      status: 'applied',
+      result: { status: 'killed' },
+    });
+    expect(await eventPayloads(store, 'agent.killed')).toEqual([
+      {
+        name: 'wren',
+        sessionId: 'session-wren',
+        sweep: 'none',
+        closeError: 'connection stuck',
+        intentId,
+      },
+    ]);
+  });
+
   it('resets an agent and acks with agent.session_reset', async () => {
     await start();
     const agentId = await insertAgent(store, {

@@ -174,7 +174,7 @@ const recordAssignment = (
     const tickets = await tx.query<BuilderTicket>(
       `update tickets
        set assignee_id = $3,
-           status = case when status in ('open', 'in_progress')
+           status = case when status in ('open', 'in_progress', 'blocked')
                     then 'assigned' else status end
        where id = $1 and project_id = $2
          and assignee_id is not distinct from $4 and status = any($5)

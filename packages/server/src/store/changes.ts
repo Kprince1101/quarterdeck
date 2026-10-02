@@ -85,8 +85,12 @@ const camelRow = (row: Row): Row =>
     Object.entries(row).map(([key, value]) => [camelKey(key), value]),
   );
 
+const AGENT_COLUMNS = `id, project_id, round_id, name, role, runtime, status,
+  session_id, worktree_path, created_at, updated_at, ended_at`;
+
 const columns = (table: WatchedTable): string => {
   if (table === 'turns') return TURN_COLUMNS;
+  if (table === 'agents') return AGENT_COLUMNS;
   return '*';
 };
 

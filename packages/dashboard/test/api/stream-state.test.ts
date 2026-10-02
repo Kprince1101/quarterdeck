@@ -35,8 +35,6 @@ const agent = (id: string): AgentRow => ({
   createdAt: AT,
   updatedAt: AT,
   endedAt: null,
-  pid: null,
-  pidStartedAt: null,
 });
 
 const turn = (id: number, agentId: string, seq: number): TurnRow => ({

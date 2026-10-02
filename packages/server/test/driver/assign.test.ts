@@ -626,6 +626,31 @@ describe('builder assignment and continue', () => {
   );
 
   it(
+    'hands the ticket a killed builder blocked to a new builder once it retires',
+    async () => {
+      const ticketId = await insertTicket();
+      const first = await assignAndSettle(ticketId);
+      await store.db.query(
+        `update tickets set status = 'in_progress' where id = $1`,
+        [ticketId],
+      );
+
+      await lifecycle.kill(store, first.builder.id);
+      expect((await ticketRow(ticketId))?.status).toBe('blocked');
+      await lifecycle.retire(store, first.builder.id);
+      scripted.reply(say('Picking it up.'));
+      const [next] = await reassignTickets(ctx, first.builder.id);
+      await next?.turn;
+
+      expect(await ticketRow(ticketId)).toEqual({
+        status: 'assigned',
+        assigneeId: next?.builder.id,
+      });
+    },
+    TIMEOUT,
+  );
+
+  it(
     'applies assign and continue actions from a Driver turn result',
     async () => {
       const ticketId = await insertTicket();

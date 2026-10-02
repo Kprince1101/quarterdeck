@@ -15,12 +15,12 @@ round.kill ─▶ cleanup + tickets reopened ─▶ round.ended (reason: killed)
 
 `readSettleState(db, projectId, roundId)` counts what keeps it going, and `isSettled(state)` is true when all of these hold:
 
-| Check             | What counts                                                                                                                                                            |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| round not ended   | The round exists in the project and its `status` is not `ended`.                                                                                                       |
-| no open tickets   | No ticket of the project is `open`, `assigned`, `in_progress`, `in_review` or `bounced` (`OPEN_TICKET_STATUSES`). `proposed` tickets wait for the human, not the crew. |
-| no running agents | No agent of the project is `starting`, `working` or `stuck` (`RUNNING_AGENT_STATUSES`). A turn in flight, the Driver's own included, keeps the round going.            |
-| no open cards     | No card of the project is `open`.                                                                                                                                      |
+| Check             | What counts                                                                                                                                                                       |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| round not ended   | The round exists in the project and its `status` is not `ended`.                                                                                                                  |
+| no open tickets   | No ticket of the project is `open`, `assigned`, `in_progress`, `in_review`, `bounced` or `blocked` (`OPEN_TICKET_STATUSES`). `proposed` tickets wait for the human, not the crew. |
+| no running agents | No agent of the project is `starting`, `working` or `stuck` (`RUNNING_AGENT_STATUSES`). A turn in flight, the Driver's own included, keeps the round going.                       |
+| no open cards     | No card of the project is `open`.                                                                                                                                                 |
 
 ## The settle timer
 
@@ -105,7 +105,7 @@ It resolves to `{ closedCards, retired, discardCards }`.
 
 ## Kill
 
-`killRound({ store, lifecycle, roundId })` is `cleanUpRound` with `reason: 'killed'` (`KILLED_REASON`) and `reopen: true`. There is no wrap-up turn and no proposals. Inside the transaction that ends the round, every ticket held by one of the round's builders (retired or not) and still `assigned`, `in_progress`, `in_review` or `bounced` goes back to `open` with no assignee; `pr_url` and `head_sha` stay so the next builder can pick up an open pull request. `ticket.reopened` is recorded for each with `{ roundId, previousStatus, previousAssigneeId }`, and any card still open on those tickets (a merge card) is expired. Tickets other rounds assigned, tickets never assigned, and `done` tickets are not touched. The reviewer gate only evaluates `in_review` tickets, so a review it was waiting on for a reopened ticket is dropped, and a verdict on it is refused.
+`killRound({ store, lifecycle, roundId })` is `cleanUpRound` with `reason: 'killed'` (`KILLED_REASON`) and `reopen: true`. There is no wrap-up turn and no proposals. Inside the transaction that ends the round, every ticket held by one of the round's builders (retired or not) and still `assigned`, `in_progress`, `in_review`, `bounced` or `blocked` goes back to `open` with no assignee; `pr_url` and `head_sha` stay so the next builder can pick up an open pull request. `ticket.reopened` is recorded for each with `{ roundId, previousStatus, previousAssigneeId }`, and any card still open on those tickets (a merge card) is expired. Tickets other rounds assigned, tickets never assigned, and `done` tickets are not touched. The reviewer gate only evaluates `in_review` tickets, so a review it was waiting on for a reopened ticket is dropped, and a verdict on it is refused.
 
 ## End and Kill from the dashboard
 
