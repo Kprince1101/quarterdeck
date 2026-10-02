@@ -14,7 +14,8 @@ import {
 import { App } from '../../src/app.js';
 import { DeckProvider, useDeck, type Deck } from '../../src/deck/deck.js';
 import { FAKE_WEBSOCKET, FakeSocket } from '../api/fake-socket.js';
-import { all, render, textOf } from './page.js';
+import { click } from '../grid/events.js';
+import { all, render, textOf, type PageElement } from './page.js';
 
 const STREAM_URL = 'ws://127.0.0.1:4317/ws';
 const PROJECT_ID = '00000000-0000-4000-8000-000000000001';
@@ -39,6 +40,16 @@ const event = (id: number, kind: string): StreamMessage => {
 };
 
 const stream = { url: STREAM_URL, WebSocket: FAKE_WEBSOCKET };
+
+const showTables = (container: PageElement) => {
+  const press = (label: string) => {
+    const button = container.querySelector(`[aria-label="${label}"]`);
+    if (button === null) throw new Error(`no ${label} button`);
+    click(button);
+  };
+  press('Hide Board');
+  press('Show Tables');
+};
 
 const socket = (): FakeSocket => {
   const [only] = FakeSocket.opened;
@@ -101,8 +112,21 @@ describe('dashboard shell', () => {
     unmount();
   });
 
+  it('opens on Board beside Events, with Tables waiting in the tray', () => {
+    const { container, unmount } = render(<App stream={stream} />);
+    const shown = all(container, '[data-grid-item]').map((cell) =>
+      cell.getAttribute('data-grid-item'),
+    );
+    expect(shown).toEqual(['board-1', 'events-1']);
+    expect(
+      container.querySelector('[data-hidden-item="tables-1"]'),
+    ).not.toBeNull();
+    unmount();
+  });
+
   it('wires the starter panels to the stream', () => {
     const { container, unmount } = render(<App stream={stream} />);
+    showTables(container);
     expect(textOf(container, '[aria-label="Events"]')).toContain(
       'No events yet.',
     );
