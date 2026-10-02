@@ -65,7 +65,7 @@ const directoryCatalog = (dataHome: string): ProjectCatalog => ({
   close: () => Promise.resolve(),
 });
 
-const postgresCatalog = (url: string): ProjectCatalog => {
+const postgresCatalog = (url: string, dataHome: string): ProjectCatalog => {
   const pool = createPostgresPool(url);
   return {
     location: redactUrl(url),
@@ -73,6 +73,7 @@ const postgresCatalog = (url: string): ProjectCatalog => {
     list: () => listProjectSlugs(pool),
     wipe: async (project) => {
       await wipePostgresProject(url, project);
+      await rm(join(dataHome, project), { recursive: true, force: true });
     },
     close: () => pool.close(),
   };
@@ -83,7 +84,7 @@ const chooseCatalog = (
   databaseUrl: string | undefined,
 ): ProjectCatalog => {
   if (databaseUrl === undefined) return directoryCatalog(dataHome);
-  return postgresCatalog(databaseUrl);
+  return postgresCatalog(databaseUrl, dataHome);
 };
 
 export const createProjectStores = (

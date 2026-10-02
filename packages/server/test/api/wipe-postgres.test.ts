@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { WIPE_ALL_CONFIRMATION } from '../../src/intents/index.js';
@@ -6,6 +7,7 @@ import {
   STORE_TABLES,
   connectPostgres,
   openStore,
+  projectTurnsDir,
   type Db,
 } from '../../src/store/index.js';
 import {
@@ -62,6 +64,9 @@ describe.runIf(POSTGRES_URL !== '')(
       const holdBefore = await projectRowCounts(db, hold);
       expect(emptyTables(await projectRowCounts(db, deck))).toEqual([]);
       expect(emptyTables(holdBefore)).toEqual([]);
+      const turnsDir = projectTurnsDir('deck', join(t.homeDir, '.quarterdeck'));
+      await mkdir(turnsDir, { recursive: true });
+      await writeFile(join(turnsDir, 'input.md'), 'turn input');
 
       const res = await t.send('wipe.project', {
         project: 'deck',
