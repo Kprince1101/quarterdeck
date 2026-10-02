@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { IntentClient } from '../../api/index.js';
+import { useIntentRequest } from '../notebook/use-intent-request.js';
 import type { PendingMessage, ProjectChoice } from './planner-model.js';
-import { useIntentRequest } from './use-intent-request.js';
 
 export interface PlannerChat {
   pending: PendingMessage[];
@@ -47,9 +47,9 @@ export const usePlannerChat = (
 
   return {
     pending,
-    isNewBusy: fresh.isBusy,
+    isNewBusy: fresh.isPending,
     newError: fresh.error,
-    hasNewError: fresh.hasError,
+    hasNewError: fresh.error !== null,
     handleSend,
     handleNew,
   };

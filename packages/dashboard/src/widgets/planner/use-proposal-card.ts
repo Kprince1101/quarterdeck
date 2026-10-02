@@ -1,7 +1,8 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react';
 import { useDeck } from '../../deck/deck.js';
+import { valueOf } from '../../grid/dom.js';
+import { useIntentRequest } from '../notebook/use-intent-request.js';
 import type { Proposal } from './planner-model.js';
-import { useIntentRequest } from './use-intent-request.js';
 
 export interface ProposalDraft {
   title: string;
@@ -43,14 +44,14 @@ export const useProposalCard = (
 
   return {
     draft,
-    isBusy: request.isBusy,
+    isBusy: request.isPending,
     error: request.error,
-    hasError: request.hasError,
+    hasError: request.error !== null,
     showActions: proposal.isDecidable && !isEditing,
     showEditor: proposal.isDecidable && isEditing,
     hasBody: proposal.body !== '',
     hasDependencies: proposal.dependsOn.length > 0,
-    isSaveDisabled: request.isBusy || draft.title.trim() === '',
+    isSaveDisabled: request.isPending || draft.title.trim() === '',
     handleApprove: () => {
       decide(() => intents.ticket.approve(target));
     },
@@ -73,11 +74,11 @@ export const useProposalCard = (
         });
     },
     handleTitleChange: ({ currentTarget }) => {
-      const title = currentTarget.value;
+      const title = valueOf(currentTarget);
       setDraft((current) => ({ ...current, title }));
     },
     handleBodyChange: ({ currentTarget }) => {
-      const body = currentTarget.value;
+      const body = valueOf(currentTarget);
       setDraft((current) => ({ ...current, body }));
     },
   };
