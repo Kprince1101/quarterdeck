@@ -42,6 +42,7 @@ describe('dashboard build', () => {
 
     await vi.waitFor(() => {
       expect(textOf(body, '#root .qd-brand')).toBe('Quarterdeck');
+      expect(FakeSocket.opened).toHaveLength(1);
     });
     expect(body.querySelector('[data-widget-mount]')).not.toBeNull();
     expect(FakeSocket.opened.map(({ url }) => new URL(url).pathname)).toEqual([
