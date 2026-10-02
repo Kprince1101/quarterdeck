@@ -71,16 +71,16 @@ A prompt the runtime refuses for sign-in raises a sign-in card and waits, its tu
 
 Each ACP prompt, birth and re-prompt included, is one `turns` row (`seq` counts per agent from 1, `prompt` is the input, `stop_reason` and token counts come from the prompt response) and one folder, `turnDir(turnsDir, agentId, seq)`: `~/.quarterdeck/<project>/turns/<agent-id>/<seq>/` with `seq` zero-padded to 4 digits. `transcript_path` names the folder.
 
-| File            | Holds                                                           |
-| --------------- | --------------------------------------------------------------- |
-| `input.md`      | The prompt as sent. Written before the prompt goes out.         |
-| `output.md`     | The agent's reply: its `agent_message_chunk` text, joined.      |
-| `updates.jsonl` | Every `session/update` of the prompt, one JSON object per line. |
-| `result.json`   | The parsed turn result, only for the prompt whose reply parsed. |
+| File            | Holds                                                                                                                                                                                                                                                     |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `input.md`      | The prompt as sent. Written before the prompt goes out.                                                                                                                                                                                                   |
+| `output.md`     | The agent's reply: its `agent_message_chunk` text, joined.                                                                                                                                                                                                |
+| `updates.jsonl` | Every `session/update` of the prompt, one JSON object per line. Each run of consecutive `agent_message_chunk` (or `agent_thought_chunk`) text updates is stored as one update with the joined text, so a secret streamed across chunks is still redacted. |
+| `result.json`   | The parsed turn result, only for the prompt whose reply parsed.                                                                                                                                                                                           |
 
 A prompt that throws still gets `output.md` and `updates.jsonl` with what arrived before it failed, and its row gets `ended_at` with a null `stop_reason`.
 
-Secrets are redacted before anything of a turn is stored: the files, the row's `prompt` and the `turn.*` event payloads (and the Planner's `planner.*` reply events). `redactSecrets` replaces with `[redacted]` GitHub tokens (`ghp_`, `gho_`, `ghs_`, `ghu_`, `ghr_`, `github_pat_`), Anthropic and OpenAI keys (`sk-ant-`, `sk-`), AWS access key ids (`AKIA`, `ASIA`), the token after `Bearer`, the password in `scheme://user:pass@` URLs, PEM private key blocks, and the literal value of every server env var whose name contains `TOKEN`, `SECRET`, `KEY`, `PASSWORD` or `DATABASE_URL` (values of 8 characters or more). The agent itself still gets the unredacted prompt; only the stored copy changes, so a replay sends the redacted input. Turn folders are `0700` and their files `0600`.
+Secrets are redacted before anything of a turn is stored: the files, the row's `prompt` and the `turn.*` event payloads (and the Planner's `planner.*` reply events). `redactSecrets` replaces with `[redacted]` GitHub tokens (`ghp_`, `gho_`, `ghs_`, `ghu_`, `ghr_`, `github_pat_`), Anthropic and OpenAI keys (`sk-ant-`, `sk-`), AWS access key ids (`AKIA`, `ASIA`), the token after `Bearer`, the password in `scheme://user:pass@` URLs, PEM private key blocks, and the literal value of every server env var whose name contains `TOKEN`, `SECRET`, `PASSWORD` or `DATABASE_URL`, or is `KEY`, starts with `KEY_` or ends with `_KEY` (values of 8 characters or more). The agent itself still gets the unredacted prompt; only the stored copy changes, so a replay sends the redacted input. Turn folders are `0700` and their files `0600`.
 
 While a prompt runs the agent is `working`; afterwards it is `idle` again. Only an `idle` or `working` agent is moved, so a pause or kill set meanwhile stands. A pause does not cancel a running prompt; it holds the next one.
 

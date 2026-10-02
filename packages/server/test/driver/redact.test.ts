@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { SessionUpdate } from '@agentclientprotocol/sdk';
 import {
   afterAll,
   afterEach,
@@ -20,6 +21,7 @@ import {
   turnDir,
   turnFile,
 } from '../../src/driver/index.js';
+import { mergeTextChunks } from '../../src/driver/files.js';
 import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
 import {
   resultText,
@@ -88,6 +90,26 @@ describe('redactSecrets', () => {
         REDACTED,
         '/home/builder-1',
         'abc',
+      ].join(' | '),
+    );
+  });
+
+  it('treats KEY as a secret name only as a whole word at either end', () => {
+    const env = {
+      API_KEY: 'example-api-key-value',
+      KEY_ID: 'example-key-id-value',
+      SSH_KEY_PATH: '/home/builder-1/.ssh/id_ed25519',
+      KEYCHAIN_DIR: '/home/builder-1/keychains',
+      MONKEY_BUSINESS: 'example-monkey-value',
+    };
+    const text = Object.values(env).join(' | ');
+    expect(redactSecrets(text, env)).toBe(
+      [
+        REDACTED,
+        REDACTED,
+        '/home/builder-1/.ssh/id_ed25519',
+        '/home/builder-1/keychains',
+        'example-monkey-value',
       ].join(' | '),
     );
   });
@@ -199,4 +221,70 @@ describe('turn transcripts', () => {
     },
     TIMEOUT,
   );
+
+  it(
+    'redacts secrets split across streamed chunks in updates.jsonl',
+    async () => {
+      const result = { summary: 'Done.', actions: [] };
+      scripted.reply({
+        chunks: [
+          `here: ${GITHUB_TOKEN.slice(0, 10)}`,
+          `${GITHUB_TOKEN.slice(10)} and ${FOO_TOKEN.slice(0, 12)}`,
+          `${FOO_TOKEN.slice(12)} done\n\n${resultText(result)}`,
+        ],
+      });
+      const { sessionId } = await scripted.client.newSession({
+        cwd: turnsDir,
+        mcpServers: [],
+      });
+
+      await runTurn(
+        {
+          store,
+          client: scripted.client,
+          agent: { id: agentId, runtime: 'claude' },
+          sessionId,
+          turnsDir,
+        },
+        'Report back.',
+        DRIVER_TURN_FORMAT,
+      );
+
+      const dir = turnDir(turnsDir, agentId, 1);
+      const updates = await readFile(turnFile(dir, 'updates'), 'utf8');
+      expect(updates).not.toContain(GITHUB_TOKEN);
+      expect(updates).not.toContain(FOO_TOKEN);
+      expect(updates).toContain(`here: ${REDACTED} and ${REDACTED} done`);
+      expect(await readFile(turnFile(dir, 'output'), 'utf8')).toContain(
+        `here: ${REDACTED} and ${REDACTED} done`,
+      );
+    },
+    TIMEOUT,
+  );
+});
+
+describe('mergeTextChunks', () => {
+  const chunk = (
+    sessionUpdate: 'agent_message_chunk' | 'agent_thought_chunk',
+    text: string,
+  ): SessionUpdate => ({ sessionUpdate, content: { type: 'text', text } });
+
+  it('joins each run of message or thought chunks and keeps other updates', () => {
+    const plan: SessionUpdate = { sessionUpdate: 'plan', entries: [] };
+    expect(
+      mergeTextChunks([
+        chunk('agent_thought_chunk', 'think '),
+        chunk('agent_thought_chunk', 'more'),
+        chunk('agent_message_chunk', 'say '),
+        chunk('agent_message_chunk', 'this'),
+        plan,
+        chunk('agent_message_chunk', 'after'),
+      ]),
+    ).toEqual([
+      chunk('agent_thought_chunk', 'think more'),
+      chunk('agent_message_chunk', 'say this'),
+      plan,
+      chunk('agent_message_chunk', 'after'),
+    ]);
+  });
 });

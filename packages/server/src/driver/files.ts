@@ -28,6 +28,49 @@ export const writeTurnInput = async (
   await writePrivateFile(turnFile(dir, 'input'), redactSecrets(input));
 };
 
+type TextChunk = Extract<
+  SessionUpdate,
+  { sessionUpdate: 'agent_message_chunk' | 'agent_thought_chunk' }
+>;
+
+const chunkText = (update: SessionUpdate): string | undefined => {
+  if (
+    update.sessionUpdate !== 'agent_message_chunk' &&
+    update.sessionUpdate !== 'agent_thought_chunk'
+  ) {
+    return undefined;
+  }
+  if (update.content.type !== 'text') return undefined;
+  return update.content.text;
+};
+
+const withText = (chunk: SessionUpdate, text: string): SessionUpdate => {
+  const { content } = chunk as TextChunk;
+  return { ...chunk, content: { ...content, text } } as SessionUpdate;
+};
+
+export const mergeTextChunks = (
+  updates: readonly SessionUpdate[],
+): SessionUpdate[] => {
+  const merged: SessionUpdate[] = [];
+  for (const update of updates) {
+    const last = merged.at(-1);
+    const text = chunkText(update);
+    const lastText = last && chunkText(last);
+    if (
+      last === undefined ||
+      lastText === undefined ||
+      text === undefined ||
+      last.sessionUpdate !== update.sessionUpdate
+    ) {
+      merged.push(update);
+    } else {
+      merged[merged.length - 1] = withText(last, lastText + text);
+    }
+  }
+  return merged;
+};
+
 export const writeTurnOutput = async (
   dir: string,
   text: string,
@@ -37,7 +80,7 @@ export const writeTurnOutput = async (
   await writePrivateFile(turnFile(dir, 'output'), redactSecrets(text));
   await writePrivateFile(
     turnFile(dir, 'updates'),
-    redactValue(updates)
+    redactValue(mergeTextChunks(updates))
       .map((update) => `${JSON.stringify(update)}\n`)
       .join(''),
   );
