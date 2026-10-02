@@ -1,6 +1,6 @@
-type JsonObject = Record<string, unknown>;
+export type JsonObject = Record<string, unknown>;
 
-const isJsonObject = (value: unknown): value is JsonObject =>
+export const isJsonObject = (value: unknown): value is JsonObject =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const mergeEntry = (base: JsonObject, layer: JsonObject, key: string) => {

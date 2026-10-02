@@ -23,6 +23,8 @@ The version step is advisory and never stops an agent from starting. If the prob
 
 If `options.signal` aborts during either probe, the probe's process group is killed. The launch then rejects with an `AcpClientError` whose code is `aborted`, closing the client first if it had already started. The version the agent reports over ACP is in `client.agent.agentInfo` as usual.
 
+The probe is built on `runCommand(command, { timeoutMs, signal })`, which `quarterdeck doctor` also uses. It runs the command in its own process group and resolves, never rejects, with either `{ status: 'exited', code, signal, stdout, stderr }` (any exit code) or `{ status: 'failed', error, notFound }`: `notFound` is true when the binary is not on `PATH`, and `error` is `timed out` or `aborted` after the group has been sent SIGKILL.
+
 ## Spawn retry
 
 A spawn that fails to exec (`spawn_failed`: ENOENT, EACCES, ETXTBSY while the binary is being updated) is retried `spawnRetries` times (default 3), `spawnRetryDelayMs` apart (default 15s). Each retry emits a `spawn_retry` event (`attempt`, `retries`, `delayMs`, `message`) before the wait. When the retries run out the last `spawn_failed` error is thrown, which is the normal failure path.

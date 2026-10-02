@@ -8,7 +8,6 @@ export {
   PLANNER_FAILED_EVENT,
   PLANNER_HUMAN_EVENT,
   PLANNER_REPLY_EVENT,
-  PlannerSignInError,
 } from './conversation.js';
 export {
   NO_REPO_PATH,

@@ -101,6 +101,11 @@ export const startPlanner = async (
 ): Promise<Planner> => {
   const { store } = options;
   const onError = options.onError ?? reportError;
+  let signIn = new AbortController();
+  const stopSignInWaits = (): void => {
+    signIn.abort();
+    signIn = new AbortController();
+  };
   const ctx: PlannerContext = {
     store,
     bus: options.bus,
@@ -108,6 +113,7 @@ export const startPlanner = async (
     cardHuman: options.cardHuman ?? refuseCards,
     homeDir: options.homeDir ?? homedir(),
     openStores: options.openStores,
+    signInSignal: () => signIn.signal,
   };
   let conversation: Conversation | undefined;
   let running: Promise<void> | undefined;
@@ -240,6 +246,7 @@ export const startPlanner = async (
 
   const onEvent = (event: StoreEvent): void => {
     if (!PLANNER_INTENT_KINDS.includes(event.kind)) return;
+    if (event.kind === PLANNER_NEW) stopSignInWaits();
     if (event.kind === PLANNER_NEW && conversation)
       cancelTurn(conversation).catch(onError);
     drain().catch(onError);
@@ -252,6 +259,7 @@ export const startPlanner = async (
   const shutdown = async (): Promise<void> => {
     closing = true;
     await subscription.close();
+    stopSignInWaits();
     if (conversation) await cancelTurn(conversation).catch(onError);
     await running?.catch(() => undefined);
     await endConversation('shutdown');

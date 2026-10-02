@@ -2,6 +2,7 @@ import {
   CHANGES_CHANNEL,
   publishEvent,
   type PublishInput,
+  type Queryable,
 } from '../store/index.js';
 import { BusToolError, type BusStore } from './tool.js';
 
@@ -27,6 +28,15 @@ export interface AskCard {
   recommendation: string;
 }
 
+export interface CardInput extends AskCard {
+  kind: string;
+}
+
+export interface CardNotice {
+  kind: string;
+  payload: Record<string, unknown>;
+}
+
 export interface RaisedCard {
   cardId: string;
   ticketId: string | null;
@@ -48,7 +58,7 @@ export const assertAskExpiry = (ms: number): number => {
   return ms;
 };
 
-interface CardLinks {
+export interface CardLinks {
   agent_id: string | null;
   ticket_id: string | null;
 }
@@ -57,12 +67,91 @@ const cardEvent = (
   kind: string,
   cardId: string,
   links: CardLinks,
+  payload: Record<string, unknown> = {},
 ): PublishInput => {
-  const input: PublishInput = { kind, payload: { cardId } };
+  const input: PublishInput = { kind, payload: { ...payload, cardId } };
   if (links.agent_id !== null) input.agentId = links.agent_id;
   if (links.ticket_id !== null) input.ticketId = links.ticket_id;
   return input;
 };
+
+export const activeTicketId = async (
+  tx: Queryable,
+  projectId: string,
+  agentId: string,
+): Promise<string | null> => {
+  const { rows } = await tx.query<{ id: string }>(
+    `select id from tickets
+     where project_id = $1 and assignee_id = $2 and status = any($3::text[])
+     order by updated_at desc limit 1`,
+    [projectId, agentId, ACTIVE_TICKET],
+  );
+  return rows[0]?.id ?? null;
+};
+
+export const publishCardNotices = async (
+  tx: Queryable,
+  projectId: string,
+  cardId: string,
+  links: CardLinks,
+  notices: readonly CardNotice[],
+): Promise<void> => {
+  for (const notice of notices) {
+    await publishEvent(
+      tx,
+      projectId,
+      cardEvent(notice.kind, cardId, links, notice.payload),
+    );
+  }
+};
+
+export const insertCard = async (
+  tx: Queryable,
+  projectId: string,
+  agentId: string,
+  card: CardInput,
+  expiryMs: number,
+  notices: readonly CardNotice[] = [],
+): Promise<RaisedCard> => {
+  const ticketId = await activeTicketId(tx, projectId, agentId);
+  const { rows } = await tx.query<{ id: string; expires_at: Date }>(
+    `insert into cards (project_id, agent_id, ticket_id, kind, question,
+       options, checked, recommendation, expires_at)
+     values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8,
+       now() + make_interval(secs => $9::float8 / 1000))
+     returning id, expires_at`,
+    [
+      projectId,
+      agentId,
+      ticketId,
+      card.kind,
+      card.question,
+      JSON.stringify(card.options),
+      card.checked,
+      card.recommendation,
+      expiryMs,
+    ],
+  );
+  const [row] = rows;
+  if (!row) throw new Error(`Could not raise the ${card.kind} card`);
+  const links = { agent_id: agentId, ticket_id: ticketId };
+  await publishCardNotices(tx, projectId, row.id, links, [
+    { kind: 'card.asked', payload: {} },
+    ...notices,
+  ]);
+  return { cardId: row.id, ticketId, expiresAt: row.expires_at };
+};
+
+export const raiseCard = (
+  store: BusStore,
+  agentId: string,
+  card: CardInput,
+  expiryMs: number,
+  notices: readonly CardNotice[] = [],
+): Promise<RaisedCard> =>
+  store.db.transaction((tx) =>
+    insertCard(tx, store.projectId, agentId, card, expiryMs, notices),
+  );
 
 export const raiseAskCard = (
   store: BusStore,
@@ -70,49 +159,7 @@ export const raiseAskCard = (
   card: AskCard,
   expiryMs: number,
 ): Promise<RaisedCard> =>
-  store.db.transaction(async (tx) => {
-    const { rows } = await tx.query<{
-      id: string;
-      ticket_id: string | null;
-      expires_at: Date;
-    }>(
-      `insert into cards (project_id, agent_id, ticket_id, kind, question,
-         options, checked, recommendation, expires_at)
-       select $1, $2,
-         (select id from tickets
-          where project_id = $1 and assignee_id = $2 and status = any($3::text[])
-          order by updated_at desc limit 1),
-         $4, $5, $6::jsonb, $7, $8,
-         now() + make_interval(secs => $9::float8 / 1000)
-       returning id, ticket_id, expires_at`,
-      [
-        store.projectId,
-        agentId,
-        ACTIVE_TICKET,
-        ASK_CARD,
-        card.question,
-        JSON.stringify(card.options),
-        card.checked,
-        card.recommendation,
-        expiryMs,
-      ],
-    );
-    const [row] = rows;
-    if (!row) throw new Error('Could not raise the ask card');
-    await publishEvent(
-      tx,
-      store.projectId,
-      cardEvent('card.asked', row.id, {
-        agent_id: agentId,
-        ticket_id: row.ticket_id,
-      }),
-    );
-    return {
-      cardId: row.id,
-      ticketId: row.ticket_id,
-      expiresAt: row.expires_at,
-    };
-  });
+  raiseCard(store, agentId, { ...card, kind: ASK_CARD }, expiryMs);
 
 const readOutcome = async (
   store: BusStore,

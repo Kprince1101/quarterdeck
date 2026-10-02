@@ -24,7 +24,7 @@ const next = await round.turn('heron reported QD12: <report>');
 
 `openDriverRound` checks the round (`RoundNotFoundError` for one outside the project, `RoundEndedError` once it has ended) and the agent (`NotADriverError` unless it is a `driver` that is not `ended`, `killed` or `retired`). It then:
 
-1. Launches the bus for the Driver (`bus.launch(agentId)`) and opens one ACP session with `client.newSession({ cwd, mcpServers: [bus] })`. Every turn of the round goes to that session; nothing else opens one.
+1. Launches the bus for the Driver (`bus.launch(agentId)`) and opens one ACP session with `client.newSession({ cwd, mcpServers: [bus] })`. Every turn of the round goes to that session; nothing else opens one. If the runtime needs sign-in, a sign-in card waits for the person and the session opens after, with a fresh bus launch (see [../signin/README.md](../signin/README.md)).
 2. Reads the active notebook: every `notebook` row of the project, pinned entries first, then oldest first.
 3. Stores the session on the agent (`session_id`, `round_id`; a `starting` agent becomes `idle`) and records `driver.round_started` with `{ roundId, round, sessionId, notebook }`, where `notebook` lists the entry ids the Driver was born with.
 4. Queues the birth turn and returns. `round.birth` settles with its outcome; await it.
@@ -59,6 +59,8 @@ A turn's outcome (`TurnOutcome`) is one of:
 | `stopped` | A prompt ended `cancelled` or `refusal`. It is not re-prompted.                                                             |
 
 On a miss the loop sends one re-prompt in the same session (`repromptText`): the error and the format instructions again. `turns` lists every prompt the turn took, so a re-prompted turn has two. A prompt that throws (the agent died, the connection closed) closes its row, records `turn.failed` and rejects the turn.
+
+A prompt the runtime refuses for sign-in raises a sign-in card and waits, its turn still open and the agent still `working`. Once the person answers, the same input goes to the same session again in the same `turns` row. A declined or expired card rejects the turn with `SignInRequiredError` and records `turn.failed` (see [../signin/README.md](../signin/README.md)).
 
 ## Turn files
 
