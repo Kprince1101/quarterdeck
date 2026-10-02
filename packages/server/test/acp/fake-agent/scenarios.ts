@@ -180,6 +180,14 @@ const describeSession: FakeScenarioHandler = async (turn) => {
   return 'end_turn';
 };
 
+const describeMode: FakeScenarioHandler = async (turn) => {
+  await sendText(
+    turn,
+    JSON.stringify({ modeId: turn.setup.modeId, meta: turn.setup.meta }),
+  );
+  return 'end_turn';
+};
+
 const crash: FakeScenarioHandler = async (turn) => {
   turn.exitProcess(FAKE_CRASH_EXIT_CODE);
   return 'refusal';
@@ -193,6 +201,7 @@ const SCENARIO_HANDLERS: Record<FakeScenario, FakeScenarioHandler> = {
   large_output: largeOutput,
   wait_for_cancel: waitForCancel,
   describe_session: describeSession,
+  describe_mode: describeMode,
   crash,
 };
 

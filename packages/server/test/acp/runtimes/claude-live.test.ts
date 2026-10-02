@@ -19,7 +19,7 @@ const claudeInstalled = (): boolean =>
     shell: process.platform === 'win32',
   }).status === 0;
 
-const LIVE = !process.env['CI'] && claudeInstalled();
+const LIVE = process.env['QUARTERDECK_LIVE'] === '1' && claudeInstalled();
 
 const LIVE_TIMEOUT_MS = CLAUDE_INITIALIZE_TIMEOUT_MS + 120_000;
 

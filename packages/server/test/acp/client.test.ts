@@ -18,7 +18,9 @@ import type {
 import {
   FAKE_AGENT_NAME,
   FAKE_CRASH_EXIT_CODE,
+  FAKE_DEFAULT_MODE_ID,
   FAKE_HISTORY_TEXT,
+  FAKE_INITIAL_MODE_ID,
   FAKE_READY_LINE,
   fakeAgentLaunch,
 } from './fake-agent/index.ts';
@@ -276,6 +278,75 @@ describe('ACP client over stdio', () => {
         content: { type: 'text', text: FAKE_HISTORY_TEXT },
       },
     });
+  });
+
+  it('sends session meta with session/new, session/resume and session/load', async () => {
+    const meta = { claudeCode: { options: { settingSources: [] } } };
+    const { client, events } = await start({
+      agent: { supportsResume: true },
+    });
+    const { sessionId } = await client.newSession({
+      cwd: PROJECT_CWD,
+      mcpServers: [],
+      meta,
+    });
+    await client.resumeSession({
+      sessionId: RESUMED_SESSION,
+      cwd: PROJECT_CWD,
+      mcpServers: [],
+      meta,
+    });
+    const loading = await start({ agent: { supportsLoad: true } });
+    await loading.client.resumeSession({
+      sessionId: RESUMED_SESSION,
+      cwd: PROJECT_CWD,
+      mcpServers: [],
+      meta,
+    });
+
+    await client.prompt(sessionId, 'describe_mode');
+    await client.prompt(RESUMED_SESSION, 'describe_mode');
+    await loading.client.prompt(RESUMED_SESSION, 'describe_mode');
+
+    [
+      agentText(events, sessionId),
+      agentText(events, RESUMED_SESSION),
+      agentText(loading.events, RESUMED_SESSION),
+    ].forEach((text) => {
+      expect(JSON.parse(text)).toEqual({ modeId: FAKE_INITIAL_MODE_ID, meta });
+    });
+  });
+
+  it('leaves session meta out when there is none', async () => {
+    const { client, events } = await start();
+    const sessionId = await openSession(client);
+
+    await client.prompt(sessionId, 'describe_mode');
+
+    expect(JSON.parse(agentText(events, sessionId))).toMatchObject({
+      meta: null,
+    });
+  });
+
+  it('sets the session mode', async () => {
+    const { client, events } = await start();
+    const sessionId = await openSession(client);
+
+    await client.setSessionMode(sessionId, FAKE_DEFAULT_MODE_ID);
+    await client.prompt(sessionId, 'describe_mode');
+
+    expect(JSON.parse(agentText(events, sessionId))).toMatchObject({
+      modeId: FAKE_DEFAULT_MODE_ID,
+    });
+  });
+
+  it('rejects a mode the agent does not offer', async () => {
+    const { client } = await start();
+    const sessionId = await openSession(client);
+
+    await expect(
+      client.setSessionMode(sessionId, 'yolo'),
+    ).rejects.toMatchObject({ code: -32602 });
   });
 
   it('refuses to resume when the agent cannot', async () => {
