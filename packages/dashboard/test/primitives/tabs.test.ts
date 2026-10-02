@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  controlsOf,
   isUnread,
   markSeenKey,
   resolveActiveTab,
@@ -90,6 +91,13 @@ describe('unread', () => {
   it('keeps the same object when nothing changes', () => {
     expect(markSeenKey(seen, 'driver', 7)).toBe(seen);
     expect(markSeenKey(null, 'driver', 8)).toBeNull();
+  });
+});
+
+describe('controlsOf', () => {
+  it('points only the active tab at the rendered panel', () => {
+    expect(controlsOf(true, 'panel-1')).toBe('panel-1');
+    expect(controlsOf(false, 'panel-1')).toBeUndefined();
   });
 });
 

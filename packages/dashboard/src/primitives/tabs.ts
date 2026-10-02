@@ -58,6 +58,14 @@ export const tabIndexOf = (isActive: boolean): number => {
   return -1;
 };
 
+export const controlsOf = (
+  isActive: boolean,
+  panelId: string,
+): string | undefined => {
+  if (isActive) return panelId;
+  return undefined;
+};
+
 export const tabDomId = (prefix: string, id: string): string =>
   `${prefix}-tab-${id}`;
 

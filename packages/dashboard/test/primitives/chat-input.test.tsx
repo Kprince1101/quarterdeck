@@ -4,6 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   CHAT_INPUT_HINT,
   ChatInput,
+  IME_KEY_CODE,
   type ChatSubmit,
 } from '../../src/primitives/index.js';
 import {
@@ -100,6 +101,18 @@ describe('ChatInput', () => {
     expect(enter.defaultPrevented).toBe(false);
     expect(onSubmit).not.toHaveBeenCalled();
     expect(valueOf(field)).toBe('にほん');
+  });
+
+  it('does not send on the Enter that confirms a Safari IME conversion', async () => {
+    const onSubmit = vi.fn<ChatSubmit>();
+    const { field } = mountChat(onSubmit);
+    typeInto(field, 'にほん');
+    const enter = await press(field, 'Enter', {
+      isComposing: false,
+      keyCode: IME_KEY_CODE,
+    });
+    expect(enter.defaultPrevented).toBe(false);
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it('sends nothing for a blank draft', async () => {

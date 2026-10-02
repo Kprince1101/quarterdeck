@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   chatKeyAction,
   chatMessage,
+  IME_KEY_CODE,
   isComposing,
 } from '../../src/primitives/index.js';
 
@@ -45,5 +46,12 @@ describe('isComposing', () => {
     expect(isComposing({ isComposing: true })).toBe(true);
     expect(isComposing({ isComposing: false })).toBe(false);
     expect(isComposing({})).toBe(false);
+  });
+
+  it('treats keyCode 229 as composing, as Safari sends it', () => {
+    expect(isComposing({ isComposing: false, keyCode: IME_KEY_CODE })).toBe(
+      true,
+    );
+    expect(isComposing({ isComposing: false, keyCode: 13 })).toBe(false);
   });
 });

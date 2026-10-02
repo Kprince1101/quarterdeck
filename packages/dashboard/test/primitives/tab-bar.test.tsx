@@ -32,10 +32,7 @@ const DeckTabs = ({ specs, ready, initial }: DeckTabsProps) => {
       <TabBar label="Deck" tabs={view.tabs} onKeyDown={view.handleKeyDown} />
       <TabPanel panel={view.panel}>
         <p className="active">{view.activeId}</p>
-        <NewestMarker
-          newest={view.activeNewest}
-          onSeen={view.handleNewestSeen}
-        />
+        <NewestMarker {...view.marker} />
       </TabPanel>
     </section>
   );
@@ -101,9 +98,9 @@ describe('TabBar', () => {
       '-1',
     ]);
     const panel = find(container, '[role="tabpanel"]');
-    expect(tab(container, 'Planner').getAttribute('aria-controls')).toBe(
-      panel.getAttribute('id'),
-    );
+    expect(
+      tabs.map((element) => element.getAttribute('aria-controls')),
+    ).toEqual([panel.getAttribute('id'), null, null]);
     expect(panel.getAttribute('aria-labelledby')).toBe(
       tab(container, 'Planner').getAttribute('id'),
     );
@@ -115,6 +112,16 @@ describe('TabBar', () => {
     expect(activeTab(view.container)).toBe('driver');
     expect(tab(view.container, 'Driver').getAttribute('aria-selected')).toBe(
       'true',
+    );
+    const panel = find(view.container, '[role="tabpanel"]');
+    expect(tab(view.container, 'Driver').getAttribute('aria-controls')).toBe(
+      panel.getAttribute('id'),
+    );
+    expect(panel.getAttribute('aria-labelledby')).toBe(
+      tab(view.container, 'Driver').getAttribute('id'),
+    );
+    expect(tab(view.container, 'Planner').hasAttribute('aria-controls')).toBe(
+      false,
     );
   });
 
@@ -208,6 +215,26 @@ describe('TabBar unread', () => {
     view.rerender(<DeckTabs specs={specs('p2', 1)} />);
     expect(first.disconnected).toBe(true);
     expect(FakeObserver.only()).not.toBe(first);
+  });
+
+  it('watches afresh when switching to a tab whose newest key matches', async () => {
+    const sameKeys = (driver: string | null): TabSpec[] => [
+      { id: 'planner', label: 'Planner', newest: 'k7' },
+      { id: 'driver', label: 'Driver', newest: driver },
+    ];
+    view = mount(<DeckTabs specs={sameKeys(null)} />);
+    const planner = FakeObserver.only();
+    planner.report(true);
+    view.rerender(<DeckTabs specs={sameKeys('k7')} />);
+    expect(unreadTabs(view.container)).toEqual(['Driver']);
+
+    await click(tab(view.container, 'Driver'));
+    expect(planner.disconnected).toBe(true);
+    const driver = FakeObserver.only();
+    expect(driver).not.toBe(planner);
+    expect(unreadTabs(view.container)).toEqual(['Driver']);
+    driver.report(true);
+    expect(unreadTabs(view.container)).toEqual([]);
   });
 
   it('does not count history that arrives before the stream is ready', () => {

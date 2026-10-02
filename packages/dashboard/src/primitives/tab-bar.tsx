@@ -10,7 +10,7 @@ const Tab = ({ tab }: { tab: TabView }) => (
     id={tab.domId}
     className="qd-tab"
     aria-selected={tab.isActive}
-    aria-controls={tab.panelId}
+    aria-controls={tab.controls}
     tabIndex={tab.tabIndex}
     data-unread={tab.isUnread}
     onClick={tab.handleSelect}

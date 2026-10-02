@@ -1,14 +1,21 @@
 import { useCallback, useRef, type RefCallback } from 'react';
 import type { ItemKey } from './tabs.js';
 
+export interface NewestMarkerView {
+  scope: string;
+  newest: ItemKey | null;
+  onSeen: (key: ItemKey) => void;
+}
+
 const pageObserver = (): typeof IntersectionObserver | undefined =>
   (globalThis as { IntersectionObserver?: typeof IntersectionObserver })
     .IntersectionObserver;
 
-export const useNewestMarker = (
-  newest: ItemKey | null,
-  onSeen: (key: ItemKey) => void,
-): RefCallback<HTMLSpanElement> => {
+export const useNewestMarker = ({
+  scope,
+  newest,
+  onSeen,
+}: NewestMarkerView): RefCallback<HTMLSpanElement> => {
   const latestOnSeen = useRef(onSeen);
   latestOnSeen.current = onSeen;
 
@@ -31,6 +38,6 @@ export const useNewestMarker = (
         observer.disconnect();
       };
     },
-    [newest],
+    [scope, newest],
   );
 };

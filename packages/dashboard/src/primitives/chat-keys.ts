@@ -24,5 +24,9 @@ export const chatMessage = (draft: string): string | null => {
   return message;
 };
 
-export const isComposing = (native: object): boolean =>
-  'isComposing' in native && native.isComposing === true;
+export const IME_KEY_CODE = 229;
+
+export const isComposing = (native: object): boolean => {
+  if ('isComposing' in native && native.isComposing === true) return true;
+  return 'keyCode' in native && native.keyCode === IME_KEY_CODE;
+};

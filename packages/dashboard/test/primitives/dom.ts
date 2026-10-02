@@ -18,6 +18,7 @@ interface DomGlobals {
 interface KeyInit {
   shiftKey?: boolean;
   isComposing?: boolean;
+  keyCode?: number;
 }
 
 export const dom = (): DomGlobals => globalThis as unknown as DomGlobals;

@@ -1,14 +1,8 @@
-import type { ItemKey } from './tabs.js';
-import { useNewestMarker } from './use-newest-marker.js';
+import { useNewestMarker, type NewestMarkerView } from './use-newest-marker.js';
 import './tab-bar.css';
 
-export interface NewestMarkerProps {
-  newest: ItemKey | null;
-  onSeen: (key: ItemKey) => void;
-}
-
-export const NewestMarker = ({ newest, onSeen }: NewestMarkerProps) => {
-  const ref = useNewestMarker(newest, onSeen);
+export const NewestMarker = (props: NewestMarkerView) => {
+  const ref = useNewestMarker(props);
   return (
     <span
       ref={ref}
