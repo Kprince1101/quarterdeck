@@ -92,7 +92,7 @@ The reviewer's verdict on a ticket in review. Only an agent with role `reviewer`
 - `approve` leaves the ticket `in_review` for the merge gate.
 - `changes` moves it to `bounced`, back to its builder, who fixes it and reports again.
 
-Either way a `ticket.verdict` event is recorded for the reviewer and the ticket with `{ decision, notes, pr, head }`, `pr` and `head` being what the ticket held when the verdict was given. The latest `ticket.verdict` for a ticket is its verdict, and a later `ticket.reported` withdraws it, so the merge gate should merge only when the newest of the two is an approval and the PR head still matches its `head`.
+Either way a `ticket.verdict` event is recorded for the reviewer and the ticket with `{ decision, notes, pr, head }`, `pr` and `head` being what the ticket held when the verdict was given. The latest `ticket.verdict` for a ticket is its verdict, and a later `ticket.reported` withdraws it, so the [merge gate](../gate/README.md) merges only when the newest of the two is an approval and the PR head still matches its `head`.
 
 ### `propose(title, body?, dependsOn?)`
 

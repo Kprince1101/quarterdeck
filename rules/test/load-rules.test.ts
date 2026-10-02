@@ -107,6 +107,36 @@ describe('rules loader', () => {
     expect(lifecycle.stuckAfterMinutes).toBe(30);
   });
 
+  it('ships the merge gate with auto merge and the Copilot gate off', async () => {
+    const lifecycle = await loadRule('lifecycle', sandbox);
+
+    expect(lifecycle.mergeGate).toEqual({
+      requireReviewerApproval: true,
+      requireChecksPassing: true,
+      requireCopilotReview: false,
+      autoMerge: false,
+    });
+  });
+
+  it('turns auto merge on from a local layer, keeping the other gates', async () => {
+    await writeLocalJson(sandbox.repoDir, 'lifecycle.json', {
+      mergeGate: { autoMerge: true },
+    });
+
+    const lifecycle = await loadRule('lifecycle', sandbox);
+
+    expect(lifecycle.mergeGate.autoMerge).toBe(true);
+    expect(lifecycle.mergeGate.requireChecksPassing).toBe(true);
+  });
+
+  it('rejects a merge gate setting that is not a boolean', async () => {
+    const path = await writeLocalJson(sandbox.homeDir, 'lifecycle.json', {
+      mergeGate: { autoMerge: 'yes' },
+    });
+
+    await expect(loadRule('lifecycle', sandbox)).rejects.toThrow(path);
+  });
+
   it('lets the repo layer win over the home layer', async () => {
     await writeLocalJson(sandbox.homeDir, 'lifecycle.json', {
       stuckAfterMinutes: 10,
