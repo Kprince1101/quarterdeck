@@ -6,7 +6,7 @@ One process on your machine. It starts agents through their own CLIs (Kiro, Clau
 
 No API keys. No account. No telemetry. Everything Quarterdeck stores lives in one folder you can open, read and delete.
 
-Status: built, by itself, from SPEC.md. What remains is the proof that it can run a round on its own repository end to end (QD14). Until that lands, treat it as alpha.
+Status: built, by itself, from a written spec. What remains is the proof that it can run a round on its own repository end to end (QD14). Until that lands, treat it as alpha.
 
 ## Getting started
 
