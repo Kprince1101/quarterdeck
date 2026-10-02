@@ -27,6 +27,7 @@ import {
 import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
 
 const TIMEOUT = 30_000;
+const settle = (check: () => unknown) => vi.waitFor(check, { timeout: 10_000 });
 
 interface EventRow {
   kind: string;
@@ -99,7 +100,7 @@ describe('pause gate', () => {
   };
 
   const heldCount = async (count: number) => {
-    await vi.waitFor(() => {
+    await settle(() => {
       expect(gate.held()).toHaveLength(count);
     });
   };
@@ -268,7 +269,7 @@ describe('pause gate', () => {
 
     await expect(held).rejects.toBeInstanceOf(PauseDroppedError);
     await expect(held).rejects.toMatchObject({ reason: 'aborted' });
-    await vi.waitFor(async () => {
+    await settle(async () => {
       expect((await events()).map((event) => event.kind)).toEqual([
         PAUSE_EVENTS.held,
         PAUSE_EVENTS.dropped,

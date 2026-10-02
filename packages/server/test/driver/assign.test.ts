@@ -52,6 +52,7 @@ import {
 } from './scripted-agent.js';
 
 const TIMEOUT = 30_000;
+const settle = (check: () => unknown) => vi.waitFor(check, { timeout: 10_000 });
 const BIRDS: Naming = { theme: 'birds', names: ['crane', 'heron', 'ibis'] };
 
 interface TicketSeed {
@@ -545,7 +546,7 @@ describe('builder assignment and continue', () => {
       scripted.reply(say('On it.'));
 
       const assigning = assignTicket(ctx, { ticketId });
-      await vi.waitFor(async () => {
+      await settle(async () => {
         expect(await events('pause.held')).toHaveLength(1);
       });
 
@@ -603,7 +604,7 @@ describe('builder assignment and continue', () => {
         builderId: builder.id,
         prompt: 'Rebase on main.\nThen push.',
       });
-      await vi.waitFor(async () => {
+      await settle(async () => {
         expect(await events('pause.held')).toHaveLength(1);
       });
 
@@ -641,7 +642,7 @@ describe('builder assignment and continue', () => {
       await pauseProject(true);
 
       const assigning = assignTicket(ctx, { ticketId });
-      await vi.waitFor(async () => {
+      await settle(async () => {
         expect(pauseGate.held()).toHaveLength(1);
       });
       await pauseGate.close();

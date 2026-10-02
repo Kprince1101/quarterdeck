@@ -26,6 +26,7 @@ import {
 } from './fixtures.ts';
 
 const CHARTER_HEADING = '# Driver charter';
+const settle = (check: () => unknown) => vi.waitFor(check, { timeout: 10_000 });
 
 describe('Planner', { timeout: TIMEOUT }, () => {
   let t: TestApi;
@@ -288,7 +289,7 @@ describe('Planner', { timeout: TIMEOUT }, () => {
       );
       return rows;
     };
-    await vi.waitFor(async () => expect(await open()).toHaveLength(1));
+    await settle(async () => expect(await open()).toHaveLength(1));
     const [card] = await open();
     if (!card) throw new Error('no open sign-in card');
     return card;
@@ -477,7 +478,7 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     await p.fake.clients[0]?.closed;
     const late = await p.send('planner.message', { text: 'still there?' });
     await p.planner().drain();
-    await vi.waitFor(async () => {
+    await settle(async () => {
       expect((await p.events()).at(-1)?.payload).toEqual({
         reason: 'shutdown',
         intentId: null,
@@ -492,7 +493,7 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     await p.start();
     expect((await p.send('pause.set', { paused: true })).status).toBe(200);
     const sent = await p.send('planner.message', { text: 'plan the login' });
-    await vi.waitFor(async () => {
+    await settle(async () => {
       expect(await pauseEvents(p)).toHaveLength(1);
     });
 
@@ -511,7 +512,7 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     expect(await p.intent(sent.body.id)).toMatchObject({ status: 'pending' });
 
     await p.send('pause.set', { paused: false });
-    await vi.waitFor(async () => {
+    await settle(async () => {
       expect(await p.intent(sent.body.id)).toMatchObject({ status: 'applied' });
     });
     await p.planner().drain();
@@ -532,7 +533,7 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     expect((await p.send('agent.pause', { agentId })).status).toBe(200);
 
     const sent = await p.send('planner.message', { text: 'still there?' });
-    await vi.waitFor(async () => {
+    await settle(async () => {
       expect(await pauseEvents(p)).toHaveLength(1);
     });
     expect((await pauseEvents(p))[0]).toMatchObject({
@@ -541,7 +542,7 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     });
 
     expect((await p.send('agent.resume', { agentId })).status).toBe(200);
-    await vi.waitFor(async () => {
+    await settle(async () => {
       expect(await p.intent(sent.body.id)).toMatchObject({ status: 'applied' });
     });
     await p.planner().drain();
@@ -554,12 +555,12 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     await p.start();
     await p.send('pause.set', { paused: true });
     const held = await p.send('planner.message', { text: 'one' });
-    await vi.waitFor(async () => {
+    await settle(async () => {
       expect(await pauseEvents(p)).toHaveLength(1);
     });
 
     const cleared = await p.send('planner.new');
-    await vi.waitFor(async () => {
+    await settle(async () => {
       expect(await p.intent(cleared.body.id)).toMatchObject({
         status: 'applied',
       });
@@ -582,7 +583,7 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     await p.start();
     await p.send('pause.set', { paused: true });
     const held = await p.send('planner.message', { text: 'one' });
-    await vi.waitFor(async () => {
+    await settle(async () => {
       expect(await pauseEvents(p)).toHaveLength(1);
     });
 

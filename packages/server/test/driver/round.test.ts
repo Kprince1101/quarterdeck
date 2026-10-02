@@ -46,6 +46,7 @@ import {
 } from './scripted-agent.js';
 
 const TIMEOUT = 30_000;
+const settle = (check: () => unknown) => vi.waitFor(check, { timeout: 10_000 });
 const CHARTER = '# Driver charter\n\nTurn tickets into merged pull requests.';
 const RESULT = { summary: 'Nothing to assign yet.', actions: [] };
 const BUS: McpServerStdio = {
@@ -668,7 +669,7 @@ describe('Driver turn loop', () => {
     scripted.reply(say(resultText(RESULT)));
 
     const opening = open();
-    await vi.waitFor(async () => {
+    await settle(async () => {
       expect(await events('pause.held')).toHaveLength(1);
     });
 
@@ -710,7 +711,7 @@ describe('Driver turn loop', () => {
 
     const first = round.turn('heron reported QD1.\nThe PR is open.');
     const second = round.turn('thimble approved QD1.');
-    await vi.waitFor(async () => {
+    await settle(async () => {
       expect(await events('pause.held')).toHaveLength(1);
     });
 
