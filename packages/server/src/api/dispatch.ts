@@ -7,7 +7,7 @@ import type { ApiContext, IntentHandlers } from './context.js';
 import { BOARD_HANDLERS } from './handlers/board.js';
 import { CREW_HANDLERS } from './handlers/crew.js';
 import { DATA_HANDLERS } from './handlers/data.js';
-import { READ_HANDLERS } from './handlers/turns.js';
+import { READ_HANDLERS } from './handlers/read.js';
 import { WORKSPACE_HANDLERS } from './handlers/workspace.js';
 
 export const INTENT_HANDLERS: IntentHandlers<IntentName> = {
