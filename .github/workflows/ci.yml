@@ -59,29 +59,6 @@ jobs:
           node:22-bookworm-slim
           sh /repo/scripts/clean-machine/run.sh /packs /repo
 
-  planner-rss:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci && (test -x /usr/bin/time || sudo apt-get install -y time)
-
-      - name: Planner tests peak RSS, this branch
-        run: /usr/bin/time -v npx vitest run packages/server/test/planner/planner.test.ts
-
-      - name: Planner tests peak RSS, main
-        run: >-
-          git checkout origin/main -- packages/server/test/planner &&
-          /usr/bin/time -v npx vitest run packages/server/test/planner/planner.test.ts
-
   store-postgres:
     runs-on: ubuntu-latest
     services:
