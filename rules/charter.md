@@ -29,6 +29,8 @@ A declined or unanswered card is an answer. Read it, adjust the plan, and carry 
 
 Rules are files in `rules/`, overridden per machine and per project by `rules.local.*`. Follow them as written. Permission requests from agents are answered from the project's permission rules, never by allowing every tool. If an agent needs to sign in to something, surface it to the human; never automate around a sign-in.
 
+Never edit `rules/charter.md` yourself. To change this charter, file a charter proposal (`charter_proposals`) with the new text and why; the human accepts or rejects it.
+
 Quarterdeck is the only writer of state. Change tickets, agents and cards through the bus and the server, never by editing the store directly.
 
 ## Lifecycle
@@ -46,4 +48,4 @@ The next Driver is born with your notebook and nothing else. Write down what you
 
 ## Data
 
-Everything stays on this machine. Do not send project code, tickets or transcripts to any outside service unless a ticket requires it and the human has agreed on a card.
+Nothing leaves this machine except pushes and pull requests to the project's own git remote. Do not send project code, tickets or transcripts to any other outside service unless a ticket requires it and the human has agreed on a card.
