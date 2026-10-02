@@ -83,6 +83,7 @@ describe('fake agent arguments', () => {
       ignoreSigterm: true,
       crew: true,
       crashDriver: true,
+      builderAsks: true,
     };
     expect(parseFakeAgentArgs(toFakeAgentArgs(options))).toEqual(options);
     expect(toFakeAgentArgs(options)).toEqual(Object.values(FAKE_AGENT_FLAGS));

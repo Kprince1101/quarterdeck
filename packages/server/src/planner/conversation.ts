@@ -34,7 +34,7 @@ export interface PlannerContext {
   store: Store;
   bus: PlannerBus;
   adapters: PlannerAdapters;
-  cardHuman: CardHuman;
+  cardHumanFor: (agent: Agent) => CardHuman;
   homeDir: string;
   openStores: () => readonly Store[];
   signInSignal: () => AbortSignal;
@@ -73,8 +73,9 @@ export const startConversation = async (
     store: ctx.store,
     bus: ctx.bus,
     adapters: ctx.adapters,
-    cardHuman: ctx.cardHuman,
+    cardHumanFor: ctx.cardHumanFor,
     signInSignal: ctx.signInSignal,
+    homeDir: ctx.homeDir,
   });
   const lifecycle = createAgentLifecycle({
     naming,

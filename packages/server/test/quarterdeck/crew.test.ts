@@ -9,7 +9,13 @@ import {
   type Quarterdeck,
   type QuarterdeckOptions,
 } from '../../src/quarterdeck/index.js';
-import { FAKE_PR_HEAD, FAKE_PR_URL } from '../acp/fake-agent/index.ts';
+import type { Store } from '../../src/store/index.js';
+import {
+  FAKE_BUILDER_PUSH,
+  FAKE_PR_HEAD,
+  FAKE_PR_URL,
+  FAKE_PROPOSAL_TITLE,
+} from '../acp/fake-agent/index.ts';
 import {
   TIMEOUT,
   WAIT,
@@ -157,6 +163,115 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
     expect(runtime.launches.map((launch) => launch.env)).toEqual(
       runtime.launches.map(() => ({ pass: [] })),
     );
+  });
+
+  it('cards the human when the Planner asks to propose, and proposes once allowed', async () => {
+    const runtime = crewRuntime({});
+    const qd = await start({ adapters: runtime.adapters });
+    await openProject(qd, PROJECT);
+    const store = storeOf(qd, PROJECT);
+
+    const sent = await sendIntent(qd, 'planner.message', {
+      project: PROJECT,
+      text: 'Fix the greeting.',
+    });
+    expect(sent.status).toBe(202);
+    await vi.waitFor(async () => {
+      expect(
+        await valueOf(
+          store,
+          `select count(*)::int as value from cards
+           where project_id = $1 and kind = 'agent.permission' and status = 'open'`,
+          [store.projectId],
+        ),
+      ).toBe(1);
+    }, WAIT);
+    const cardId = await valueOf<string>(
+      store,
+      `select id as value from cards where project_id = $1`,
+      [store.projectId],
+    );
+
+    const answered = await sendIntent(qd, 'card.answer', {
+      project: PROJECT,
+      cardId,
+      answer: 'allow',
+    });
+    expect(answered.status).toBe(200);
+    await vi.waitFor(async () => {
+      expect(await eventsOf(store, 'ticket.proposed')).toEqual([
+        expect.objectContaining({
+          payload: { title: FAKE_PROPOSAL_TITLE },
+        }),
+      ]);
+    }, WAIT);
+  });
+
+  it('reads the Planner’s permissions from the home it was started with', async () => {
+    await writeMachineRule(homeDir, 'permissions.json', {
+      rules: [{ kind: 'other', decision: 'allow' }],
+    });
+    const runtime = crewRuntime({});
+    const qd = await start({ adapters: runtime.adapters });
+    await openProject(qd, PROJECT);
+    const store = storeOf(qd, PROJECT);
+
+    await sendIntent(qd, 'planner.message', {
+      project: PROJECT,
+      text: 'Fix the greeting.',
+    });
+    await vi.waitFor(async () => {
+      expect(await eventsOf(store, 'ticket.proposed')).toHaveLength(1);
+    }, WAIT);
+    expect(
+      await valueOf(
+        store,
+        'select count(*)::int as value from cards where project_id = $1',
+        [store.projectId],
+      ),
+    ).toBe(0);
+  });
+
+  const reportAfterAsking = async (): Promise<Store> => {
+    const runtime = crewRuntime({ [PROJECT]: { builderAsks: true } });
+    const qd = await start({
+      adapters: runtime.adapters,
+      github: fakeGitHub(),
+    });
+    await openProject(qd, PROJECT);
+    const store = await startRound(qd, PROJECT);
+    const ticketId = await proposeTicket(store, 'Add a greeting');
+    await sendIntent(qd, 'ticket.approve', { project: PROJECT, ticketId });
+    return store;
+  };
+
+  const permissionCards = (store: Store): Promise<number | undefined> =>
+    valueOf<number>(
+      store,
+      `select count(*)::int as value from cards
+       where project_id = $1 and kind = 'agent.permission'`,
+      [store.projectId],
+    );
+
+  it('reads a builder’s permissions from the home it was started with', async () => {
+    await writeMachineRule(homeDir, 'permissions.json', {
+      rules: [
+        { kind: 'execute', pattern: FAKE_BUILDER_PUSH, decision: 'allow' },
+      ],
+    });
+    const store = await reportAfterAsking();
+    await vi.waitFor(async () => {
+      expect(await eventsOf(store, 'ticket.reported')).toHaveLength(1);
+    }, WAIT);
+    expect(await permissionCards(store)).toBe(0);
+  });
+
+  it('cards a builder’s push when the home allows nothing', async () => {
+    const store = await reportAfterAsking();
+    await vi.waitFor(async () => {
+      expect(await permissionCards(store)).toBe(1);
+    }, WAIT);
+    expect(await eventsOf(store, 'ticket.reported')).toEqual([]);
   });
 
   it('passes the Agents widget’s poke and kill to the live Driver', async () => {

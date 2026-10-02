@@ -1,5 +1,5 @@
 import type { AuthMethod } from '@agentclientprotocol/sdk';
-import type { Runtime } from '@quarterdeck/rules';
+import { loadPermissionLayers, type Runtime } from '@quarterdeck/rules';
 import {
   trackAgentProcess,
   type Agent,
@@ -48,6 +48,11 @@ export interface PlannerSessionSite {
   cardHuman: CardHuman;
   signInSignal: () => AbortSignal;
   passEnv?: readonly string[];
+  homeDir: string;
+}
+
+export interface PlannerHostSite extends Omit<PlannerSessionSite, 'cardHuman'> {
+  cardHumanFor: (agent: Agent) => CardHuman;
 }
 
 export interface PlannerSessionHost extends SessionHost {
@@ -88,6 +93,8 @@ const connectOnce = async (
       onPermissionRequest: createPermissionPolicy({
         repoDir: cwd,
         cardHuman: site.cardHuman,
+        loadLayers: () =>
+          loadPermissionLayers({ repoDir: cwd, homeDir: site.homeDir }),
       }),
       onEvent: trackAgentProcess(site.store, agent.id),
     },
@@ -122,14 +129,18 @@ export const connectAgentSession = (
   );
 };
 
-export const createPlannerSessionHost = (
-  site: PlannerSessionSite,
-): PlannerSessionHost => {
+export const createPlannerSessionHost = ({
+  cardHumanFor,
+  ...site
+}: PlannerHostSite): PlannerSessionHost => {
   let session: PlannerSession | undefined;
 
   const open = async (agent: Agent): Promise<string> => {
     try {
-      session = await connectAgentSession(site, agent);
+      session = await connectAgentSession(
+        { ...site, cardHuman: cardHumanFor(agent) },
+        agent,
+      );
       return session.sessionId;
     } catch (err) {
       site.bus.revoke(agent.id);

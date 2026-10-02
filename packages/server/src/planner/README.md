@@ -28,7 +28,7 @@ await planner.close();
 
 The Planner applies the pending intents the HTTP API records, oldest first, one at a time. It wakes on their events and also drains whatever was pending when it started.
 
-1. `planner.message` with no conversation open births a Planner agent (`role: 'planner'`, a name from the naming theme) on the runtime `rules/models.json` names for `planner`. Its process runs as the runtime adapter decides; the session `cwd` is the project's `repo_path`, and the bus is its MCP server. Permission requests are answered by `createPermissionPolicy` from the project's rules. A request the rules leave at `ask` is refused unless `cardHuman` is given.
+1. `planner.message` with no conversation open births a Planner agent (`role: 'planner'`, a name from the naming theme) on the runtime `rules/models.json` names for `planner`. Its process runs as the runtime adapter decides; the session `cwd` is the project's `repo_path`, and the bus is its MCP server. Permission requests are answered by `createPermissionPolicy` from the project's rules, read with `homeDir` as the machine layer. A request the rules leave at `ask`, which under the shipped rules includes the bus tool `propose`, goes to `permissionCards(agent, signal)` when given (the crew raises an `agent.permission` card), else to `cardHuman`, and is refused when neither is given. The signal aborts on `planner.new` and `close()`.
 2. The first turn sends the Planner brief (`PLANNER_BRIEF`), then the charter (`rules/charter.md` with its local overrides), then the human's message. Later turns send the message alone, prefixed with a `[Quarterdeck]` note naming every proposal from this conversation that the human has approved or rejected since it was last told.
 3. Each turn is a `turns` row (`seq` from 1 per agent, `prompt`, `stop_reason`, `ended_at`). The agent is `working` during the turn and `idle` after it.
 4. The Planner proposes tickets with the bus tool `propose` (see [bus](../bus/README.md#proposetitle-body-dependson)).
@@ -65,10 +65,10 @@ When the Planner starts it retires any Planner agent still live from an earlier 
 
 ## API
 
-| Export                  | What it does                                                                                                                                                                           |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `startPlanner(options)` | Starts applying one project's Planner intents. `store`, `bus` (`launch`, `revoke`), `pause` and `openStores` are required; `adapters`, `homeDir`, `cardHuman`, `onError` are optional. |
-| `Planner.drain()`       | Applies every pending Planner intent and resolves once none is left.                                                                                                                   |
-| `Planner.close()`       | Stops listening, cancels a running turn and retires the conversation.                                                                                                                  |
-| `PLANNER_BRIEF`         | The text that opens every conversation, before the charter.                                                                                                                            |
-| `PLANNER_ADAPTERS`      | The runtime adapters used when `adapters` is not given.                                                                                                                                |
+| Export                  | What it does                                                                                                                                                                                              |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `startPlanner(options)` | Starts applying one project's Planner intents. `store`, `bus` (`launch`, `revoke`), `pause` and `openStores` are required; `adapters`, `homeDir`, `cardHuman`, `permissionCards`, `onError` are optional. |
+| `Planner.drain()`       | Applies every pending Planner intent and resolves once none is left.                                                                                                                                      |
+| `Planner.close()`       | Stops listening, cancels a running turn and retires the conversation.                                                                                                                                     |
+| `PLANNER_BRIEF`         | The text that opens every conversation, before the charter.                                                                                                                                               |
+| `PLANNER_ADAPTERS`      | The runtime adapters used when `adapters` is not given.                                                                                                                                                   |

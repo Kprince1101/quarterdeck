@@ -1,7 +1,11 @@
 import { homedir } from 'node:os';
 import { getErrorMessage, loadRule } from '@quarterdeck/rules';
 import type { CardHuman } from '../acp/permissions/index.js';
-import { createAgentLifecycle, gitWorktrees } from '../agents/index.js';
+import {
+  createAgentLifecycle,
+  gitWorktrees,
+  type Agent,
+} from '../agents/index.js';
 import {
   ARCHIVE_KIND,
   PauseDroppedError,
@@ -63,8 +67,11 @@ export interface PlannerOptions {
   adapters?: PlannerAdapters;
   homeDir?: string;
   cardHuman?: CardHuman;
+  permissionCards?: PermissionCards;
   onError?: (err: unknown) => void;
 }
+
+export type PermissionCards = (agent: Agent, signal: AbortSignal) => CardHuman;
 
 export interface Planner {
   drain: () => Promise<void>;
@@ -121,11 +128,16 @@ export const startPlanner = async (
     signIn.abort();
     signIn = new AbortController();
   };
+  const cardHumanFor = (agent: Agent): CardHuman => {
+    if (options.permissionCards)
+      return options.permissionCards(agent, signIn.signal);
+    return options.cardHuman ?? refuseCards;
+  };
   const ctx: PlannerContext = {
     store,
     bus: options.bus,
     adapters: options.adapters ?? PLANNER_ADAPTERS,
-    cardHuman: options.cardHuman ?? refuseCards,
+    cardHumanFor,
     homeDir: options.homeDir ?? homedir(),
     openStores: options.openStores,
     signInSignal: () => signIn.signal,

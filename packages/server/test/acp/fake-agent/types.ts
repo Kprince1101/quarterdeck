@@ -24,7 +24,8 @@ export type FakeAgentFlag =
   | 'linger'
   | 'ignoreSigterm'
   | 'crew'
-  | 'crashDriver';
+  | 'crashDriver'
+  | 'builderAsks';
 
 export interface FakeAgentOptions extends Partial<
   Record<FakeAgentFlag, boolean>
