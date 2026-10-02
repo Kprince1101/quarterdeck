@@ -1,4 +1,4 @@
-import { Window } from 'happy-dom';
+import { Window, type HTMLElement as HappyElement } from 'happy-dom';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { WebSocket as WsSocket } from 'ws';
 import { TIMEOUT, startDeck, type Deck } from '../api/harness.js';
@@ -37,34 +37,36 @@ describe('dashboard on a live server', () => {
     async () => {
       const { all, render, textOf } = await import('./page.js');
       const { App } = await import('../../src/app.js');
-      const { DeckProvider } = await import('../../src/deck/deck.js');
-      const { TablesWidget } =
-        await import('../../src/widgets/starter/tables.widget.js');
       const served = await deck.serve();
-      const stream = {
-        url: served.url,
-        WebSocket: WsSocket as unknown as typeof WebSocket,
-      };
       const { container, unmount } = render(
-        <App stream={stream} intents={deck.client} />,
-      );
-      const tables = render(
-        <DeckProvider stream={stream} intents={deck.client}>
-          <TablesWidget />
-        </DeckProvider>,
+        <App
+          stream={{
+            url: served.url,
+            WebSocket: WsSocket as unknown as typeof WebSocket,
+          }}
+          intents={deck.client}
+        />,
       );
       await vi.waitFor(() => {
         expect(textOf(container, '[role="status"]')).toBe('Live');
-        expect(count(all, tables.container, 'notebook')).toBe('0');
+      });
+      const { showOnly } = await import('./show-only.js');
+      const { flushSync } = await import('react-dom');
+      showOnly(container, ['Events', 'Tables'], (element) => {
+        flushSync(() => {
+          (element as unknown as HappyElement).click();
+        });
+      });
+      await vi.waitFor(() => {
+        expect(count(all, container, 'notebook')).toBe('0');
       });
 
       await deck.client.notebook.add({ project: deck.project, body: 'hi' });
 
       await vi.waitFor(() => {
-        expect(count(all, tables.container, 'notebook')).toBe('1');
+        expect(count(all, container, 'notebook')).toBe('1');
         expect(textOf(container, '.qd-event-list code')).toBe('notebook.add');
       });
-      tables.unmount();
       unmount();
     },
     TIMEOUT,
