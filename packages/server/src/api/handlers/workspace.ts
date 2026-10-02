@@ -6,7 +6,8 @@ import { applyInProject, findRow, unrecorded } from '../record.js';
 import { assertDirectory } from '../repo-path.js';
 import { RULES_HANDLERS } from './rules.js';
 
-type ProjectIntentName = 'project.create' | 'project.update';
+type ProjectIntentName =
+  'project.create' | 'project.update' | 'project.archive';
 
 const PROJECT_HANDLERS: IntentHandlers<ProjectIntentName> = {
   'project.create': async (ctx, input, name) => {
@@ -39,6 +40,19 @@ const PROJECT_HANDLERS: IntentHandlers<ProjectIntentName> = {
       return { projectId };
     });
   },
+  'project.archive': (ctx, input, name) =>
+    applyInProject(ctx, name, input, async (tx, projectId) => {
+      await findRow(
+        tx,
+        `update projects set archived_at =
+           case when $2::boolean then coalesce(archived_at, now()) end
+         where id = $1
+         returning id`,
+        [projectId, input.archived],
+        `project ${input.project} not found`,
+      );
+      return { projectId, archived: input.archived };
+    }),
 };
 
 const saveLayout = async (

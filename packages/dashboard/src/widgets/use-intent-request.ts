@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { getErrorMessage } from '../../lib/errors.js';
+import { getErrorMessage } from '../lib/errors.js';
 
 export interface IntentRequest {
   isPending: boolean;

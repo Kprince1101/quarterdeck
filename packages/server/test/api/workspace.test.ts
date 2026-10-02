@@ -96,6 +96,38 @@ describe('workspace intents', { timeout: TIMEOUT }, () => {
       expect(rows).toEqual([{ name: 'Deck 2', repo_path: null }]);
       await t.send('project.update', { project: 'deck', repoPath: repoDir });
     });
+
+    it('archives a project once and unarchives it', async () => {
+      const store = await t.store('deck');
+      const archivedAt = async () => {
+        const { rows } = await store.db.query<{ archived_at: unknown }>(
+          'select archived_at from projects',
+        );
+        return rows[0]?.archived_at ?? null;
+      };
+      const res = await t.send('project.archive', {
+        project: 'deck',
+        archived: true,
+      });
+      expect(res).toMatchObject({
+        status: 200,
+        body: { status: 'applied', result: { archived: true } },
+      });
+      const first = await archivedAt();
+      expect(first).not.toBeNull();
+      await t.send('project.archive', { project: 'deck', archived: true });
+      expect(await archivedAt()).toEqual(first);
+      await t.send('project.archive', { project: 'deck', archived: false });
+      expect(await archivedAt()).toBeNull();
+      const { rows } = await store.db.query<{ kind: string }>(
+        `select kind from events where kind = 'project.archive'`,
+      );
+      expect(rows).toHaveLength(3);
+      expect(
+        (await t.send('project.archive', { project: 'ghost', archived: true }))
+          .status,
+      ).toBe(404);
+    });
   });
 
   describe('layouts', () => {

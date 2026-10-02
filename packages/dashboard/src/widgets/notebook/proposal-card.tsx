@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
+import { RequestError } from '../request-error.js';
 import { DiffView } from './diff-view.js';
 import type { DiffLine } from './line-diff.js';
-import { NotebookError } from './notebook-error.js';
 import type { ProposalDisplay, ProposalView } from './notebook-model.js';
 import { ProjectTag } from './project-tag.js';
 import { useProposalCard, type ProposalCardView } from './use-proposal-card.js';
@@ -101,7 +101,7 @@ export const ProposalCard = ({ proposal, showProject }: ProposalCardProps) => {
       {proposal.hasRationale && (
         <p className="qd-notebook-note">{proposal.rationale}</p>
       )}
-      <NotebookError error={card.error} />
+      <RequestError error={card.error} />
       {card.isViewing && <ViewActions card={card} canEdit={proposal.canEdit} />}
       {card.isEditing && <EditActions card={card} canEdit={proposal.canEdit} />}
     </li>
