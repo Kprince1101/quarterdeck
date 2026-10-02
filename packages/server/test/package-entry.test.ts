@@ -70,7 +70,7 @@ describe('@quarterdeck/server package entry', () => {
       expect(result.status).toBe(0);
       const report = JSON.parse(result.stdout) as EntryReport;
       expect(report).toMatchObject({
-        migrated: ['0001_init'],
+        migrated: ['0001_init', '0002_agent_names'],
         kind: 'entry',
         agent: FAKE_AGENT_NAME,
         events: ['spawned', 'closed', 'exit'],
