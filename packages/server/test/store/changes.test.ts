@@ -96,9 +96,11 @@ describe.each(TEST_BACKENDS)('store table changes on $name', (backend) => {
       `insert into tickets (project_id, title) values ($1, 'QD6b') returning id`,
       [store.projectId],
     );
+    await vi.waitFor(() => expect(changes).toHaveLength(1));
     await store.db.query(`update tickets set status = 'done' where id = $1`, [
       ticket?.id,
     ]);
+    await vi.waitFor(() => expect(changes).toHaveLength(2));
     await store.db.query('delete from tickets where id = $1', [ticket?.id]);
 
     await vi.waitFor(() => expect(changes).toHaveLength(3));

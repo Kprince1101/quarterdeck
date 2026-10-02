@@ -169,9 +169,11 @@ describe.each(TEST_BACKENDS)('websocket stream on $name', (backend) => {
       `insert into tickets (project_id, title) values ($1, 'QD6b') returning id`,
       [store.projectId],
     );
+    await vi.waitFor(() => expect(client.raw).toHaveLength(3));
     await store.db.query(`update tickets set status = 'done' where id = $1`, [
       ticket?.id,
     ]);
+    await vi.waitFor(() => expect(client.raw).toHaveLength(4));
     await store.db.query('delete from tickets where id = $1', [ticket?.id]);
 
     await vi.waitFor(() => expect(client.raw).toHaveLength(5));
