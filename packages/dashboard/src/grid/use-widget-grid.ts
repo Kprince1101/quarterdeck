@@ -61,13 +61,12 @@ const cellViews = (
 ): CellView[] => {
   const labels = itemLabels(layout, registry);
   return layout.items.flatMap((item) => {
-    const definition = registry.get(item.widget);
-    if (item.hidden || definition === undefined) return [];
     const panes = panesOf(item, registry);
+    if (item.hidden || panes.length === 0) return [];
     return [
       {
         id: item.id,
-        label: labels.get(item.id) ?? definition.title,
+        label: labels.get(item.id) ?? item.widget,
         item,
         panes,
         stacked: panes.length > 1,

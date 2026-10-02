@@ -19,6 +19,14 @@ export const slotWidgets = (item: GridItem): string[] => [
   ...(item.tabs ?? []),
 ];
 
+export const hasPanes = (item: GridItem, registry: WidgetRegistry): boolean =>
+  slotWidgets(item).some((type) => registry.has(type));
+
+export const slotTitle = (item: GridItem, registry: WidgetRegistry): string => {
+  const shown = slotWidgets(item).find((type) => registry.has(type));
+  return registry.get(shown ?? item.widget)?.title ?? item.widget;
+};
+
 export const panesOf = (item: GridItem, registry: WidgetRegistry): PaneView[] =>
   slotWidgets(item).flatMap((type, index) => {
     const definition = registry.get(type);

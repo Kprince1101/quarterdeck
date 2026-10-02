@@ -24,13 +24,15 @@ const Probe = ({ instanceId }: WidgetProps) => (
 const probe = (type: string, title: string) =>
   defineWidget({ type, title, component: Probe, size: { w: 2, h: 2 } });
 
-const REGISTRY = createRegistry([
+const WIDGETS = [
   probe('board', 'Board'),
   probe('planner', 'Planner'),
   probe('driver', 'Driver'),
   probe('notebook', 'Notebook'),
   probe('events', 'Events'),
-]);
+];
+
+const REGISTRY = createRegistry(WIDGETS);
 
 const SAVED: GridLayout = {
   columns: 12,
@@ -47,7 +49,7 @@ interface Sent {
 
 const stream = { url: 'ws://127.0.0.1:4317/ws', WebSocket: FAKE_WEBSOCKET };
 
-const setup = (status = 200) => {
+const setup = (status = 200, registry = REGISTRY) => {
   const sent: Sent[] = [];
   const fetch = vi.fn<typeof globalThis.fetch>((url, init) => {
     const intent = String(url).split('/').at(-1) ?? '';
@@ -63,7 +65,7 @@ const setup = (status = 200) => {
   const intents = createIntentClient({ fetch });
   const rendered = render(
     <DeckProvider stream={stream} intents={intents}>
-      <DeckLayout registry={REGISTRY} saveDelayMs={0} />
+      <DeckLayout registry={registry} saveDelayMs={0} />
     </DeckProvider>,
   );
   return { ...rendered, sent };
@@ -129,6 +131,27 @@ describe('deck layout', () => {
         '[role="tablist"]',
       ),
     ).toBe(null);
+    unmount();
+  });
+
+  it('shows the tabs that have landed when the first widget of a slot has not', () => {
+    const { container, unmount } = setup(
+      200,
+      createRegistry(WIDGETS.filter(({ type }) => type !== 'planner')),
+    );
+    const slot = find(container, '[data-grid-item="planner-1"]');
+    expect(textOf(slot, '.qd-panel-title')).toBe('Driver');
+    expect(all(slot, '[role="tab"]').map((tab) => tab.textContent)).toEqual([
+      'Driver',
+      'Notebook',
+    ]);
+    expect(textOf(slot, '[role="tabpanel"] [data-probe]')).toBe(
+      'planner-1:driver',
+    );
+    click(find(slot, '[aria-label="Hide Driver"]'));
+    expect(textOf(container, '[data-hidden-item="planner-1"]')).toContain(
+      'Driver',
+    );
     unmount();
   });
 
