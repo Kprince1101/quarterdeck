@@ -8,6 +8,6 @@ import {
 
 export const WIDGETS: WidgetRegistry = createRegistry(
   definitionsFrom(
-    import.meta.glob<WidgetModule>('./**/*.widget.tsx', { eager: true }),
+    import.meta.glob<WidgetModule>('./**/*Widget.tsx', { eager: true }),
   ),
 );

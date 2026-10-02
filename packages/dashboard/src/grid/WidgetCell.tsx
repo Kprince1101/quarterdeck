@@ -1,10 +1,10 @@
-import { Panel } from '../shell/shell.js';
+import { Panel } from '../shell/Shell.js';
 import {
   useWidgetCell,
   type WidgetCellProps,
   type WidgetCellView,
 } from './use-widget-cell.js';
-import { WidgetSlot } from './widget-slot.js';
+import { WidgetSlot } from './WidgetSlot.js';
 
 interface CellControlsProps {
   view: WidgetCellView;

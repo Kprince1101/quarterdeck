@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { IntentReply } from '../../api/index.js';
-import { useDeck } from '../../deck/deck.js';
+import { useDeck } from '../../deck/DeckProvider.js';
 import { killAck } from './agent-actions.js';
 import type { AgentView } from './agents-model.js';
 

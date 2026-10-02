@@ -8,10 +8,10 @@ import {
   emptyTables,
   type RulesView,
 } from '../../../src/api/index.js';
-import { DeckProvider } from '../../../src/deck/deck.js';
+import { DeckProvider } from '../../../src/deck/DeckProvider.js';
 import PROJECT_WIDGET, {
   ProjectWidget,
-} from '../../../src/widgets/project/project.widget.js';
+} from '../../../src/widgets/project/ProjectWidget.js';
 import { WIDGETS } from '../../../src/widgets/widgets.js';
 import { FAKE_WEBSOCKET, FakeSocket } from '../../api/fake-socket.js';
 import { choose, click } from '../../grid/events.js';

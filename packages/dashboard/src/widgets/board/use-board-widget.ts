@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { StreamStatus } from '../../api/index.js';
-import { useDeck } from '../../deck/deck.js';
-import { STATUS_LABELS } from '../../shell/shell.js';
+import { useDeck } from '../../deck/DeckProvider.js';
+import { STATUS_LABELS } from '../../shell/Shell.js';
 import { projectLiveness, type ProjectLiveness } from './board-model.js';
 import { usePauseAll, type PauseAllView } from './use-pause-all.js';
 import {

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useDeck } from '../../deck/deck.js';
+import { useDeck } from '../../deck/DeckProvider.js';
 import { useIntentRequest } from '../use-intent-request.js';
 import {
   AUTO_MERGE_WARNING,

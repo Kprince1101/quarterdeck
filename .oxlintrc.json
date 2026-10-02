@@ -2,5 +2,22 @@
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "extends": ["./node_modules/legion-toolkit/presets/strict.json"],
   "plugins": ["unicorn", "oxc", "typescript"],
-  "ignorePatterns": ["node_modules/**", "dist/**", "coverage/**"]
+  "ignorePatterns": ["node_modules/**", "dist/**", "coverage/**"],
+  "overrides": [
+    {
+      "files": ["packages/dashboard/src/**/*.tsx"],
+      "rules": {
+        "unicorn/filename-case": [
+          "error",
+          { "case": "pascalCase", "ignore": ["^(main|mount|live)\\.tsx$"] }
+        ]
+      }
+    },
+    {
+      "files": ["packages/dashboard/src/**/*.ts"],
+      "rules": {
+        "unicorn/filename-case": ["error", { "case": "kebabCase" }]
+      }
+    }
+  ]
 }

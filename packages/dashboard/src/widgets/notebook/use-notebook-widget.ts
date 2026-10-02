@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useDeck } from '../../deck/deck.js';
+import { useDeck } from '../../deck/DeckProvider.js';
 import { buildNotebook, type NotebookModel } from './notebook-model.js';
 
 export interface NotebookWidgetView extends NotebookModel {

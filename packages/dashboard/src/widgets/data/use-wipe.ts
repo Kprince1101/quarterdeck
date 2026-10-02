@@ -4,7 +4,7 @@ import {
   wipeResultSchema,
   type IntentReply,
 } from '@quarterdeck/server/intents';
-import { useDeck } from '../../deck/deck.js';
+import { useDeck } from '../../deck/DeckProvider.js';
 import { useIntentRequest } from '../use-intent-request.js';
 import { wipeSummary } from './data-view.js';
 

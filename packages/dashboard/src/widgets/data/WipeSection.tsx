@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { RequestError } from '../request-error.js';
+import { RequestError } from '../RequestError.js';
 import { useWipeAll, useWipeProject, type WipeView } from './use-wipe.js';
 
 interface WipeControlProps {

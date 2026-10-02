@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { RoundRow } from '@quarterdeck/server/stream-schema';
-import { useDeck } from '../../deck/deck.js';
+import { useDeck } from '../../deck/DeckProvider.js';
 import {
   currentRound,
   roundTurns,

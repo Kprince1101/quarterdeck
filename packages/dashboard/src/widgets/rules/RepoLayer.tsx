@@ -1,6 +1,6 @@
 import type { RuleLayer, RuleView } from '../../api/index.js';
 import { REPO_NOT_MERGED_NOTICE } from './constants.js';
-import { LayerHeading, RulesAlert } from './rules-parts.js';
+import { LayerHeading, RulesAlert } from './RulesParts.js';
 import type { RulesWidgetView } from './use-rules-widget.js';
 
 interface RepoLayerProps {

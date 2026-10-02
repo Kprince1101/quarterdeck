@@ -1,5 +1,5 @@
 import { defineWidget } from '../registry.js';
-import { AgentCard } from './agent-card.js';
+import { AgentCard } from './AgentCard.js';
 import { useAgentsWidget } from './use-agents-widget.js';
 import './agents.css';
 

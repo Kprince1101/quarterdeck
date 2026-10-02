@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useDeck } from '../../deck/deck.js';
+import { useDeck } from '../../deck/DeckProvider.js';
 import { useNow } from '../../lib/use-now.js';
 import { buildAgents, type AgentsModel } from './agents-model.js';
 

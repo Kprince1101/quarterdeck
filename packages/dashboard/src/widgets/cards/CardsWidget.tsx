@@ -1,7 +1,7 @@
 import { defineWidget } from '../registry.js';
 import { LOOKUP_LABEL, type CardView } from './card-deck.js';
-import { CardFacts, CardHead, CardTicket } from './card-parts.js';
-import { CardReply } from './card-reply.js';
+import { CardFacts, CardHead, CardTicket } from './CardParts.js';
+import { CardReply } from './CardReply.js';
 import './cards.css';
 import { useCardsWidget } from './use-cards-widget.js';
 

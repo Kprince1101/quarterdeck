@@ -1,6 +1,6 @@
 import type { RuleName } from '@quarterdeck/rules/schemas';
 import { useMemo, useState } from 'react';
-import { useDeck } from '../../deck/deck.js';
+import { useDeck } from '../../deck/DeckProvider.js';
 import { getErrorMessage } from '../../lib/errors.js';
 import { lineDiff, type DiffLine } from '../line-diff.js';
 import { SAVED_VERBS, type ReviewKind } from './constants.js';

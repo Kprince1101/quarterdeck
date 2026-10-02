@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useDeck } from '../../deck/deck.js';
+import { useDeck } from '../../deck/DeckProvider.js';
 import { conversation, type ConversationEntry } from './planner-model.js';
 import { usePlannerChat, type PlannerChat } from './use-planner-chat.js';
 import { useProjectPicker, type ProjectPicker } from './use-project-picker.js';

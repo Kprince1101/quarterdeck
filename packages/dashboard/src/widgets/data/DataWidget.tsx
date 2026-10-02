@@ -1,8 +1,8 @@
 import { defineWidget } from '../registry.js';
-import { Pager, PathList, RowsTable, TableList } from './data-parts.js';
+import { Pager, PathList, RowsTable, TableList } from './DataParts.js';
 import type { PageView } from './data-view.js';
 import { useDataWidget, type DataWidgetView } from './use-data-widget.js';
-import { WipeSection } from './wipe-parts.js';
+import { WipeSection } from './WipeSection.js';
 
 interface RowsSectionProps {
   page: PageView | null;

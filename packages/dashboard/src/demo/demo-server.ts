@@ -2,7 +2,7 @@ import type { WipeResult } from '@quarterdeck/server/intents';
 import type { RoundRow } from '@quarterdeck/server/stream-schema';
 import { createIntentClient } from '../api/intents.js';
 import { createRulesReader } from '../api/rules.js';
-import type { DeckSources } from '../deck/deck.js';
+import type { DeckSources } from '../deck/DeckProvider.js';
 import { DEMO_ORIGIN, demoFetch } from './demo-fetch.js';
 import { createDemoIntents } from './demo-intents.js';
 import { createDemoPlanner } from './demo-planner.js';

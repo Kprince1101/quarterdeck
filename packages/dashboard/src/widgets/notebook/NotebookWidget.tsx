@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { defineWidget } from '../registry.js';
-import { EntryRow } from './entry-row.js';
-import { ProposalCard } from './proposal-card.js';
+import { EntryRow } from './EntryRow.js';
+import { ProposalCard } from './ProposalCard.js';
 import { useNotebookWidget } from './use-notebook-widget.js';
 import './notebook.css';
 

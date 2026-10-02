@@ -1,6 +1,6 @@
 import { StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { App, type AppProps } from './app.js';
+import { App, type AppProps } from './App.js';
 import './theme/tokens.css';
 import './shell/shell.css';
 import './grid/grid.css';

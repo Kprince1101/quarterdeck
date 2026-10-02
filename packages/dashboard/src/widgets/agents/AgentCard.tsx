@@ -1,4 +1,4 @@
-import { RequestError } from '../request-error.js';
+import { RequestError } from '../RequestError.js';
 import type { AgentTicketView, AgentView } from './agents-model.js';
 import type { HeldWorkView } from './held-work.js';
 import { useAgentCard, type AgentActionView } from './use-agent-card.js';

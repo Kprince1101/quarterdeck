@@ -1,9 +1,9 @@
 import type { ComponentType } from 'react';
 import type { DiffLine } from '../line-diff.js';
-import { RequestError } from '../request-error.js';
-import { DiffView } from './diff-view.js';
+import { RequestError } from '../RequestError.js';
+import { DiffView } from './DiffView.js';
 import type { ProposalDisplay, ProposalView } from './notebook-model.js';
-import { ProjectTag } from './project-tag.js';
+import { ProjectTag } from './ProjectTag.js';
 import { useProposalCard, type ProposalCardView } from './use-proposal-card.js';
 
 interface ProposalBodyProps {

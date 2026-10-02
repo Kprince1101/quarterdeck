@@ -12,12 +12,12 @@ import {
   vi,
 } from 'vitest';
 import { createIntentClient, emptyTables } from '../../../src/api/index.js';
-import { DeckProvider } from '../../../src/deck/deck.js';
+import { DeckProvider } from '../../../src/deck/DeckProvider.js';
 import { defaultLayout } from '../../../src/grid/default-layout.js';
 import { NOW_TICK_MS } from '../../../src/lib/use-now.js';
 import USAGE_WIDGET, {
   UsageWidget,
-} from '../../../src/widgets/usage/usage.widget.js';
+} from '../../../src/widgets/usage/UsageWidget.js';
 import { WIDGETS } from '../../../src/widgets/widgets.js';
 import { FAKE_WEBSOCKET, FakeSocket } from '../../api/fake-socket.js';
 import { render, textOf, type PageElement } from '../../shell/page.js';

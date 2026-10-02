@@ -1,5 +1,5 @@
 import type { GridLayout } from '@quarterdeck/server/layouts';
-import { useDeck } from '../deck/deck.js';
+import { useDeck } from '../deck/DeckProvider.js';
 import { usePresetPicker, type PresetPicker } from './use-preset-picker.js';
 import { useLayoutSync } from './use-layout-sync.js';
 

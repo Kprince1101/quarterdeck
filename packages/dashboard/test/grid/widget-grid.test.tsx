@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { DeckProvider } from '../../src/deck/deck.js';
+import { DeckProvider } from '../../src/deck/DeckProvider.js';
 import type { GridLayout } from '../../src/grid/layout.js';
-import { WidgetMount } from '../../src/widgets/widget-mount.js';
+import { WidgetMount } from '../../src/widgets/WidgetMount.js';
 import { FAKE_WEBSOCKET, FakeSocket } from '../api/fake-socket.js';
 import { all, render, textOf, type PageElement } from '../shell/page.js';
 import { choose, click, point, press, stubSize } from './events.js';

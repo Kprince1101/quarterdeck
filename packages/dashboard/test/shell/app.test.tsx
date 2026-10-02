@@ -11,8 +11,12 @@ import {
   createIntentClient,
   emptyTables,
 } from '../../src/api/index.js';
-import { App } from '../../src/app.js';
-import { DeckProvider, useDeck, type Deck } from '../../src/deck/deck.js';
+import { App } from '../../src/App.js';
+import {
+  DeckProvider,
+  useDeck,
+  type Deck,
+} from '../../src/deck/DeckProvider.js';
 import { FAKE_WEBSOCKET, FakeSocket } from '../api/fake-socket.js';
 import {
   PROJECT_ID,

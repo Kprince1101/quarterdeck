@@ -1,6 +1,6 @@
-import { DeckProvider, type DeckSources } from './deck/deck.js';
-import { DeckLayout } from './layouts/deck-layout.js';
-import { Shell } from './shell/shell.js';
+import { DeckProvider, type DeckSources } from './deck/DeckProvider.js';
+import { DeckLayout } from './layouts/DeckLayout.js';
+import { Shell } from './shell/Shell.js';
 
 export interface AppProps extends DeckSources {
   mode?: string | undefined;

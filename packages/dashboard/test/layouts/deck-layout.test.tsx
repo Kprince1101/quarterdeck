@@ -4,9 +4,9 @@ import type { StreamMessage } from '@quarterdeck/server/stream-schema';
 import { act } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createIntentClient } from '../../src/api/index.js';
-import { DeckProvider } from '../../src/deck/deck.js';
+import { DeckProvider } from '../../src/deck/DeckProvider.js';
 import { LAYOUT_LOADED } from '../../src/grid/grid-state.js';
-import { DeckLayout } from '../../src/layouts/deck-layout.js';
+import { DeckLayout } from '../../src/layouts/DeckLayout.js';
 import {
   createRegistry,
   defineWidget,

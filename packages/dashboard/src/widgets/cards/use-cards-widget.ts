@@ -1,5 +1,5 @@
 import { useId, useMemo, useState } from 'react';
-import { useDeck } from '../../deck/deck.js';
+import { useDeck } from '../../deck/DeckProvider.js';
 import { useNow } from '../../lib/use-now.js';
 import { cardDeck, type CardDeck } from './card-deck.js';
 

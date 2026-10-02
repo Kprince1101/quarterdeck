@@ -8,8 +8,8 @@ import type { StreamMessage } from '@quarterdeck/server/stream-schema';
 import { act } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createIntentClient, emptyTables } from '../../src/api/index.js';
-import { DeckProvider } from '../../src/deck/deck.js';
-import { DataWidget } from '../../src/widgets/data/data.widget.js';
+import { DeckProvider } from '../../src/deck/DeckProvider.js';
+import { DataWidget } from '../../src/widgets/data/DataWidget.js';
 import {
   formatCell,
   pageView,
