@@ -18,6 +18,7 @@ import type {
 } from '@agentclientprotocol/sdk';
 import {
   CANCELLED_PERMISSION,
+  childEnv,
   createGeminiAdapter,
   defaultGeminiDir,
   GEMINI_ADAPTER,
@@ -90,10 +91,18 @@ const clientOptions = (
 describeRuntimeConformance(testAdapter, { cwd: worktree });
 
 describe('gemini adapter command', () => {
-  const env = { PATH: '/usr/bin' };
+  const env = {
+    source: {
+      PATH: '/usr/bin',
+      GEMINI_API_KEY: 'key',
+      GH_TOKEN: 'gh-secret',
+      [GEMINI_TRUST_WORKSPACE_ENV]: 'true',
+    },
+  };
 
   it('runs Gemini CLI in native ACP mode from the Quarterdeck gemini folder', () => {
-    expect(testAdapter.command({ cwd: '/work/deck', env })).toEqual({
+    const command = testAdapter.command({ cwd: '/work/deck', env });
+    expect({ ...command, env: childEnv(command.env) }).toEqual({
       command: 'gemini',
       args: [
         '--acp',
@@ -105,6 +114,7 @@ describe('gemini adapter command', () => {
       cwd: geminiDir,
       env: {
         PATH: '/usr/bin',
+        GEMINI_API_KEY: 'key',
         [GEMINI_SYSTEM_SETTINGS_ENV]: paths.systemSettings,
         [GEMINI_TRUST_WORKSPACE_ENV]: 'false',
       },
@@ -113,12 +123,11 @@ describe('gemini adapter command', () => {
 
   it('keeps Quarterdeck-owned files under ~/.quarterdeck/gemini', () => {
     expect(defaultGeminiDir()).toMatch(/\.quarterdeck[/\\]gemini$/);
-    expect(GEMINI_ADAPTER.command({ cwd: tmpdir(), env })).toMatchObject({
-      cwd: defaultGeminiDir(),
-      env: {
-        [GEMINI_SYSTEM_SETTINGS_ENV]:
-          geminiPaths(defaultGeminiDir()).systemSettings,
-      },
+    const command = GEMINI_ADAPTER.command({ cwd: tmpdir(), env });
+    expect(command.cwd).toBe(defaultGeminiDir());
+    expect(childEnv(command.env)).toMatchObject({
+      [GEMINI_SYSTEM_SETTINGS_ENV]:
+        geminiPaths(defaultGeminiDir()).systemSettings,
     });
   });
 
@@ -188,7 +197,7 @@ describe('gemini adapter launch', () => {
       const client = await testAdapter.connect(
         {
           cwd: worktree,
-          env: { ...process.env, QUARTERDECK_ENV_MARKER: marker },
+          env: { set: { QUARTERDECK_ENV_MARKER: marker } },
           command: { command: await writeGeminiShim(), args: ['--acp'] },
         },
         clientOptions({ onEvent: (event) => events.push(event) }),
@@ -219,7 +228,7 @@ describe('gemini adapter launch', () => {
     const client = await testAdapter.connect(
       {
         cwd: worktree,
-        env: { ...process.env, QUARTERDECK_ENV_MARKER: marker },
+        env: { set: { QUARTERDECK_ENV_MARKER: marker } },
         command: {
           command: fake.command,
           args: fake.args.map((arg) => {
@@ -281,7 +290,12 @@ describe('gemini adapter lockdown', () => {
     const events: string[] = [];
     const launch = {
       cwd: worktree,
-      env: { [GEMINI_SYSTEM_SETTINGS_ENV]: '/etc/corp/gemini.json' },
+      env: {
+        source: {
+          ...process.env,
+          [GEMINI_SYSTEM_SETTINGS_ENV]: '/etc/corp/gemini.json',
+        },
+      },
       command: fakeAgentLaunch(),
     };
     const err: unknown = await testAdapter

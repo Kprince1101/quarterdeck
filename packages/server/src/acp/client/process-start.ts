@@ -62,7 +62,7 @@ export const processStartedAt = async (pid: number): Promise<Date | null> => {
     {
       command: 'ps',
       args: ['-o', 'lstart=', '-p', String(pid)],
-      env: { ...process.env, LC_ALL: 'C' },
+      env: { set: { LC_ALL: 'C' } },
     },
     { timeoutMs: PS_TIMEOUT_MS },
   );

@@ -51,6 +51,7 @@ describe('rules loader', () => {
   it('ships every default rule file', () => {
     expect(Object.values(RULE_FILES).toSorted()).toEqual([
       'charter.md',
+      'env.json',
       'lifecycle.json',
       'models.json',
       'naming.json',

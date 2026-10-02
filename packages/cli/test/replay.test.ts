@@ -182,6 +182,7 @@ describe('quarterdeck replay', () => {
     expect(connection?.runtime).toBe('claude');
     expect(connection?.launch).toEqual({
       cwd: connection?.sessions[0],
+      env: { pass: [] },
       project: 'deck',
       agentName: 'replay-5',
     });

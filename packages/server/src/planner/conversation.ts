@@ -59,14 +59,16 @@ export const startConversation = async (
   site: ConversationSite,
 ): Promise<Conversation> => {
   const rules = { homeDir: ctx.homeDir, repoDir: site.repoPath };
-  const [naming, models, charter, lifecycleRule] = await Promise.all([
+  const [naming, models, charter, lifecycleRule, env] = await Promise.all([
     loadRule('naming', rules),
     loadRule('models', rules),
     loadRule('charter', rules),
     loadRule('lifecycle', rules),
+    loadRule('env', rules),
   ]);
   const host = createPlannerSessionHost({
     ...site,
+    passEnv: env.pass,
     store: ctx.store,
     bus: ctx.bus,
     adapters: ctx.adapters,

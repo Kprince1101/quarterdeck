@@ -1,4 +1,4 @@
-import { rm } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   afterAll,
@@ -92,6 +92,7 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     expect(p.fake.launches).toEqual([
       {
         cwd: p.repoDir,
+        env: { pass: [] },
         project: p.project,
         agentName: agent?.name,
         mcpServers: [expect.objectContaining({ name: 'bus' })],
@@ -482,6 +483,18 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     } finally {
       await rm(join(t.homeDir, '.quarterdeck', 'rules.local.models.json'));
     }
+  });
+
+  it('passes the names the project env rule adds to the Planner', async () => {
+    const p = await open();
+    await mkdir(join(p.repoDir, '.quarterdeck'), { recursive: true });
+    await writeFile(
+      join(p.repoDir, '.quarterdeck', 'rules.local.env.json'),
+      JSON.stringify({ pass: ['EXAMPLE_TOKEN'] }),
+    );
+    await p.start();
+    await say(p, 'hello');
+    expect(p.fake.launches[0]?.env).toEqual({ pass: ['EXAMPLE_TOKEN'] });
   });
 
   it('retires a Planner left over from an earlier run when it starts', async () => {

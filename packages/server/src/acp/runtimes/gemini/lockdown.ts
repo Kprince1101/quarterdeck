@@ -120,10 +120,8 @@ export const writeGeminiLockdown = async (paths: GeminiPaths) => {
 };
 
 export const geminiLockdownEnv = (
-  env: NodeJS.ProcessEnv,
   paths: GeminiPaths,
-): NodeJS.ProcessEnv => ({
-  ...env,
+): Record<string, string> => ({
   [GEMINI_SYSTEM_SETTINGS_ENV]: paths.systemSettings,
   [GEMINI_TRUST_WORKSPACE_ENV]: 'false',
 });

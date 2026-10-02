@@ -8,10 +8,12 @@ import {
   CLAUDE_AGENT_ACP_VERSION,
   CLAUDE_DEFAULT_MODE_ID,
   CLAUDE_INITIALIZE_TIMEOUT_MS,
+  CLAUDE_PASS_ENV,
   CLAUDE_PERMISSION_SETTINGS,
   ClaudePermissionSettingsError,
   DEFAULT_INITIALIZE_TIMEOUT_MS,
   NPM_PUBLIC_REGISTRY,
+  childEnv,
   claudeAgentCommand,
   claudeRuntimeDir,
   claudeVersionCommand,
@@ -192,9 +194,31 @@ describe('claude adapter command', () => {
   });
 
   it('fetches from the public npm registry and keeps the launch env', () => {
-    const env = { PATH: '/usr/bin', npm_config_registry: 'https://evil.test/' };
+    const env = {
+      pass: ['EXAMPLE_NAME'],
+      set: { npm_config_registry: 'https://evil.test/' },
+    };
     expect(CLAUDE_ADAPTER.command({ cwd: '/work/deck', env }).env).toEqual({
+      pass: ['EXAMPLE_NAME', ...CLAUDE_PASS_ENV],
+      set: { npm_config_registry: NPM_PUBLIC_REGISTRY },
+    });
+  });
+
+  it('passes Claude sign-in variables and nothing else from the server', () => {
+    const source = {
       PATH: '/usr/bin',
+      ANTHROPIC_API_KEY: 'key',
+      CLAUDE_CONFIG_DIR: '/home/example/.claude',
+      GH_TOKEN: 'gh-secret',
+    };
+    const command = CLAUDE_ADAPTER.command({
+      cwd: '/work/deck',
+      env: { source },
+    });
+    expect(childEnv(command.env)).toEqual({
+      PATH: '/usr/bin',
+      ANTHROPIC_API_KEY: 'key',
+      CLAUDE_CONFIG_DIR: '/home/example/.claude',
       npm_config_registry: NPM_PUBLIC_REGISTRY,
     });
   });
@@ -388,7 +412,7 @@ describe('claude settings that would skip the project rules', () => {
     const refused = CLAUDE_ADAPTER.connect(
       {
         cwd,
-        env: { ...process.env, CLAUDE_CONFIG_DIR: config },
+        env: { set: { CLAUDE_CONFIG_DIR: config } },
         command: fakeAgentLaunch(),
       },
       {
@@ -440,9 +464,10 @@ describe.skipIf(IS_WINDOWS)('claude adapter default npx path', () => {
     const launch: RuntimeLaunch = {
       cwd,
       env: {
-        ...process.env,
-        CLAUDE_CONFIG_DIR: config,
-        PATH: `${bin}${delimiter}${process.env['PATH']}`,
+        set: {
+          CLAUDE_CONFIG_DIR: config,
+          PATH: `${bin}${delimiter}${process.env['PATH']}`,
+        },
       },
     };
     const adapter = createClaudeAdapter({ processDir, ...adapterOptions });

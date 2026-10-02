@@ -1,4 +1,4 @@
-export { defineRuntimeAdapter, launchSite } from './adapter.js';
+export { defineRuntimeAdapter, launchSite, withPassEnv } from './adapter.js';
 export type {
   RuntimeAdapter,
   RuntimeAdapterSpec,

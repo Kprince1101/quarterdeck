@@ -11,6 +11,7 @@ import {
   claudeCliCommand,
   runCommand,
   type AgentCommand,
+  type ChildEnvSpec,
   type CommandResult,
 } from '@quarterdeck/server';
 import { CliError, type CliIo, type Command } from './io.js';
@@ -20,8 +21,9 @@ export const DOCTOR_PROBE_TIMEOUT_MS = 15_000;
 export const DOCTOR_USAGE = `Usage: quarterdeck doctor
 
 Checks that kiro-cli, claude, gemini and gh are installed and signed in, and
-prints the command to run for each one that is not. Exits 1 if any needs
-attention.`;
+prints the command to run for each one that is not. Warns when gh is signed
+in only through GH_TOKEN or GITHUB_TOKEN, which agents do not get. Exits 1 if
+any needs attention.`;
 
 const CLAUDE_PINNED = `${CLAUDE_AGENT_ACP_PACKAGE}@${CLAUDE_AGENT_ACP_VERSION}`;
 
@@ -124,6 +126,11 @@ const viaShim = (
   };
 };
 
+const shellEnv = (
+  io: CliIo,
+  set: Record<string, string> = {},
+): ChildEnvSpec => ({ source: io.env, pass: Object.keys(io.env), set });
+
 const fileExists = (path: string) =>
   stat(path).then(
     (info) => info.isFile(),
@@ -200,7 +207,7 @@ const checkClaude = async ({
   const claude = (args: string[]): AgentCommand => ({
     ...claudeCliCommand(args, platform),
     cwd: tmpdir(),
-    env: { ...io.env, npm_config_registry: NPM_PUBLIC_REGISTRY },
+    env: shellEnv(io, { npm_config_registry: NPM_PUBLIC_REGISTRY }),
   });
   const version = installed(
     await run(claude(['--version'])),
@@ -296,12 +303,35 @@ const checkGh = async ({ platform, run }: Probe): Promise<DoctorCheck> => {
   return signedIn(name, version.version, account);
 };
 
+const GH_TOKEN_ENV = ['GH_TOKEN', 'GITHUB_TOKEN'];
+
+const checkGhForAgents = async ({
+  io,
+  run,
+}: Probe): Promise<DoctorCheck | undefined> => {
+  const tokens = GH_TOKEN_ENV.filter((name) => io.env[name]);
+  if (tokens.length === 0) return undefined;
+  const status = (env: ChildEnvSpec) =>
+    run({ command: 'gh', args: ['auth', 'status'], env });
+  const [shell, agent] = await Promise.all([
+    status(shellEnv(io)),
+    status({ source: io.env }),
+  ]);
+  if (!succeeded(shell) || succeeded(agent)) return undefined;
+  const named = tokens.join(' and ');
+  return {
+    name: 'gh for agents',
+    state: `signed in only through ${named}, which agents do not get; unset ${named} and sign in`,
+    fixes: [{ label: 'Sign in', command: DOCTOR_FIXES.ghSignIn }],
+  };
+};
+
 export interface DoctorOptions {
   platform?: NodeJS.Platform;
   timeoutMs?: number;
 }
 
-export const runDoctorChecks = (
+export const runDoctorChecks = async (
   io: CliIo,
   {
     platform = process.platform,
@@ -312,11 +342,14 @@ export const runDoctorChecks = (
     io,
     platform,
     run: (command) =>
-      runCommand({ cwd: io.cwd, env: io.env, ...command }, { timeoutMs }),
+      runCommand({ cwd: io.cwd, env: shellEnv(io), ...command }, { timeoutMs }),
   };
-  return Promise.all(
-    [checkKiro, checkClaude, checkGemini, checkGh].map((check) => check(probe)),
+  const checks = await Promise.all(
+    [checkKiro, checkClaude, checkGemini, checkGh, checkGhForAgents].map(
+      (check) => check(probe),
+    ),
   );
+  return checks.filter((check) => check !== undefined);
 };
 
 const render = (io: CliIo, checks: DoctorCheck[], misses: number) => {

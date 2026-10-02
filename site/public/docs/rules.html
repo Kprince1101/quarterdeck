@@ -68,6 +68,13 @@
               <code>gemini</code>) and optional model for each role.
             </td>
           </tr>
+          <tr>
+            <td><code>env.json</code></td>
+            <td>
+              Extra environment variables agents get from the server's
+              environment.
+            </td>
+          </tr>
         </tbody>
       </table>
 
@@ -332,6 +339,30 @@
         <code>names</code>. The default theme is animals. Names are lowercase
         letters, digits and hyphens, start with a letter, and must be unique.
       </p>
+
+      <h2 id="env">env.json</h2>
+      <p>
+        Agents do not inherit the server's environment. They get
+        <code>PATH</code>, <code>HOME</code>, <code>USER</code>,
+        <code>LOGNAME</code>, <code>SHELL</code>, <code>LANG</code>,
+        <code>LC_*</code>, <code>TERM</code>, <code>TMPDIR</code>,
+        <code>TZ</code>, <code>SSH_AUTH_SOCK</code> (so
+        <code>git push</code> over ssh works), Quarterdeck's own
+        <code>QUARTERDECK_BUS_*</code> variables, and the variables their
+        runtime needs to sign in. Anything else, <code>GH_TOKEN</code>,
+        <code>GITHUB_TOKEN</code> and <code>DATABASE_URL</code> included, stays
+        out. Builders open pull requests with <code>gh</code>, which keeps
+        working through its own <code>gh auth login</code>;
+        <code>quarterdeck doctor</code> warns when <code>gh</code> is signed in
+        only through a token variable.
+      </p>
+      <p>
+        <code>pass</code> lists more names. Values always come from the server's
+        environment; the rule holds names only. The default is empty. This
+        <code>&lt;repo&gt;/.quarterdeck/rules.local.env.json</code> gives one
+        project's agents <code>AWS_PROFILE</code>:
+      </p>
+      <pre><code>{ "pass": ["AWS_PROFILE"] }</code></pre>
 
       <h2 id="prompts">charter.md and reviewer.md</h2>
       <p>

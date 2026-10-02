@@ -2,6 +2,7 @@ export {
   createKiroAdapter,
   KIRO_ADAPTER,
   KIRO_COMMAND,
+  KIRO_PASS_ENV,
   kiroArgs,
 } from './adapter.js';
 export type { KiroAdapterOptions } from './adapter.js';

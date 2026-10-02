@@ -6,10 +6,11 @@ import type {
   AcpClientOptions,
   AgentCommand,
 } from '../client/types.js';
+import { withChildEnv, type ChildEnvSpec } from '../env.js';
 
 export interface RuntimeLaunch {
   cwd: string;
-  env?: NodeJS.ProcessEnv;
+  env?: ChildEnvSpec;
   project?: string;
   agentName?: string;
   mcpServers?: McpServer[];
@@ -19,6 +20,7 @@ export interface RuntimeLaunch {
 export interface RuntimeAdapter {
   readonly runtime: Runtime;
   readonly displayName: string;
+  readonly passEnv: readonly string[];
   command: (launch: RuntimeLaunch) => AgentCommand;
   connect: (
     launch: RuntimeLaunch,
@@ -29,6 +31,7 @@ export interface RuntimeAdapter {
 export interface RuntimeAdapterSpec {
   runtime: Runtime;
   displayName: string;
+  passEnv?: readonly string[];
   command: (launch: RuntimeLaunch) => AgentCommand;
 }
 
@@ -40,6 +43,14 @@ export const launchSite = ({
   return { cwd, env };
 };
 
+export const withPassEnv = (
+  command: AgentCommand,
+  passEnv: readonly string[],
+): AgentCommand => ({
+  ...command,
+  env: withChildEnv(command.env, { pass: passEnv }),
+});
+
 const launchCommand = (
   spec: RuntimeAdapterSpec,
   launch: RuntimeLaunch,
@@ -50,8 +61,15 @@ const launchCommand = (
 
 export const defineRuntimeAdapter = (
   spec: RuntimeAdapterSpec,
-): RuntimeAdapter => ({
-  ...spec,
-  connect: (launch, options) =>
-    spawnAcpClient(launchCommand(spec, launch), options),
-});
+): RuntimeAdapter => {
+  const passEnv = spec.passEnv ?? [];
+  return {
+    ...spec,
+    passEnv,
+    connect: (launch, options) =>
+      spawnAcpClient(
+        withPassEnv(launchCommand(spec, launch), passEnv),
+        options,
+      ),
+  };
+};

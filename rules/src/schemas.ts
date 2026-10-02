@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 const AGENT_NAME = /^[a-z][a-z0-9-]*$/;
+const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 const hasUniqueValues = (values: string[]): boolean =>
   new Set(values).size === values.length;
@@ -98,6 +99,12 @@ export const modelsSchema = z.strictObject({
   reviewer: roleModelSchema,
 });
 
+export const envSchema = z.strictObject({
+  pass: z
+    .array(z.string().regex(ENV_NAME))
+    .refine(hasUniqueValues, 'pass must not repeat a name'),
+});
+
 export const RULE_SCHEMAS = {
   charter: markdownSchema,
   reviewer: markdownSchema,
@@ -105,6 +112,7 @@ export const RULE_SCHEMAS = {
   naming: namingSchema,
   lifecycle: lifecycleSchema,
   models: modelsSchema,
+  env: envSchema,
 };
 
 export type RuleName = keyof typeof RULE_SCHEMAS;
@@ -126,3 +134,4 @@ export type RepoMergeGate = z.infer<typeof repoMergeGateSchema>;
 export type Runtime = z.infer<typeof runtimeSchema>;
 export type RoleModel = z.infer<typeof roleModelSchema>;
 export type Models = z.infer<typeof modelsSchema>;
+export type EnvRule = z.infer<typeof envSchema>;

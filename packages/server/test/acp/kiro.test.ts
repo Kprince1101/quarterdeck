@@ -121,13 +121,13 @@ describe('kiro command', () => {
         cwd: '/work/deck',
         project: 'deck',
         agentName: 'narwhal',
-        env: { PATH: '/bin' },
+        env: { pass: ['EXAMPLE_NAME'] },
       }),
     ).toEqual({
       command: 'kiro-cli',
       args: ['acp', '--agent', 'quarterdeck-deck-narwhal'],
       cwd: defaultKiroProcessDir(),
-      env: { PATH: '/bin' },
+      env: { pass: ['EXAMPLE_NAME'] },
     });
   });
 
@@ -177,7 +177,7 @@ describe('kiro process directory', () => {
         cwd: worktree,
         project: PROJECT,
         agentName: 'cwd',
-        env: { ...process.env, QUARTERDECK_CWD_MARKER: marker },
+        env: { set: { QUARTERDECK_CWD_MARKER: marker } },
         command: {
           command: fake.command,
           args: fake.args.map((arg) => {

@@ -8,7 +8,8 @@ import type {
 } from '../../client/types.js';
 import { launchAcpClient } from '../../launch/launch.js';
 import type { AgentLaunch, LaunchOptions } from '../../launch/launch.js';
-import { launchSite } from '../adapter.js';
+import { childEnv, withChildEnv } from '../../env.js';
+import { launchSite, withPassEnv } from '../adapter.js';
 import type {
   RuntimeAdapter,
   RuntimeAdapterSpec,
@@ -26,6 +27,14 @@ export const CLAUDE_AGENT_ACP_VERSION = '0.85.0';
 export const CLAUDE_INITIALIZE_TIMEOUT_MS = 300_000;
 export const CLAUDE_DEFAULT_MODE_ID = 'default';
 export const NPM_PUBLIC_REGISTRY = 'https://registry.npmjs.org/';
+
+export const CLAUDE_PASS_ENV: readonly string[] = [
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_AUTH_TOKEN',
+  'ANTHROPIC_BASE_URL',
+  'CLAUDE_CODE_OAUTH_TOKEN',
+  'CLAUDE_CONFIG_DIR',
+];
 
 export const CLAUDE_LOCKED_OPTIONS = {
   settingSources: [],
@@ -117,19 +126,23 @@ export const createClaudeAdapter = ({
   const spec: RuntimeAdapterSpec = {
     runtime: 'claude',
     displayName: 'Claude',
+    passEnv: CLAUDE_PASS_ENV,
     command: (launch: RuntimeLaunch) => ({
       ...claudeAgentCommand(),
       cwd: processDir,
-      env: {
-        ...(launch.env ?? process.env),
-        npm_config_registry: NPM_PUBLIC_REGISTRY,
-      },
+      env: withChildEnv(launch.env, {
+        pass: CLAUDE_PASS_ENV,
+        set: { npm_config_registry: NPM_PUBLIC_REGISTRY },
+      }),
     }),
   };
 
   const agentLaunch = (launch: RuntimeLaunch): AgentLaunch => {
     if (launch.command) {
-      const command = { ...launchSite(launch), ...launch.command };
+      const command = withPassEnv(
+        { ...launchSite(launch), ...launch.command },
+        CLAUDE_PASS_ENV,
+      );
       return { command, version: { ...command, args: ['--version'] } };
     }
     const command = spec.command(launch);
@@ -146,7 +159,7 @@ export const createClaudeAdapter = ({
   };
 
   const refuseUnlockedSettings = async (launch: RuntimeLaunch) => {
-    const env = launch.command?.env ?? launch.env ?? process.env;
+    const env = childEnv(agentLaunch(launch).command.env);
     const overrides = await findClaudeSettingsOverrides(launch.cwd, env);
     const blocking = refused(launch, overrides);
     if (blocking.length > 0) throw new ClaudePermissionSettingsError(blocking);
@@ -165,7 +178,7 @@ export const createClaudeAdapter = ({
     return lockPermissions(client);
   };
 
-  return { ...spec, connect };
+  return { ...spec, passEnv: CLAUDE_PASS_ENV, connect };
 };
 
 export const CLAUDE_ADAPTER: RuntimeAdapter = createClaudeAdapter();
