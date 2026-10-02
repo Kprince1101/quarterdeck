@@ -87,7 +87,12 @@ const mount = (
     </DeckProvider>,
   );
   act(() => {
-    FakeSocket.opened[0]?.deliver({ type: 'snapshot', cursor: 0, tables });
+    FakeSocket.opened[0]?.deliver({
+      type: 'snapshot',
+      cursor: 0,
+      tables,
+      machine: { pausedAt: null },
+    });
   });
   return { ...rendered, sent, asked: rules.asked };
 };
@@ -544,6 +549,7 @@ describe('Project widget', () => {
         type: 'snapshot',
         cursor: 0,
         tables: projectTables(),
+        machine: { pausedAt: null },
       });
     });
     const copy = (n: number) => find(container, `[data-copy="${n}"]`);

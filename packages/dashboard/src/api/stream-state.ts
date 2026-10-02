@@ -1,6 +1,7 @@
 import {
   STREAM_TABLES,
   type ChangeMessage,
+  type MachineState,
   type SnapshotTables,
   type StreamEvent,
   type StreamMessage,
@@ -13,9 +14,12 @@ export interface StreamState {
   status: StreamStatus;
   cursor: number | null;
   tables: SnapshotTables;
+  machine: MachineState;
   events: readonly StreamEvent[];
   error: string | null;
 }
+
+export const UNPAUSED_MACHINE: MachineState = { pausedAt: null };
 
 export interface StreamLimits {
   events: number;
@@ -44,6 +48,7 @@ export const initialStreamState: StreamState = {
   status: 'connecting',
   cursor: null,
   tables: emptyTables(),
+  machine: UNPAUSED_MACHINE,
   events: [],
   error: null,
 };
@@ -112,8 +117,12 @@ export const applyStreamMessage = (
         status: 'live',
         cursor: message.cursor,
         tables: message.tables,
+        machine: message.machine,
         error: null,
       };
+    }
+    case 'machine': {
+      return { ...state, machine: message.machine };
     }
     case 'event': {
       return applyEvent(state, message.event, limits);

@@ -63,6 +63,7 @@ export const snapshotWith = (...layouts: LayoutRow[]): StreamMessage => ({
   type: 'snapshot',
   cursor: 0,
   tables: { ...emptyTables(), projects: [projectRow()], layouts },
+  machine: { pausedAt: null },
 });
 
 export const layoutChange = (row: LayoutRow): StreamMessage => ({

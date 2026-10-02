@@ -1,4 +1,5 @@
 export * from './schema.js';
+export { MACHINE_EVENT_KINDS, readMachineState } from './machine.js';
 export {
   SNAPSHOT_TURNS_PER_AGENT,
   readSnapshot,

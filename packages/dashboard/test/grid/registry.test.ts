@@ -11,6 +11,7 @@ describe('widget registry', () => {
   it('discovers every *.widget.tsx file', () => {
     expect([...WIDGETS.keys()]).toEqual(
       expect.arrayContaining([
+        'board',
         'data',
         'driver',
         'events',
