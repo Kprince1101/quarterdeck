@@ -86,12 +86,16 @@ export const createDemoServer = (
     director.idle = 0;
   };
 
-  const isPaused = (): boolean =>
+  const isHeld = (): boolean =>
     store.machine().pausedAt !== null ||
-    store.rows('projects').some((project) => project.pausedAt !== null);
+    store
+      .rows('projects')
+      .some(
+        (project) => project.pausedAt !== null || project.archivedAt !== null,
+      );
 
   const step = (): void => {
-    if (isPaused()) return;
+    if (isHeld()) return;
     const open = world.openRound();
     if (open === undefined) {
       director.idle += 1;

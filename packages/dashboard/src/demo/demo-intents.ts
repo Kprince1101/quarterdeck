@@ -103,13 +103,22 @@ export const createDemoIntents = (
     store.setMachine({ pausedAt: pausedAt(paused) });
     return { paused, projects: [DEMO_PROJECT], failed: [] };
   };
-  const pauseAgent = (agentId: string) => {
+  const liveAgent = (agentId: string) => {
     const agent = agentOf(agentId);
     if (world.isGone(agent)) {
       refuse(CONFLICT, `agent ${agentId} is already ${agent.status}`);
     }
-    return world.setAgent(agent, 'paused');
+    return agent;
   };
+  const unretiredAgent = (agentId: string) => {
+    const agent = agentOf(agentId);
+    if (agent.status === 'retired') {
+      refuse(CONFLICT, `agent ${agentId} is already retired`);
+    }
+    return agent;
+  };
+  const pauseAgent = (agentId: string) =>
+    world.setAgent(liveAgent(agentId), 'paused');
   const resumeAgent = (agentId: string) => {
     const agent = agentOf(agentId);
     if (agent.status !== 'paused') {
@@ -187,16 +196,20 @@ export const createDemoIntents = (
       return reply('applied', { agentId: agent.id, status: agent.status });
     },
     'agent.end': (input, reply) => {
-      world.setAgent(agentOf(input.agentId), 'ended');
-      return reply('applied', { agentId: input.agentId });
+      const agent = world.setAgent(liveAgent(input.agentId), 'ended');
+      return reply('applied', { agentId: agent.id, status: agent.status });
     },
     'agent.kill': (input, reply) => {
-      world.setAgent(agentOf(input.agentId), 'killed');
-      return reply('applied', { agentId: input.agentId });
+      const agent = world.killAgent(liveAgent(input.agentId));
+      return reply('applied', { agentId: agent.id, status: agent.status });
     },
     'agent.retire': (input, reply) => {
-      world.setAgent(agentOf(input.agentId), 'retired');
-      return reply('applied', { agentId: input.agentId });
+      const agent = world.setAgent(unretiredAgent(input.agentId), 'retired');
+      return reply('applied', { agentId: agent.id, status: agent.status });
+    },
+    'agent.reset': (input, reply) => {
+      const agent = world.resetAgent(unretiredAgent(input.agentId));
+      return reply('applied', { agentId: agent.id, status: agent.status });
     },
     'agent.message': notInDemo('Messaging an agent'),
     'planner.message': (input, reply) => {
@@ -336,11 +349,18 @@ export const createDemoIntents = (
     'project.create': notInDemo('Adding a project'),
     'project.update': notInDemo('Editing a project'),
     'project.archive': (input, reply) => {
+      const project = store.find('projects', store.projectId);
       store.patch('projects', store.projectId, {
-        archivedAt: (input.archived && store.now()) || null,
+        archivedAt:
+          (input.archived && (project?.archivedAt ?? store.now())) || null,
         updatedAt: store.now(),
       });
-      return reply('applied', { archived: input.archived });
+      const answer = reply('applied', {
+        projectId: store.projectId,
+        archived: input.archived,
+      });
+      if (input.archived) world.retireArchived();
+      return answer;
     },
     'rules.write': (input, reply) => {
       if (input.scope !== 'machine') return notInDemo('A repo rules layer')();

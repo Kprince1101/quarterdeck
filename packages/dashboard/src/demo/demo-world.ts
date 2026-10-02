@@ -18,6 +18,18 @@ const ACTIVE_TICKETS: ReadonlySet<TicketStatus> = new Set([
   'in_progress',
   'in_review',
   'bounced',
+  'blocked',
+]);
+
+const BLOCKED_ON_KILL: ReadonlySet<TicketStatus> = new Set([
+  'assigned',
+  'in_progress',
+]);
+
+const RUNNING: ReadonlySet<AgentStatus> = new Set([
+  'starting',
+  'working',
+  'stuck',
 ]);
 
 export interface TurnTokens {
@@ -47,6 +59,9 @@ export interface DemoWorld {
     runtime?: AgentRow['runtime'],
   ) => AgentRow;
   setAgent: (agent: AgentRow, status: AgentStatus) => AgentRow;
+  killAgent: (agent: AgentRow) => AgentRow;
+  resetAgent: (agent: AgentRow) => AgentRow;
+  retireArchived: () => string[];
   createTicket: (
     title: string,
     body: string,
@@ -101,6 +116,59 @@ export const createDemoWorld = (store: DemoStore): DemoWorld => {
       payload: { name: agent.name, role: agent.role },
     });
     return next ?? agent;
+  };
+
+  const killAgent: DemoWorld['killAgent'] = (agent) => {
+    const killed = setAgent(agent, 'killed');
+    store
+      .rows('tickets')
+      .filter(
+        (ticket) =>
+          ticket.assigneeId === agent.id && BLOCKED_ON_KILL.has(ticket.status),
+      )
+      .forEach((ticket) => {
+        store.patch('tickets', ticket.id, {
+          status: 'blocked',
+          updatedAt: store.now(),
+        });
+        store.emit('ticket.blocked', {
+          agentId: agent.id,
+          ticketId: ticket.id,
+          payload: {
+            name: agent.name,
+            previousStatus: ticket.status,
+            reason: 'killed',
+          },
+        });
+      });
+    return killed;
+  };
+
+  const resetAgent: DemoWorld['resetAgent'] = (agent) => {
+    let status = agent.status;
+    if (RUNNING.has(status)) status = 'idle';
+    const reset =
+      store.patch('agents', agent.id, {
+        status,
+        sessionId: null,
+        updatedAt: store.now(),
+      }) ?? agent;
+    store.emit('agent.session_reset', {
+      agentId: agent.id,
+      payload: { name: agent.name, sessionId: agent.sessionId },
+    });
+    return reset;
+  };
+
+  const retireArchived: DemoWorld['retireArchived'] = () => {
+    const retired = store
+      .rows('agents')
+      .filter((agent) => agent.status !== 'retired')
+      .map((agent) => setAgent(agent, 'retired').id);
+    if (retired.length > 0) {
+      store.emit('archive.retired', { payload: { retired, discardCards: [] } });
+    }
+    return retired;
   };
 
   const expireCard: DemoWorld['expireCard'] = (card, reason) => {
@@ -341,6 +409,9 @@ export const createDemoWorld = (store: DemoStore): DemoWorld => {
     },
     settleCard,
     expireCard,
+    killAgent,
+    resetAgent,
+    retireArchived,
   };
   return world;
 };

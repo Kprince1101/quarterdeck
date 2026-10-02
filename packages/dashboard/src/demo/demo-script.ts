@@ -17,7 +17,8 @@ export const CARD_PATIENCE_BEATS = 12;
 
 const WORK_WHILE_WAITING_EVERY = 3;
 
-const CLOSED_TICKETS: ReadonlySet<TicketRow['status']> = new Set([
+const HANDS_OFF_TICKETS: ReadonlySet<TicketRow['status']> = new Set([
+  'blocked',
   'done',
   'cancelled',
   'rejected',
@@ -166,7 +167,9 @@ export const roundBeats = (
   };
   const ticket = (nth: number): TicketRow | undefined => {
     const row = roundTickets(world, round.id)[nth];
-    if (row === undefined || CLOSED_TICKETS.has(row.status)) return undefined;
+    if (row === undefined || HANDS_OFF_TICKETS.has(row.status)) {
+      return undefined;
+    }
     return row;
   };
   const work = (

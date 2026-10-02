@@ -231,6 +231,93 @@ describe('demo server', () => {
     expect(store.find('agents', agentId)?.status).toBe('idle');
   });
 
+  it('resets an agent session the way the server does', async () => {
+    const server = createDemoServer();
+    const { intents, store } = parts(server);
+    const crew = store
+      .rows('agents')
+      .filter((agent) => agent.roundId === openRound(server).id);
+    const [working, paused] = crew.filter((agent) => agent.role === 'builder');
+    const workingId = working?.id ?? '';
+    const pausedId = paused?.id ?? '';
+    expect(working?.status).toBe('working');
+    const sessionId = working?.sessionId;
+
+    const reply = await intents.agent.reset({ project, agentId: workingId });
+    expect(reply.result).toEqual({ agentId: workingId, status: 'idle' });
+    expect(store.find('agents', workingId)).toMatchObject({
+      status: 'idle',
+      sessionId: null,
+    });
+    expect(
+      store.events().findLast((event) => event.kind === 'agent.session_reset'),
+    ).toMatchObject({
+      agentId: workingId,
+      payload: { name: working?.name, sessionId },
+    });
+
+    await intents.agent.pause({ project, agentId: pausedId });
+    await intents.agent.reset({ project, agentId: pausedId });
+    expect(store.find('agents', pausedId)?.status).toBe('paused');
+
+    const retired = store.rows('agents').find((a) => a.status === 'retired');
+    const before = store.events().length;
+    await expect(
+      intents.agent.reset({ project, agentId: retired?.id ?? '' }),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: `agent ${retired?.id} is already retired`,
+    });
+    expect(store.events()).toHaveLength(before);
+  });
+
+  it('blocks the tickets a killed builder held', async () => {
+    const server = createDemoServer();
+    const { intents, store } = parts(server);
+    const ticket = store
+      .rows('tickets')
+      .find((row) => row.status === 'in_progress' && row.assigneeId !== null);
+    const agentId = ticket?.assigneeId ?? '';
+
+    await intents.agent.kill({ project, agentId });
+    expect(store.find('agents', agentId)?.status).toBe('killed');
+    expect(store.find('tickets', ticket?.id ?? '')?.status).toBe('blocked');
+    expect(
+      store.events().findLast((event) => event.kind === 'ticket.blocked'),
+    ).toMatchObject({
+      agentId,
+      ticketId: ticket?.id,
+      payload: { previousStatus: 'in_progress', reason: 'killed' },
+    });
+    await expect(
+      intents.agent.kill({ project, agentId }),
+    ).rejects.toMatchObject({ status: 409 });
+
+    const round = openRound(server);
+    stepUntil(server, () => store.find('rounds', round.id)?.status === 'ended');
+    expect(store.find('tickets', ticket?.id ?? '')).toMatchObject({
+      status: 'open',
+      assigneeId: null,
+    });
+  });
+
+  it('retires every agent of an archived project and holds the script', async () => {
+    const server = createDemoServer();
+    const { intents, store } = parts(server);
+    await intents.project.archive({ project, archived: true });
+    expect(store.rows('agents').every((a) => a.status === 'retired')).toBe(
+      true,
+    );
+    expect(store.events().at(-1)?.kind).toBe('archive.retired');
+    const before = store.events().length;
+    server.step();
+    expect(store.events()).toHaveLength(before);
+
+    await intents.project.archive({ project, archived: false });
+    expect(store.find('projects', store.projectId)?.archivedAt).toBeNull();
+    stepUntil(server, () => store.rows('rounds').length === 3);
+  });
+
   it('opens on a layout the grid accepts', () => {
     expect(parseGridLayout(DEMO_LAYOUT)).toEqual(DEMO_LAYOUT);
   });
