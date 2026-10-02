@@ -1,5 +1,6 @@
 import type { Db, LiveFeed, Queryable } from './db.js';
 import { reporter } from './events.js';
+import type { StoreTable } from './store.js';
 
 export const CHANGES_CHANNEL = 'quarterdeck_changes';
 
@@ -11,6 +12,7 @@ export const WATCHED_TABLES = [
   'cards',
   'turns',
   'notebook',
+  'notebook_proposals',
   'charter_proposals',
   'budget',
   'layouts',
@@ -59,12 +61,13 @@ const ORDER: Record<WatchedTable, string> = {
   cards: 'created_at',
   turns: 'id',
   notebook: 'created_at',
+  notebook_proposals: 'created_at',
   charter_proposals: 'created_at',
   budget: 'updated_at',
   layouts: 'name',
 };
 
-const scope = (table: WatchedTable): string => {
+export const tableScope = (table: StoreTable): string => {
   if (table === 'projects') return 'id = $1';
   if (table === 'turns') {
     return 'agent_id in (select id from agents where project_id = $1)';
@@ -91,7 +94,7 @@ const columns = (table: WatchedTable): string => {
 const latestTurns = (perAgent: number): string =>
   `select ${TURN_COLUMNS} from (
      select *, row_number() over (partition by agent_id order by id desc) as recent
-     from turns where ${scope('turns')}
+     from turns where ${tableScope('turns')}
    ) latest
    where recent <= ${perAgent}
    order by id`;
@@ -107,7 +110,7 @@ export const readRows = async (
   options: ReadRowsOptions = {},
 ): Promise<Row[]> => {
   const { turnsPerAgent } = options;
-  let sql = `select ${columns(table)} from ${table} where ${scope(table)}
+  let sql = `select ${columns(table)} from ${table} where ${tableScope(table)}
      order by ${ORDER[table]}, id`;
   if (table === 'turns' && turnsPerAgent !== undefined) {
     sql = latestTurns(Math.max(0, Math.trunc(turnsPerAgent)));
@@ -123,7 +126,7 @@ export const readRow = async (
   id: string | number,
 ): Promise<Row | null> => {
   const { rows } = await db.query<Row>(
-    `select ${columns(table)} from ${table} where id = $2 and ${scope(table)}`,
+    `select ${columns(table)} from ${table} where id = $2 and ${tableScope(table)}`,
     [projectId, id],
   );
   const [row] = rows;

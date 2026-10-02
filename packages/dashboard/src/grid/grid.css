@@ -119,6 +119,13 @@
   outline-offset: 1px;
 }
 
+.qd-widget-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qd-space-3);
+  min-height: 0;
+}
+
 .qd-visually-hidden {
   position: absolute;
   width: 1px;

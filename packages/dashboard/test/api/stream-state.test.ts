@@ -58,6 +58,7 @@ const note = (body: string): NotebookRow => ({
   body,
   pinned: false,
   createdAt: AT,
+  retiredAt: null,
 });
 
 const event = (id: number): StreamEvent => ({

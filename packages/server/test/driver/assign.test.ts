@@ -1,8 +1,8 @@
-import { existsSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Naming } from '@quarterdeck/rules';
+import type { BudgetWindow, Naming } from '@quarterdeck/rules';
 import {
   afterAll,
   afterEach,
@@ -19,8 +19,10 @@ import {
   gitWorktrees,
   type AgentLifecycle,
 } from '../../src/agents/index.js';
+import { BudgetHeldError } from '../../src/budget/index.js';
 import {
   AgentNotRetiredError,
+  BUILDER_STUCK_EVENT,
   BuilderNotAvailableError,
   BuilderSessionLostError,
   DRIVER_TURN_INSTRUCTIONS,
@@ -32,6 +34,8 @@ import {
   builderWorktreePath,
   continueBuilder,
   reassignTickets,
+  STUCK_AFTER_CONTINUES,
+  worktreeHead,
   type BuilderContext,
 } from '../../src/driver/index.js';
 import {
@@ -54,6 +58,7 @@ import {
 const TIMEOUT = 30_000;
 const settle = (check: () => unknown) => vi.waitFor(check, { timeout: 10_000 });
 const BIRDS: Naming = { theme: 'birds', names: ['crane', 'heron', 'ibis'] };
+const NO_CAP: BudgetWindow = { hours: 5, capTokens: null, holdAtFraction: 0.8 };
 
 interface TicketSeed {
   title?: string;
@@ -110,6 +115,7 @@ describe('builder assignment and continue', () => {
       sessions,
       worktrees: gitWorktrees,
       openStores: () => [store],
+      budget: () => Promise.resolve(ctx.budget),
       random: () => 0,
     });
     ctx = {
@@ -122,9 +128,14 @@ describe('builder assignment and continue', () => {
       base,
       worktreesDir: join(root, 'worktrees'),
       turnsDir: join(root, 'turns'),
+      budget: NO_CAP,
       pause: pauseGate,
     };
   });
+
+  const capBudget = (budget: BudgetWindow): void => {
+    ctx = { ...ctx, budget };
+  };
 
   afterEach(async () => {
     await pauseGate.close();
@@ -496,6 +507,7 @@ describe('builder assignment and continue', () => {
           payload: {
             name: 'crane',
             prompt: 'CI failed on lint; fix it and push.',
+            head: base,
           },
         },
       ]);
@@ -503,6 +515,61 @@ describe('builder assignment and continue', () => {
     },
     TIMEOUT,
   );
+
+  it(
+    'flags a builder stuck after three continues made no commit, once per head',
+    async () => {
+      const ticketId = await insertTicket();
+      const { builder, worktreePath } = await assignAndSettle(ticketId);
+      const continueAndSettle = async () => {
+        scripted.reply(say('Still on it.'));
+        const continuation = await continueBuilder(ctx, {
+          builderId: builder.id,
+          prompt: 'Keep going.',
+        });
+        await continuation.turn;
+      };
+
+      await continueAndSettle();
+      await continueAndSettle();
+      await continueAndSettle();
+      expect(await events(BUILDER_STUCK_EVENT)).toEqual([]);
+      await continueAndSettle();
+      await continueAndSettle();
+      expect(await events(BUILDER_STUCK_EVENT)).toEqual([
+        {
+          agentId: builder.id,
+          ticketId,
+          payload: {
+            name: 'crane',
+            head: base,
+            continues: STUCK_AFTER_CONTINUES,
+          },
+        },
+      ]);
+
+      git(worktreePath, 'commit', '--quiet', '--allow-empty', '-m', 'work');
+      const moved = git(worktreePath, 'rev-parse', 'HEAD');
+      await continueAndSettle();
+      await continueAndSettle();
+      await continueAndSettle();
+      expect(await events(BUILDER_STUCK_EVENT)).toHaveLength(1);
+      await continueAndSettle();
+      expect(
+        (await events(BUILDER_STUCK_EVENT)).map((event) => event.payload),
+      ).toEqual([
+        { name: 'crane', head: base, continues: STUCK_AFTER_CONTINUES },
+        { name: 'crane', head: moved, continues: STUCK_AFTER_CONTINUES },
+      ]);
+      expect((await agentRow(builder.id))?.status).toBe('idle');
+    },
+    TIMEOUT,
+  );
+
+  it('reads no head without a worktree', async () => {
+    expect(await worktreeHead(null)).toBeNull();
+    expect(await worktreeHead(join(root, 'nowhere'))).toBeNull();
+  });
 
   it(
     'refuses to continue a working builder, an empty prompt or a lost session',
@@ -721,6 +788,56 @@ describe('builder assignment and continue', () => {
   );
 
   it(
+    'skips a held re-assignment whose ticket was reopened during the pause',
+    async () => {
+      const reopened = await insertTicket({ title: 'QD1' });
+      const first = await assignAndSettle(reopened);
+      const kept = await insertTicket({
+        title: 'QD2',
+        status: 'assigned',
+        assigneeId: first.builder.id,
+      });
+      await lifecycle.retire(store, first.builder.id);
+      await pauseProject(true);
+      scripted.reply(say('Picking it up.'));
+
+      const reassigning = reassignTickets(ctx, first.builder.id);
+      await settle(async () => {
+        expect(await events('pause.held')).toHaveLength(1);
+      });
+      expect((await events('pause.held'))[0]?.ticketId).toBe(reopened);
+      await store.db.query(
+        `update tickets set status = 'open', assignee_id = null where id = $1`,
+        [reopened],
+      );
+      await pauseProject(false);
+      const assignments = await reassigning;
+      await Promise.all(assignments.map((assignment) => assignment.turn));
+
+      expect(assignments).toHaveLength(1);
+      expect(assignments[0]).toMatchObject({
+        born: true,
+        previousAssigneeId: first.builder.id,
+        ticket: { id: kept },
+      });
+      expect(await agentCount()).toBe(2);
+      expect(sessions.opened).toHaveLength(2);
+      expect(await ticketRow(reopened)).toEqual({
+        status: 'open',
+        assigneeId: null,
+      });
+      expect(await ticketRow(kept)).toEqual({
+        status: 'assigned',
+        assigneeId: assignments[0]?.builder.id,
+      });
+      expect(
+        (await events(TICKET_ASSIGNED_EVENT)).map((event) => event.ticketId),
+      ).toEqual([reopened, kept]);
+    },
+    TIMEOUT,
+  );
+
+  it(
     'applies assign and continue actions from a Driver turn result',
     async () => {
       const ticketId = await insertTicket();
@@ -752,6 +869,62 @@ describe('builder assignment and continue', () => {
       expect(scripted.prompts.map((prompt) => prompt.text)[1]).toBe(
         'Push your branch.',
       );
+    },
+    TIMEOUT,
+  );
+
+  it(
+    'holds a new builder, a moved builder and a continue at the budget line',
+    async () => {
+      const first = await insertTicket({ title: 'QD1' });
+      const second = await insertTicket({ title: 'QD2' });
+      const { builder, worktreePath } = await assignAndSettle(first);
+      await store.db.query(
+        `insert into turns (agent_id, seq, prompt, input_tokens, ended_at)
+         values ($1, 100, 'earlier work', 800, now())`,
+        [builder.id],
+      );
+      capBudget({ hours: 5, capTokens: 1000, holdAtFraction: 0.8 });
+
+      await expect(
+        continueBuilder(ctx, { builderId: builder.id, prompt: 'Push.' }),
+      ).rejects.toBeInstanceOf(BudgetHeldError);
+      await expect(
+        assignTicket(ctx, { ticketId: second }),
+      ).rejects.toBeInstanceOf(BudgetHeldError);
+      await store.db.query(`update tickets set status = 'done' where id = $1`, [
+        first,
+      ]);
+      await expect(
+        assignTicket(ctx, { ticketId: second, builderId: builder.id }),
+      ).rejects.toBeInstanceOf(BudgetHeldError);
+
+      expect(await agentCount()).toBe(1);
+      expect(await agentRow(builder.id)).toMatchObject({
+        status: 'idle',
+        sessionId: builder.sessionId,
+        worktreePath,
+      });
+      expect(readdirSync(ctx.worktreesDir)).toEqual([
+        `crane-${first.slice(0, 8)}`,
+      ]);
+      expect(sessions.opened).toHaveLength(1);
+      expect(sessions.closed).toEqual([]);
+      expect(scripted.prompts).toHaveLength(1);
+      expect(
+        (await events('budget.held')).map(({ agentId, ticketId }) => ({
+          agentId,
+          ticketId,
+        })),
+      ).toEqual([
+        { agentId: builder.id, ticketId: null },
+        { agentId: null, ticketId: second },
+        { agentId: builder.id, ticketId: second },
+      ]);
+      expect(await ticketRow(second)).toEqual({
+        status: 'open',
+        assigneeId: null,
+      });
     },
     TIMEOUT,
   );

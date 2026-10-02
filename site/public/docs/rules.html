@@ -135,8 +135,10 @@
       </p>
       <pre><code>{ "mergeGate": { "requireCopilotReview": true } }</code></pre>
       <p>
-        The other keys in a repo layer, <code>budget</code> included, merge like
-        any other layer.
+        <code>budget.window</code> is tighten-only there too. A repo layer gets
+        the smaller cap (a <code>null</code> cap never lifts a machine cap), the
+        lower <code>holdAtFraction</code> and the longer <code>hours</code>. The
+        rest of <code>budget</code> merges like any other layer.
       </p>
 
       <h2 id="permissions">permissions.json</h2>
@@ -228,6 +230,18 @@
             <td><code>budget.warnAtFraction</code></td>
             <td><code>0.8</code></td>
             <td>The share of the budget at which you are warned.</td>
+          </tr>
+          <tr>
+            <td><code>budget.window</code></td>
+            <td>
+              <code>{"hours":5,"capTokens":null,"holdAtFraction":0.8}</code>
+            </td>
+            <td>
+              The rolling token window. Every launch is held once the tokens
+              spent in the last <code>hours</code> reach
+              <code>holdAtFraction</code> of <code>capTokens</code>.
+              <code>capTokens: null</code> means no cap.
+            </td>
           </tr>
           <tr>
             <td><code>mergeGate</code></td>

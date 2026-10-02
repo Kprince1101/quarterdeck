@@ -1,4 +1,4 @@
-import type { Runtime } from '@quarterdeck/rules';
+import type { BudgetWindow, Runtime } from '@quarterdeck/rules';
 import {
   AGENT_COLUMNS,
   findAgent,
@@ -32,6 +32,7 @@ export interface BuilderContext {
   base: string;
   worktreesDir: string;
   turnsDir: string;
+  budget: BudgetWindow;
   pause: PauseGuard;
   roundId?: string;
 }

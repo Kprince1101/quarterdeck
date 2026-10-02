@@ -4,6 +4,7 @@ import { App } from './app.js';
 import './theme/tokens.css';
 import './shell/shell.css';
 import './grid/grid.css';
+import './layouts/layouts.css';
 import './widgets/widgets.css';
 
 const container = document.getElementById('root');

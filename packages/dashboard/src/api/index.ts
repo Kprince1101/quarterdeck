@@ -1,4 +1,5 @@
 import { createIntentClient } from './intents.js';
+import { createRulesReader } from './rules.js';
 
 export {
   IntentError,
@@ -11,6 +12,11 @@ export {
   type IntentSender,
   type SendIntent,
 } from './intents.js';
+export {
+  RulesReadError,
+  createRulesReader,
+  type RulesReader,
+} from './rules.js';
 export {
   CLOSE_NORMAL,
   MAX_RETRY_DELAY_MS,
@@ -39,7 +45,12 @@ export type {
   IntentInput,
   IntentName,
   IntentReply,
+  RuleLayer,
+  RuleView,
+  RulesView,
 } from '@quarterdeck/server/intents';
 export type * from '@quarterdeck/server/stream-schema';
 
 export const intents = createIntentClient();
+
+export const readRules = createRulesReader();

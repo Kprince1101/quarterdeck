@@ -124,15 +124,34 @@ export const notebookRowSchema = z.object({
   body: z.string(),
   pinned: z.boolean(),
   createdAt: timestampSchema,
+  retiredAt: timestampSchema.nullable(),
+});
+
+const proposalStatusSchema = z.enum(['open', 'accepted', 'rejected']);
+
+export const notebookProposalRowSchema = z.object({
+  id: idSchema,
+  projectId: idSchema,
+  roundId: idSchema.nullable(),
+  agentId: idSchema.nullable(),
+  op: z.enum(['add', 'update', 'retire']),
+  entryId: idSchema.nullable(),
+  body: z.string().nullable(),
+  pinned: z.boolean(),
+  rationale: z.string(),
+  status: proposalStatusSchema,
+  createdAt: timestampSchema,
+  decidedAt: timestampSchema.nullable(),
 });
 
 export const charterProposalRowSchema = z.object({
   id: idSchema,
   projectId: idSchema,
+  roundId: idSchema.nullable(),
   agentId: idSchema.nullable(),
   body: z.string(),
   rationale: z.string(),
-  status: z.enum(['open', 'accepted', 'rejected']),
+  status: proposalStatusSchema,
   createdAt: timestampSchema,
   decidedAt: timestampSchema.nullable(),
 });
@@ -166,6 +185,7 @@ export const tableRowSchemas = {
   cards: cardRowSchema,
   turns: turnRowSchema,
   notebook: notebookRowSchema,
+  notebook_proposals: notebookProposalRowSchema,
   charter_proposals: charterProposalRowSchema,
   budget: budgetRowSchema,
   layouts: layoutRowSchema,
@@ -193,6 +213,7 @@ export const snapshotTablesSchema = z.object({
   cards: z.array(cardRowSchema),
   turns: z.array(turnRowSchema),
   notebook: z.array(notebookRowSchema),
+  notebook_proposals: z.array(notebookProposalRowSchema),
   charter_proposals: z.array(charterProposalRowSchema),
   budget: z.array(budgetRowSchema),
   layouts: z.array(layoutRowSchema),
@@ -244,6 +265,7 @@ export const changeMessageSchema = z.discriminatedUnion('table', [
   changeOf('cards', cardRowSchema),
   changeOf('turns', turnRowSchema),
   changeOf('notebook', notebookRowSchema),
+  changeOf('notebook_proposals', notebookProposalRowSchema),
   changeOf('charter_proposals', charterProposalRowSchema),
   changeOf('budget', budgetRowSchema),
   changeOf('layouts', layoutRowSchema),
@@ -263,6 +285,7 @@ export type TicketRow = z.infer<typeof ticketRowSchema>;
 export type CardRow = z.infer<typeof cardRowSchema>;
 export type TurnRow = z.infer<typeof turnRowSchema>;
 export type NotebookRow = z.infer<typeof notebookRowSchema>;
+export type NotebookProposalRow = z.infer<typeof notebookProposalRowSchema>;
 export type CharterProposalRow = z.infer<typeof charterProposalRowSchema>;
 export type BudgetRow = z.infer<typeof budgetRowSchema>;
 export type LayoutRow = z.infer<typeof layoutRowSchema>;

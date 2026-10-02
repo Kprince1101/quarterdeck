@@ -1,4 +1,5 @@
 import type { Agent } from '../agents/index.js';
+import { assertLaunchBudget } from '../budget/index.js';
 import { pauseLabel, type PauseSubject } from '../pause/index.js';
 import type { PublishInput } from '../store/index.js';
 import {
@@ -8,13 +9,14 @@ import {
   withClaim,
   type BuilderContext,
 } from './builders.js';
+import { BUILDER_CONTINUED_EVENT, flagIfStuck, worktreeHead } from './stuck.js';
 import type { TurnRecord } from './turns.js';
 
-export const BUILDER_CONTINUED_EVENT = 'builder.continued';
+export { BUILDER_CONTINUED_EVENT };
 
 export type ContinueContext = Pick<
   BuilderContext,
-  'store' | 'sessions' | 'turnsDir' | 'pause'
+  'store' | 'sessions' | 'turnsDir' | 'budget' | 'pause'
 >;
 
 export interface ContinueRequest {
@@ -33,19 +35,22 @@ const sendContinue = async (
   builderId: string,
   prompt: string,
 ): Promise<Continuation> => {
+  await assertLaunchBudget(ctx.store, ctx.budget, { agentId: builderId });
   const { builder, ticketId } = await claimBuilder(ctx.store, builderId, {
     free: false,
     session: true,
   });
   const target = await withClaim(ctx.store, builder.id, async () => {
     const found = builderTarget(ctx, builder, ticketId);
+    const head = await worktreeHead(builder.worktreePath);
     const event: PublishInput = {
       kind: BUILDER_CONTINUED_EVENT,
       agentId: builder.id,
-      payload: { name: builder.name, prompt },
+      payload: { name: builder.name, prompt, head },
     };
     if (ticketId !== null) event.ticketId = ticketId;
     await ctx.store.publish(event);
+    await flagIfStuck(ctx.store, builder, ticketId, head);
     return found;
   });
   return { builder, ticketId, turn: promptBuilder(target, prompt) };

@@ -9,8 +9,19 @@ import { ALPHA, BETA } from './fixtures.js';
 
 describe('widget registry', () => {
   it('discovers every *.widget.tsx file', () => {
-    expect([...WIDGETS.keys()]).toEqual(['board', 'events', 'tables']);
+    expect([...WIDGETS.keys()]).toEqual(
+      expect.arrayContaining([
+        'board',
+        'data',
+        'driver',
+        'events',
+        'notebook',
+        'rules',
+        'tables',
+      ]),
+    );
     expect(WIDGETS.get('events')?.title).toBe('Events');
+    expect(WIDGETS.get('data')?.title).toBe('Data');
   });
 
   it('keys definitions by type', () => {

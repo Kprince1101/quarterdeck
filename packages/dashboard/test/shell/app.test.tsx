@@ -14,11 +14,15 @@ import {
 import { App } from '../../src/app.js';
 import { DeckProvider, useDeck, type Deck } from '../../src/deck/deck.js';
 import { FAKE_WEBSOCKET, FakeSocket } from '../api/fake-socket.js';
-import { click } from '../grid/events.js';
-import { all, render, textOf, type PageElement } from './page.js';
+import {
+  PROJECT_ID,
+  STARTER_LAYOUT,
+  layoutRow,
+  snapshotWith,
+} from '../layouts/stream-rows.js';
+import { all, render, textOf } from './page.js';
 
 const STREAM_URL = 'ws://127.0.0.1:4317/ws';
-const PROJECT_ID = '00000000-0000-4000-8000-000000000001';
 
 const SNAPSHOT: StreamMessage = {
   type: 'snapshot',
@@ -41,16 +45,6 @@ const event = (id: number, kind: string): StreamMessage => {
 };
 
 const stream = { url: STREAM_URL, WebSocket: FAKE_WEBSOCKET };
-
-const showTables = (container: PageElement) => {
-  const press = (label: string) => {
-    const button = container.querySelector(`[aria-label="${label}"]`);
-    if (button === null) throw new Error(`no ${label} button`);
-    click(button);
-  };
-  press('Hide Board');
-  press('Show Tables');
-};
 
 const socket = (): FakeSocket => {
   const [only] = FakeSocket.opened;
@@ -101,6 +95,7 @@ describe('dashboard shell', () => {
 
   it('gives every panel its own scrolling body', () => {
     const { container, unmount } = render(<App stream={stream} />);
+    deliver(snapshotWith(layoutRow(STARTER_LAYOUT)));
     const panels = all(
       container,
       '[data-widget-mount] .qd-grid-cell > .qd-panel',
@@ -113,26 +108,71 @@ describe('dashboard shell', () => {
     unmount();
   });
 
-  it('opens on Board beside Events, with Tables waiting in the tray', () => {
+  it('registers the Board widget', () => {
     const { container, unmount } = render(<App stream={stream} />);
-    const shown = all(container, '[data-grid-item]').map((cell) =>
-      cell.getAttribute('data-grid-item'),
+    deliver(
+      snapshotWith(
+        layoutRow({
+          columns: 12,
+          rows: 12,
+          items: [
+            {
+              id: 'board-1',
+              widget: 'board',
+              x: 0,
+              y: 0,
+              w: 12,
+              h: 12,
+              hidden: false,
+            },
+          ],
+        }),
+      ),
     );
-    expect(shown).toEqual(['board-1', 'events-1']);
-    expect(
-      container.querySelector('[data-hidden-item="tables-1"]'),
-    ).not.toBeNull();
+    const board = textOf(container, '[aria-label="Board"]');
+    expect(board).toContain('deck');
+    expect(board).toContain('Pause all');
+    unmount();
+  });
+
+  it('registers the Driver widget', () => {
+    const { container, unmount } = render(<App stream={stream} />);
+    deliver(
+      snapshotWith(
+        layoutRow({
+          columns: 12,
+          rows: 12,
+          items: [
+            {
+              id: 'driver-1',
+              widget: 'driver',
+              x: 0,
+              y: 0,
+              w: 12,
+              h: 12,
+              hidden: false,
+            },
+          ],
+        }),
+      ),
+    );
+    expect(textOf(container, '[aria-label="Driver"]')).toContain(
+      'No rounds yet.',
+    );
     unmount();
   });
 
   it('wires the starter panels to the stream', () => {
     const { container, unmount } = render(<App stream={stream} />);
-    showTables(container);
     expect(textOf(container, '[aria-label="Events"]')).toContain(
       'No events yet.',
     );
 
-    deliver(SNAPSHOT, event(1, 'project.created'), event(2, 'notebook.added'));
+    deliver(
+      snapshotWith(layoutRow(STARTER_LAYOUT)),
+      event(1, 'project.created'),
+      event(2, 'notebook.added'),
+    );
     const tables = all(container, '.qd-table-counts dt').map(
       ({ textContent }) => textContent,
     );

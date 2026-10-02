@@ -12,7 +12,11 @@ export {
   type LoadRulesOptions,
   type RuleLayers,
 } from './load-rules.js';
-export { mergeRepoLifecycle, tightenMergeGate } from './merge-gate-layer.js';
+export {
+  mergeRepoLifecycle,
+  tightenMergeGate,
+  tightenSettleSeconds,
+} from './lifecycle-layer.js';
 export {
   loadPermissionLayers,
   loadRepoPermissions,

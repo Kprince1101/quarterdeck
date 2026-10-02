@@ -4,6 +4,7 @@ import {
   readdir,
   readFile,
   rm,
+  utimes,
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -34,8 +35,10 @@ import {
   ReplaySignInError,
   TurnInputMissingError,
   buildBirthInput,
+  findRoundSessions,
   isBirthInput,
   openDriverRound,
+  readBirth,
   readTurnChain,
   replayCommand,
   replayDriverChain,
@@ -226,6 +229,7 @@ describe('Driver replay', () => {
           cwd: '/work/deck',
           charter: '# Driver charter',
           turnsDir,
+          budget: { hours: 5, capTokens: null, holdAtFraction: 0.8 },
           pause: { hold: (_subject, run) => run() },
         });
         await round.birth;
@@ -547,23 +551,100 @@ describe('isBirthInput', () => {
   });
 });
 
+describe('readBirth', () => {
+  it("reads the Driver's name and round from a birth input", () => {
+    expect(readBirth(birthInput(12))).toEqual({ name: 'newt', round: 12 });
+    expect(readBirth('heron reported QD12.')).toBeUndefined();
+  });
+});
+
+describe('findRoundSessions', () => {
+  const OTHER_ID = '0b1c2d3e-4f50-4617-8899-aabbccddeeff';
+  const BUILDER_ID = '11111111-2222-4333-8444-555555555555';
+  let turnsDir: string;
+
+  beforeEach(async () => {
+    turnsDir = await mkdtemp(join(tmpdir(), 'qd-round-'));
+  });
+
+  afterEach(async () => {
+    await rm(turnsDir, { recursive: true, force: true });
+  });
+
+  const save = async (
+    agentId: string,
+    seq: number,
+    input: string,
+    bornAt?: Date,
+  ) => {
+    const dir = turnDir(turnsDir, agentId, seq);
+    await mkdir(dir, { recursive: true });
+    const path = turnFile(dir, 'input');
+    await writeFile(path, input);
+    if (bornAt) await utimes(path, bornAt, bornAt);
+  };
+
+  it('finds each Driver session of a round, its turns ending at the next birth', async () => {
+    await save(AGENT_ID, 1, birthInput(1), new Date('2026-01-01'));
+    await save(AGENT_ID, 2, 'poke');
+    await save(AGENT_ID, 3, birthInput(2), new Date('2026-01-02'));
+    await save(AGENT_ID, 4, 'poke');
+    await save(AGENT_ID, 5, 'poke again');
+    await save(AGENT_ID, 6, birthInput(3), new Date('2026-01-04'));
+    await save(OTHER_ID, 1, birthInput(2), new Date('2026-01-03'));
+    await save(BUILDER_ID, 1, 'Work on QD12.');
+    await save(BUILDER_ID, 2, birthInput(2));
+    await mkdir(join(turnsDir, 'not-an-agent', '0001'), { recursive: true });
+
+    const sessions = await findRoundSessions(turnsDir, 2);
+
+    expect(sessions).toEqual([
+      {
+        agentId: AGENT_ID,
+        driverName: 'newt',
+        round: 2,
+        firstSeq: 3,
+        lastSeq: 5,
+        bornAt: new Date('2026-01-02'),
+      },
+      {
+        agentId: OTHER_ID,
+        driverName: 'newt',
+        round: 2,
+        firstSeq: 1,
+        lastSeq: 1,
+        bornAt: new Date('2026-01-03'),
+      },
+    ]);
+    expect(await findRoundSessions(turnsDir, 1)).toMatchObject([
+      { agentId: AGENT_ID, firstSeq: 1, lastSeq: 2 },
+    ]);
+    expect(await findRoundSessions(turnsDir, 4)).toEqual([]);
+  });
+
+  it('finds nothing in a folder that does not exist', async () => {
+    expect(await findRoundSessions(join(turnsDir, 'missing'), 1)).toEqual([]);
+  });
+});
+
 describe('replayCommand', () => {
-  it('prints the command the dashboard shows for a turn', () => {
-    expect(
-      replayCommand({ project: 'commander', agentId: AGENT_ID, through: 7 }),
-    ).toBe(`${REPLAY_COMMAND} commander ${AGENT_ID} 7`);
+  it('prints the command the Driver widget shows for a round', () => {
+    expect(replayCommand({ round: 3 })).toBe(`${REPLAY_COMMAND} 3`);
+    expect(replayCommand({ round: 3, through: 7 })).toBe(
+      `${REPLAY_COMMAND} 3 7`,
+    );
+    expect(replayCommand({ round: 3, through: 7, project: 'commander' })).toBe(
+      `${REPLAY_COMMAND} 3 7 --project commander`,
+    );
     expect(REPLAY_COMMAND).toBe('npx quarterdeck replay');
   });
 
   it('refuses parts that are not safe to paste into a shell', () => {
-    expect(() =>
-      replayCommand({ project: 'a; rm -rf ~', agentId: AGENT_ID, through: 1 }),
-    ).toThrow('Invalid project slug');
-    expect(() =>
-      replayCommand({ project: 'deck', agentId: '$(id)', through: 1 }),
-    ).toThrow('Invalid agent id');
-    expect(() =>
-      replayCommand({ project: 'deck', agentId: AGENT_ID, through: 0 }),
-    ).toThrow(RangeError);
+    expect(() => replayCommand({ round: 1, project: 'a; rm -rf ~' })).toThrow(
+      'Invalid project slug',
+    );
+    expect(() => replayCommand({ round: 0 })).toThrow(RangeError);
+    expect(() => replayCommand({ round: 1.5 })).toThrow(RangeError);
+    expect(() => replayCommand({ round: 1, through: 0 })).toThrow(RangeError);
   });
 });

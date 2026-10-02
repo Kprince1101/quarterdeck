@@ -58,22 +58,28 @@ describe('crew intents are recorded or applied', { timeout: TIMEOUT }, () => {
     expect(kinds).toEqual(['pause.set']);
   });
 
-  it('checks the round exists and is still open', async () => {
-    const missing = await t.send('round.end', {
+  it.each([
+    ['round.end', 1],
+    ['round.kill', 2],
+  ])('%s checks the round exists and is still open', async (name, number) => {
+    const missing = await t.send(name, {
       project,
       roundId: crypto.randomUUID(),
     });
     expect(missing.status).toBe(404);
-    const { rows } = await store.db.query<{ id: string }>(
+    const { rows } = await store.db.query<{ id: string; status: string }>(
       `insert into rounds (project_id, number, status)
-       values ($1, 1, 'ended') returning id`,
-      [store.projectId],
+       values ($1, $2, 'ended'), ($1, $3, 'active') returning id, status`,
+      [store.projectId, number * 10, number * 10 + 1],
     );
-    const ended = await t.send('round.end', {
-      project,
-      roundId: rows[0]?.id,
+    const [ended, open] = rows;
+    const refused = await t.send(name, { project, roundId: ended?.id });
+    expect(refused.status).toBe(409);
+    const queued = await t.send(name, { project, roundId: open?.id });
+    expect(queued).toMatchObject({
+      status: 202,
+      body: { intent: name, status: 'pending' },
     });
-    expect(ended.status).toBe(409);
   });
 
   it.each(['agent.end', 'agent.kill'])(

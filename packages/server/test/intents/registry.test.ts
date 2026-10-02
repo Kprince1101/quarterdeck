@@ -3,8 +3,10 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { RULE_NAMES } from '@quarterdeck/rules';
 import {
+  DATA_PAGE_SIZE,
   INTENTS,
   INTENT_NAMES,
+  MAX_DATA_PAGE_SIZE,
   intentPath,
   isIntentName,
   ruleNameSchema,
@@ -31,6 +33,7 @@ describe('intent registry', () => {
         'agent',
         'card',
         'charter',
+        'data',
         'layout',
         'notebook',
         'pause',
@@ -39,6 +42,7 @@ describe('intent registry', () => {
         'round',
         'rules',
         'ticket',
+        'turn',
         'wipe',
       ].toSorted(),
     );
@@ -157,14 +161,59 @@ describe('intent schemas', () => {
     ).toBe(false);
   });
 
+  it('pages data rows within bounds', () => {
+    expect(INTENTS['data.rows'].parse({ project, table: 'events' })).toEqual({
+      project,
+      table: 'events',
+      offset: 0,
+      limit: DATA_PAGE_SIZE,
+    });
+    [
+      { table: 'events', limit: MAX_DATA_PAGE_SIZE + 1 },
+      { table: 'events', limit: 0 },
+      { table: 'events', offset: -1 },
+      { table: 'events; drop table events' },
+      { table: 'Events' },
+    ].forEach((input) =>
+      expect(
+        INTENTS['data.rows'].safeParse({ project, ...input }).success,
+      ).toBe(false),
+    );
+  });
+
   it('validates layout grids', () => {
-    const item = { id: 'a', widget: 'board', x: 0, y: 0, w: 0, h: 1 };
+    const item = {
+      id: 'a',
+      widget: 'board',
+      x: 0,
+      y: 0,
+      w: 1,
+      h: 1,
+      hidden: false,
+    };
+    const saves = (spec: unknown) =>
+      INTENTS['layout.save'].safeParse({ project, name: 'n', spec }).success;
+    expect(saves({ columns: 12, rows: 12, items: [item] })).toBe(true);
+    expect(saves({ columns: 12, rows: 12, items: [{ ...item, w: 0 }] })).toBe(
+      false,
+    );
+    expect(saves({ columns: 12, items: [item] })).toBe(false);
     expect(
-      INTENTS['layout.save'].safeParse({
-        project,
-        name: 'n',
-        spec: { columns: 12, items: [item] },
-      }).success,
+      saves({ columns: 12, rows: 12, items: [{ ...item, config: {} }] }),
     ).toBe(false);
+    expect(
+      saves({ columns: 12, rows: 12, items: [{ ...item, tabs: ['board'] }] }),
+    ).toBe(false);
+  });
+
+  it('resets a layout only to a shipped preset', () => {
+    const resets = (preset: string) =>
+      INTENTS['layout.reset'].safeParse({ project, name: 'n', preset }).success;
+    expect(['default', 'ops', 'minimal'].map(resets)).toEqual([
+      true,
+      true,
+      true,
+    ]);
+    expect(resets('cockpit')).toBe(false);
   });
 });

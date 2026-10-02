@@ -8,6 +8,7 @@ import {
   type Agent,
   type BirthRequest,
 } from '../agents/index.js';
+import { assertLaunchBudget } from '../budget/index.js';
 import { pauseLabel, type PauseSubject } from '../pause/index.js';
 import { publishEvent } from '../store/index.js';
 import { buildAssignmentPrompt } from './assignment-prompt.js';
@@ -90,6 +91,7 @@ const birthBuilder = async (
     store: ctx.store,
     role: 'builder',
     runtime: ctx.runtime,
+    ticketId: ticket.id,
     prepare,
   };
   if (ctx.roundId !== undefined) request.roundId = ctx.roundId;
@@ -138,6 +140,10 @@ const moveBuilder = async (
   builderId: string,
   ticket: BuilderTicket,
 ): Promise<PlacedBuilder> => {
+  await assertLaunchBudget(ctx.store, ctx.budget, {
+    agentId: builderId,
+    ticketId: ticket.id,
+  });
   const { builder } = await claimBuilder(ctx.store, builderId, {
     free: true,
     session: false,
@@ -296,11 +302,13 @@ export const reassignTickets = async (
   const assignments: Assignment[] = [];
   for (const ticket of tickets) {
     const subject = launchSubject('reassign', ticket, undefined);
-    assignments.push(
-      await ctx.pause.hold(subject, () =>
-        handOver(ctx, ticket, undefined, retiredId),
-      ),
-    );
+    const assignment = await ctx.pause.hold(subject, async () => {
+      const held = await heldTickets(ctx.store, retiredId);
+      const current = held.find((row) => row.id === ticket.id);
+      if (current === undefined) return undefined;
+      return handOver(ctx, current, undefined, retiredId);
+    });
+    if (assignment !== undefined) assignments.push(assignment);
   }
   return assignments;
 };

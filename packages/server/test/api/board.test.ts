@@ -357,6 +357,132 @@ describe('board intents', { timeout: TIMEOUT }, () => {
     });
   });
 
+  describe('notebook proposals', () => {
+    const addEntry = async (body: string) => {
+      const res = await t.send('notebook.add', { project, body });
+      return (res.body.result as { entryId: string }).entryId;
+    };
+
+    const propose = async (
+      op: string,
+      entryId: string | null,
+      body: string | null,
+    ) => {
+      const { rows } = await store.db.query<{ id: string }>(
+        `insert into notebook_proposals (project_id, op, entry_id, body)
+         values ($1, $2, $3, $4) returning id`,
+        [store.projectId, op, entryId, body],
+      );
+      return rows[0]?.id ?? '';
+    };
+
+    const entry = async (id: unknown) => {
+      const { rows } = await store.db.query<{
+        body: string;
+        retired: boolean;
+      }>(
+        `select body, retired_at is not null as retired
+         from notebook where id = $1`,
+        [id],
+      );
+      return rows[0];
+    };
+
+    const proposal = async (id: string) => {
+      const { rows } = await store.db.query<{
+        status: string;
+        body: string | null;
+        decided: boolean;
+      }>(
+        `select status, body, decided_at is not null as decided
+         from notebook_proposals where id = $1`,
+        [id],
+      );
+      return rows[0];
+    };
+
+    const decide = (proposalId: string, decision: string, body?: string) =>
+      t.send('notebook.decide', { project, proposalId, decision, body });
+
+    it('accepts an add as a new entry, with the edit the human made', async () => {
+      const proposalId = await propose('add', null, 'Run both backends.');
+      const res = await decide(
+        proposalId,
+        'accepted',
+        'Run both store backends.',
+      );
+      expect(res.status).toBe(200);
+      const result = res.body.result as { entryId: string };
+      expect(result).toEqual({
+        proposalId,
+        decision: 'accepted',
+        op: 'add',
+        entryId: result.entryId,
+      });
+      expect(await entry(result.entryId)).toEqual({
+        body: 'Run both store backends.',
+        retired: false,
+      });
+      expect(await proposal(proposalId)).toEqual({
+        status: 'accepted',
+        body: 'Run both store backends.',
+        decided: true,
+      });
+      expect(await intentRow(store, res.body.id)).toMatchObject({
+        kind: 'notebook.decide',
+        status: 'applied',
+      });
+    });
+
+    it('accepts an update and a retire against the entry', async () => {
+      const entryId = await addEntry('Tests matter.');
+      const update = await propose(
+        'update',
+        entryId,
+        'Every ticket has tests.',
+      );
+      await decide(update, 'accepted');
+      expect(await entry(entryId)).toEqual({
+        body: 'Every ticket has tests.',
+        retired: false,
+      });
+
+      const retire = await propose('retire', entryId, null);
+      expect((await decide(retire, 'accepted', 'x')).status).toBe(400);
+      expect((await decide(retire, 'accepted')).status).toBe(200);
+      expect(await entry(entryId)).toEqual({
+        body: 'Every ticket has tests.',
+        retired: true,
+      });
+
+      const late = await propose('update', entryId, 'Too late.');
+      expect(await decide(late, 'accepted')).toMatchObject({
+        status: 409,
+        body: { error: `notebook entry ${entryId} is retired` },
+      });
+      expect((await proposal(late))?.status).toBe('open');
+    });
+
+    it('rejects without touching the notebook, once', async () => {
+      const entryId = await addEntry('Keep me.');
+      const proposalId = await propose('retire', entryId, null);
+      expect((await decide(proposalId, 'rejected')).body.result).toEqual({
+        proposalId,
+        decision: 'rejected',
+        op: 'retire',
+      });
+      expect(await entry(entryId)).toEqual({
+        body: 'Keep me.',
+        retired: false,
+      });
+      expect(await decide(proposalId, 'accepted')).toMatchObject({
+        status: 409,
+        body: { error: `notebook proposal ${proposalId} is already rejected` },
+      });
+      expect((await decide(crypto.randomUUID(), 'accepted')).status).toBe(404);
+    });
+  });
+
   describe('charter', () => {
     it('rejects a proposal without touching files', async () => {
       const proposalId = await insertProposal('# Charter\n\nBe terse.');

@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { loadRule, type Naming } from '@quarterdeck/rules';
+import { loadRule, type BudgetWindow, type Naming } from '@quarterdeck/rules';
+import { BudgetHeldError } from '../../src/budget/index.js';
 import type { Store } from '../../src/store/index.js';
 import {
   AgentNotFoundError,
@@ -23,6 +24,7 @@ import {
 } from './fixtures.js';
 
 const PAIR: Naming = { theme: 'birds', names: ['crane', 'heron'] };
+const NO_CAP: BudgetWindow = { hours: 5, capTokens: null, holdAtFraction: 0.8 };
 
 describe('agent lifecycle', () => {
   let deck: Store;
@@ -45,15 +47,26 @@ describe('agent lifecycle', () => {
     await Promise.all([clearAgents(deck), clearAgents(yard)]);
   });
 
-  const lifecycle = (naming: Naming): AgentLifecycle => {
+  interface LifecycleTweaks {
+    budget?: BudgetWindow;
+    now?: () => Date;
+  }
+
+  const lifecycle = (
+    naming: Naming,
+    tweaks: LifecycleTweaks = {},
+  ): AgentLifecycle => {
     sessions = fakeSessions();
     worktrees = fakeWorktrees();
+    const budget = tweaks.budget ?? NO_CAP;
     return createAgentLifecycle({
       naming,
       sessions,
       worktrees,
       openStores: () => [deck, yard],
+      budget: () => Promise.resolve(budget),
       random: () => 0,
+      ...(tweaks.now && { now: tweaks.now }),
     });
   };
 
@@ -168,30 +181,35 @@ describe('agent lifecycle', () => {
     expect(retry.name).toBe('crane');
   });
 
-  it('reports both errors when a failed birth cannot be retired', async () => {
-    const doomed = await openTestStore('doomed');
-    const agents = createAgentLifecycle({
-      naming: PAIR,
-      sessions: {
-        open: async () => {
-          await doomed.close();
-          throw new Error('kiro-cli crashed');
+  it(
+    'reports both errors when a failed birth cannot be retired',
+    async () => {
+      const doomed = await openTestStore('doomed');
+      const agents = createAgentLifecycle({
+        naming: PAIR,
+        sessions: {
+          open: async () => {
+            await doomed.close();
+            throw new Error('kiro-cli crashed');
+          },
+          close: () => Promise.resolve(),
         },
-        close: () => Promise.resolve(),
-      },
-      worktrees: fakeWorktrees(),
-      openStores: () => [doomed],
-    });
+        worktrees: fakeWorktrees(),
+        openStores: () => [doomed],
+        budget: () => Promise.resolve(NO_CAP),
+      });
 
-    const failure = await agents
-      .birth({ store: doomed, role: 'builder', runtime: 'kiro' })
-      .catch((err: unknown) => err);
+      const failure = await agents
+        .birth({ store: doomed, role: 'builder', runtime: 'kiro' })
+        .catch((err: unknown) => err);
 
-    expect(failure).toBeInstanceOf(AggregateError);
-    const { errors } = failure as AggregateError;
-    expect(errors).toHaveLength(2);
-    expect(errors[0]).toEqual(new Error('kiro-cli crashed'));
-  });
+      expect(failure).toBeInstanceOf(AggregateError);
+      const { errors } = failure as AggregateError;
+      expect(errors).toHaveLength(2);
+      expect(errors[0]).toEqual(new Error('kiro-cli crashed'));
+    },
+    TIMEOUT,
+  );
 
   const birthWithWorktree = async (agents: AgentLifecycle) => {
     const agent = await agents.birth({
@@ -412,5 +430,105 @@ describe('agent lifecycle', () => {
     await expect(agents.retire(yard, agent.id)).rejects.toThrow(
       AgentNotFoundError,
     );
+  });
+
+  describe('budget hold', () => {
+    const CAPPED: BudgetWindow = {
+      hours: 5,
+      capTokens: 1000,
+      holdAtFraction: 0.8,
+    };
+    const NOW = new Date('2026-10-01T12:00:00.000Z');
+    const HOUR = 3_600_000;
+
+    const spend = async (tokens: number, endedAt: Date): Promise<void> => {
+      const { rows } = await deck.db.query<{ id: string }>(
+        `insert into agents (project_id, name, role, status)
+         values ($1, 'spender', 'builder', 'ended') returning id`,
+        [deck.projectId],
+      );
+      await deck.db.query(
+        `insert into turns (agent_id, seq, prompt, input_tokens, output_tokens,
+                            started_at, ended_at)
+         values ($1, 1, 'go', $2, 0, $3, $3)`,
+        [rows[0]?.id, tokens, endedAt],
+      );
+    };
+
+    const ticket = async (): Promise<string> => {
+      const { rows } = await deck.db.query<{ id: string }>(
+        `insert into tickets (project_id, title) values ($1, 'QD5k')
+         returning id`,
+        [deck.projectId],
+      );
+      return rows[0]?.id ?? '';
+    };
+
+    const builders = async () => {
+      const { rows } = await deck.db.query<{ name: string }>(
+        `select name from agents where name <> 'spender' order by created_at`,
+      );
+      return rows.map((row) => row.name);
+    };
+
+    const budgetEvents = async () =>
+      (await eventsFor(deck)).filter(({ kind }) => kind.startsWith('budget.'));
+
+    afterEach(async () => {
+      await deck.db.exec('delete from tickets');
+    });
+
+    it('holds a birth at the hold line before a name, row or session', async () => {
+      await spend(800, new Date(NOW.getTime() - HOUR));
+      const ticketId = await ticket();
+      let now = NOW;
+      const agents = lifecycle(PAIR, { budget: CAPPED, now: () => now });
+
+      const held = await agents
+        .birth({ store: deck, role: 'builder', runtime: 'kiro', ticketId })
+        .catch((err: unknown) => err);
+
+      expect(held).toBeInstanceOf(BudgetHeldError);
+      expect(held).toMatchObject({
+        meter: { usedTokens: 800, holdAtTokens: 800, held: true },
+        releaseAt: new Date(NOW.getTime() + 4 * HOUR),
+      });
+      expect(await builders()).toEqual([]);
+      expect(sessions.opened).toEqual([]);
+      const { rows } = await deck.db.query<{ ticketId: string }>(
+        `select ticket_id as "ticketId" from events where kind = 'budget.held'`,
+      );
+      expect(rows).toEqual([{ ticketId }]);
+      expect((await budgetEvents()).map(({ kind }) => kind)).toEqual([
+        'budget.held',
+      ]);
+
+      now = (held as BudgetHeldError).releaseAt!;
+      const agent = await agents.birth({
+        store: deck,
+        role: 'builder',
+        runtime: 'kiro',
+        ticketId,
+      });
+
+      expect(agent.name).toBe('crane');
+      expect(await builders()).toEqual(['crane']);
+      expect((await budgetEvents()).map(({ kind }) => kind)).toEqual([
+        'budget.held',
+        'budget.released',
+      ]);
+    });
+
+    it('births freely with no cap', async () => {
+      await spend(1_000_000, new Date());
+      const agents = lifecycle(PAIR, {
+        budget: { ...CAPPED, capTokens: null },
+      });
+
+      await agents.birth({ store: deck, role: 'builder', runtime: 'kiro' });
+
+      expect(await builders()).toEqual(['crane']);
+      expect(await budgetEvents()).toEqual([]);
+    });
   });
 });
