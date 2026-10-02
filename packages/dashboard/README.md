@@ -34,6 +34,7 @@ src/widgets/widgets.ts       WIDGETS: every src/widgets/**/*.widget.tsx, found a
 src/widgets/widget-mount.tsx WidgetMount: the grid over WIDGETS
 src/widgets/starter/         the Tables starter widget
 src/widgets/events/          Events: the feed, filtered by project and kind
+src/widgets/data/            Data: table counts, rows a page at a time, paths on disk
 src/grid/                    the grid: layout JSON, actions, drag, resize, keyboard, tray
 src/theme/tokens.css         dark theme tokens (--qd-*) and the page base
 src/theme/tokens.ts          the same token names, typed: token('accent') is 'var(--qd-accent)'

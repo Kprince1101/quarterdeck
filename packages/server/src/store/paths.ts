@@ -17,6 +17,13 @@ export const projectDataDir = (
   home: string = quarterdeckHome(),
 ): string => join(home, assertProjectSlug(project), 'pg');
 
+export const dataDirLockPath = (dataDir: string): string => `${dataDir}.lock`;
+
+export const projectDir = (
+  project: string,
+  home: string = quarterdeckHome(),
+): string => join(home, assertProjectSlug(project));
+
 export const projectTurnsDir = (
   project: string,
   home: string = quarterdeckHome(),

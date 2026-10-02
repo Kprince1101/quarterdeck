@@ -59,4 +59,15 @@ Every intent but `rules.*` with `scope: "machine"` and `wipe.all` takes a `proje
 | `wipe.project`                                                                            | `confirm` must repeat the slug. Closes the store and deletes `~/.quarterdeck/<project>/`. With `DATABASE_URL`, it takes the project lock instead (409 while another process has the project open) and deletes the project's rows from every store table plus its `projects` row, in one transaction, then deletes `~/.quarterdeck/<project>/` (turn files). Not recorded.                                                  |
 | `wipe.all`                                                                                | `confirm` must be `wipe everything`. Wipes every project's state (`~/.quarterdeck/<project>/`, or every project in the `projects` table with `DATABASE_URL`). Machine rules (`~/.quarterdeck/rules.local.*`) are configuration, not state, and stay; remove them with `rules.reset`. Not recorded.                                                                                                                         |
 
+### Reading data
+
+Two intents only read, for the Data widget. Neither is recorded (`id: null`), and both 404 for a project that does not exist.
+
+| Intent         | Result                                                                                                                                                                                                                                                                                   |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `data.summary` | `{ backend, tables, paths }`: the row count of every `STORE_TABLES` table for the project, and `dataPaths` (see [data](../data/README.md)) with `exists` for each path.                                                                                                                  |
+| `data.rows`    | `{ table, offset, limit, total, columns, rows }` for one `STORE_TABLES` table (404 for any other), newest first. `offset` defaults to 0, `limit` to `DATA_PAGE_SIZE` (25), at most `MAX_DATA_PAGE_SIZE` (100). `columns` is the table's columns in order; each row is an array of cells. |
+
+`dataSummarySchema` and `dataPageSchema` in `@quarterdeck/server/intents` parse the results.
+
 Pending intents stay `pending` with `settled_at` null until the logic that owns them marks them `applied` or `rejected`.

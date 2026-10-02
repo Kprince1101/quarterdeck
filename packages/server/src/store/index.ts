@@ -32,6 +32,7 @@ export {
   WATCHED_TABLES,
   readRow,
   readRows,
+  tableScope,
   watchChanges,
   type ChangeHandler,
   type ChangeOp,
@@ -50,7 +51,9 @@ export {
 } from './migrate.js';
 export {
   assertProjectSlug,
+  dataDirLockPath,
   projectDataDir,
+  projectDir,
   projectTurnsDir,
   projectWorktreesDir,
   quarterdeckHome,

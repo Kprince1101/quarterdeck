@@ -3,8 +3,10 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { RULE_NAMES } from '@quarterdeck/rules';
 import {
+  DATA_PAGE_SIZE,
   INTENTS,
   INTENT_NAMES,
+  MAX_DATA_PAGE_SIZE,
   intentPath,
   isIntentName,
   ruleNameSchema,
@@ -26,6 +28,7 @@ describe('intent registry', () => {
         'agent',
         'card',
         'charter',
+        'data',
         'layout',
         'notebook',
         'pause',
@@ -150,6 +153,26 @@ describe('intent schemas', () => {
       INTENTS['rules.reset'].safeParse({ scope: 'machine', name: 'other' })
         .success,
     ).toBe(false);
+  });
+
+  it('pages data rows within bounds', () => {
+    expect(INTENTS['data.rows'].parse({ project, table: 'events' })).toEqual({
+      project,
+      table: 'events',
+      offset: 0,
+      limit: DATA_PAGE_SIZE,
+    });
+    [
+      { table: 'events', limit: MAX_DATA_PAGE_SIZE + 1 },
+      { table: 'events', limit: 0 },
+      { table: 'events', offset: -1 },
+      { table: 'events; drop table events' },
+      { table: 'Events' },
+    ].forEach((input) =>
+      expect(
+        INTENTS['data.rows'].safeParse({ project, ...input }).success,
+      ).toBe(false),
+    );
   });
 
   it('validates layout grids', () => {
