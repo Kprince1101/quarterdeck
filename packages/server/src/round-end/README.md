@@ -143,18 +143,18 @@ const auto = await startRoundAutoEnd({
 await auto.close();
 ```
 
-| Export                                                    | What it does                                                                                                                   |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `startRoundAutoEnd(options)`                              | `startAutoEnd` whose `end` is `endRound` for the Driver round. `onEnded(ended)` is called with its result.                     |
-| `startAutoEnd(options)`, `timerScheduler`, `Scheduler`    | The settle timer alone, with any `end`.                                                                                        |
-| `startRoundControl(options)`, `ROUND_INTENTS`             | Apply the `round.end` and `round.kill` intents.                                                                                |
-| `endRound({ store, round, charter, lifecycle, reason? })` | `releaseRound`, `wrapUpRound`, then `cleanUpRound` (`reason` defaults to `SETTLED_REASON`). Resolves to `{ wrapUp, cleanup }`. |
-| `endRoundWithoutDriver({ store, lifecycle, roundId })`    | End with the wrap-up recorded as missed (`NO_DRIVER_SESSION`).                                                                 |
-| `killRound({ store, lifecycle, roundId })`                | `cleanUpRound` with `reason: 'killed'` and the round's tickets reopened.                                                       |
-| `wrapUpRound(options)`, `missWrapUp`                      | The wrap-up turn and its proposals, on their own; record a wrap-up that could not run.                                         |
-| `releaseRound(options)`, `closeRoundCards`                | Close the round's cards and retire its builders; close its cards only.                                                         |
-| `cleanUpRound(options)`                                   | Release, retire the Driver and end the round, on its own.                                                                      |
-| `readSettleState`, `isSettled`                            | Whether a round is settled.                                                                                                    |
-| `buildWrapUpPrompt`, `wrapUpFormat`, `wrapUpResultSchema` | The wrap-up prompt and the shape of its result.                                                                                |
-| `AUTO_END_EVENTS`, `WRAP_UP_EVENTS`, `ROUND_ENDED_EVENT`  | `round.settling`, `round.settled`; `round.wrapped_up`, `round.wrap_up_missed`; `round.ended`.                                  |
-| `CARD_EXPIRED_EVENT`, `TICKET_REOPENED_EVENT`             | `card.expired` for a card the cleanup closed; `ticket.reopened` for a ticket a Kill put back.                                  |
+| Export                                                    | What it does                                                                                                                    |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `startRoundAutoEnd(options)`                              | `startAutoEnd` whose `end` is `endRound` for the Driver round. `onEnded(ended)` is called with its result; `home` is passed on. |
+| `startAutoEnd(options)`, `timerScheduler`, `Scheduler`    | The settle timer alone, with any `end`.                                                                                         |
+| `startRoundControl(options)`, `ROUND_INTENTS`             | Apply the `round.end` and `round.kill` intents.                                                                                 |
+| `endRound({ store, round, charter, lifecycle, reason? })` | `releaseRound`, `wrapUpRound`, then `cleanUpRound` (`reason` defaults to `SETTLED_REASON`). Resolves to `{ wrapUp, cleanup }`.  |
+| `endRoundWithoutDriver({ store, lifecycle, roundId })`    | End with the wrap-up recorded as missed (`NO_DRIVER_SESSION`).                                                                  |
+| `killRound({ store, lifecycle, roundId })`                | `cleanUpRound` with `reason: 'killed'` and the round's tickets reopened.                                                        |
+| `wrapUpRound(options)`, `missWrapUp`                      | The wrap-up turn and its proposals, on their own; record a wrap-up that could not run.                                          |
+| `releaseRound(options)`, `closeRoundCards`                | Close the round's cards and retire its builders; close its cards only.                                                          |
+| `cleanUpRound(options)`                                   | Release, retire the Driver and end the round, on its own.                                                                       |
+| `readSettleState`, `isSettled`                            | Whether a round is settled.                                                                                                     |
+| `buildWrapUpPrompt`, `wrapUpFormat`, `wrapUpResultSchema` | The wrap-up prompt and the shape of its result.                                                                                 |
+| `AUTO_END_EVENTS`, `WRAP_UP_EVENTS`, `ROUND_ENDED_EVENT`  | `round.settling`, `round.settled`; `round.wrapped_up`, `round.wrap_up_missed`; `round.ended`.                                   |
+| `CARD_EXPIRED_EVENT`, `TICKET_REOPENED_EVENT`             | `card.expired` for a card the cleanup closed; `ticket.reopened` for a ticket a Kill put back.                                   |

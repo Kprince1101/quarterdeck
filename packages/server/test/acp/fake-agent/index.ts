@@ -5,6 +5,7 @@ export {
   toFakeAgentArgs,
 } from './args.ts';
 export * from './constants.ts';
+export { FAKE_PR_HEAD, FAKE_PR_URL, runCrewTurn } from './crew.ts';
 export {
   connectFakeAgentInProcess,
   FAKE_AGENT_ENTRY,

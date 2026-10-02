@@ -22,7 +22,9 @@ export type FakeAgentFlag =
   | 'announce'
   | 'silent'
   | 'linger'
-  | 'ignoreSigterm';
+  | 'ignoreSigterm'
+  | 'crew'
+  | 'crashDriver';
 
 export interface FakeAgentOptions extends Partial<
   Record<FakeAgentFlag, boolean>
