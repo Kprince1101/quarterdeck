@@ -6,12 +6,18 @@ export type BusStore = Pick<Store, 'db' | 'projectId' | 'publish'>;
 export interface BusContext {
   store: BusStore;
   agentId: string;
+  askExpiryMs?: number | undefined;
+}
+
+export interface BusCall extends BusContext {
+  signal: AbortSignal;
+  progress: (message: string) => Promise<void>;
 }
 
 export interface BusToolSpec<Shape extends z.ZodRawShape = z.ZodRawShape> {
   description: string;
   input: Shape;
-  run(context: BusContext, args: z.output<z.ZodObject<Shape>>): Promise<string>;
+  run(call: BusCall, args: z.output<z.ZodObject<Shape>>): Promise<string>;
 }
 
 export interface BusTool extends BusToolSpec {

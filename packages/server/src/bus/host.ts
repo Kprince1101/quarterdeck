@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import type { McpServerStdio } from '@agentclientprotocol/sdk';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { AgentNotFoundError } from '../agents/agent.js';
+import { ASK_EXPIRY_MS, assertAskExpiry } from './cards.js';
 import { loadBusTools } from './registry.js';
 import { BUS_SERVER_NAME, createBusServer } from './server.js';
 import {
@@ -29,6 +30,7 @@ export interface BusHostOptions {
   socketPath?: string;
   home?: string;
   tools?: readonly BusTool[];
+  askExpiryMs?: number;
 }
 
 export interface BusHost {
@@ -90,6 +92,7 @@ export const startBusHost = async (
   options: BusHostOptions,
 ): Promise<BusHost> => {
   const { store } = options;
+  const askExpiryMs = assertAskExpiry(options.askExpiryMs ?? ASK_EXPIRY_MS);
   const socketPath = assertSocketPath(
     options.socketPath ??
       busSocketPath(store.projectId, { home: options.home }),
@@ -105,7 +108,7 @@ export const startBusHost = async (
   ): Promise<void> => {
     sockets.set(socket, agentId);
     if (rest.length > 0) socket.unshift(rest);
-    const server = createBusServer({ store, agentId }, tools);
+    const server = createBusServer({ store, agentId, askExpiryMs }, tools);
     socket.once('close', () => void server.close());
     socket.write('ok\n');
     await server.connect(new StdioServerTransport(socket, socket));

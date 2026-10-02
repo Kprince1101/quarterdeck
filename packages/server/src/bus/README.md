@@ -1,6 +1,6 @@
 # bus
 
-The bus MCP server handed to every agent session: the tools agents use to reach Quarterdeck. This package has `status`, `read`, `report` and `verdict`; `ask` follows.
+The bus MCP server handed to every agent session: the tools agents use to reach Quarterdeck: `status`, `read`, `ask`, `report` and `verdict`.
 
 ## How a session reaches it
 
@@ -51,6 +51,34 @@ Reads rows of the caller's project. The caller never sends SQL: tables and colum
 
 Returns a JSON array of rows built by Postgres (`json_build_object`), so timestamps are ISO strings and `bigint` and `numeric` are numbers. A reply over `READ_REPLY_MAX_BYTES` (100 000 bytes) is an error asking the agent to narrow its columns, add filters or lower the limit. A bad table, column, op, value or limit is a tool error naming what was wrong.
 
+### `ask(question, options?, checked, recommendation)`
+
+Puts a decision in front of the person and waits for it. The tool call blocks until the card is answered, declined or expires; declined and expired are results the agent gets back, never a crash.
+
+- `question`: 1 to 500 characters.
+- `options`: 2 to 10 distinct choices of up to 100 characters each, or omitted (or `[]`) for a free-text answer. The `card.answer` intent then only accepts one of them.
+- `checked`: what the agent already checked or tried, up to 2000 characters.
+- `recommendation`: what the agent would pick, up to 500 characters; one of `options` when there are options.
+
+Text fields are trimmed; a blank one, one option, a repeated option or a recommendation outside the options is a tool error and raises no card.
+
+`ask` inserts a `cards` row with `kind` `ask` (`ASK_CARD`), the caller as `agent_id`, the caller's most recently updated ticket in `assigned`, `in_progress`, `in_review` or `bounced` as `ticket_id` (null when it has none), and `expires_at` `askExpiryMs` from now (`ASK_EXPIRY_MS`, one hour, unless the host sets another). In the same transaction it records a `card.asked` event with `{ cardId }`.
+
+It then listens on `CHANGES_CHANNEL` for changes to that card and re-reads it, after a first read so an answer that lands before the listen is not missed. The first of these ends the wait:
+
+| What happens                                             | Card                                                                      | Result                                                  |
+| -------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------- |
+| The person answers (`card.answer`)                       | `answered`                                                                | `{"cardId","status":"answered","answer":"<answer>"}`    |
+| The person declines                                      | `declined`                                                                | `{"cardId","status":"declined","answer":null}`          |
+| `askExpiryMs` passes                                     | `expired`, only if still `open`; records `card.expired` with `{ cardId }` | `{"cardId","status":"expired","answer":null}`           |
+| The call is cancelled or the session's connection closes | stays `open`                                                              | none; the waiting stops and the call ends with an error |
+
+Expiry never overwrites an answer that landed first: the update only touches an `open` card, and the result is read back from the row. A card left `open` by a cancelled call or a server restart can still be answered on the board; passing that answer on is the Driver's job.
+
+While waiting, a caller that sent a `progressToken` gets a `notifications/progress` every `ASK_PROGRESS_MS` (30 s), so MCP clients that reset their request timeout on progress do not give up on a long wait.
+
+A runtime's MCP client may still give up first. The tool description tells the agent what to do then: `read` `cards` filtered by its own `agent_id` (newest first), or the `card.asked` events with its `agent_id` for the `cardId`, and take the card's `status` and `answer` from there.
+
 ### `report(ticket, pr, notes, head?)`
 
 A builder hands its pull request to review. `ticket` is a ticket id of this project assigned to the caller, in status `assigned`, `in_progress`, `bounced` or `in_review` (a re-report after new commits); anything else, or a ticket assigned to another agent, is an error and changes nothing. `pr` is an `http(s)` URL of at most `PR_URL_MAX` (2000) characters, `notes` is trimmed and 1 to `REVIEW_NOTES_MAX` (8000) characters, and `head`, when given, is the 40-character lowercase head commit.
@@ -83,18 +111,20 @@ export default defineBusTool({
 });
 ```
 
-`run` gets the `BusContext` (`store` with `db`, `projectId` and `publish`, plus the caller's `agentId`) and the parsed input. Its string is the tool result; a thrown error becomes an MCP tool error with the error's message, which the agent sees and can correct. Arguments that fail `input` are rejected the same way before `run` is called.
+`run` gets a `BusCall` and the parsed input. A `BusCall` is the connection's `BusContext` (`store` with `db`, `projectId` and `publish`, the caller's `agentId`, and the host's `askExpiryMs`) plus this call's `signal`, aborted when the caller cancels or the connection closes, and `progress(message)`, which sends a progress notification when the caller asked for them and does nothing otherwise. Its string is the tool result; a thrown error becomes an MCP tool error with the error's message, which the agent sees and can correct. Arguments that fail `input` are rejected the same way before `run` is called.
 
 ## API
 
-| Export                                                         | What it does                                                                                                                  |
-| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `startBusHost({ store, home?, socketPath?, tools? })`          | Starts listening and resolves to `{ socketPath, tools, launch, revoke, close }`. `tools` defaults to `loadBusTools()`.        |
-| `busSocketPath(projectId, { home?, tmp? })`, `SOCKET_PATH_MAX` | The socket path for a project (see [Socket path](#socket-path)), and its byte limit.                                          |
-| `createBusServer(context, tools)`                              | One MCP server bound to one agent, for any MCP transport (the host uses stdio over the socket; tests use the in-memory pair). |
-| `loadBusTools(dir?)`                                           | Imports the tools in `dir` (default `tools/`), sorted by name.                                                                |
-| `defineBusTool(spec)`, `BusToolError`                          | Typed tool definition, and an error whose message is meant for the agent.                                                     |
-| `buildReadQuery(projectId, request)`                           | The SQL and parameters `read` runs, for tests and for other readers that must stay inside the allowlist.                      |
-| `READ_TABLES`, `READ_TABLE_NAMES`, `READ_REPLY_MAX_BYTES`      | The allowlist: readable tables, their columns and kinds, scope and default order.                                             |
-| `PR_URL_MAX`, `REVIEW_NOTES_MAX`                               | The longest `pr` URL and `notes` that `report` and `verdict` take.                                                            |
-| `BUS_RELAY`, `BUS_SOCKET_ENV`, `BUS_TOKEN_ENV`                 | The relay script path and the environment it reads.                                                                           |
+| Export                                                                                                                                                 | What it does                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `startBusHost({ store, home?, socketPath?, tools?, askExpiryMs? })`                                                                                    | Starts listening and resolves to `{ socketPath, tools, launch, revoke, close }`. `tools` defaults to `loadBusTools()`; `askExpiryMs` (1 to `ASK_EXPIRY_MAX_MS`, the largest timer delay) to `ASK_EXPIRY_MS`. |
+| `raiseAskCard(store, agentId, card, expiryMs)`, `awaitCard(store, cardId, { expiryMs, signal, onWaiting?, progressMs? })`, `expireCard(store, cardId)` | The steps of `ask`: insert the card and its `card.asked` event; wait for it to settle; expire it if still open. Each settled card is a `CardOutcome` `{ cardId, status, answer }`.                           |
+| `ASK_CARD`, `ASK_EXPIRY_MS`, `ASK_EXPIRY_MAX_MS`, `ASK_PROGRESS_MS`                                                                                    | The `ask` card kind, the default and largest expiry, and the progress interval.                                                                                                                              |
+| `busSocketPath(projectId, { home?, tmp? })`, `SOCKET_PATH_MAX`                                                                                         | The socket path for a project (see [Socket path](#socket-path)), and its byte limit.                                                                                                                         |
+| `createBusServer(context, tools)`                                                                                                                      | One MCP server bound to one agent, for any MCP transport (the host uses stdio over the socket; tests use the in-memory pair).                                                                                |
+| `loadBusTools(dir?)`                                                                                                                                   | Imports the tools in `dir` (default `tools/`), sorted by name.                                                                                                                                               |
+| `defineBusTool(spec)`, `BusToolError`, `BusContext`, `BusCall`                                                                                         | Typed tool definition, and an error whose message is meant for the agent.                                                                                                                                    |
+| `buildReadQuery(projectId, request)`                                                                                                                   | The SQL and parameters `read` runs, for tests and for other readers that must stay inside the allowlist.                                                                                                     |
+| `READ_TABLES`, `READ_TABLE_NAMES`, `READ_REPLY_MAX_BYTES`                                                                                              | The allowlist: readable tables, their columns and kinds, scope and default order.                                                                                                                            |
+| `PR_URL_MAX`, `REVIEW_NOTES_MAX`                                                                                                                       | The longest `pr` URL and `notes` that `report` and `verdict` take.                                                                                                                                           |
+| `BUS_RELAY`, `BUS_SOCKET_ENV`, `BUS_TOKEN_ENV`                                                                                                         | The relay script path and the environment it reads.                                                                                                                                                          |
