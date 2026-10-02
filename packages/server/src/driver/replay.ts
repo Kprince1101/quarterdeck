@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { StopReason } from '@agentclientprotocol/sdk';
@@ -9,9 +9,8 @@ import {
   type PermissionHandler,
 } from '../acp/client/index.js';
 import { answerPermission } from '../acp/permissions/index.js';
-import { hasErrorCode } from '../lib/errors.js';
+import { readTextIfExists } from '../lib/fs.js';
 import { signInCommand } from '../signin/commands.js';
-import { assertProjectSlug } from '../store/paths.js';
 import { isBirthInput } from './birth-input.js';
 import {
   NoBirthTurnError,
@@ -19,6 +18,7 @@ import {
   TurnInputMissingError,
 } from './errors.js';
 import { turnDir, turnFile } from './files.js';
+import { assertThrough } from './replay-command.js';
 import {
   DRIVER_TURN_FORMAT,
   parseTurnResult,
@@ -26,8 +26,6 @@ import {
   type ParsedTurnResult,
 } from './result.js';
 import { collectUpdates, replyText } from './turns.js';
-
-export const REPLAY_COMMAND = 'npx quarterdeck replay';
 
 const AGENT_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -81,45 +79,11 @@ export interface Replay {
   turns: ReplayTurn[];
 }
 
-export interface ReplayCommandParts {
-  round: number;
-  through?: number;
-  project?: string;
-}
-
 const assertAgentId = (agentId: string): string => {
   if (!AGENT_ID.test(agentId)) {
     throw new Error(`Invalid agent id: ${JSON.stringify(agentId)}`);
   }
   return agentId;
-};
-
-const isPositive = (value: number): boolean =>
-  Number.isSafeInteger(value) && value >= 1;
-
-const assertThrough = (through: number): number => {
-  if (!isPositive(through)) {
-    throw new RangeError(
-      `A replay runs turns up to n with n a positive integer, not ${through}`,
-    );
-  }
-  return through;
-};
-
-const assertRound = (round: number): number => {
-  if (!isPositive(round)) {
-    throw new RangeError(`A round is a positive integer, not ${round}`);
-  }
-  return round;
-};
-
-const readOptional = async (path: string): Promise<string | null> => {
-  try {
-    return await readFile(path, 'utf8');
-  } catch (err) {
-    if (hasErrorCode(err, 'ENOENT')) return null;
-    throw err;
-  }
 };
 
 const readSavedTurn = async (
@@ -128,11 +92,11 @@ const readSavedTurn = async (
 ): Promise<SavedTurn> => {
   const dir = turnDir(chain.turnsDir, chain.agentId, seq);
   const inputPath = turnFile(dir, 'input');
-  const input = await readOptional(inputPath);
+  const input = await readTextIfExists(inputPath);
   if (input === null) {
     throw new TurnInputMissingError(chain.agentId, seq, inputPath);
   }
-  const output = await readOptional(turnFile(dir, 'output'));
+  const output = await readTextIfExists(turnFile(dir, 'output'));
   return { seq, dir, input, output };
 };
 
@@ -224,15 +188,4 @@ export const replayDriverChain = async (
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }
-};
-
-export const replayCommand = (parts: ReplayCommandParts): string => {
-  const words = [REPLAY_COMMAND, String(assertRound(parts.round))];
-  if (parts.through !== undefined) {
-    words.push(String(assertThrough(parts.through)));
-  }
-  if (parts.project !== undefined) {
-    words.push('--project', assertProjectSlug(parts.project));
-  }
-  return words.join(' ');
 };
