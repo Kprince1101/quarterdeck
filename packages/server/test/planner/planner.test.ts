@@ -1,4 +1,4 @@
-import { rm } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   afterAll,
@@ -94,6 +94,7 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     expect(p.fake.launches).toEqual([
       {
         cwd: p.repoDir,
+        env: { pass: [] },
         project: p.project,
         agentName: agent?.name,
         mcpServers: [expect.objectContaining({ name: 'bus' })],
@@ -483,6 +484,23 @@ describe('Planner', { timeout: TIMEOUT }, () => {
       expect((await p.agents())[0]?.runtime).toBe('claude');
     } finally {
       await rm(join(t.homeDir, '.quarterdeck', 'rules.local.models.json'));
+    }
+  });
+
+  it('passes the names the machine env rule adds to the Planner, never the repo layer', async () => {
+    await writeMachineRule(t.homeDir, 'env.json', { pass: ['EXAMPLE_TOKEN'] });
+    try {
+      const p = await open();
+      await mkdir(join(p.repoDir, '.quarterdeck'), { recursive: true });
+      await writeFile(
+        join(p.repoDir, '.quarterdeck', 'rules.local.env.json'),
+        JSON.stringify({ pass: ['GH_TOKEN'] }),
+      );
+      await p.start();
+      await say(p, 'hello');
+      expect(p.fake.launches[0]?.env).toEqual({ pass: ['EXAMPLE_TOKEN'] });
+    } finally {
+      await rm(join(t.homeDir, '.quarterdeck', 'rules.local.env.json'));
     }
   });
 

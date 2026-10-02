@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { childEnv } from '../env.js';
 
 export type TreeSignal = 'SIGTERM' | 'SIGKILL';
 
@@ -26,6 +27,7 @@ const isMissingProcess = (err: unknown) =>
 
 const signalWindowsTree = (pid: number, signal: TreeSignal) => {
   spawn('taskkill', ['/pid', String(pid), ...TASKKILL_FLAGS[signal]], {
+    env: childEnv(),
     stdio: 'ignore',
     windowsHide: true,
   }).on('error', () => undefined);

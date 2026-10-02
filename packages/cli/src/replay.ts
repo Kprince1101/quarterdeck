@@ -250,9 +250,15 @@ export const replayRound = async (
       await client?.close();
     })
     .catch(() => undefined);
+  const env = await loadRule('env', { homeDir: io.homeDir });
   const connect: ConnectReplay = async ({ cwd, onPermissionRequest }) => {
     client = await adapters[runtime].connect(
-      { cwd, project: found.project, agentName: `replay-${through}` },
+      {
+        cwd,
+        env: { pass: env.pass },
+        project: found.project,
+        agentName: `replay-${through}`,
+      },
       {
         clientName: REPLAY_CLIENT_NAME,
         clientVersion: REPLAY_CLIENT_VERSION,

@@ -1,4 +1,5 @@
 export * from './acp/client/index.js';
+export * from './acp/env.js';
 export * from './acp/launch/index.js';
 export * from './acp/permissions/index.js';
 export * from './acp/runtimes/index.js';

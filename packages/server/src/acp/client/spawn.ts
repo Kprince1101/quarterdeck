@@ -5,6 +5,7 @@ import { createInterface } from 'node:readline';
 import { Readable, Writable } from 'node:stream';
 import { ndJsonStream } from '@agentclientprotocol/sdk';
 import { getErrorMessage } from '../../lib/errors.js';
+import { childEnv } from '../env.js';
 import { connectAcpClient, createClientEvents } from './connection.js';
 import { AcpClientError } from './errors.js';
 import type { EventHub } from './event-hub.js';
@@ -22,7 +23,7 @@ const spawnFailed = (command: string, reason: string) =>
 const startProcess = async ({ command, args, cwd, env }: AgentCommand) => {
   const child = spawn(command, args, {
     cwd: cwd ?? process.cwd(),
-    env: env ?? process.env,
+    env: childEnv(env),
     stdio: ['pipe', 'pipe', 'pipe'],
     detached: SPAWN_DETACHED,
     windowsHide: true,

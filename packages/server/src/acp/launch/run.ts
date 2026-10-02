@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { getErrorMessage, hasErrorCode } from '../../lib/errors.js';
 import { SPAWN_DETACHED, signalTree } from '../client/process-tree.js';
 import type { AgentCommand } from '../client/types.js';
+import { childEnv } from '../env.js';
 
 export interface RunOptions {
   timeoutMs: number;
@@ -35,7 +36,7 @@ export const runCommand = (
     }
     const child = spawn(command, args, {
       cwd,
-      env,
+      env: childEnv(env),
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: SPAWN_DETACHED,
       windowsHide: true,

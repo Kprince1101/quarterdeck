@@ -75,7 +75,7 @@ Wiping keeps the rules files and everything else under `~/.quarterdeck/` that is
 
 ## Rules
 
-The defaults live in `rules/`: `charter.md`, `reviewer.md`, `permissions.json`, `naming.json`, `lifecycle.json` and `models.json`. Override any of them with a file named `rules.local.<file>`, for example `rules.local.lifecycle.json`. Quarterdeck reads three layers, last one wins:
+The defaults live in `rules/`: `charter.md`, `reviewer.md`, `permissions.json`, `naming.json`, `lifecycle.json`, `models.json` and `env.json`. Override any of them with a file named `rules.local.<file>`, for example `rules.local.lifecycle.json`. Quarterdeck reads three layers, last one wins:
 
 1. `rules/<file>`, shipped with Quarterdeck
 2. `~/.quarterdeck/rules.local.<file>`, for this machine
@@ -88,6 +88,8 @@ Permissions are the exception: the repo layer is not merged. It is checked on it
 The merge gate (`mergeGate` in `lifecycle.json`) is tighten-only in the repo layer too: a `require*` flag is on if any layer turns it on, `autoMerge` is on only if no layer turns it off, and the repo layer may not set `base`. See `packages/server/src/gate/README.md`.
 
 So is the auto-end settle time (`autoEndSettleSeconds`, how long a round must stay settled before it ends itself): the repo layer can lengthen it but never shorten it. See `packages/server/src/round-end/README.md`.
+
+Agents do not inherit the server's environment. They get a short allowlist (`PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`, `LC_*`, `TERM`, `TMPDIR`, `TZ`, `SSH_AUTH_SOCK`, `QUARTERDECK_BUS_*`), plus the sign-in variables their runtime declares. `GH_TOKEN`, `GITHUB_TOKEN` and `DATABASE_URL` stay out. `env.json` lists more names in `pass`; values always come from the server's environment. Only the machine layer (`~/.quarterdeck/rules.local.env.json`) can add names: the repo layer is ignored, because agents can write to the repo. See `packages/server/src/acp/README.md`.
 
 ## Contributing
 

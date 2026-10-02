@@ -39,6 +39,14 @@ esac`;
 
 const GH_SIGNED_IN = '  ✓ Logged in to github.com account legion (keyring)';
 
+const GH_TOKEN_ONLY = `case "$*" in
+  --version) echo "gh version 2.81.0 (2025-09-01)" ;;
+  "auth status")
+    if [ -z "$GH_TOKEN" ]; then echo "You are not logged into any GitHub hosts."; exit 1; fi
+    echo "  ✓ Logged in to github.com account example (GH_TOKEN)" ;;
+  *) exit 64 ;;
+esac`;
+
 describe.skipIf(IS_WINDOWS)('quarterdeck doctor', () => {
   let box: Sandbox;
   let bin = '';
@@ -263,6 +271,24 @@ describe.skipIf(IS_WINDOWS)('quarterdeck doctor', () => {
         state: '2.81.0, not signed in',
         fixes: [{ label: 'Sign in', command: 'gh auth login' }],
       });
+    });
+
+    it('says when gh works only through GH_TOKEN, which agents do not get', async () => {
+      await fake('gh', GH_TOKEN_ONLY);
+      const checks = await doctor({ GH_TOKEN: 'gh-example' });
+      expect(check(checks, 'gh')?.fixes).toEqual([]);
+      expect(check(checks, 'gh for agents')).toEqual({
+        name: 'gh for agents',
+        state:
+          'signed in only through GH_TOKEN, which agents do not get; unset GH_TOKEN and sign in',
+        fixes: [{ label: 'Sign in', command: 'gh auth login' }],
+      });
+    });
+
+    it('has nothing to say when gh is signed in without the token too', async () => {
+      await fake('gh', ghFake(GH_SIGNED_IN));
+      const checks = await doctor({ GH_TOKEN: 'a', GITHUB_TOKEN: 'b' });
+      expect(check(checks, 'gh for agents')).toBeUndefined();
     });
 
     it('gives up on a hung gh', async () => {

@@ -12,12 +12,13 @@ import type {
   SessionUpdate,
   StopReason,
 } from '@agentclientprotocol/sdk';
+import type { ChildEnvSpec } from '../env.js';
 
 export interface AgentCommand {
   command: string;
   args: string[];
   cwd?: string;
-  env?: NodeJS.ProcessEnv;
+  env?: ChildEnvSpec;
 }
 
 export type SessionMeta = Record<string, unknown>;

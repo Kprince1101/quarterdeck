@@ -3,6 +3,7 @@ export {
   GEMINI_ADAPTER,
   GEMINI_ARGS,
   GEMINI_COMMAND,
+  GEMINI_PASS_ENV,
   isGeminiCommand,
 } from './adapter.js';
 export type { GeminiAdapterOptions } from './adapter.js';

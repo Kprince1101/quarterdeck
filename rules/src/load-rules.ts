@@ -18,12 +18,14 @@ export const RULE_FILES: Record<RuleName, string> = {
   naming: 'naming.json',
   lifecycle: 'lifecycle.json',
   models: 'models.json',
+  env: 'env.json',
 };
 
 export const RULE_NAMES = Object.keys(RULE_FILES) as RuleName[];
 
 export const TIGHTEN_ONLY_RULES: ReadonlySet<RuleName> = new Set([
   'permissions',
+  'env',
 ]);
 
 export interface LoadRulesOptions {

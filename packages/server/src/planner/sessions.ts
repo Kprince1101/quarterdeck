@@ -47,6 +47,7 @@ export interface PlannerSessionSite {
   adapters: PlannerAdapters;
   cardHuman: CardHuman;
   signInSignal: () => AbortSignal;
+  passEnv?: readonly string[];
 }
 
 export interface PlannerSessionHost extends SessionHost {
@@ -75,6 +76,7 @@ const connectOnce = async (
   const client = await site.adapters[agent.runtime].connect(
     {
       cwd: site.repoPath,
+      env: { pass: site.passEnv ?? [] },
       project: site.slug,
       agentName: agent.name,
       mcpServers: [bus],

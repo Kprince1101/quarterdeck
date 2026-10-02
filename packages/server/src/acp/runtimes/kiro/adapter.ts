@@ -27,6 +27,8 @@ import { KIRO_EXTENSION_NOTIFICATIONS } from './extensions.js';
 
 export const KIRO_COMMAND = 'kiro-cli';
 
+export const KIRO_PASS_ENV: readonly string[] = [];
+
 export const kiroArgs = ({ project, agentName }: RuntimeLaunch): string[] => [
   'acp',
   '--agent',
@@ -83,6 +85,7 @@ export const createKiroAdapter = ({
   const spec: RuntimeAdapterSpec = {
     runtime: 'kiro',
     displayName: 'Kiro',
+    passEnv: KIRO_PASS_ENV,
     command: (launch: RuntimeLaunch) => ({
       command: KIRO_COMMAND,
       args: kiroArgs(launch),
@@ -128,7 +131,7 @@ export const createKiroAdapter = ({
     return wrapClient(client, new Set(Object.keys(config.mcpServers)), removed);
   };
 
-  return { ...spec, connect };
+  return { ...spec, passEnv: KIRO_PASS_ENV, connect };
 };
 
 export const KIRO_ADAPTER: RuntimeAdapter = createKiroAdapter();

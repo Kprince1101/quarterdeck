@@ -68,6 +68,13 @@
               <code>gemini</code>) and optional model for each role.
             </td>
           </tr>
+          <tr>
+            <td><code>env.json</code></td>
+            <td>
+              Extra environment variables agents get from the server's
+              environment.
+            </td>
+          </tr>
         </tbody>
       </table>
 
@@ -139,6 +146,12 @@
         the smaller cap (a <code>null</code> cap never lifts a machine cap), the
         lower <code>holdAtFraction</code> and the longer <code>hours</code>. The
         rest of <code>budget</code> merges like any other layer.
+      </p>
+      <h3>Environment</h3>
+      <p>
+        <code>env.json</code> is machine-only: its repo layer is ignored, so a
+        repository can never hand its agents more of your environment. See
+        <a href="#env">env.json</a>.
       </p>
 
       <h2 id="permissions">permissions.json</h2>
@@ -332,6 +345,32 @@
         <code>names</code>. The default theme is animals. Names are lowercase
         letters, digits and hyphens, start with a letter, and must be unique.
       </p>
+
+      <h2 id="env">env.json</h2>
+      <p>
+        Agents do not inherit the server's environment. They get
+        <code>PATH</code>, <code>HOME</code>, <code>USER</code>,
+        <code>LOGNAME</code>, <code>SHELL</code>, <code>LANG</code>,
+        <code>LC_*</code>, <code>TERM</code>, <code>TMPDIR</code>,
+        <code>TZ</code>, <code>SSH_AUTH_SOCK</code> (so
+        <code>git push</code> over ssh works), Quarterdeck's own
+        <code>QUARTERDECK_BUS_*</code> variables, and the variables their
+        runtime needs to sign in. Anything else, <code>GH_TOKEN</code>,
+        <code>GITHUB_TOKEN</code> and <code>DATABASE_URL</code> included, stays
+        out. Builders open pull requests with <code>gh</code>, which keeps
+        working through its own <code>gh auth login</code>;
+        <code>quarterdeck doctor</code> warns when <code>gh</code> is signed in
+        only through a token variable.
+      </p>
+      <p>
+        <code>pass</code> lists more names. Values always come from the server's
+        environment; the rule holds names only. The default is empty. Only the
+        machine layer can add names: agents can write to a repository, so a
+        <code>&lt;repo&gt;/.quarterdeck/rules.local.env.json</code> is ignored.
+        This <code>~/.quarterdeck/rules.local.env.json</code> gives every
+        project's agents <code>AWS_PROFILE</code>:
+      </p>
+      <pre><code>{ "pass": ["AWS_PROFILE"] }</code></pre>
 
       <h2 id="prompts">charter.md and reviewer.md</h2>
       <p>

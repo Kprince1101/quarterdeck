@@ -65,7 +65,7 @@ describe('defineRuntimeAdapter', () => {
 
   it('starts the runtime command where launchSite puts it', async () => {
     const report = await launchAndReport(
-      { cwd: dir, env: { ...process.env, QD_MARKER: 'from-launch' } },
+      { cwd: dir, env: { set: { QD_MARKER: 'from-launch' } } },
       (launch) => ({ ...reporter, ...launchSite(launch) }),
     );
     expect(report).toEqual({ cwd: dir, marker: 'from-launch' });
@@ -85,7 +85,7 @@ describe('defineRuntimeAdapter', () => {
     const report = await launchAndReport(
       {
         cwd: dir,
-        env: { ...process.env, QD_MARKER: 'from-launch' },
+        env: { set: { QD_MARKER: 'from-launch' } },
         command: reporter,
       },
       () => NOT_INSTALLED,
