@@ -69,7 +69,7 @@ describe('rules loader', () => {
     expect(rules.naming).toEqual(await readDefaultJson('naming.json'));
     expect(rules.lifecycle).toEqual(await readDefaultJson('lifecycle.json'));
     expect(rules.models).toEqual(await readDefaultJson('models.json'));
-    expect(rules.charter).toContain('# Agent charter');
+    expect(rules.charter).toContain('# Driver charter');
     expect(rules.reviewer).toContain('# Reviewer');
   });
 
