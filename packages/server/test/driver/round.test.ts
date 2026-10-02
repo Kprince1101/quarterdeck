@@ -18,8 +18,13 @@ import {
   ROUND_STARTED_EVENT,
   RoundEndedError,
   RoundNotFoundError,
+  STUCK_AFTER_CONTINUES,
+  STUCK_SURFACED_EVENT,
   TURN_EVENTS,
+  flagIfStuck,
+  markStuckFlagsSurfaced,
   openDriverRound,
+  unsurfacedStuckFlags,
   turnDir,
   turnFile,
   type DriverRound,
@@ -94,8 +99,8 @@ describe('Driver turn loop', () => {
     await rm(turnsDir, { recursive: true, force: true });
     await store.db.exec(
       `delete from events; delete from turns; delete from notebook;
-       delete from cards; delete from agents; delete from rounds;
-       update projects set paused_at = null;`,
+       delete from cards; delete from tickets; delete from agents;
+       delete from rounds; update projects set paused_at = null;`,
     );
   });
 
@@ -463,6 +468,96 @@ describe('Driver turn loop', () => {
 
     scripted.reply(say(resultText(RESULT)));
     expect((await round.turn('try again')).status).toBe('result');
+  });
+
+  const stall = async (builderId: string, ticketId: string, head: string) => {
+    const builder = { id: builderId, name: 'builder-idle' };
+    for (let i = 0; i <= STUCK_AFTER_CONTINUES; i += 1) {
+      await store.publish({
+        kind: 'builder.continued',
+        agentId: builderId,
+        ticketId,
+        payload: { name: builder.name, prompt: 'Keep going.', head },
+      });
+    }
+    return flagIfStuck(store, builder, ticketId, head);
+  };
+
+  const insertTicket = async (): Promise<string> => {
+    const { rows } = await store.db.query<{ id: string }>(
+      `insert into tickets (project_id, title) values ($1, 'QD9 widget')
+       returning id`,
+      [store.projectId],
+    );
+    return rows[0]?.id ?? '';
+  };
+
+  it(
+    'surfaces each stuck flag in the next Driver turn input, once',
+    async () => {
+      const builderId = await insertAgent('builder');
+      const ticketId = await insertTicket();
+      expect(await stall(builderId, ticketId, 'a'.repeat(40))).toBe(true);
+      expect(
+        await flagIfStuck(
+          store,
+          { id: builderId, name: 'b' },
+          ticketId,
+          'a'.repeat(40),
+        ),
+      ).toBe(false);
+      scripted.reply(
+        say(resultText(RESULT)),
+        say(resultText(RESULT)),
+        say('Working on it', { stopReason: 'cancelled' }),
+        say('Partial thought', { fail: 'agent crashed' }),
+        say(resultText(RESULT)),
+      );
+
+      const round = await open();
+      await round.birth;
+      const birth = scripted.prompts[0]?.text ?? '';
+      expect(birth).toContain('# Stuck builders');
+      expect(birth).toContain(
+        `- builder-idle (${builderId}) on ticket ${ticketId} "QD9 widget", at ${'a'.repeat(40)}.`,
+      );
+
+      await round.turn('heron reported QD1.');
+      expect(scripted.prompts[1]?.text).toBe('heron reported QD1.');
+
+      expect(await stall(builderId, ticketId, 'b'.repeat(40))).toBe(true);
+      expect((await round.turn('crane is idle.')).status).toBe('stopped');
+      await expect(round.turn('thimble approved QD1.')).rejects.toThrow(
+        'agent crashed',
+      );
+      await round.turn('try again');
+      const resent = scripted.prompts.slice(2).map((prompt) => prompt.text);
+      expect(resent).toHaveLength(3);
+      for (const text of resent) {
+        expect(text).toContain('# Stuck builders');
+        expect(text).toContain(`at ${'b'.repeat(40)}.`);
+        expect(text).not.toContain('a'.repeat(40));
+      }
+      expect(await unsurfacedStuckFlags(store)).toEqual([]);
+      expect(
+        (await events(STUCK_SURFACED_EVENT)).map((payload) => payload['flags']),
+      ).toEqual([[expect.any(Number)], [expect.any(Number)]]);
+    },
+    TIMEOUT,
+  );
+
+  it('keeps a flag older than one already surfaced unsurfaced', async () => {
+    const driverId = await insertAgent();
+    const builderId = await insertAgent('builder');
+    const ticketId = await insertTicket();
+    await stall(builderId, ticketId, 'a'.repeat(40));
+    await stall(builderId, ticketId, 'b'.repeat(40));
+    const [older, newer] = await unsurfacedStuckFlags(store);
+    if (!older || !newer) throw new Error('expected two flags');
+
+    await markStuckFlagsSurfaced(store, { id: driverId }, [newer]);
+
+    expect(await unsurfacedStuckFlags(store)).toEqual([older]);
   });
 
   const signInCards = async () => {
