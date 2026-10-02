@@ -54,6 +54,10 @@ const notebookSection = (notebook: readonly NotebookEntry[]): string => {
 const goalSection = (goal: string): string =>
   goal.trim() || 'No goal is set for this round.';
 
+const BIRTH_LINE = /^You are .+, the Driver of this project for round \d+\.\n/;
+
+export const isBirthInput = (input: string): boolean => BIRTH_LINE.test(input);
+
 export const buildBirthInput = (parts: BirthInputParts): string =>
   [
     `You are ${parts.agent.name}, the Driver of this project for round ${parts.round.number}.`,

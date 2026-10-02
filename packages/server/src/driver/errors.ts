@@ -1,3 +1,6 @@
+import type { Runtime } from '@quarterdeck/rules';
+import type { SignInCommand } from '../signin/commands.js';
+
 export class RoundNotFoundError extends Error {
   readonly roundId: string;
 
@@ -15,6 +18,49 @@ export class RoundEndedError extends Error {
     super(`Round ${number} has ended; a Driver session cannot start in it`);
     this.name = 'RoundEndedError';
     this.roundId = roundId;
+  }
+}
+
+export class TurnInputMissingError extends Error {
+  readonly agentId: string;
+  readonly seq: number;
+  readonly path: string;
+
+  constructor(agentId: string, seq: number, path: string) {
+    super(`Agent ${agentId} has no saved input for turn ${seq} (${path})`);
+    this.name = 'TurnInputMissingError';
+    this.agentId = agentId;
+    this.seq = seq;
+    this.path = path;
+  }
+}
+
+export class ReplaySignInError extends Error {
+  readonly runtime: Runtime;
+  readonly command: string;
+
+  constructor(signIn: SignInCommand, cause: unknown) {
+    super(
+      `${signIn.displayName} is not signed in; run \`${signIn.command}\` to sign in, then replay again`,
+      { cause },
+    );
+    this.name = 'ReplaySignInError';
+    this.runtime = signIn.runtime;
+    this.command = signIn.command;
+  }
+}
+
+export class NoBirthTurnError extends Error {
+  readonly agentId: string;
+  readonly through: number;
+
+  constructor(agentId: string, through: number) {
+    super(
+      `Agent ${agentId} has no saved Driver birth input at or before turn ${through}`,
+    );
+    this.name = 'NoBirthTurnError';
+    this.agentId = agentId;
+    this.through = through;
   }
 }
 

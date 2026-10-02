@@ -45,6 +45,7 @@ export {
 } from './tickets.js';
 export {
   buildBirthInput,
+  isBirthInput,
   readActiveNotebook,
   type BirthInputParts,
   type NotebookEntry,
@@ -54,10 +55,13 @@ export {
   AgentNotRetiredError,
   BuilderNotAvailableError,
   BuilderSessionLostError,
+  NoBirthTurnError,
   NotADriverError,
+  ReplaySignInError,
   RoundEndedError,
   RoundNotFoundError,
   TicketNotAssignableError,
+  TurnInputMissingError,
 } from './errors.js';
 export {
   BUILDER_STUCK_EVENT,
@@ -84,6 +88,22 @@ export {
   type ParsedTurnResult,
   type TurnFormat,
 } from './result.js';
+export {
+  REPLAY_COMMAND,
+  REPLAY_PERMISSIONS,
+  readTurnChain,
+  replayCommand,
+  replayDriverChain,
+  type ConnectReplay,
+  type Replay,
+  type ReplayChain,
+  type ReplayClient,
+  type ReplayCommandParts,
+  type ReplayOptions,
+  type ReplaySetup,
+  type ReplayTurn,
+  type SavedTurn,
+} from './replay.js';
 export {
   ROUND_STARTED_EVENT,
   openDriverRound,
