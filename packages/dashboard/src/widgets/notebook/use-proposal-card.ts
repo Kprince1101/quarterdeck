@@ -1,8 +1,8 @@
 import { useMemo, useState, type ChangeEvent } from 'react';
 import { useDeck } from '../../deck/deck.js';
 import { valueOf } from '../../grid/dom.js';
+import { lineDiff, type DiffLine } from '../line-diff.js';
 import { useIntentRequest } from '../use-intent-request.js';
-import { lineDiff, type DiffLine } from './line-diff.js';
 import type { ProposalView } from './notebook-model.js';
 
 export interface ProposalCardView {

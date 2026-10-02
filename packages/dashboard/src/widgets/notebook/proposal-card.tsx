@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
+import type { DiffLine } from '../line-diff.js';
 import { RequestError } from '../request-error.js';
 import { DiffView } from './diff-view.js';
-import type { DiffLine } from './line-diff.js';
 import type { ProposalDisplay, ProposalView } from './notebook-model.js';
 import { ProjectTag } from './project-tag.js';
 import { useProposalCard, type ProposalCardView } from './use-proposal-card.js';

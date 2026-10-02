@@ -116,11 +116,11 @@
   white-space: pre-wrap;
 }
 
-.qd-diff-line[data-op='add'] {
+.qd-diff-line[data-op='added'] {
   color: var(--qd-ok);
 }
 
-.qd-diff-line[data-op='remove'] {
+.qd-diff-line[data-op='removed'] {
   color: var(--qd-danger);
 }
 

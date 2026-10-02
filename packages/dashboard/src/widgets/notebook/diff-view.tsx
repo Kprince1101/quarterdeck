@@ -1,4 +1,4 @@
-import type { DiffKind, DiffLine } from './line-diff.js';
+import type { DiffKind, DiffLine } from '../line-diff.js';
 
 const DIFF_SIGNS: Record<DiffKind, string> = {
   same: ' ',

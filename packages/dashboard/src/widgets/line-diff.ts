@@ -1,8 +1,8 @@
-export type DiffOp = 'same' | 'add' | 'remove';
+export type DiffKind = 'same' | 'added' | 'removed';
 
 export interface DiffLine {
   id: string;
-  op: DiffOp;
+  kind: DiffKind;
   text: string;
 }
 
@@ -17,8 +17,8 @@ const linesOf = (text: string): string[] => {
   return lines;
 };
 
-const tagged = (op: DiffOp, lines: readonly string[]): DiffEntry[] =>
-  lines.map((text) => ({ op, text }));
+const tagged = (kind: DiffKind, lines: readonly string[]): DiffEntry[] =>
+  lines.map((text) => ({ kind, text }));
 
 const sharedPrefix = (a: readonly string[], b: readonly string[]): number => {
   let n = 0;
@@ -76,29 +76,29 @@ const walkTable = (a: readonly string[], b: readonly string[]): DiffEntry[] => {
   while (i < a.length && j < b.length) {
     const before = a[i] ?? '';
     if (before === b[j]) {
-      lines.push({ op: 'same', text: before });
+      lines.push({ kind: 'same', text: before });
       i += 1;
       j += 1;
     } else if (
       (table[(i + 1) * width + j] ?? 0) >= (table[i * width + j + 1] ?? 0)
     ) {
-      lines.push({ op: 'remove', text: before });
+      lines.push({ kind: 'removed', text: before });
       i += 1;
     } else {
-      lines.push({ op: 'add', text: b[j] ?? '' });
+      lines.push({ kind: 'added', text: b[j] ?? '' });
       j += 1;
     }
   }
   return [
     ...lines,
-    ...tagged('remove', a.slice(i)),
-    ...tagged('add', b.slice(j)),
+    ...tagged('removed', a.slice(i)),
+    ...tagged('added', b.slice(j)),
   ];
 };
 
 const middle = (a: readonly string[], b: readonly string[]): DiffEntry[] => {
   if ((a.length + 1) * (b.length + 1) > MAX_TABLE_CELLS) {
-    return [...tagged('remove', a), ...tagged('add', b)];
+    return [...tagged('removed', a), ...tagged('added', b)];
   }
   return walkTable(a, b);
 };
@@ -107,8 +107,8 @@ const numbered = (entries: readonly DiffEntry[]): DiffLine[] => {
   let before = 0;
   let after = 0;
   return entries.map((entry) => {
-    if (entry.op !== 'add') before += 1;
-    if (entry.op !== 'remove') after += 1;
+    if (entry.kind !== 'added') before += 1;
+    if (entry.kind !== 'removed') after += 1;
     return { ...entry, id: `${before}:${after}` };
   });
 };

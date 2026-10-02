@@ -1,6 +1,6 @@
 import type { RuleView } from '../../api/index.js';
+import type { DiffLine } from '../line-diff.js';
 import { DIFF_MARKS } from './constants.js';
-import type { DiffLine } from './line-diff.js';
 import { LayerHeading, RulesAlert } from './rules-parts.js';
 import type { RulesWidgetView } from './use-rules-widget.js';
 
@@ -10,8 +10,8 @@ interface ReviewPanelProps {
 }
 
 const DiffRow = ({ line }: { line: DiffLine }) => (
-  <span className="qd-diff-line" data-op={line.op}>
-    {DIFF_MARKS[line.op]} {line.text}
+  <span className="qd-diff-line" data-op={line.kind}>
+    {DIFF_MARKS[line.kind]} {line.text}
     {'\n'}
   </span>
 );
