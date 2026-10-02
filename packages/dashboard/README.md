@@ -36,6 +36,7 @@ src/widgets/starter/         the Tables starter widget
 src/widgets/events/          Events: the feed, filtered by project and kind
 src/widgets/data/            Data: table counts, rows a page at a time, paths on disk
 src/widgets/driver/          the Driver widget: round picker, turns, turn detail, replay command
+src/widgets/planner/         Planner: the conversation, proposals to approve, edit or reject
 src/widgets/rules/           Rules: edit rules.local.* with validation, a diff and provenance
 src/grid/                    the grid: layout JSON, actions, drag, resize, keyboard, tray
 src/theme/tokens.css         dark theme tokens (--qd-*) and the page base
