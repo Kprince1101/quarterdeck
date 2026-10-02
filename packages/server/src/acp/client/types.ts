@@ -103,8 +103,11 @@ export interface ClosedEvent {
   type: 'closed';
 }
 
+export type VersionStage = 'before_spawn' | 'after_spawn';
+
 export interface AgentVersionEvent {
   type: 'agent_version';
+  stage: VersionStage;
   command: string;
   version: string | null;
   error?: string;

@@ -14,7 +14,14 @@ const client = await launchAcpClient(
 
 ## Version on every launch
 
-Before spawning, the wrapper runs `launch.version` and emits one `agent_version` event with the first line it printed (stdout, else stderr). Each adapter names the command that prints its CLI's version. A probe that fails, times out (`versionTimeoutMs`, default 10s) or prints nothing gives `version: null` and an `error`, and the launch goes ahead. The version the agent reports over ACP is in `client.agent.agentInfo` as usual.
+Each adapter names the command that prints its CLI's version in `launch.version`. The wrapper runs it twice and emits an `agent_version` event each time, carrying the first line the command printed (stdout, else stderr):
+
+- `stage: 'before_spawn'` runs before the first attempt, so a launch that never starts still records which binary was on disk.
+- `stage: 'after_spawn'` runs once the agent has started. During an update the binary that finally starts can differ from the one the first probe saw.
+
+The version step is advisory and never stops an agent from starting. If the probe fails or prints nothing, the event has `version: null` and an `error`, and the launch goes ahead. The probe gets `versionTimeoutMs` (default 10s); after that its whole process group is sent SIGKILL, the event's error is `timed out`, and the launch goes ahead. That holds even for a CLI that ignores SIGTERM or sits on a prompt.
+
+If `options.signal` aborts during either probe, the probe's process group is killed. The launch then rejects with an `AcpClientError` whose code is `aborted`, closing the client first if it had already started. The version the agent reports over ACP is in `client.agent.agentInfo` as usual.
 
 ## Spawn retry
 
@@ -30,7 +37,7 @@ The wait is `options.sleep(ms, signal)`, so tests can pass one that returns at o
 
 Both events go to `options.onEvent`, through the same listener isolation as the client's own events.
 
-| `type`          | When                                                           |
-| --------------- | -------------------------------------------------------------- |
-| `agent_version` | Once per launch, before the first spawn (`command`, `version`) |
-| `spawn_retry`   | A spawn failed to exec and will be retried after `delayMs`     |
+| `type`          | When                                                                              |
+| --------------- | --------------------------------------------------------------------------------- |
+| `agent_version` | Before the first spawn and after a successful one (`stage`, `command`, `version`) |
+| `spawn_retry`   | A spawn failed to exec and will be retried after `delayMs`                        |

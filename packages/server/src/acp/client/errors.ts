@@ -1,7 +1,7 @@
 import { RequestError } from '@agentclientprotocol/sdk';
 
 export type AcpClientErrorCode =
-  'initialize_timeout' | 'resume_unsupported' | 'spawn_failed';
+  'aborted' | 'initialize_timeout' | 'resume_unsupported' | 'spawn_failed';
 
 export class AcpClientError extends Error {
   readonly code: AcpClientErrorCode;

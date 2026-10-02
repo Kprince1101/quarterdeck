@@ -7,6 +7,7 @@ import type {
   AcpClient,
   AcpClientOptions,
   AgentCommand,
+  VersionStage,
 } from '../client/types.js';
 import { DEFAULT_VERSION_TIMEOUT_MS, probeAgentVersion } from './version.js';
 
@@ -33,6 +34,9 @@ const sleepUntilAborted: Sleep = (ms, signal) =>
 const isSpawnFailure = (err: unknown) =>
   err instanceof AcpClientError && err.code === 'spawn_failed';
 
+const launchAborted = () =>
+  new AcpClientError('ACP launch was aborted', 'aborted');
+
 export const launchAcpClient = async (
   launch: AgentLaunch,
   options: LaunchOptions,
@@ -43,8 +47,21 @@ export const launchAcpClient = async (
     sleep = sleepUntilAborted,
     versionTimeoutMs = DEFAULT_VERSION_TIMEOUT_MS,
   } = options;
+  const { signal } = options;
   const events = createClientEvents(options);
-  events.emit(await probeAgentVersion(launch.version, versionTimeoutMs));
+
+  const logVersion = async (stage: VersionStage) => {
+    const probe = await probeAgentVersion(launch.version, {
+      timeoutMs: versionTimeoutMs,
+      signal,
+    });
+    events.emit({
+      type: 'agent_version',
+      stage,
+      command: launch.version.command,
+      ...probe,
+    });
+  };
 
   const attempt = async (retry: number): Promise<AcpClient> => {
     try {
@@ -58,11 +75,19 @@ export const launchAcpClient = async (
         delayMs: spawnRetryDelayMs,
         message: getErrorMessage(err),
       });
-      await sleep(spawnRetryDelayMs, options.signal);
-      if (options.signal?.aborted) throw err;
+      await sleep(spawnRetryDelayMs, signal);
+      if (signal?.aborted) throw err;
       return attempt(retry + 1);
     }
   };
 
-  return attempt(1);
+  await logVersion('before_spawn');
+  if (signal?.aborted) throw launchAborted();
+  const client = await attempt(1);
+  await logVersion('after_spawn');
+  if (signal?.aborted) {
+    await client.close();
+    throw launchAborted();
+  }
+  return client;
 };
