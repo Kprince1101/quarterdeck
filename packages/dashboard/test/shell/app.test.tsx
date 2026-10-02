@@ -70,6 +70,7 @@ describe('dashboard shell', () => {
   it('mounts the header and the widget mount point under one stream', () => {
     const { container, unmount } = render(<App stream={stream} />);
     expect(textOf(container, '.qd-brand')).toBe('Quarterdeck');
+    expect(container.querySelector('.qd-mode')).toBeNull();
     expect(container.querySelector('main [data-widget-mount]')).not.toBeNull();
     expect(FakeSocket.opened.map(({ url }) => url)).toEqual([STREAM_URL]);
     unmount();

@@ -22,6 +22,17 @@
   letter-spacing: 0.02em;
 }
 
+.qd-mode {
+  padding: 0 var(--qd-space-2);
+  border: 1px solid var(--qd-warn);
+  border-radius: var(--qd-radius);
+  color: var(--qd-warn);
+  font-size: var(--qd-text-sm);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .qd-header-end {
   margin-left: auto;
   display: flex;

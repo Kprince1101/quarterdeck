@@ -5,6 +5,10 @@
   "type": "module",
   "license": "MIT",
   "author": "Kristopher Prince",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite"
+  },
   "engines": {
     "node": ">=22"
   },

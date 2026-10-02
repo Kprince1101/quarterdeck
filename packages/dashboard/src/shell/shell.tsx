@@ -21,15 +21,18 @@ export const StreamStatusBadge = ({ stream }: { stream: StreamState }) => (
 );
 
 export interface ShellProps {
+  mode?: string | undefined;
   children?: ReactNode;
 }
 
-export const Shell = ({ children }: ShellProps) => {
+export const Shell = ({ mode, children }: ShellProps) => {
   const { stream } = useDeck();
+  const hasMode = mode !== undefined;
   return (
     <div className="qd-shell">
       <header className="qd-header">
         <h1 className="qd-brand">Quarterdeck</h1>
+        {hasMode && <span className="qd-mode">{mode}</span>}
         <div className="qd-header-end">
           <StreamStatusBadge stream={stream} />
         </div>
