@@ -7,6 +7,7 @@ export {
   CLAUDE_LOCKED_OPTIONS,
   NPM_PUBLIC_REGISTRY,
   claudeAgentCommand,
+  claudeCliCommand,
   claudeVersionCommand,
   claudeRuntimeDir,
   claudeSessionMeta,
