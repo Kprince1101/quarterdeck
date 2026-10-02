@@ -177,7 +177,7 @@ describe('rules loader', () => {
 
   it('rejects a __proto__ key instead of reshaping the merged object', async () => {
     const path = await writeLocal(
-      sandbox.repoDir,
+      sandbox.homeDir,
       'permissions.json',
       '{ "__proto__": { "default": "allow" } }',
     );

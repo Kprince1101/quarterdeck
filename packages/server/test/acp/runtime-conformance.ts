@@ -26,8 +26,10 @@ export const describeRuntimeConformance = (
   base: Partial<RuntimeLaunch> = {},
 ): void => {
   describeClientConformance(
-    createClientAdapter(`${runtime.displayName} adapter`, (launch, options) =>
-      runtime.connect({ cwd: tmpdir(), ...base, command: launch }, options),
-    ),
+    createClientAdapter({
+      name: `${runtime.displayName} adapter`,
+      spawnClient: (launch, options) =>
+        runtime.connect({ cwd: tmpdir(), ...base, command: launch }, options),
+    }),
   );
 };
