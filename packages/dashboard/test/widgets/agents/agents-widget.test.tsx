@@ -189,7 +189,7 @@ describe('Agents widget', () => {
       'Reset',
     ]);
 
-    expect(names(card(container, KILLED_ID))).toEqual(['Retire']);
+    expect(names(card(container, KILLED_ID))).toEqual(['Retire', 'Reset']);
     unmount();
   });
 
@@ -216,7 +216,7 @@ describe('Agents widget', () => {
         body: { project: 'deck', agentId: BUILDER_ID, text: POKE_TEXT },
       },
       {
-        url: 'http://deck.test/api/intents/agent.end',
+        url: 'http://deck.test/api/intents/agent.reset',
         body: { project: 'deck', agentId: BUILDER_ID },
       },
       {
@@ -254,8 +254,8 @@ describe('Agents widget', () => {
     });
     expect(textOf(builder(), '.qd-agent-state')).toBe('killed');
     expect(textOf(builder(), '.qd-agent-since')).toBe('just now');
-    expect(names(builder())).toEqual(['Retire']);
-    expect(enabled(builder())).toEqual([true]);
+    expect(names(builder())).toEqual(['Retire', 'Reset']);
+    expect(enabled(builder())).toEqual([true, true]);
     unmount();
   });
 

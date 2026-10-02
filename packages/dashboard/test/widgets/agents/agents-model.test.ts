@@ -113,7 +113,7 @@ describe('agent actions', () => {
       'retire',
       'reset',
     ]);
-    expect(availableActions(viewOf(KILLED_ID))).toEqual(['retire']);
+    expect(availableActions(viewOf(KILLED_ID))).toEqual(['retire', 'reset']);
   });
 
   it('finds the failure the stream records for an intent', () => {

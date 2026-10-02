@@ -38,7 +38,7 @@ const SENDERS: Record<AgentActionKind, ActionSender> = {
     intents.agent.message({ ...target, text: POKE_TEXT }),
   kill: (intents, target) => intents.agent.kill(target),
   retire: (intents, target) => intents.agent.retire(target),
-  reset: (intents, target) => intents.agent.end(target),
+  reset: (intents, target) => intents.agent.reset(target),
 };
 
 export const sendAgentAction = (
@@ -53,7 +53,7 @@ const pauseOrResume = (agent: AgentView): AgentActionKind => {
 };
 
 export const availableActions = (agent: AgentView): AgentActionKind[] => {
-  if (!agent.isLive) return ['retire'];
+  if (!agent.isLive) return ['retire', 'reset'];
   return [pauseOrResume(agent), 'poke', 'kill', 'retire', 'reset'];
 };
 
