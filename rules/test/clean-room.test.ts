@@ -3,15 +3,16 @@ import { existsSync, readFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  PRIVATE_NAMES,
-  PRIVATE_NAMES_FILE,
+  PRIVATE_NAME_HASHES,
   TOOLKIT,
+  hashName,
+  namesIn,
   privateNamesIn,
 } from './private-names.js';
 
 const ROOT = resolve(import.meta.dirname, '../..');
-const SKIPPED = new Set(['SPEC.md', 'package-lock.json', PRIVATE_NAMES_FILE]);
-const NAME = PRIVATE_NAMES[0] ?? '';
+const TOOLKIT_DEPENDENCY_TREE = 'package-lock.json';
+const NAME = TOOLKIT.split('-')[0] ?? '';
 const CAPITALISED = NAME.charAt(0).toUpperCase() + NAME.slice(1);
 
 const loadsToolkit = (file: string) => {
@@ -42,7 +43,9 @@ const repoFiles = () =>
     .split('\0')
     .filter(
       (file) =>
-        file !== '' && !SKIPPED.has(file) && existsSync(resolve(ROOT, file)),
+        file !== '' &&
+        file !== TOOLKIT_DEPENDENCY_TREE &&
+        existsSync(resolve(ROOT, file)),
     );
 
 const scanFile = (file: string): string[] => {
@@ -52,13 +55,19 @@ const scanFile = (file: string): string[] => {
 };
 
 describe('clean room', () => {
+  it('lists private names only as SHA-256 hashes', () => {
+    expect(PRIVATE_NAME_HASHES.size).toBeGreaterThan(0);
+    for (const hash of PRIVATE_NAME_HASHES)
+      expect(hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(PRIVATE_NAME_HASHES).toContain(hashName(NAME));
+  });
+
   it('flags a private name in a test file, whatever its case', () => {
     const file = 'packages/server/test/gate/gate.test.ts';
     expect(leaksIn(file, `const ok = 1;\nname: '${CAPITALISED}'`)).toEqual([
       `${file}:2: ${CAPITALISED}`,
     ]);
-    for (const name of PRIVATE_NAMES)
-      expect(leaksIn('docs.md', `see ${name.toUpperCase()}.`)).toHaveLength(1);
+    expect(leaksIn('docs.md', `see ${NAME.toUpperCase()}.`)).toHaveLength(1);
   });
 
   it('flags a private name in a file path', () => {
@@ -69,6 +78,14 @@ describe('clean room', () => {
 
   it('matches whole words only', () => {
     expect(leaksIn('a.ts', `${NAME}Error({ ${NAME}s, x${NAME} })`)).toEqual([]);
+  });
+
+  it('matches a two-word name across whitespace only', () => {
+    const names = new Set([hashName('harbor master')]);
+    expect(namesIn('ask the Harbor\n  Master', names)).toEqual([
+      'Harbor\n  Master',
+    ]);
+    expect(namesIn('harbor-master, harbor, master', names)).toEqual([]);
   });
 
   it('allows the toolkit dependency only in the files that load it', () => {
@@ -83,10 +100,10 @@ describe('clean room', () => {
     expect(leaksIn('README.md', `uses ${TOOLKIT}`)).toHaveLength(1);
   });
 
-  it('finds no private name in any repo file but SPEC.md, the lockfile and the name list', () => {
+  it('finds no private name in any repo file but the lockfile', () => {
     const files = repoFiles();
     expect(files).toContain('rules/test/clean-room.test.ts');
-    expect(files).not.toContain('SPEC.md');
+    expect(files).toContain('rules/test/private-names.ts');
     expect(files.flatMap((file) => scanFile(file))).toEqual([]);
   });
 });

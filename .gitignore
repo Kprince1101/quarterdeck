@@ -5,3 +5,4 @@ coverage/
 rules.local*
 .DS_Store
 .idea/
+/SPEC.md

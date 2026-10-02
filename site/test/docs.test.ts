@@ -182,14 +182,6 @@ describe('rules page', () => {
 });
 
 describe('widgets page', () => {
-  it('has one section per widget in the SPEC, in order', () => {
-    const spec = readFileSync(resolve(ROOT, 'SPEC.md'), 'utf8');
-    const widgets = /Widgets: ([^.]+)\./.exec(spec)?.[1]?.split(', ');
-
-    expect(widgets).toBeDefined();
-    expect(headings(readDoc('widgets.html'), 2)).toEqual(widgets);
-  });
-
   it('shows no screenshots', () => {
     expect(readDoc('widgets.html')).not.toMatch(/<img|<figure/);
   });

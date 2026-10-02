@@ -32,21 +32,9 @@
         The dashboard is still being built, so this page says what each widget
         is for, not what it looks like. Every widget shows state the server
         streams to it; anything you do in one is sent to the server, which is
-        the only thing that changes state.
+        the only thing that changes state. The widgets are listed in the order
+        the grid's tray lists them.
       </p>
-
-      <h2 id="board">Board</h2>
-      <p>
-        Whether everything is alive. The Board shows the stream's status, then
-        each picked project with its live agents, tagged paused or archived.
-        Pause all stops new work in every project and the Board then says Paused
-        everywhere; Resume all undoes it. Up to four projects are shown at once:
-        the first four by name until you pick, and archived projects only when
-        Show archived is on.
-      </p>
-
-      <h2 id="project">Project</h2>
-      <p>One project: its repository and its crew.</p>
 
       <h2 id="agents">Agents</h2>
       <p>
@@ -65,48 +53,21 @@
         does not deliver yet.
       </p>
 
-      <h2 id="events">Events</h2>
-      <p>Everything that happened in the project, in order, as it happens.</p>
+      <h2 id="board">Board</h2>
+      <p>
+        Whether everything is alive. The Board shows the stream's status, then
+        each picked project with its live agents, tagged paused or archived.
+        Pause all stops new work in every project and the Board then says Paused
+        everywhere; Resume all undoes it. Up to four projects are shown at once:
+        the first four by name until you pick, and archived projects only when
+        Show archived is on.
+      </p>
 
       <h2 id="cards">Cards</h2>
       <p>
         Decisions waiting for you: permission requests, questions from agents,
         merges, sign-ins. A declined or unanswered card is a result the agent
         sees, not a crash.
-      </p>
-
-      <h2 id="planner">Planner</h2>
-      <p>
-        Your conversation with the Planner, which turns what you describe into
-        tickets for you to approve.
-      </p>
-
-      <h2 id="driver">Driver</h2>
-      <p>
-        The Driver's work: which builder has which ticket, and what it is doing
-        about each.
-      </p>
-
-      <h2 id="notebook">Notebook</h2>
-      <p>
-        What earlier Drivers learned about the project. Each new Driver is born
-        with it.
-      </p>
-
-      <h2 id="usage">Usage</h2>
-      <p>
-        Tokens this project's agents spent in the budget window, the same count
-        that holds launches. If
-        <a href="rules.html#lifecycle"><code>budget.window</code></a> sets a
-        <code>capTokens</code>, it shows the share of that cap, amber from 60%
-        and red from 80%; otherwise it says no cap is set.
-      </p>
-
-      <h2 id="rules">Rules</h2>
-      <p>
-        The <a href="rules.html">rules</a> files, edited in place. Edits are
-        saved as <code>rules.local.*</code> files and checked before they are
-        written.
       </p>
 
       <h2 id="data">Data</h2>
@@ -117,6 +78,52 @@
         project and one for everything. Each asks you to type the project's
         name, or <code>wipe everything</code>, and stops the agents before it
         deletes anything. See <a href="data.html">where your data lives</a>.
+      </p>
+
+      <h2 id="driver">Driver</h2>
+      <p>
+        The Driver's work: which builder has which ticket, and what it is doing
+        about each.
+      </p>
+
+      <h2 id="events">Events</h2>
+      <p>Everything that happened in the project, in order, as it happens.</p>
+
+      <h2 id="notebook">Notebook</h2>
+      <p>
+        What earlier Drivers learned about the project. Each new Driver is born
+        with it.
+      </p>
+
+      <h2 id="planner">Planner</h2>
+      <p>
+        Your conversation with the Planner, which turns what you describe into
+        tickets for you to approve.
+      </p>
+
+      <h2 id="project">Project</h2>
+      <p>One project: its repository and its crew.</p>
+
+      <h2 id="rules">Rules</h2>
+      <p>
+        The <a href="rules.html">rules</a> files, edited in place. Edits are
+        saved as <code>rules.local.*</code> files and checked before they are
+        written.
+      </p>
+
+      <h2 id="tables">Tables</h2>
+      <p>
+        How many rows of each table the stream holds right now. It is the
+        smallest widget, and the one to copy when you write your own.
+      </p>
+
+      <h2 id="usage">Usage</h2>
+      <p>
+        Tokens this project's agents spent in the budget window, the same count
+        that holds launches. If
+        <a href="rules.html#lifecycle"><code>budget.window</code></a> sets a
+        <code>capTokens</code>, it shows the share of that cap, amber from 60%
+        and red from 80%; otherwise it says no cap is set.
       </p>
     </main>
 
