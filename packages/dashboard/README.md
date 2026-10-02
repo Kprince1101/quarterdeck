@@ -40,6 +40,7 @@ src/widgets/driver/          the Driver widget: round picker, turns, turn detail
 src/widgets/planner/         Planner: the conversation, proposals to approve, edit or reject
 src/widgets/rules/           Rules: edit rules.local.* with validation, a diff and provenance
 src/widgets/project/         Project: round Start/End/Kill, pause, Copilot and auto-merge (machine lifecycle layer), reviewer, retired count, Refresh agents, archive
+src/widgets/usage/           Usage: this project's tokens in the budget window and the share of budget.window.capTokens
 src/grid/                    the grid: layout JSON, actions, drag, resize, keyboard, tray
 src/layouts/                 DeckLayout: the saved layout, the preset bar, writes to the server
 src/theme/tokens.css         dark theme tokens (--qd-*) and the page base
@@ -112,6 +113,12 @@ The Board shows whether things are alive across projects:
 ## The Driver widget
 
 The Driver widget shows one round at a time: the active round, or the newest if none is active, until another is picked in the Round picker. It lists the turns of the round's Driver agents from the stream, newest first, so it holds each Driver's latest 20. Selecting a turn sends `turn.read` (see [the API](../server/src/api/README.md)) for its input, output and result, and reads it again when the turn ends. The replay command is `replayCommand({ round, through: n, project })` from `@quarterdeck/server/replay-command`, with `round` and `n` from `turn.read`, and a Copy button puts it on the clipboard. The turn field next to it starts at the selected turn's `n` and takes any whole number from 1 to it, so a round longer than the 20 listed turns can still be replayed through an earlier turn. A turn whose session a later Driver session replaced gets no command, since `quarterdeck replay` runs only the latest.
+
+## The Usage widget
+
+`usage` starts in the tray. It shows the budget window that holds launches (`lifecycle.budget.window`, see [budget](../server/src/budget/README.md)): it sends `usage.read` for the stream's project and renders the reply, so the widget and the hold always read the same meter. The count is per project, so the readout says _this project_. It never sums the stream's `turns` table, which keeps only each agent's latest 20 turns.
+
+It reads on mount, every 15 seconds so old turns leave the window, and whenever a turn in the stream ends. With a cap it shows the percent of the cap, amber from 60% and red from 80%. Without one it shows the token total and _No cap set_. A failed read shows the error and keeps the last reading. It only displays usage: the hold is the budget module's.
 
 ## The grid
 

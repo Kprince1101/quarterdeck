@@ -28,8 +28,10 @@ export {
 export {
   READ_INTENTS,
   turnReadResultSchema,
+  usageReadResultSchema,
   type ReadIntentName,
   type TurnReadResult,
+  type UsageReadResult,
 } from './read.js';
 export {
   INTENTS,

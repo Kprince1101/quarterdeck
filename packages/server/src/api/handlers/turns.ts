@@ -4,10 +4,10 @@ import {
   type RoundAgents,
 } from '../../driver/replay-round.js';
 import { ROUND_STARTED_EVENT } from '../../driver/round.js';
-import type { ReadIntentName, TurnReadResult } from '../../intents/index.js';
+import type { TurnReadResult } from '../../intents/index.js';
 import { readTextIfExists } from '../../lib/fs.js';
 import { projectTurnsDir, type Store } from '../../store/index.js';
-import type { IntentHandler, IntentHandlers } from '../context.js';
+import type { IntentHandler } from '../context.js';
 import { findRow, unrecorded } from '../record.js';
 
 interface TurnPrompt {
@@ -42,7 +42,11 @@ const roundAgents =
     return rows.map((row) => row.agentId);
   };
 
-const readTurn: IntentHandler<'turn.read'> = async (ctx, input, name) => {
+export const readTurn: IntentHandler<'turn.read'> = async (
+  ctx,
+  input,
+  name,
+) => {
   const store = await ctx.stores.get(input.project);
   const turn = await findRow<TurnPrompt>(
     store.db,
@@ -71,8 +75,4 @@ const readTurn: IntentHandler<'turn.read'> = async (ctx, input, name) => {
     latestSession: session?.latest ?? false,
   };
   return unrecorded(name, read);
-};
-
-export const READ_HANDLERS: IntentHandlers<ReadIntentName> = {
-  'turn.read': readTurn,
 };
