@@ -1,0 +1,13 @@
+{
+  "extends": "legion-toolkit/tsconfig/node.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "test/**/*.ts",
+    "packages/*/src/**/*.ts",
+    "rules/**/*.ts",
+    "site/**/*.ts"
+  ],
+  "exclude": ["node_modules", "**/dist"]
+}
