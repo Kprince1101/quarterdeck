@@ -1,0 +1,6 @@
+{
+  "planner": { "runtime": "kiro" },
+  "driver": { "runtime": "kiro" },
+  "builder": { "runtime": "kiro" },
+  "reviewer": { "runtime": "kiro" }
+}

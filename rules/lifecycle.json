@@ -1,0 +1,12 @@
+{
+  "autoEndSettleSeconds": 120,
+  "stuckAfterMinutes": 30,
+  "budget": {
+    "maxTokensPerTicket": 2000000,
+    "warnAtFraction": 0.8
+  },
+  "mergeGate": {
+    "requireReviewerApproval": true,
+    "requireChecksPassing": true
+  }
+}
