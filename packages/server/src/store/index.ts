@@ -48,7 +48,12 @@ export {
   migrate,
   type Migration,
 } from './migrate.js';
-export { assertProjectSlug, projectDataDir, quarterdeckHome } from './paths.js';
+export {
+  assertProjectSlug,
+  projectDataDir,
+  projectTurnsDir,
+  quarterdeckHome,
+} from './paths.js';
 export {
   connectPostgres,
   createPostgresPool,

@@ -4,6 +4,7 @@ export * from './acp/permissions/index.js';
 export * from './acp/runtimes/index.js';
 export * from './agents/index.js';
 export * from './bus/index.js';
+export * from './driver/index.js';
 export * from './store/index.js';
 export * from './api/index.js';
 export * from './stream/index.js';

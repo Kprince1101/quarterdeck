@@ -16,3 +16,8 @@ export const projectDataDir = (
   project: string,
   home: string = quarterdeckHome(),
 ): string => join(home, assertProjectSlug(project), 'pg');
+
+export const projectTurnsDir = (
+  project: string,
+  home: string = quarterdeckHome(),
+): string => join(home, assertProjectSlug(project), 'turns');

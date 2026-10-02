@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assertProjectSlug,
   projectDataDir,
+  projectTurnsDir,
   quarterdeckHome,
 } from '../../src/store/index.js';
 
@@ -17,6 +18,14 @@ describe('store paths', () => {
 
   it('roots the data dir at a custom home', () => {
     expect(projectDataDir('qd-2', '/tmp/qd')).toBe('/tmp/qd/qd-2/pg');
+  });
+
+  it('keeps turn files next to the data dir', () => {
+    expect(projectTurnsDir('commander')).toBe(
+      join(homedir(), '.quarterdeck', 'commander', 'turns'),
+    );
+    expect(projectTurnsDir('qd-2', '/tmp/qd')).toBe('/tmp/qd/qd-2/turns');
+    expect(() => projectTurnsDir('../escape')).toThrow('Invalid project slug');
   });
 
   it.each(['', '../escape', 'a/b', 'Upper', '-lead', 'x'.repeat(64)])(
