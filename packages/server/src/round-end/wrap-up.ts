@@ -5,7 +5,13 @@ import {
   type TurnOutcome,
 } from '../driver/index.js';
 import { getErrorMessage } from '../lib/errors.js';
-import { publishEvent, type Queryable, type Store } from '../store/index.js';
+import {
+  publishEvent,
+  type PublishInput,
+  type Queryable,
+  type Store,
+} from '../store/index.js';
+import { readRoundNumber } from './cleanup.js';
 import {
   buildWrapUpPrompt,
   wrapUpFormat,
@@ -18,6 +24,8 @@ export const WRAP_UP_EVENTS = {
   proposed: 'round.wrapped_up',
   missed: 'round.wrap_up_missed',
 } as const;
+
+export const NO_DRIVER_SESSION = 'the round has no live Driver session';
 
 export interface WrapUpOptions {
   store: Store;
@@ -173,17 +181,36 @@ const missReason = (outcome: MissedOutcome): string => {
   return `the wrap-up turn stopped: ${outcome.stopReason}`;
 };
 
-const recordMiss = async (
-  options: WrapUpOptions,
+const publishMiss = async (
+  store: Store,
+  round: { id: string; number: number },
+  agentId: string | null,
   reason: string,
 ): Promise<WrapUp> => {
-  const { store, round } = options;
-  await store.publish({
+  const event: PublishInput = {
     kind: WRAP_UP_EVENTS.missed,
-    agentId: round.agent.id,
-    payload: { roundId: round.round.id, round: round.round.number, reason },
-  });
+    payload: { roundId: round.id, round: round.number, reason },
+  };
+  if (agentId !== null) event.agentId = agentId;
+  await store.publish(event);
   return { status: 'missed', reason };
+};
+
+const recordMiss = (options: WrapUpOptions, reason: string): Promise<WrapUp> =>
+  publishMiss(
+    options.store,
+    options.round.round,
+    options.round.agent.id,
+    reason,
+  );
+
+export const missWrapUp = async (
+  store: Store,
+  roundId: string,
+  reason: string,
+): Promise<WrapUp> => {
+  const number = await readRoundNumber(store.db, store.projectId, roundId);
+  return publishMiss(store, { id: roundId, number }, null, reason);
 };
 
 const runWrapUpTurn = async (
