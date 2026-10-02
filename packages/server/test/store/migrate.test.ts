@@ -45,6 +45,22 @@ describe('migrate', () => {
     expect(rows.map((row) => row.n)).toEqual([1, 2, 3]);
   });
 
+  it.each(['0002_AddX.sql', '2_x.sql', '0003-dash.sql'])(
+    'refuses to run when %s does not match NNNN_name.sql',
+    async (file) => {
+      write('0001_a.sql', 'create table good (n int);');
+      write(file, 'create table never (n int);');
+
+      await expect(migrate(db, dir)).rejects.toThrow(
+        `Migration ${file} must be named NNNN_name.sql`,
+      );
+      const { rows } = await db.query<{ good: string | null }>(
+        `select to_regclass('good')::text as good`,
+      );
+      expect(rows).toEqual([{ good: null }]);
+    },
+  );
+
   it('rolls back a failing migration and leaves it pending', async () => {
     write('0001_a.sql', 'create table good (n int);');
     write('0002_bad.sql', 'create table half (n int); select nope;');

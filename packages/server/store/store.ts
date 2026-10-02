@@ -1,5 +1,6 @@
 import { mkdir } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
+import { NO_LOCK, lockDataDir, type DataDirLock } from './lock.js';
 import { migrate } from './migrate.js';
 import { assertProjectSlug, projectDataDir } from './paths.js';
 
@@ -39,9 +40,15 @@ export interface Store {
 
 const ensureProject = async (db: PGlite, slug: string): Promise<string> => {
   const { rows } = await db.query<{ id: string }>(
-    `insert into projects (slug, name) values ($1, $1)
-     on conflict (slug) do update set slug = excluded.slug
-     returning id`,
+    `with inserted as (
+       insert into projects (slug, name) values ($1, $1)
+       on conflict (slug) do nothing
+       returning id
+     )
+     select id from inserted
+     union all
+     select id from projects where slug = $1
+     limit 1`,
     [slug],
   );
   const [row] = rows;
@@ -49,22 +56,46 @@ const ensureProject = async (db: PGlite, slug: string): Promise<string> => {
   return row.id;
 };
 
-const prepareDataDir = async (dataDir: string): Promise<void> => {
-  if (dataDir.startsWith(IN_MEMORY)) return;
+const prepareDataDir = async (
+  dataDir: string,
+  project: string,
+): Promise<DataDirLock> => {
+  if (dataDir.startsWith(IN_MEMORY)) return NO_LOCK;
   await mkdir(dataDir, { recursive: true });
+  return lockDataDir(`${dataDir}.lock`, project);
+};
+
+const startDatabase = async (
+  dataDir: string,
+  project: string,
+  lock: DataDirLock,
+): Promise<Store> => {
+  const db = await PGlite.create(dataDir);
+  try {
+    const migrated = await migrate(db);
+    const projectId = await ensureProject(db, project);
+    const close = async () => {
+      try {
+        await db.close();
+      } finally {
+        await lock.release();
+      }
+    };
+    return { db, dataDir, projectId, migrated, close };
+  } catch (err) {
+    await db.close();
+    throw err;
+  }
 };
 
 export const openStore = async (options: StoreOptions): Promise<Store> => {
   const project = assertProjectSlug(options.project);
   const dataDir = options.dataDir ?? projectDataDir(project, options.home);
-  await prepareDataDir(dataDir);
-  const db = await PGlite.create(dataDir);
+  const lock = await prepareDataDir(dataDir, project);
   try {
-    const migrated = await migrate(db);
-    const projectId = await ensureProject(db, project);
-    return { db, dataDir, projectId, migrated, close: () => db.close() };
+    return await startDatabase(dataDir, project, lock);
   } catch (err) {
-    await db.close();
+    await lock.release();
     throw err;
   }
 };

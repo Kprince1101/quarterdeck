@@ -19,12 +19,22 @@ const CREATE_LEDGER = `create table if not exists schema_migrations (
   applied_at timestamptz not null default now()
 )`;
 
+const migrationVersion = (file: string): string => {
+  const version = MIGRATION_FILE.exec(file)?.[1];
+  if (version === undefined) {
+    throw new Error(
+      `Migration ${file} must be named NNNN_name.sql in lowercase snake_case`,
+    );
+  }
+  return version;
+};
+
 export const loadMigrations = async (
   dir: string = MIGRATIONS_DIR,
 ): Promise<Migration[]> => {
   const versions = (await readdir(dir))
-    .map((file) => MIGRATION_FILE.exec(file)?.[1])
-    .filter((version) => version !== undefined)
+    .filter((file) => file.endsWith('.sql'))
+    .map(migrationVersion)
     .toSorted();
   return Promise.all(
     versions.map(async (version) => ({

@@ -138,6 +138,49 @@ describe('store schema', () => {
     ]);
   });
 
+  it('maintains updated_at on every table that has one', async () => {
+    const { rows } = await store.db.query<{
+      table_name: string;
+      touched: boolean;
+    }>(
+      `select c.table_name, exists (
+         select 1 from information_schema.triggers t
+         where t.event_object_table = c.table_name
+           and t.event_manipulation = 'UPDATE'
+           and t.action_timing = 'BEFORE'
+           and t.action_statement = 'EXECUTE FUNCTION touch_updated_at()'
+       ) as touched
+       from information_schema.columns c
+       where c.table_schema = 'public' and c.column_name = 'updated_at'
+       order by c.table_name`,
+    );
+    expect(rows).toEqual(
+      ['agents', 'budget', 'layouts', 'projects', 'tickets'].map(
+        (table_name) => ({ table_name, touched: true }),
+      ),
+    );
+
+    const {
+      rows: [ticket],
+    } = await store.db.query<{ id: string }>(
+      `insert into tickets (project_id, title, updated_at)
+       values ($1, 'stale', '2000-01-01') returning id`,
+      [store.projectId],
+    );
+    const { rows: touched } = await store.db.query<{ fresh: boolean }>(
+      `update tickets set title = 'fresh' where id = $1
+       returning updated_at > now() - interval '1 minute' as fresh`,
+      [ticket?.id],
+    );
+    expect(touched).toEqual([{ fresh: true }]);
+  });
+
+  it('scopes every layout to a project', async () => {
+    await expect(
+      store.db.query(`insert into layouts (name, spec) values ('board', '{}')`),
+    ).rejects.toThrow(/not-null/);
+  });
+
   it('nulls ticket assignees when their agent is removed', async () => {
     const {
       rows: [agent],

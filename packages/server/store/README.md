@@ -6,6 +6,8 @@ The Quarterdeck store: one in-process [PGlite](https://pglite.dev) Postgres per 
 
 `~/.quarterdeck/<project>/pg` is the Postgres data dir for one project. Deleting that folder deletes the project's state; the next `openStore` recreates it empty.
 
+`~/.quarterdeck/<project>/pg.lock` holds the pid of the process that has the project open. PGlite takes no lock of its own, and two processes on one data dir silently lose each other's writes, so `openStore` creates this file exclusively and throws `project <p> is already open (pid N)` while that pid is alive. A lock left by a dead pid is reclaimed. `close()` removes it, as does a failed open. `IN_MEMORY` stores are not locked.
+
 ## API
 
 ```ts
@@ -21,11 +23,11 @@ await store.close();
 
 | Export                                    | What it does                                                                                                                                         |
 | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `openStore({ project, home?, dataDir? })` | Opens (creating if needed) the project's data dir, applies pending migrations, upserts the `projects` row and resolves to a `Store`.                 |
+| `openStore({ project, home?, dataDir? })` | Locks and opens (creating if needed) the project's data dir, applies pending migrations, upserts the `projects` row and resolves to a `Store`.       |
 | `Store.db`                                | The `PGlite` instance. Use `query(sql, params)` with `$n` parameters, `exec` for multi-statement SQL, `transaction(tx => …)`, `listen(channel, fn)`. |
 | `Store.projectId`                         | The `projects.id` for `project`. Every other table is scoped by `project_id`.                                                                        |
 | `Store.dataDir` / `Store.migrated`        | The data dir in use, and the migration versions this open applied.                                                                                   |
-| `Store.close()`                           | Closes the database. Call it on shutdown.                                                                                                            |
+| `Store.close()`                           | Closes the database and releases the lock. Call it on shutdown.                                                                                      |
 | `IN_MEMORY`                               | Pass as `dataDir` for a throwaway in-memory database (tests).                                                                                        |
 | `STORE_TABLES`                            | Every table name, for the Data widget and wipe.                                                                                                      |
 | `EVENTS_CHANNEL`                          | `quarterdeck_events`. Every insert into `events` sends `{"id","project_id","kind"}` on it via `pg_notify`.                                           |
@@ -34,7 +36,7 @@ await store.close();
 
 ## Migrations
 
-`migrations/NNNN_name.sql`, applied in version order, each in its own transaction together with its row in `schema_migrations`. A failing migration rolls back and stays pending. Never edit a migration that has merged; add the next number.
+`migrations/NNNN_name.sql`, applied in version order, each in its own transaction together with its row in `schema_migrations`. A failing migration rolls back and stays pending. Any other `*.sql` name in the folder (`0002_AddX.sql`, `2_x.sql`) makes `migrate` throw before anything runs. Tables with `updated_at` keep it current through the `touch_updated_at` trigger. Never edit a migration that has merged; add the next number.
 
 ## Tables
 
@@ -50,4 +52,4 @@ await store.close();
 | `notebook`          | Entries the next Driver is born with: `body`, `pinned`, `author_id`, `round_id`.                                                |
 | `charter_proposals` | Proposed charter changes: `body`, `rationale`, `status` open / accepted / rejected.                                             |
 | `budget`            | Token and USD limits and spend, one row per (project, round, agent) scope; null round/agent is wider.                           |
-| `layouts`           | Dashboard layouts as JSON `spec`, per project or global (`project_id` null), `is_preset`.                                       |
+| `layouts`           | This project's saved dashboard layouts as JSON `spec`, unique by `name`. Shipped presets live in code or `rules/`, not here.    |

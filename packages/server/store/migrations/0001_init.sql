@@ -156,11 +156,32 @@ create table budget (
 
 create table layouts (
   id uuid primary key default gen_random_uuid(),
-  project_id uuid references projects (id) on delete cascade,
+  project_id uuid not null references projects (id) on delete cascade,
   name text not null,
-  is_preset boolean not null default false,
   spec jsonb not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique nulls not distinct (project_id, name)
+  unique (project_id, name)
 );
+
+create function touch_updated_at() returns trigger language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+create trigger projects_touch before update on projects
+  for each row execute function touch_updated_at();
+
+create trigger agents_touch before update on agents
+  for each row execute function touch_updated_at();
+
+create trigger tickets_touch before update on tickets
+  for each row execute function touch_updated_at();
+
+create trigger budget_touch before update on budget
+  for each row execute function touch_updated_at();
+
+create trigger layouts_touch before update on layouts
+  for each row execute function touch_updated_at();
