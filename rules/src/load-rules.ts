@@ -3,7 +3,6 @@ import { homedir } from 'node:os';
 import { extname, resolve } from 'node:path';
 import { z } from 'zod';
 import { getErrorMessage, isMissingFile, RulesError } from './errors.js';
-import { tightenRepoBudget } from './budget-layers.js';
 import { mergeRepoLifecycle } from './lifecycle-layer.js';
 import { mergeLayer } from './merge-layer.js';
 import { RULE_SCHEMAS, type RuleName, type Rules } from './schemas.js';
@@ -102,8 +101,7 @@ type RepoLayerMerge = (
 ) => unknown;
 
 const REPO_LAYER_MERGES: Partial<Record<RuleName, RepoLayerMerge>> = {
-  lifecycle: (merged, layer, path) =>
-    tightenRepoBudget(merged, mergeRepoLifecycle(merged, layer, path)),
+  lifecycle: mergeRepoLifecycle,
 };
 
 const mergeLocal = (
