@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Widgets · Quarterdeck docs</title>
+    <meta
+      name="description"
+      content="The Quarterdeck dashboard is a grid of widgets. What each one is for."
+    />
+    <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <nav class="site-nav" aria-label="Docs">
+      <a class="home" href="../">Quarterdeck</a>
+      <a href="quickstart.html">Quickstart</a>
+      <a href="rules.html">Rules</a>
+      <a href="widgets.html" aria-current="page">Widgets</a>
+      <a href="data.html">Where your data lives</a>
+      <a href="faq.html">FAQ</a>
+    </nav>
+
+    <main class="docs">
+      <h1>Widgets</h1>
+      <p class="lead">
+        The dashboard is made of widgets that you arrange on a grid. Layouts are
+        JSON the server keeps, and presets ship with Quarterdeck: the first is
+        Board, then the Planner, Driver and Notebook as tabs, then Events.
+      </p>
+      <p>
+        The dashboard is still being built, so this page says what each widget
+        is for, not what it looks like. Every widget shows state the server
+        streams to it; anything you do in one is sent to the server, which is
+        the only thing that changes state.
+      </p>
+
+      <h2 id="board">Board</h2>
+      <p>The project's tickets, by where each one stands.</p>
+
+      <h2 id="project">Project</h2>
+      <p>One project: its repository and its crew.</p>
+
+      <h2 id="agents">Agents</h2>
+      <p>
+        The crew: the Planner, the Driver, the builders and the reviewer, with
+        each agent's runtime and latest status.
+      </p>
+
+      <h2 id="events">Events</h2>
+      <p>Everything that happened in the project, in order, as it happens.</p>
+
+      <h2 id="cards">Cards</h2>
+      <p>
+        Decisions waiting for you: permission requests, questions from agents,
+        merges, sign-ins. A declined or unanswered card is a result the agent
+        sees, not a crash.
+      </p>
+
+      <h2 id="planner">Planner</h2>
+      <p>
+        Your conversation with the Planner, which turns what you describe into
+        tickets for you to approve.
+      </p>
+
+      <h2 id="driver">Driver</h2>
+      <p>
+        The Driver's work: which builder has which ticket, and what it is doing
+        about each.
+      </p>
+
+      <h2 id="notebook">Notebook</h2>
+      <p>
+        What earlier Drivers learned about the project. Each new Driver is born
+        with it.
+      </p>
+
+      <h2 id="usage">Usage</h2>
+      <p>Tokens spent by agents and tickets, against the budget.</p>
+
+      <h2 id="rules">Rules</h2>
+      <p>
+        The <a href="rules.html">rules</a> files, edited in place. Edits are
+        saved as <code>rules.local.*</code> files and checked before they are
+        written.
+      </p>
+
+      <h2 id="data">Data</h2>
+      <p>
+        Every table Quarterdeck keeps and the folder it lives in, with a Wipe
+        button for one project and one for everything. See
+        <a href="data.html">where your data lives</a>.
+      </p>
+    </main>
+
+    <footer>
+      <p>
+        MIT licensed. &copy; Kristopher Prince. &ldquo;Kiro&rdquo; is a
+        trademark of Amazon.com, Inc. or its affiliates. Quarterdeck is not
+        affiliated with or endorsed by Amazon.
+      </p>
+    </footer>
+  </body>
+</html>

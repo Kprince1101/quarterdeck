@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quickstart · Quarterdeck docs</title>
+    <meta
+      name="description"
+      content="Install an agent runtime, sign in, and start Quarterdeck on your repository: Kiro, Claude Code or Gemini CLI."
+    />
+    <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <nav class="site-nav" aria-label="Docs">
+      <a class="home" href="../">Quarterdeck</a>
+      <a href="quickstart.html" aria-current="page">Quickstart</a>
+      <a href="rules.html">Rules</a>
+      <a href="widgets.html">Widgets</a>
+      <a href="data.html">Where your data lives</a>
+      <a href="faq.html">FAQ</a>
+    </nav>
+
+    <main class="docs">
+      <h1>Quickstart</h1>
+      <p class="lead">
+        Pick one agent runtime, sign in to it and to GitHub, point Quarterdeck
+        at a git repository, and start it. Kiro is the default; Claude Code and
+        Gemini CLI work the same way.
+      </p>
+
+      <p>
+        You need Node.js 22 or later and a git repository with a GitHub remote.
+        Quarterdeck never signs in for you and never asks for an API key: each
+        runtime signs in through its own CLI, and
+        <code>quarterdeck doctor</code> tells you exactly which command to run.
+      </p>
+
+      <h2 id="doctor">1. See what is missing</h2>
+      <pre><code>npx quarterdeck doctor</code></pre>
+      <p>
+        Doctor checks <code>kiro-cli</code>, <code>claude</code>,
+        <code>gemini</code> and <code>gh</code>: installed, which version, and
+        signed in. Every miss is followed by the command that fixes it. You only
+        need the runtime you pick and <code>gh</code>; the other runtimes can
+        stay on the list. Doctor exits 0 when all four are ready and 1
+        otherwise. It never signs in for you and never starts a download.
+      </p>
+
+      <h2 id="kiro">2a. Kiro</h2>
+      <p>Kiro is the runtime Quarterdeck uses out of the box. Doctor prints:</p>
+      <pre><code>kiro-cli: not installed
+  Install: curl -fsSL https://cli.kiro.dev/install | bash
+  Sign in: kiro-cli login</code></pre>
+      <p>
+        Run the two commands. Once <code>kiro-cli whoami</code> succeeds, doctor
+        shows <code>kiro-cli: &lt;version&gt;, signed in</code>.
+      </p>
+
+      <h2 id="claude">2b. Claude Code</h2>
+      <p>
+        Quarterdeck runs Claude Code through a pinned
+        <code>@agentclientprotocol/claude-agent-acp</code> package with
+        <code>npx</code>, so you do not need a separate <code>claude</code>
+        install. Doctor prints:
+      </p>
+      <pre><code>claude: @agentclientprotocol/claude-agent-acp@0.85.0 is not downloaded yet
+  Download: npx --yes @agentclientprotocol/claude-agent-acp@0.85.0 --cli --version
+  Sign in: npx --yes @agentclientprotocol/claude-agent-acp@0.85.0 --cli auth login --claudeai</code></pre>
+      <p>
+        The download is about 240 MB, which is why doctor leaves it to you. The
+        sign-in uses your claude.ai account. An API key or a non-Anthropic
+        backend that Claude Code is already set up for counts as signed in too.
+      </p>
+
+      <h2 id="gemini">2c. Gemini CLI</h2>
+      <p>Doctor prints:</p>
+      <pre><code>gemini: not installed
+  Install: npm install -g @google/gemini-cli
+  Sign in: gemini, then choose Login with Google (or set GEMINI_API_KEY)</code></pre>
+      <p>
+        Doctor counts Gemini as signed in when <code>GEMINI_API_KEY</code> is
+        set, when <code>GOOGLE_GENAI_USE_VERTEXAI=true</code> is set with
+        <code>GOOGLE_API_KEY</code> or <code>GOOGLE_CLOUD_PROJECT</code>, or
+        when <code>~/.gemini/oauth_creds.json</code> exists after a Google
+        login.
+      </p>
+
+      <h2 id="gh">3. GitHub</h2>
+      <p>
+        Builders open pull requests and the merge gate merges them with
+        <code>gh</code>. Install it (<code>brew install gh</code> on macOS,
+        <code>winget install --id GitHub.cli</code> on Windows, or your system's
+        package), then sign in:
+      </p>
+      <pre><code>gh: 2.81.0, not signed in
+  Sign in: gh auth login</code></pre>
+      <p>
+        Run <code>npx quarterdeck doctor</code> again until your runtime and
+        <code>gh</code> say <code>signed in</code>.
+      </p>
+
+      <h2 id="init">4. Create a project</h2>
+      <pre><code>npx quarterdeck init path/to/your/repo</code></pre>
+      <p>
+        <code>init</code> creates <code>~/.quarterdeck/</code> and a project for
+        the repository (the current directory if you leave the path out). In a
+        terminal it asks for the runtime:
+      </p>
+      <pre><code>Runtime (kiro, claude, gemini) [kiro]: </code></pre>
+      <ul>
+        <li><strong>Kiro</strong>: press Enter. Nothing else is written.</li>
+        <li>
+          <strong>Claude Code</strong>: type <code>claude</code>, or pass
+          <code>--runtime claude</code>.
+        </li>
+        <li>
+          <strong>Gemini</strong>: type <code>gemini</code>, or pass
+          <code>--runtime gemini</code>.
+        </li>
+      </ul>
+      <p>
+        A runtime other than the machine's default has to be saved somewhere, so
+        <code>init</code> asks where: in a <code>.quarterdeck/</code> folder in
+        the repository, for this project only (<code>--folder</code>), or in
+        <code>~/.quarterdeck/</code>, for every project on this machine
+        (<code>--no-folder</code>). That folder is the only thing
+        <code>init</code> ever writes into your repository, and only after you
+        say yes. Without a terminal, pass <code>--runtime</code> and one of the
+        two flags.
+      </p>
+      <pre><code>Created project my-app (my-app) for /home/you/code/my-app
+Runtime: kiro
+Data: /home/you/.quarterdeck/my-app
+Next: quarterdeck up</code></pre>
+      <p>
+        The project slug comes from the folder name; <code>--project</code> and
+        <code>--name</code> set the slug and display name yourself. If
+        <code>init</code> fails or you cancel it, nothing is left behind.
+      </p>
+
+      <h2 id="up">5. Start Quarterdeck</h2>
+      <pre><code>npx quarterdeck up</code></pre>
+      <pre><code>Quarterdeck is running at http://127.0.0.1:4317
+Data: /home/you/.quarterdeck
+Press Ctrl+C to stop.</code></pre>
+      <p>
+        Open the URL. One process serves the dashboard and the API on
+        <code>127.0.0.1</code> only. <code>--port</code> picks another port
+        (<code>0</code> picks a free one); a port that is already taken is an
+        error that says so. Ctrl+C stops the server and closes every project.
+      </p>
+
+      <h2 id="next">Next</h2>
+      <ul>
+        <li>
+          <a href="rules.html">Rules</a>: what agents may do, how the merge gate
+          decides, and how to override the defaults.
+        </li>
+        <li>
+          <a href="data.html">Where your data lives</a>: every path Quarterdeck
+          writes, and how to delete it.
+        </li>
+      </ul>
+    </main>
+
+    <footer>
+      <p>
+        MIT licensed. &copy; Kristopher Prince. &ldquo;Kiro&rdquo; is a
+        trademark of Amazon.com, Inc. or its affiliates. Quarterdeck is not
+        affiliated with or endorsed by Amazon.
+      </p>
+    </footer>
+  </body>
+</html>
