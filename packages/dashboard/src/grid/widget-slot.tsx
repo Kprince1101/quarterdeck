@@ -1,6 +1,9 @@
+import { TabBar, TabPanel } from '../primitives/index.js';
 import type { PaneView } from './panes.js';
+import { usePaneTabs } from './use-pane-tabs.js';
 
 export interface WidgetSlotProps {
+  label: string;
   panes: PaneView[];
   stacked: boolean;
 }
@@ -9,28 +12,24 @@ interface PanesProps {
   panes: PaneView[];
 }
 
-const PaneStack = ({ panes }: PanesProps) => (
-  <div className="qd-widget-stack">
-    {panes.map(({ type, title, instanceId, Widget }) => (
-      <section
-        key={type}
-        className="qd-widget-pane"
-        aria-label={title}
-        data-pane={type}
-      >
-        <h3 className="qd-widget-pane-title">{title}</h3>
-        <Widget instanceId={instanceId} />
-      </section>
-    ))}
-  </div>
-);
-
-const SinglePane = ({ panes }: PanesProps) =>
+const Panes = ({ panes }: PanesProps) =>
   panes.map(({ type, instanceId, Widget }) => (
     <Widget key={type} instanceId={instanceId} />
   ));
 
-export const WidgetSlot = ({ panes, stacked }: WidgetSlotProps) => {
-  if (stacked) return <PaneStack panes={panes} />;
-  return <SinglePane panes={panes} />;
+const PaneTabs = ({ label, panes }: Omit<WidgetSlotProps, 'stacked'>) => {
+  const { tabs, panel, activePanes, handleKeyDown } = usePaneTabs(panes);
+  return (
+    <div className="qd-widget-tabs">
+      <TabBar label={label} tabs={tabs} onKeyDown={handleKeyDown} />
+      <TabPanel panel={panel}>
+        <Panes panes={activePanes} />
+      </TabPanel>
+    </div>
+  );
+};
+
+export const WidgetSlot = ({ label, panes, stacked }: WidgetSlotProps) => {
+  if (stacked) return <PaneTabs label={label} panes={panes} />;
+  return <Panes panes={panes} />;
 };

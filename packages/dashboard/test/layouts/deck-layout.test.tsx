@@ -102,22 +102,31 @@ describe('deck layout', () => {
     FakeSocket.opened = [];
   });
 
-  it('starts on the default preset with Planner, Driver and Notebook stacked in one slot', () => {
+  it('starts on the default preset with Planner, Driver and Notebook as tabs in one slot', () => {
     const { container, unmount } = setup();
     expect(cells(container)).toEqual(['board-1', 'planner-1', 'events-1']);
     const slot = find(container, '[data-grid-item="planner-1"]');
     expect(textOf(slot, '.qd-panel-title')).toBe('Planner');
-    expect(
-      all(slot, '.qd-widget-pane').map((pane) =>
-        pane.getAttribute('aria-label'),
-      ),
-    ).toEqual(['Planner', 'Driver', 'Notebook']);
-    expect(
-      all(slot, '[data-probe]').map((pane) => pane.getAttribute('data-probe')),
-    ).toEqual(['planner-1', 'planner-1:driver', 'planner-1:notebook']);
+    expect(find(slot, '[role="tablist"]').getAttribute('aria-label')).toBe(
+      'Planner',
+    );
+    expect(all(slot, '[role="tab"]').map((tab) => tab.textContent)).toEqual([
+      'Planner',
+      'Driver',
+      'Notebook',
+    ]);
+    const probes = () =>
+      all(slot, '[role="tabpanel"] [data-probe]').map((pane) =>
+        pane.getAttribute('data-probe'),
+      );
+    expect(probes()).toEqual(['planner-1']);
+    click(find(slot, '[role="tab"]:nth-child(2)'));
+    expect(probes()).toEqual(['planner-1:driver']);
+    press(find(slot, '[role="tab"][aria-selected="true"]'), 'ArrowRight');
+    expect(probes()).toEqual(['planner-1:notebook']);
     expect(
       find(container, '[data-grid-item="board-1"]').querySelector(
-        '.qd-widget-pane',
+        '[role="tablist"]',
       ),
     ).toBe(null);
     unmount();

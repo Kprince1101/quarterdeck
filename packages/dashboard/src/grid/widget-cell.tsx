@@ -55,7 +55,11 @@ export const WidgetCell = ({ cell, controls }: WidgetCellProps) => {
       data-widget={cell.item.widget}
     >
       <Panel title={cell.label} actions={<CellControls view={view} />}>
-        <WidgetSlot panes={cell.panes} stacked={cell.stacked} />
+        <WidgetSlot
+          label={cell.label}
+          panes={cell.panes}
+          stacked={cell.stacked}
+        />
       </Panel>
       <button
         type="button"
