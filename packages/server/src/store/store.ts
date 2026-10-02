@@ -1,6 +1,12 @@
 import { mkdir } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import {
+  watchChanges,
+  type ChangeHandler,
+  type WatchOptions,
+  type Watcher,
+} from './changes.js';
+import {
   publishEvent,
   subscribeEvents,
   type EventHandler,
@@ -48,6 +54,7 @@ export interface Store {
     handler: EventHandler,
     options?: SubscribeOptions,
   ) => Promise<Subscription>;
+  watch: (handler: ChangeHandler, options?: WatchOptions) => Promise<Watcher>;
   close: () => Promise<void>;
 }
 
@@ -88,6 +95,14 @@ const startDatabase = async (
     const migrated = await migrate(db);
     const projectId = await ensureProject(db, project);
     const subscriptions = new Set<() => Promise<void>>();
+    const track = (close: () => Promise<void>): (() => Promise<void>) => {
+      const release = (): Promise<void> => {
+        subscriptions.delete(release);
+        return close();
+      };
+      subscriptions.add(release);
+      return release;
+    };
     const publish = (input: PublishInput) => publishEvent(db, projectId, input);
     const subscribe = async (
       handler: EventHandler,
@@ -99,17 +114,20 @@ const startDatabase = async (
         handler,
         options,
       );
-      const release = (): Promise<void> => {
-        subscriptions.delete(release);
-        return subscription.close();
-      };
-      subscriptions.add(release);
+      const release = track(() => subscription.close());
       return {
         get cursor() {
           return subscription.cursor;
         },
         close: release,
       };
+    };
+    const watch = async (
+      handler: ChangeHandler,
+      options?: WatchOptions,
+    ): Promise<Watcher> => {
+      const watcher = await watchChanges(db, projectId, handler, options);
+      return { close: track(() => watcher.close()) };
     };
     const close = async () => {
       try {
@@ -121,7 +139,16 @@ const startDatabase = async (
         await lock.release();
       }
     };
-    return { db, dataDir, projectId, migrated, publish, subscribe, close };
+    return {
+      db,
+      dataDir,
+      projectId,
+      migrated,
+      publish,
+      subscribe,
+      watch,
+      close,
+    };
   } catch (err) {
     await db.close();
     throw err;

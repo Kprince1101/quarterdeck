@@ -40,6 +40,16 @@ const reportError = (err: unknown): void => {
   console.error('quarterdeck event subscriber failed', err);
 };
 
+export const reporter =
+  (onError: (err: unknown) => void = reportError) =>
+  (err: unknown): void => {
+    try {
+      onError(err);
+    } catch (failure) {
+      reportError(failure);
+    }
+  };
+
 export const publishEvent = async (
   db: PGlite | Transaction,
   projectId: string,
@@ -94,14 +104,7 @@ export const subscribeEvents = async (
   handler: EventHandler,
   options: SubscribeOptions = {},
 ): Promise<Subscription> => {
-  const onError = options.onError ?? reportError;
-  const report = (err: unknown): void => {
-    try {
-      onError(err);
-    } catch (failure) {
-      reportError(failure);
-    }
-  };
+  const report = reporter(options.onError);
   let cursor = options.after ?? (await latestEventId(db, projectId));
   let closed = false;
   let queued = false;

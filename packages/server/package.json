@@ -15,6 +15,11 @@
       "@quarterdeck/source": "./src/intents/index.ts",
       "types": "./dist/intents/index.d.ts",
       "default": "./dist/intents/index.js"
+    },
+    "./stream-schema": {
+      "@quarterdeck/source": "./src/stream/schema.ts",
+      "types": "./dist/stream/schema.d.ts",
+      "default": "./dist/stream/schema.js"
     }
   },
   "files": [
@@ -30,6 +35,10 @@
     "@agentclientprotocol/sdk": "^1.6.0",
     "@electric-sql/pglite": "^0.5.8",
     "@quarterdeck/rules": "0.0.0",
+    "ws": "^8.22.0",
     "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.2"
   }
 }

@@ -1,0 +1,290 @@
+import {
+  STATUS_CODES,
+  createServer,
+  type IncomingMessage,
+  type Server,
+} from 'node:http';
+import type { AddressInfo } from 'node:net';
+import type { Duplex } from 'node:stream';
+import { WebSocket, WebSocketServer } from 'ws';
+import { reporter } from '../store/events.js';
+import type { StoreEvent, Store, TableChange } from '../store/index.js';
+import { STREAM_AFTER_PARAM, STREAM_PATH } from './schema.js';
+import { readSnapshot, tailCursor, type SnapshotRows } from './snapshot.js';
+
+export const STREAM_HOST = '127.0.0.1';
+
+export const STREAM_TAIL = 200;
+
+export const MAX_BUFFERED_BYTES = 8 * 1024 * 1024;
+
+export const CLOSE_GOING_AWAY = 1001;
+
+export const CLOSE_READ_ONLY = 1008;
+
+export const CLOSE_FAILED = 1011;
+
+const LOOPBACK_ADDRESSES = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+
+const MAX_INBOUND_BYTES = 1024;
+
+export interface StreamOptions {
+  store: Store;
+  tail?: number;
+  turnsPerAgent?: number;
+  maxBufferedBytes?: number;
+  allowedOrigins?: readonly string[];
+  onError?: (err: unknown) => void;
+}
+
+export interface Stream {
+  handleUpgrade: (
+    request: IncomingMessage,
+    socket: Duplex,
+    head: Buffer,
+  ) => boolean;
+  readonly clients: number;
+  close: () => Promise<void>;
+}
+
+export interface ServedStream {
+  stream: Stream;
+  port: number;
+  url: string;
+  close: () => Promise<void>;
+}
+
+type Outgoing =
+  | { type: 'snapshot'; cursor: number; tables: SnapshotRows }
+  | { type: 'event'; event: StoreEvent }
+  | ({ type: 'change' } & TableChange);
+
+const jsonValue = (_: string, value: unknown): unknown => {
+  if (typeof value === 'bigint') return Number(value);
+  return value;
+};
+
+const serialize = (message: Outgoing): string =>
+  JSON.stringify(message, jsonValue);
+
+const reject = (socket: Duplex, status: number, reason: string): void => {
+  socket.end(
+    `HTTP/1.1 ${status} ${STATUS_CODES[status]}\r\n` +
+      'Connection: close\r\nContent-Type: text/plain\r\n' +
+      `Content-Length: ${Buffer.byteLength(reason)}\r\n\r\n${reason}`,
+  );
+};
+
+const localHosts = (port: number): string[] => [
+  `127.0.0.1:${port}`,
+  `localhost:${port}`,
+];
+
+const refusal = (
+  request: IncomingMessage,
+  allowedOrigins: ReadonlySet<string>,
+): string | undefined => {
+  const { remoteAddress, localPort } = request.socket;
+  if (!LOOPBACK_ADDRESSES.has(remoteAddress ?? '')) {
+    return 'stream accepts loopback connections only';
+  }
+  const hosts = localHosts(localPort ?? 0);
+  if (!hosts.includes(request.headers.host ?? '')) {
+    return 'Host not allowed';
+  }
+  const { origin } = request.headers;
+  const ownOrigin = hosts.some((host) => origin === `http://${host}`);
+  if (origin !== undefined && !ownOrigin && !allowedOrigins.has(origin)) {
+    return 'Origin not allowed';
+  }
+  return undefined;
+};
+
+const parseAfter = (url: URL): number | undefined | null => {
+  const after = url.searchParams.get(STREAM_AFTER_PARAM);
+  if (after === null) return undefined;
+  if (!/^\d+$/.test(after)) return null;
+  const cursor = Number(after);
+  if (!Number.isSafeInteger(cursor)) return null;
+  return cursor;
+};
+
+export const createStream = (options: StreamOptions): Stream => {
+  const { store } = options;
+  const tail = options.tail ?? STREAM_TAIL;
+  const maxBuffered = options.maxBufferedBytes ?? MAX_BUFFERED_BYTES;
+  const allowedOrigins = new Set(options.allowedOrigins);
+  const report = reporter(options.onError);
+  const wss = new WebSocketServer({
+    noServer: true,
+    maxPayload: MAX_INBOUND_BYTES,
+  });
+  const connections = new Map<WebSocket, () => Promise<void>>();
+
+  const connect = async (
+    ws: WebSocket,
+    requested: number | undefined,
+  ): Promise<void> => {
+    const resources: Array<() => Promise<void>> = [];
+    let open = true;
+    let releasing: Promise<void> | undefined;
+    const release = (): Promise<void> => {
+      open = false;
+      connections.delete(ws);
+      releasing ??= Promise.allSettled(resources.map((close) => close())).then(
+        () => undefined,
+      );
+      return releasing;
+    };
+    const keep = async (close: () => Promise<void>): Promise<boolean> => {
+      if (open) {
+        resources.push(close);
+        return true;
+      }
+      await close();
+      return false;
+    };
+    connections.set(ws, release);
+    ws.on('close', () => void release());
+    ws.on('error', report);
+    ws.on('message', () => ws.close(CLOSE_READ_ONLY, 'read-only stream'));
+
+    const behind = (): boolean => {
+      if (ws.bufferedAmount <= maxBuffered) return false;
+      ws.terminate();
+      return true;
+    };
+    const write = (message: Outgoing): Promise<void> =>
+      new Promise((resolve) => {
+        if (ws.readyState !== WebSocket.OPEN) {
+          resolve();
+          return;
+        }
+        const done = (): void => {
+          ws.off('close', done);
+          resolve();
+        };
+        ws.once('close', done);
+        ws.send(serialize(message), done);
+      });
+    const sendChange = (change: TableChange): void => {
+      if (ws.readyState !== WebSocket.OPEN || behind()) return;
+      ws.send(serialize({ type: 'change', ...change }));
+    };
+    const sendEvent = async (event: StoreEvent): Promise<void> => {
+      if (behind()) return;
+      await write({ type: 'event', event });
+    };
+
+    try {
+      const pending: TableChange[] = [];
+      let live = false;
+      const watcher = await store.watch(
+        (change) => {
+          if (live) sendChange(change);
+          else pending.push(change);
+        },
+        { onError: report },
+      );
+      if (!(await keep(() => watcher.close()))) return;
+      const after = requested ?? (await tailCursor(store, tail));
+      const tables = await readSnapshot(store, options.turnsPerAgent);
+      if (!open) return;
+      await write({ type: 'snapshot', cursor: after, tables });
+      if (!open) return;
+      live = true;
+      pending.splice(0).forEach(sendChange);
+      const subscription = await store.subscribe(sendEvent, {
+        after,
+        onError: report,
+      });
+      await keep(() => subscription.close());
+    } catch (err) {
+      report(err);
+      ws.close(CLOSE_FAILED, 'stream failed');
+      await release();
+    }
+  };
+
+  const handleUpgrade = (
+    request: IncomingMessage,
+    socket: Duplex,
+    head: Buffer,
+  ): boolean => {
+    const url = new URL(request.url ?? '/', 'http://localhost');
+    if (url.pathname !== STREAM_PATH) return false;
+    const refused = refusal(request, allowedOrigins);
+    if (refused) {
+      reject(socket, 403, refused);
+      return true;
+    }
+    const after = parseAfter(url);
+    if (after === null) {
+      reject(socket, 400, `${STREAM_AFTER_PARAM} must be an event id`);
+      return true;
+    }
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      void connect(ws, after);
+    });
+    return true;
+  };
+
+  const close = async (): Promise<void> => {
+    const releases = [...connections].map(([ws, release]) => {
+      ws.close(CLOSE_GOING_AWAY, 'server closing');
+      return release();
+    });
+    await Promise.all(releases);
+    await new Promise<void>((resolve) => {
+      wss.close(() => resolve());
+    });
+  };
+
+  return {
+    handleUpgrade,
+    get clients() {
+      return connections.size;
+    },
+    close,
+  };
+};
+
+export const attachStream = (
+  server: Server,
+  options: StreamOptions,
+): Stream => {
+  const stream = createStream(options);
+  server.on('upgrade', (request, socket, head) => {
+    if (!stream.handleUpgrade(request, socket, head)) {
+      reject(socket, 404, 'no such stream');
+    }
+  });
+  return stream;
+};
+
+export const serveStream = async (
+  options: StreamOptions & { port?: number },
+): Promise<ServedStream> => {
+  const server = createServer((_, response) => {
+    response.writeHead(404).end();
+  });
+  const stream = attachStream(server, options);
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(options.port ?? 0, STREAM_HOST, resolve);
+  });
+  const { port } = server.address() as AddressInfo;
+  const close = async (): Promise<void> => {
+    await stream.close();
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+    });
+  };
+  return {
+    stream,
+    port,
+    url: `ws://${STREAM_HOST}:${port}${STREAM_PATH}`,
+    close,
+  };
+};
