@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { INTENT_NAMES } from '../src/intents/index.js';
 import { FAKE_AGENT_NAME, fakeAgentLaunch } from './acp/fake-agent/index.ts';
 import { isAlive } from './acp/process-check.ts';
 import { SHIPPED_MIGRATIONS } from './store/backends.js';
@@ -116,7 +117,7 @@ describe('@quarterdeck/server package entry', () => {
 
     expect(result.stderr).toBe('');
     expect(JSON.parse(result.stdout)).toEqual({
-      count: 33,
+      count: INTENT_NAMES.length,
       start: 'function',
     });
   });

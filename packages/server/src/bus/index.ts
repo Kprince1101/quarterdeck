@@ -25,6 +25,7 @@ export {
 } from './cards.js';
 export {
   SOCKET_PATH_MAX,
+  busSocketDir,
   busSocketPath,
   type SocketPathOptions,
 } from './socket.js';

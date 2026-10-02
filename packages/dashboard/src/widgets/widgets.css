@@ -24,6 +24,134 @@
   text-align: right;
 }
 
+.qd-data {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qd-space-3);
+  font-size: var(--qd-text-sm);
+}
+
+.qd-data-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.qd-data-error {
+  margin: 0;
+  color: var(--qd-danger);
+}
+
+.qd-data-section h3 {
+  margin: 0 0 var(--qd-space-2);
+  font-size: var(--qd-text-md);
+  font-weight: 600;
+}
+
+.qd-data-tables {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: var(--qd-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.qd-data-tables button {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--qd-space-1) var(--qd-space-2);
+  border: 1px solid var(--qd-line);
+  border-radius: var(--qd-radius);
+  background: var(--qd-surface);
+  color: var(--qd-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.qd-data-tables button[aria-pressed='true'] {
+  border-color: var(--qd-accent);
+  color: var(--qd-fg);
+}
+
+.qd-data-count,
+.qd-data-range {
+  font-family: var(--qd-mono);
+}
+
+.qd-data-pager {
+  display: flex;
+  align-items: center;
+  gap: var(--qd-space-2);
+  margin-bottom: var(--qd-space-2);
+}
+
+.qd-data-range {
+  flex: 1;
+  color: var(--qd-muted);
+}
+
+.qd-data-scroll {
+  overflow: auto;
+  max-height: 24rem;
+  border: 1px solid var(--qd-line);
+  border-radius: var(--qd-radius);
+}
+
+.qd-data-rows {
+  border-collapse: collapse;
+  font-family: var(--qd-mono);
+}
+
+.qd-data-rows th,
+.qd-data-rows td {
+  max-width: 16rem;
+  padding: var(--qd-space-1) var(--qd-space-2);
+  overflow: hidden;
+  border-bottom: 1px solid var(--qd-line);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qd-data-rows th {
+  position: sticky;
+  top: 0;
+  background: var(--qd-surface-raised);
+  color: var(--qd-muted);
+  font-weight: 600;
+}
+
+.qd-data-paths {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qd-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.qd-data-paths li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 var(--qd-space-2);
+}
+
+.qd-data-paths code {
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
+  font-family: var(--qd-mono);
+}
+
+.qd-data-path-scope,
+.qd-data-path-presence {
+  color: var(--qd-faint);
+}
+
+.qd-data-paths li[data-exists='false'] code {
+  color: var(--qd-faint);
+}
+
 .qd-event-list {
   margin: 0;
   padding: 0;

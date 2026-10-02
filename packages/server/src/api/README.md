@@ -60,6 +60,17 @@ Every intent but `rules.*` with `scope: "machine"` and `wipe.all` takes a `proje
 | `wipe.all`                                                                                | `confirm` must be `wipe everything`. Wipes every project's state (`~/.quarterdeck/<project>/`, or every project in the `projects` table with `DATABASE_URL`). Machine rules (`~/.quarterdeck/rules.local.*`) are configuration, not state, and stay; remove them with `rules.reset`. Not recorded.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `turn.read`                                                                               | Reads one turn, changes nothing and is not recorded (`id: null`). `turnId` is a `turns` row id in the project. `result` is `{ turnId, agentId, seq, input, output, result, round, n, latestSession }`: `input` is the prompt sent, `output` and `result` are the turn's `output.md` and parsed `result.json` under `~/.quarterdeck/<project>/turns/` (`null` if absent or, for `result`, not valid JSON). For a Driver turn, `round` and `n` come from `findTurnSession`: the round its session was born for and its place in that session (1 is the birth), and `latestSession` says whether that session is the one `quarterdeck replay <round> [n]` replays, weighing the sessions of the agents with a `driver.round_started` event for that round. Other turns get `null`, `null` and `false`. Parse it with `turnReadResultSchema`. |
 
+### Reading data
+
+Two intents only read, for the Data widget. Neither is recorded (`id: null`), and both 404 for a project that does not exist.
+
+| Intent         | Result                                                                                                                                                                                                                                                                                   |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `data.summary` | `{ backend, tables, paths }`: the row count of every `STORE_TABLES` table for the project, and `dataPaths` (see [data](../data/README.md)) with `exists` for each path.                                                                                                                  |
+| `data.rows`    | `{ table, offset, limit, total, columns, rows }` for one `STORE_TABLES` table (404 for any other), newest first. `offset` defaults to 0, `limit` to `DATA_PAGE_SIZE` (25), at most `MAX_DATA_PAGE_SIZE` (100). `columns` is the table's columns in order; each row is an array of cells. |
+
+`dataSummarySchema` and `dataPageSchema` in `@quarterdeck/server/intents` parse the results.
+
 Pending intents stay `pending` with `settled_at` null until the logic that owns them marks them `applied` or `rejected`.
 
 ## Reads

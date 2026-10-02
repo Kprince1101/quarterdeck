@@ -18,7 +18,7 @@ import {
 } from './events.js';
 import { NO_LOCK, lockDataDir, type DataDirLock } from './lock.js';
 import { migrate } from './migrate.js';
-import { assertProjectSlug, projectDataDir } from './paths.js';
+import { assertProjectSlug, dataDirLockPath, projectDataDir } from './paths.js';
 import { openPostgres, redactUrl, type LostHandler } from './postgres.js';
 import { assertServerVersion } from './version.js';
 
@@ -97,7 +97,7 @@ const prepareDataDir = async (
 ): Promise<DataDirLock> => {
   if (dataDir.startsWith(IN_MEMORY)) return NO_LOCK;
   await mkdir(dataDir, { recursive: true });
-  return lockDataDir(`${dataDir}.lock`, project);
+  return lockDataDir(dataDirLockPath(dataDir), project);
 };
 
 const openPglite = async (

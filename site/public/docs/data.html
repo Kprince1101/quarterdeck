@@ -28,6 +28,12 @@
         <code>~/.quarterdeck/</code>. There is no hosted component and no
         telemetry, and you can open, read and delete all of it.
       </p>
+      <p>
+        The dashboard's <a href="widgets.html#data">Data widget</a> shows the
+        same thing for the open project: every table with its row count, the
+        rows themselves a page at a time, and every path below with whether it
+        exists yet.
+      </p>
 
       <h2 id="folder">The folder</h2>
       <pre><code>~/.quarterdeck/
@@ -37,6 +43,7 @@
     pg.lock                      which process has the project open
     turns/&lt;agent-id&gt;/&lt;seq&gt;/      one folder per agent turn
     worktrees/&lt;builder&gt;-&lt;ticket&gt;/  a builder's git worktree
+  plugins/&lt;name&gt;.mjs             ticket-source plugins you add yourself
   sock/&lt;hash&gt;.sock               a project's bus socket, while running
   kiro/                          where kiro-cli runs
   gemini/                        where gemini runs, and its locked settings
@@ -61,8 +68,9 @@
             <td><code>~/.quarterdeck/&lt;project&gt;/pg/</code></td>
             <td>
               The project's store: a real Postgres data directory (PGlite), one
-              per project. Tickets, agents, events, cards, turns and the rest.
-              Deleting it deletes the project's state.
+              per project. Tickets, agents, events, cards, turns, saved
+              dashboard layouts and the rest. Deleting it deletes the project's
+              state.
             </td>
           </tr>
           <tr>
@@ -97,6 +105,13 @@
               The git worktree a builder works a ticket in, registered with your
               repository. <code>&lt;ticket&gt;</code> is the first 8 characters
               of the ticket id. Retiring the builder removes it.
+            </td>
+          </tr>
+          <tr>
+            <td><code>~/.quarterdeck/plugins/&lt;name&gt;.mjs</code></td>
+            <td>
+              Ticket-source plugins you put there yourself. Code, not data:
+              Quarterdeck only reads them, and wiping leaves them.
             </td>
           </tr>
           <tr>
