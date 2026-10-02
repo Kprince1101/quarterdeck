@@ -2,16 +2,21 @@ export {
   BUS_RELAY,
   BUS_SOCKET_ENV,
   BUS_TOKEN_ENV,
-  busSocketPath,
   startBusHost,
   type BusHost,
   type BusHostOptions,
 } from './host.js';
 export {
+  SOCKET_PATH_MAX,
+  busSocketPath,
+  type SocketPathOptions,
+} from './socket.js';
+export {
   FILTER_OPS,
   IN_VALUES_MAX,
   READ_LIMIT_DEFAULT,
   READ_LIMIT_MAX,
+  READ_REPLY_MAX_BYTES,
   buildReadQuery,
   filterOpsFor,
   type FilterOp,

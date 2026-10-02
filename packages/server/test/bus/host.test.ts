@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { McpServerStdio } from '@agentclientprotocol/sdk';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -12,11 +12,12 @@ import {
   BUS_RELAY,
   BUS_SOCKET_ENV,
   BUS_TOKEN_ENV,
+  SOCKET_PATH_MAX,
   busSocketPath,
   startBusHost,
   type BusHost,
 } from '../../src/bus/index.js';
-import type { Store } from '../../src/store/index.js';
+import { openStore, type Store } from '../../src/store/index.js';
 import {
   TIMEOUT,
   callTool,
@@ -25,11 +26,14 @@ import {
   openTestStore,
 } from './fixtures.ts';
 
+const envOf = (launch: McpServerStdio): Record<string, string> =>
+  Object.fromEntries(launch.env.map(({ name, value }) => [name, value]));
+
 const connectStdio = async (launch: McpServerStdio): Promise<Client> => {
   const transport = new StdioClientTransport({
     command: launch.command,
     args: launch.args,
-    env: Object.fromEntries(launch.env.map(({ name, value }) => [name, value])),
+    env: envOf(launch),
     stderr: 'pipe',
   });
   const client = new Client({ name: 'bus-host-test', version: '0.0.0' });
@@ -64,7 +68,7 @@ describe('bus host', () => {
     dir = await mkdtemp(join(tmpdir(), 'qd-bus-'));
     store = await openTestStore('hosted');
     agentId = await insertAgent(store, store.projectId, 'okapi');
-    host = await startBusHost({ store, socketPath: join(dir, 'bus.sock') });
+    host = await startBusHost({ store, home: dir });
   }, TIMEOUT);
 
   afterEach(async () => {
@@ -133,12 +137,26 @@ describe('bus host', () => {
     TIMEOUT,
   );
 
-  it('gives one agent the same token on every launch', async () => {
-    const first = await host.launch(agentId);
-    const second = await host.launch(agentId);
+  it(
+    'takes each token once and only the latest one per agent',
+    async () => {
+      const first = await host.launch(agentId);
+      const second = await host.launch(agentId);
+      expect(envOf(second)[BUS_TOKEN_ENV]).not.toBe(
+        envOf(first)[BUS_TOKEN_ENV],
+      );
 
-    expect(second.env).toEqual(first.env);
-  });
+      expect((await runRelay(envOf(first))).stderr).toContain('denied');
+      const client = await connectStdio(second);
+      clients.push(client);
+      expect(await callTool(client, 'status', { text: 'pinned' })).toEqual({
+        text: 'noted',
+        isError: false,
+      });
+      expect((await runRelay(envOf(second))).stderr).toContain('denied');
+    },
+    TIMEOUT,
+  );
 
   it('refuses to launch for an agent outside the project or retired', async () => {
     const other = await insertProject(store, 'elsewhere');
@@ -179,11 +197,11 @@ describe('bus host', () => {
   );
 
   it(
-    'cuts a revoked agent off and refuses its token afterwards',
+    'cuts a revoked agent off and refuses its pending token',
     async () => {
-      const launch = await host.launch(agentId);
-      const client = await connectStdio(launch);
+      const client = await connectStdio(await host.launch(agentId));
       clients.push(client);
+      const pending = await host.launch(agentId);
       const closed = new Promise<void>((resolve) => {
         client.onclose = () => resolve();
       });
@@ -191,15 +209,15 @@ describe('bus host', () => {
       host.revoke(agentId);
 
       await closed;
-      const env = Object.fromEntries(
-        launch.env.map(({ name, value }) => [name, value]),
-      );
-      expect((await runRelay(env)).stderr).toContain('denied');
+      expect((await runRelay(envOf(pending))).stderr).toContain('denied');
     },
     TIMEOUT,
   );
 
-  it('removes its socket on close', async () => {
+  it('listens under <home>/sock in a private dir and removes the socket on close', async () => {
+    expect(host.socketPath).toBe(busSocketPath(store.projectId, { home: dir }));
+    expect(host.socketPath.startsWith(join(dir, 'sock'))).toBe(true);
+    expect((await stat(dirname(host.socketPath))).mode & 0o777).toBe(0o700);
     expect(existsSync(host.socketPath)).toBe(true);
 
     await host.close();
@@ -207,7 +225,58 @@ describe('bus host', () => {
     expect(existsSync(host.socketPath)).toBe(false);
   });
 
-  it('puts the socket next to the project data dir', () => {
-    expect(busSocketPath('deck', '/home/q')).toBe('/home/q/deck/bus.sock');
+  it('refuses an explicit socket path longer than the limit', async () => {
+    const socketPath = join(dir, 'x'.repeat(SOCKET_PATH_MAX), 'bus.sock');
+
+    await expect(startBusHost({ store, socketPath })).rejects.toThrow(
+      `the limit is ${SOCKET_PATH_MAX}`,
+    );
   });
+});
+
+describe('bus host for a long slug under a long home', () => {
+  let home = '';
+
+  beforeEach(async () => {
+    const base = await mkdtemp(join(tmpdir(), 'qd-bus-home-'));
+    home = join(base, 'h'.repeat(60), 'quarterdeck-home-with-a-long-name');
+    await mkdir(home, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await rm(dirname(dirname(home)), { recursive: true, force: true });
+  });
+
+  it(
+    'listens on a short socket and relays a session',
+    async () => {
+      const slug = 'a'.repeat(63);
+      expect(Buffer.byteLength(join(home, slug, 'bus.sock'))).toBeGreaterThan(
+        SOCKET_PATH_MAX,
+      );
+      const store = await openStore({ project: slug, home });
+      const host = await startBusHost({ store, home });
+      try {
+        expect(Buffer.byteLength(host.socketPath)).toBeLessThanOrEqual(
+          SOCKET_PATH_MAX,
+        );
+        expect(host.socketPath.startsWith(home)).toBe(false);
+        expect((await stat(dirname(host.socketPath))).mode & 0o777).toBe(0o700);
+        const agentId = await insertAgent(store, store.projectId, 'okapi');
+        const client = await connectStdio(await host.launch(agentId));
+        try {
+          expect(await callTool(client, 'status', { text: 'long' })).toEqual({
+            text: 'noted',
+            isError: false,
+          });
+        } finally {
+          await client.close();
+        }
+      } finally {
+        await host.close();
+        await store.close();
+      }
+    },
+    TIMEOUT,
+  );
 });

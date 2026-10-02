@@ -1,7 +1,13 @@
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Store } from '../../src/store/index.js';
-import { READ_LIMIT_MAX, READ_TABLE_NAMES } from '../../src/bus/index.js';
+import {
+  READ_LIMIT_MAX,
+  READ_REPLY_MAX_BYTES,
+  READ_TABLE_NAMES,
+  buildReadQuery,
+  type ReadTableName,
+} from '../../src/bus/index.js';
 import {
   TIMEOUT,
   callTool,
@@ -315,6 +321,20 @@ describe('bus read', () => {
     ],
     [{ table: 'tickets', limit: READ_LIMIT_MAX + 1 }, 'limit'],
     [{ table: 'tickets', limit: 0 }, 'limit'],
+    [{ table: 'tickets', columns: ['constructor'] }, 'no readable column'],
+    [{ table: 'tickets', columns: ['__proto__'] }, 'no readable column'],
+    [
+      { table: 'tickets', order: [{ column: 'toString' }] },
+      'no readable column',
+    ],
+    [
+      { table: 'tickets', filters: [{ column: '__proto__', op: 'is_null' }] },
+      'no readable column',
+    ],
+    [
+      { table: 'tickets', filters: [{ column: 'hasOwnProperty', value: 'x' }] },
+      'no readable column',
+    ],
   ])('rejects %j', async (args, message) => {
     const reply = await callTool(client, 'read', args);
 
@@ -338,5 +358,58 @@ describe('bus read', () => {
     );
 
     expect(rows[0]?.count).toBe(4);
+  });
+
+  it.each(['constructor', '__proto__', 'toString'])(
+    'refuses %s as a table name',
+    (table) => {
+      expect(() =>
+        buildReadQuery(seeded.agentId, {
+          table: table as ReadTableName,
+          limit: 1,
+        }),
+      ).toThrow(`${table} is not a readable table`);
+    },
+  );
+});
+
+describe('bus read reply cap', () => {
+  let store: Store;
+  let client: Client;
+
+  beforeAll(async () => {
+    store = await openTestStore('capped');
+    const agentId = await insertAgent(store, store.projectId, 'okapi');
+    const body = 'x'.repeat(READ_REPLY_MAX_BYTES / 2);
+    for (const title of ['one', 'two', 'three'])
+      await store.db.query(
+        'insert into tickets (project_id, title, body) values ($1, $2, $3)',
+        [store.projectId, title, body],
+      );
+    client = await connectClient(store, agentId);
+  }, TIMEOUT);
+
+  afterAll(async () => {
+    await client.close();
+    await store.close();
+  });
+
+  it('refuses a reply over the byte cap and says how to narrow it', async () => {
+    const reply = await callTool(client, 'read', { table: 'tickets' });
+
+    expect(reply.isError).toBe(true);
+    expect(reply.text).toContain(
+      `over the ${READ_REPLY_MAX_BYTES}-byte reply cap; narrow your columns`,
+    );
+  });
+
+  it('serves the same rows once the columns are narrowed', async () => {
+    expect(
+      await readRows(client, {
+        table: 'tickets',
+        columns: ['title'],
+        order: [{ column: 'title' }],
+      }),
+    ).toEqual([{ title: 'one' }, { title: 'three' }, { title: 'two' }]);
   });
 });

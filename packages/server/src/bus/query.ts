@@ -50,6 +50,7 @@ export interface ReadQuery {
 export const READ_LIMIT_DEFAULT = 50;
 export const READ_LIMIT_MAX = 200;
 export const IN_VALUES_MAX = 100;
+export const READ_REPLY_MAX_BYTES = 100_000;
 
 const PG_TYPES: Record<ColumnKind, string> = {
   uuid: 'uuid',
@@ -109,8 +110,8 @@ const columnKind = (
   table: ReadTable,
   column: string,
 ): ColumnKind => {
-  const kind = table.columns[column];
-  if (kind === undefined)
+  const kind = Object.hasOwn(table.columns, column) && table.columns[column];
+  if (!kind)
     throw new BusToolError(
       `${name} has no readable column ${column}; readable: ${Object.keys(table.columns).join(', ')}`,
     );
@@ -209,9 +210,9 @@ export const buildReadQuery = (
   request: ReadRequest,
 ): ReadQuery => {
   const name = request.table;
-  const table: ReadTable | undefined = READ_TABLES[name];
-  if (table === undefined)
+  if (!Object.hasOwn(READ_TABLES, name))
     throw new BusToolError(`${String(name)} is not a readable table`);
+  const table: ReadTable = READ_TABLES[name];
   if (!Number.isInteger(request.limit) || request.limit < 1)
     throw new BusToolError('limit must be a positive integer');
   const params: unknown[] = [projectId];

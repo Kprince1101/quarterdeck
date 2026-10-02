@@ -4,11 +4,12 @@ import {
   IN_VALUES_MAX,
   READ_LIMIT_DEFAULT,
   READ_LIMIT_MAX,
+  READ_REPLY_MAX_BYTES,
   buildReadQuery,
   filterOpsFor,
 } from '../query.js';
 import { READ_TABLES, READ_TABLE_NAMES } from '../tables.js';
-import { defineBusTool } from '../tool.js';
+import { BusToolError, defineBusTool } from '../tool.js';
 
 const scalar = z.union([z.string(), z.number(), z.boolean()]);
 
@@ -32,7 +33,7 @@ export default defineBusTool({
     "Read rows from this project's tables. No SQL: pick a table, columns, filters, order and limit.",
     'Filters are ANDed. Ops by column kind: int, numeric, bool and time take the uuid ops; ' +
       `${describeOps()}. \`in\` takes an array, \`is_null\`/\`not_null\` take no value.`,
-    `Returns a JSON array of rows, newest first unless ordered, at most ${READ_LIMIT_MAX}.`,
+    `Returns a JSON array of rows, newest first unless ordered, at most ${READ_LIMIT_MAX} rows and ${READ_REPLY_MAX_BYTES} bytes.`,
     `Tables:\n${describeTables()}`,
   ].join('\n'),
   input: {
@@ -73,6 +74,12 @@ export default defineBusTool({
   run: async ({ store }, request) => {
     const { sql, params } = buildReadQuery(store.projectId, request);
     const { rows } = await store.db.query<{ row: unknown }>(sql, params);
-    return JSON.stringify(rows.map(({ row }) => row));
+    const reply = JSON.stringify(rows.map(({ row }) => row));
+    const bytes = Buffer.byteLength(reply);
+    if (bytes > READ_REPLY_MAX_BYTES)
+      throw new BusToolError(
+        `${rows.length} rows of ${request.table} are ${bytes} bytes, over the ${READ_REPLY_MAX_BYTES}-byte reply cap; narrow your columns, add filters or lower the limit`,
+      );
+    return reply;
   },
 });

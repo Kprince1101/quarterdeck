@@ -1,14 +1,18 @@
-import { createHash, randomBytes } from 'node:crypto';
-import { mkdir, rm } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
+import { rm } from 'node:fs/promises';
 import { createServer, type Socket } from 'node:net';
-import { dirname, extname, join } from 'node:path';
+import { dirname, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { McpServerStdio } from '@agentclientprotocol/sdk';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { AgentNotFoundError } from '../agents/agent.js';
-import { projectDataDir } from '../store/index.js';
 import { loadBusTools } from './registry.js';
 import { BUS_SERVER_NAME, createBusServer } from './server.js';
+import {
+  assertSocketPath,
+  busSocketPath,
+  preparePrivateDir,
+} from './socket.js';
 import type { BusStore, BusTool } from './tool.js';
 
 export const BUS_SOCKET_ENV = 'QUARTERDECK_BUS_SOCKET';
@@ -22,7 +26,8 @@ const HANDSHAKE_MAX = 256;
 
 export interface BusHostOptions {
   store: BusStore;
-  socketPath: string;
+  socketPath?: string;
+  home?: string;
   tools?: readonly BusTool[];
 }
 
@@ -38,13 +43,6 @@ interface Handshake {
   line: string;
   rest: Buffer;
 }
-
-export const busSocketPath = (project: string, home?: string): string => {
-  const dir = dirname(projectDataDir(project, home));
-  if (process.platform !== 'win32') return join(dir, 'bus.sock');
-  const hash = createHash('sha256').update(dir).digest('hex').slice(0, 12);
-  return `\\\\.\\pipe\\quarterdeck-${project}-${hash}`;
-};
 
 const readHandshake = (socket: Socket): Promise<Handshake> =>
   new Promise((resolve, reject) => {
@@ -76,7 +74,7 @@ const listen = async (
   socketPath: string,
 ): Promise<void> => {
   if (process.platform !== 'win32') {
-    await mkdir(dirname(socketPath), { recursive: true });
+    await preparePrivateDir(dirname(socketPath));
     await rm(socketPath, { force: true });
   }
   await new Promise<void>((resolve, reject) => {
@@ -91,7 +89,11 @@ const listen = async (
 export const startBusHost = async (
   options: BusHostOptions,
 ): Promise<BusHost> => {
-  const { store, socketPath } = options;
+  const { store } = options;
+  const socketPath = assertSocketPath(
+    options.socketPath ??
+      busSocketPath(store.projectId, { home: options.home }),
+  );
   const tools = options.tools ?? (await loadBusTools());
   const tokens = new Map<string, string>();
   const sockets = new Map<Socket, string | undefined>();
@@ -121,6 +123,7 @@ export const startBusHost = async (
           socket.end('denied\n');
           return undefined;
         }
+        tokens.delete(line);
         return serve(socket, agentId, rest);
       })
       .catch(() => socket.destroy());
@@ -129,8 +132,13 @@ export const startBusHost = async (
   const listener = createServer(accept);
   await listen(listener, socketPath);
 
-  const tokenFor = (agentId: string): string => {
-    for (const [token, owner] of tokens) if (owner === agentId) return token;
+  const dropTokens = (agentId: string): void => {
+    for (const [token, owner] of tokens)
+      if (owner === agentId) tokens.delete(token);
+  };
+
+  const issueToken = (agentId: string): string => {
+    dropTokens(agentId);
     const token = randomBytes(32).toString('hex');
     tokens.set(token, agentId);
     return token;
@@ -149,14 +157,13 @@ export const startBusHost = async (
       args: [BUS_RELAY],
       env: [
         { name: BUS_SOCKET_ENV, value: socketPath },
-        { name: BUS_TOKEN_ENV, value: tokenFor(agentId) },
+        { name: BUS_TOKEN_ENV, value: issueToken(agentId) },
       ],
     };
   };
 
   const revoke = (agentId: string): void => {
-    for (const [token, owner] of tokens)
-      if (owner === agentId) tokens.delete(token);
+    dropTokens(agentId);
     for (const [socket, owner] of sockets)
       if (owner === agentId) socket.destroy();
   };
