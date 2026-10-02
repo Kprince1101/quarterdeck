@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { emptyTables } from '../../../src/api/index.js';
 import {
   availableActions,
-  intentFailure,
+  killAck,
   UNEXPLAINED_FAILURE,
 } from '../../../src/widgets/agents/agent-actions.js';
 import { buildAgents } from '../../../src/widgets/agents/agents-model.js';
 import {
+  BLOCKED_TICKET_ID,
   BUILDER_ID,
   DRIVER_ID,
   INTENT_ID,
@@ -19,6 +20,7 @@ import {
   agent,
   agentsTables,
   failedEvent,
+  killedEvent,
   project,
 } from './fixtures.js';
 
@@ -89,6 +91,19 @@ describe('agents model', () => {
     expect(viewOf(KILLED_ID).isLive).toBe(false);
   });
 
+  it('shows the tickets a kill blocked as held by the killed agent', () => {
+    expect(viewOf(KILLED_ID)).toMatchObject({
+      workingOn: 'QD5i kill / retire / reset',
+      held: [
+        {
+          id: BLOCKED_TICKET_ID,
+          title: 'QD5i kill / retire / reset',
+          statusLabel: 'blocked',
+        },
+      ],
+    });
+  });
+
   it('is empty without agents', () => {
     expect(buildAgents(emptyTables(), NOW)).toEqual({
       agents: [],
@@ -116,21 +131,29 @@ describe('agent actions', () => {
     expect(availableActions(viewOf(KILLED_ID))).toEqual(['retire', 'reset']);
   });
 
-  it('finds the failure the stream records for an intent', () => {
+  it('finds the ack the stream records for a kill', () => {
     const other = '00000000-0000-4000-8000-0000000000f2';
     const events = [failedEvent(1, other), failedEvent(2, INTENT_ID)];
-    expect(intentFailure(events, INTENT_ID)).toBe('session would not close');
-    expect(intentFailure(events, null)).toBeNull();
-    expect(intentFailure([failedEvent(1, other)], INTENT_ID)).toBeNull();
+    expect(killAck(events, INTENT_ID)).toEqual({
+      failure: 'session would not close',
+    });
+    expect(killAck(events, null)).toBeNull();
+    expect(killAck([failedEvent(1, other)], INTENT_ID)).toBeNull();
+    expect(killAck([killedEvent(3, INTENT_ID)], INTENT_ID)).toEqual({
+      failure: null,
+    });
+    expect(killAck([killedEvent(3, other)], INTENT_ID)).toBeNull();
     expect(
-      intentFailure([failedEvent(3, INTENT_ID, { error: '' })], INTENT_ID),
-    ).toBe(UNEXPLAINED_FAILURE);
+      killAck([failedEvent(4, INTENT_ID, { error: '' })], INTENT_ID),
+    ).toEqual({ failure: UNEXPLAINED_FAILURE });
     const unexplained = {
-      ...failedEvent(4, INTENT_ID),
+      ...failedEvent(5, INTENT_ID),
       payload: { intentId: INTENT_ID },
     };
-    expect(intentFailure([unexplained], INTENT_ID)).toBe(UNEXPLAINED_FAILURE);
-    const elsewhere = { ...failedEvent(5, INTENT_ID), kind: 'agent.killed' };
-    expect(intentFailure([elsewhere], INTENT_ID)).toBeNull();
+    expect(killAck([unexplained], INTENT_ID)).toEqual({
+      failure: UNEXPLAINED_FAILURE,
+    });
+    const elsewhere = { ...failedEvent(6, INTENT_ID), kind: 'agent.retired' };
+    expect(killAck([elsewhere], INTENT_ID)).toBeNull();
   });
 });

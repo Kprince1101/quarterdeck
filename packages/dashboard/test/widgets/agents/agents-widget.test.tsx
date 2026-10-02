@@ -36,6 +36,7 @@ import {
   agentsTables,
   ago,
   failedEvent,
+  killedEvent,
 } from './fixtures.js';
 
 interface Sent {
@@ -90,7 +91,12 @@ const mount = (
       <AgentsWidget />
     </DeckProvider>,
   );
-  deliver({ type: 'snapshot', cursor: 0, tables });
+  deliver({
+    type: 'snapshot',
+    cursor: 0,
+    tables,
+    machine: { pausedAt: null },
+  });
   return { ...rendered, sent };
 };
 
@@ -189,7 +195,9 @@ describe('Agents widget', () => {
       'Reset',
     ]);
 
-    expect(names(card(container, KILLED_ID))).toEqual(['Retire', 'Reset']);
+    const killed = card(container, KILLED_ID);
+    expect(held(killed)).toEqual(['QD5i kill / retire / resetblocked']);
+    expect(names(killed)).toEqual(['Retire', 'Reset']);
     unmount();
   });
 
@@ -227,7 +235,7 @@ describe('Agents widget', () => {
     unmount();
   });
 
-  it('shows killing… until the stream says the agent is killed', async () => {
+  it('shows killing… until the stream acks the kill with agent.killed', async () => {
     const { container, sent, unmount } = mount(agentsTables(), PENDING_KILL);
     click(button(card(container, BUILDER_ID), 'Kill'));
     expect(textOf(card(container, BUILDER_ID), '.qd-agent-state')).toBe(
@@ -252,7 +260,12 @@ describe('Agents widget', () => {
       id: BUILDER_ID,
       row: agent(BUILDER_ID, 'tansy', { status: 'killed', updatedAt: ago(0) }),
     });
+    expect(textOf(builder(), '.qd-agent-state')).toBe(KILLING_LABEL);
+    expect(enabled(builder())).toEqual([false, false]);
+
+    deliver({ type: 'event', event: killedEvent(1, INTENT_ID) });
     expect(textOf(builder(), '.qd-agent-state')).toBe('killed');
+    expect(builder().getAttribute('data-killing')).toBe('false');
     expect(textOf(builder(), '.qd-agent-since')).toBe('just now');
     expect(names(builder())).toEqual(['Retire', 'Reset']);
     expect(enabled(builder())).toEqual([true, true]);

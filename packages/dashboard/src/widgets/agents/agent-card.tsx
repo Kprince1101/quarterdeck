@@ -1,4 +1,4 @@
-import { NotebookError } from '../notebook/notebook-error.js';
+import { RequestError } from '../request-error.js';
 import type { AgentView, HeldTicketView } from './agents-model.js';
 import { useAgentCard, type AgentActionView } from './use-agent-card.js';
 
@@ -75,7 +75,7 @@ export const AgentCard = ({ agent, showProject }: AgentCardProps) => {
         </p>
       )}
       {agent.hasWork && <HeldTickets held={agent.held} />}
-      <NotebookError error={card.error} />
+      <RequestError error={card.error} />
       <AgentActions actions={card.actions} isBusy={card.isBusy} />
     </li>
   );

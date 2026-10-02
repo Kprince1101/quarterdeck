@@ -19,6 +19,7 @@ export const RETIRED_ID = '00000000-0000-4000-8000-0000000000b4';
 export const TICKET_ID = '00000000-0000-4000-8000-0000000000c1';
 export const REVIEW_TICKET_ID = '00000000-0000-4000-8000-0000000000c2';
 export const DONE_TICKET_ID = '00000000-0000-4000-8000-0000000000c3';
+export const BLOCKED_TICKET_ID = '00000000-0000-4000-8000-0000000000c4';
 export const INTENT_ID = '00000000-0000-4000-8000-0000000000f1';
 
 export const ago = (ms: number): string => new Date(NOW - ms).toISOString();
@@ -79,6 +80,16 @@ export const failedEvent = (
   createdAt: ago(0),
 });
 
+export const killedEvent = (id: number, intentId: string): StreamEvent => ({
+  id,
+  projectId: PROJECT_ID,
+  agentId: BUILDER_ID,
+  ticketId: null,
+  kind: 'agent.killed',
+  payload: { intentId, name: 'tansy', sessionId: null },
+  createdAt: ago(0),
+});
+
 export const agentsTables = (): SnapshotTables => ({
   ...emptyTables(),
   projects: [project(PROJECT_ID, 'deck')],
@@ -108,6 +119,10 @@ export const agentsTables = (): SnapshotTables => ({
     ticket(DONE_TICKET_ID, 'QD7b Widget grid', {
       assigneeId: BUILDER_ID,
       status: 'done',
+    }),
+    ticket(BLOCKED_TICKET_ID, 'QD5i kill / retire / reset', {
+      assigneeId: KILLED_ID,
+      status: 'blocked',
     }),
   ],
 });

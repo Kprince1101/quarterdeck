@@ -1,5 +1,5 @@
 import { useDeck } from '../../deck/deck.js';
-import { useIntentRequest } from '../notebook/use-intent-request.js';
+import { useIntentRequest } from '../use-intent-request.js';
 import {
   ACTION_LABELS,
   availableActions,

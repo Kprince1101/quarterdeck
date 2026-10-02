@@ -54,13 +54,15 @@ const HELD_LABELS: Partial<Record<TicketStatus, string>> = {
   in_progress: 'in progress',
   in_review: 'in review',
   bounced: 'bounced',
+  blocked: 'blocked',
 };
 
 const HELD_ORDER: Partial<Record<TicketStatus, number>> = {
   in_progress: 0,
   bounced: 1,
-  assigned: 2,
-  in_review: 3,
+  blocked: 2,
+  assigned: 3,
+  in_review: 4,
 };
 
 const ROLE_ORDER: Record<AgentRole, number> = {

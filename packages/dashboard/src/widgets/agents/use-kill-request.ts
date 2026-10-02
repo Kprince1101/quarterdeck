@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { IntentReply } from '../../api/index.js';
 import { useDeck } from '../../deck/deck.js';
-import { intentFailure } from './agent-actions.js';
+import { killAck } from './agent-actions.js';
 import type { AgentView } from './agents-model.js';
 
 export interface KillRequest {
@@ -14,24 +14,32 @@ export interface KillRequest {
 
 interface KillState {
   intentId: string | null;
+  isAccepted: boolean;
 }
+
+const isAwaitingAck = (
+  kill: KillState | null,
+  agent: AgentView,
+  isAcked: boolean,
+): boolean => {
+  if (kill === null || isAcked) return false;
+  if (!kill.isAccepted || kill.intentId !== null) return true;
+  return agent.isLive;
+};
 
 export const useKillRequest = (agent: AgentView): KillRequest => {
   const { events } = useDeck().stream;
   const [kill, setKill] = useState<KillState | null>(null);
   const intentId = kill?.intentId ?? null;
-  const failure = useMemo(
-    () => intentFailure(events, intentId),
-    [events, intentId],
-  );
+  const ack = useMemo(() => killAck(events, intentId), [events, intentId]);
   return {
-    isKilling: kill !== null && agent.isLive && failure === null,
-    failure,
+    isKilling: isAwaitingAck(kill, agent, ack !== null),
+    failure: ack?.failure ?? null,
     begin: () => {
-      setKill({ intentId: null });
+      setKill({ intentId: null, isAccepted: false });
     },
     accept: (reply) => {
-      setKill({ intentId: reply.id });
+      setKill({ intentId: reply.id, isAccepted: true });
     },
     cancel: () => {
       setKill(null);

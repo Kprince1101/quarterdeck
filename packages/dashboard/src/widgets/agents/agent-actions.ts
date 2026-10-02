@@ -15,6 +15,8 @@ export const POKE_TEXT =
 
 export const INTENT_FAILED_KIND = 'agent.intent_failed';
 
+export const KILLED_KIND = 'agent.killed';
+
 export const UNEXPLAINED_FAILURE = 'The server could not apply it.';
 
 export const ACTION_LABELS: Record<AgentActionKind, string> = {
@@ -60,23 +62,32 @@ export const availableActions = (agent: AgentView): AgentActionKind[] => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const failureOf = (event: StreamEvent, intentId: string): string | null => {
-  const { payload } = event;
-  if (event.kind !== INTENT_FAILED_KIND || !isRecord(payload)) return null;
-  if (payload['intentId'] !== intentId) return null;
+export interface KillAck {
+  failure: string | null;
+}
+
+const failureOf = (payload: Record<string, unknown>): string => {
   const { error } = payload;
   if (typeof error === 'string' && error.trim() !== '') return error;
   return UNEXPLAINED_FAILURE;
 };
 
-export const intentFailure = (
+const killAckOf = (event: StreamEvent, intentId: string): KillAck | null => {
+  const { payload } = event;
+  if (!isRecord(payload) || payload['intentId'] !== intentId) return null;
+  if (event.kind === KILLED_KIND) return { failure: null };
+  if (event.kind === INTENT_FAILED_KIND) return { failure: failureOf(payload) };
+  return null;
+};
+
+export const killAck = (
   events: readonly StreamEvent[],
   intentId: string | null,
-): string | null => {
+): KillAck | null => {
   if (intentId === null) return null;
   for (const event of events) {
-    const failure = failureOf(event, intentId);
-    if (failure !== null) return failure;
+    const ack = killAckOf(event, intentId);
+    if (ack !== null) return ack;
   }
   return null;
 };
