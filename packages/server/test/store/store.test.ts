@@ -33,6 +33,7 @@ describe('openStore on disk', () => {
         '0001_init',
         '0002_agent_names',
         '0003_intents',
+        '0004_table_changes',
       ]);
       await first.db.query(
         'insert into notebook (project_id, body) values ($1, $2)',
