@@ -10,7 +10,7 @@ import { ALPHA, BETA } from './fixtures.js';
 describe('widget registry', () => {
   it('discovers every *.widget.tsx file', () => {
     expect([...WIDGETS.keys()]).toEqual(
-      expect.arrayContaining(['events', 'notebook', 'tables']),
+      expect.arrayContaining(['driver', 'events', 'notebook', 'tables']),
     );
     expect(WIDGETS.get('events')?.title).toBe('Events');
   });

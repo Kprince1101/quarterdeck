@@ -96,3 +96,29 @@ export const findRoundSessions = async (
         a.bornAt.getTime() - b.bornAt.getTime() || a.firstSeq - b.firstSeq,
     );
 };
+
+export interface TurnSession {
+  session: RoundSession;
+  n: number;
+  latest: boolean;
+}
+
+const sameSession = (a: RoundSession, b: RoundSession | undefined): boolean =>
+  b !== undefined && a.agentId === b.agentId && a.firstSeq === b.firstSeq;
+
+export const findTurnSession = async (
+  turnsDir: string,
+  agentId: string,
+  seq: number,
+): Promise<TurnSession | null> => {
+  const session = (await agentSessions(turnsDir, agentId)).find(
+    (candidate) => candidate.firstSeq <= seq && seq <= candidate.lastSeq,
+  );
+  if (session === undefined) return null;
+  const round = await findRoundSessions(turnsDir, session.round);
+  return {
+    session,
+    n: seq - session.firstSeq + 1,
+    latest: sameSession(session, round.at(-1)),
+  };
+};

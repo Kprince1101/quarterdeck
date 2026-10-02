@@ -6,12 +6,14 @@ import type {
 import type { ApiContext, IntentHandlers } from './context.js';
 import { BOARD_HANDLERS } from './handlers/board.js';
 import { CREW_HANDLERS } from './handlers/crew.js';
+import { READ_HANDLERS } from './handlers/turns.js';
 import { WORKSPACE_HANDLERS } from './handlers/workspace.js';
 
 export const INTENT_HANDLERS: IntentHandlers<IntentName> = {
   ...CREW_HANDLERS,
   ...BOARD_HANDLERS,
   ...WORKSPACE_HANDLERS,
+  ...READ_HANDLERS,
 };
 
 export const dispatchIntent = <N extends IntentName>(

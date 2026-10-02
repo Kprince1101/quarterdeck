@@ -34,6 +34,7 @@ src/widgets/widgets.ts       WIDGETS: every src/widgets/**/*.widget.tsx, found a
 src/widgets/widget-mount.tsx WidgetMount: the grid over WIDGETS
 src/widgets/starter/         the Tables starter widget
 src/widgets/events/          Events: the feed, filtered by project and kind
+src/widgets/driver/          the Driver widget: round picker, turns, turn detail, replay command
 src/grid/                    the grid: layout JSON, actions, drag, resize, keyboard, tray
 src/theme/tokens.css         dark theme tokens (--qd-*) and the page base
 src/theme/tokens.ts          the same token names, typed: token('accent') is 'var(--qd-accent)'
@@ -82,6 +83,10 @@ That is the whole registration. `src/widgets/widgets.ts` picks up every `*.widge
 The grid draws the `Panel` (title, move, duplicate, hide, resize), so the component renders only its body. `createRegistry` throws at load on a repeated `type`, a type that is not kebab-case, or a `size` under `minSize`; a `*.widget.tsx` without a `defineWidget` default export fails the same way.
 
 `useDeck()` gives every widget the same `StreamState` (see [`src/api`](src/api/README.md)) and the same `IntentClient`, so a dashboard with ten widgets still opens one socket. `DeckProvider` takes `stream` options and an `intents` client, which is how tests and the site's demo mode feed it fake data.
+
+## The Driver widget
+
+The Driver widget shows one round at a time: the active round, or the newest if none is active, until another is picked in the Round picker. It lists the turns of the round's Driver agents from the stream, newest first, so it holds each Driver's latest 20. Selecting a turn sends `turn.read` (see [the API](../server/src/api/README.md)) for its input, output and result, and reads it again when the turn ends. The replay command is `replayCommand({ round, through: n, project })` from `@quarterdeck/server/replay-command`, with `round` and `n` from `turn.read`, and a Copy button puts it on the clipboard. A turn whose session a later Driver session replaced gets no command, since `quarterdeck replay` runs only the latest.
 
 ## The grid
 

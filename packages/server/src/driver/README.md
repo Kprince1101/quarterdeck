@@ -132,7 +132,7 @@ npx quarterdeck replay 3 7 --project commander
 
 Round numbers start at 1 in every project, so pass `project` when the machine may have more than one; without it the CLI picks the only project that has the round. `through` counts Driver turns within the round, not `seq`: the turn with `seq` s in a session born at `seq` b is turn s - b + 1.
 
-It refuses a round or `n` that is not a positive integer and a project that is not a slug, so the line is always safe to paste. `readTurnChain` checks `agentId` is a uuid, since it names a folder under `turnsDir`.
+It refuses a round or `n` that is not a positive integer and a project that is not a slug, so the line is always safe to paste. It lives in `replay-command.ts`, which imports nothing from Node, and the dashboard imports it as `@quarterdeck/server/replay-command`. `readTurnChain` checks `agentId` is a uuid, since it names a folder under `turnsDir`.
 
 ### Finding a round's Driver
 
