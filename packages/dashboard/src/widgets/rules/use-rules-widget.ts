@@ -3,13 +3,13 @@ import { useMemo, type ChangeEvent } from 'react';
 import type { ProjectRow, RuleView } from '../../api/index.js';
 import { useDeck } from '../../deck/deck.js';
 import { valueOf } from '../../grid/dom.js';
+import type { DiffLine } from '../line-diff.js';
 import {
   CONFIRM_LABELS,
   MACHINE_ONLY,
   REVIEW_TITLES,
   type ReviewKind,
 } from './constants.js';
-import type { DiffLine } from './line-diff.js';
 import type { ValueSource } from './rule-layers.js';
 import { useRuleDrafts } from './use-rule-drafts.js';
 import { useRuleReview } from './use-rule-review.js';

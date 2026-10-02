@@ -1,5 +1,5 @@
 import type { RuleName } from '@quarterdeck/rules/schemas';
-import type { DiffOp } from './line-diff.js';
+import type { DiffKind } from '../line-diff.js';
 
 export type ReviewKind = 'write' | 'reset';
 
@@ -19,10 +19,10 @@ export const TIGHTEN_ONLY_NOTICE =
 export const REPO_NOT_MERGED_NOTICE =
   'It is not merged: it is decided on its own and the stricter answer wins.';
 
-export const DIFF_MARKS: Record<DiffOp, string> = {
+export const DIFF_MARKS: Record<DiffKind, string> = {
   same: ' ',
-  add: '+',
-  remove: '-',
+  added: '+',
+  removed: '-',
 };
 
 export const SAVED_VERBS: Record<ReviewKind, string> = {
