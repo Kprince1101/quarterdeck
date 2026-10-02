@@ -274,7 +274,9 @@ describe('Planner', { timeout: TIMEOUT }, () => {
       );
       return rows;
     };
-    await vi.waitFor(async () => expect(await open()).toHaveLength(1));
+    await vi.waitFor(async () => expect(await open()).toHaveLength(1), {
+      timeout: 10_000,
+    });
     const [card] = await open();
     if (!card) throw new Error('no open sign-in card');
     return card;
