@@ -39,6 +39,7 @@ describe('the dashboard on the demo server', () => {
 
     expect(textOf(container, '.qd-mode')).toBe('Demo');
     expect(textOf(container, '[role="status"]')).toBe('Live');
+    expect(textOf(container, '[aria-label="Board"]')).toContain('Harbor');
     expect(textOf(container, '[aria-label="Project"]')).toContain(
       DEMO_ROUND_PLANS[1]?.goal,
     );

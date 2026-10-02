@@ -87,6 +87,7 @@ export const createDemoServer = (
   };
 
   const isPaused = (): boolean =>
+    store.machine().pausedAt !== null ||
     store.rows('projects').some((project) => project.pausedAt !== null);
 
   const step = (): void => {

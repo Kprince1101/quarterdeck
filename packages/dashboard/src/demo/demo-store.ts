@@ -1,4 +1,5 @@
 import type {
+  MachineState,
   SnapshotMessage,
   SnapshotTables,
   StreamEvent,
@@ -42,6 +43,8 @@ export interface DemoStore {
   ) => void;
   emit: (kind: string, fields?: DemoEventFields) => StreamEvent;
   events: () => readonly StreamEvent[];
+  machine: () => MachineState;
+  setMachine: (machine: MachineState) => void;
   connect: (after: number | null, listener: DemoListener) => () => void;
 }
 
@@ -64,6 +67,7 @@ export const createDemoStore = ({
   const log: StreamEvent[] = [];
   const listeners = new Set<DemoListener>();
   let ids = 0;
+  let machine: MachineState = { pausedAt: null };
 
   const broadcast = (message: StreamMessage): void => {
     listeners.forEach((listener) => listener(message));
@@ -138,12 +142,18 @@ export const createDemoStore = ({
       return event;
     },
     events: () => log,
+    machine: () => machine,
+    setMachine: (next) => {
+      machine = next;
+      broadcast({ type: 'machine', machine });
+    },
     connect: (after, listener) => {
       const cursor = after ?? Math.max(0, log.length - DEMO_STREAM_TAIL);
       const snapshot: SnapshotMessage = {
         type: 'snapshot',
         cursor,
         tables: structuredClone(tables),
+        machine,
       };
       listener(snapshot);
       log

@@ -12,6 +12,7 @@ import type {
   RoundRow,
 } from '@quarterdeck/server/stream-schema';
 import { DemoRefusal } from './demo-fetch.js';
+import { DEMO_PROJECT } from './demo-seed.js';
 import type { DemoPlanner } from './demo-planner.js';
 import type { DemoReads } from './demo-reads.js';
 import type { DemoRules } from './demo-rules.js';
@@ -89,12 +90,32 @@ export const createDemoIntents = (
   };
   const agentOf = (agentId: string) =>
     found(store.find('agents', agentId), `agent ${agentId}`);
+  const pausedAt = (paused: boolean) => (paused && store.now()) || null;
   const setPaused = (paused: boolean) => {
-    const pausedAt = (paused && store.now()) || null;
-    store.rows('projects').forEach((project) => {
-      store.patch('projects', project.id, { pausedAt, updatedAt: store.now() });
+    const at = pausedAt(paused);
+    store.patch('projects', store.projectId, {
+      pausedAt: at,
+      updatedAt: store.now(),
     });
-    return { paused, pausedAt };
+    return { paused, pausedAt: at };
+  };
+  const setPausedEverywhere = (paused: boolean) => {
+    store.setMachine({ pausedAt: pausedAt(paused) });
+    return { paused, projects: [DEMO_PROJECT], failed: [] };
+  };
+  const pauseAgent = (agentId: string) => {
+    const agent = agentOf(agentId);
+    if (world.isGone(agent)) {
+      refuse(CONFLICT, `agent ${agentId} is already ${agent.status}`);
+    }
+    return world.setAgent(agent, 'paused');
+  };
+  const resumeAgent = (agentId: string) => {
+    const agent = agentOf(agentId);
+    if (agent.status !== 'paused') {
+      refuse(CONFLICT, `agent ${agentId} is not paused, it is ${agent.status}`);
+    }
+    return world.setAgent(agent, 'idle');
   };
   const acceptProposal = (
     proposal: NotebookProposalRow,
@@ -155,14 +176,15 @@ export const createDemoIntents = (
       return reply('applied', { roundId: input.roundId, ended: true });
     },
     'pause.set': (input, reply) => reply('applied', setPaused(input.paused)),
-    'pause.all': (input, reply) => reply('applied', setPaused(input.paused)),
+    'pause.all': (input, reply) =>
+      reply('applied', setPausedEverywhere(input.paused)),
     'agent.pause': (input, reply) => {
-      world.setAgent(agentOf(input.agentId), 'paused');
-      return reply('applied', { agentId: input.agentId });
+      const agent = pauseAgent(input.agentId);
+      return reply('applied', { agentId: agent.id, status: agent.status });
     },
     'agent.resume': (input, reply) => {
-      world.setAgent(agentOf(input.agentId), 'idle');
-      return reply('applied', { agentId: input.agentId });
+      const agent = resumeAgent(input.agentId);
+      return reply('applied', { agentId: agent.id, status: agent.status });
     },
     'agent.end': (input, reply) => {
       world.setAgent(agentOf(input.agentId), 'ended');

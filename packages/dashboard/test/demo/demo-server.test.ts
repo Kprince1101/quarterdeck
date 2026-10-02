@@ -1,4 +1,4 @@
-import { presetLayout } from '@quarterdeck/server/layouts';
+import { parseGridLayout, presetLayout } from '@quarterdeck/server/layouts';
 import {
   streamMessageSchema,
   type StreamMessage,
@@ -14,7 +14,7 @@ import {
   type DemoServer,
 } from '../../src/demo/demo-server.js';
 import { CARD_PATIENCE_BEATS } from '../../src/demo/demo-script.js';
-import { DEMO_PROJECT } from '../../src/demo/demo-seed.js';
+import { DEMO_LAYOUT, DEMO_PROJECT } from '../../src/demo/demo-seed.js';
 import {
   PLANNER_HEAR_MS,
   PLANNER_REPLY_MS,
@@ -188,6 +188,51 @@ describe('demo server', () => {
     await intents.pause.set({ project, paused: false });
     server.step();
     expect(store.events().length).toBeGreaterThan(before + 1);
+  });
+
+  it('pauses everywhere through the machine state the Board reads', async () => {
+    const server = createDemoServer();
+    const { intents, store } = parts(server);
+    const messages: StreamMessage[] = [];
+    store.connect(null, (message) => messages.push(message));
+    const reply = await intents.pause.all({ paused: true });
+    expect(reply.result).toEqual({
+      paused: true,
+      projects: [project],
+      failed: [],
+    });
+    expect(messages.at(-2)).toMatchObject({
+      type: 'machine',
+      machine: { pausedAt: expect.any(String) },
+    });
+    const before = store.events().length;
+    server.step();
+    expect(store.events()).toHaveLength(before);
+
+    await intents.pause.all({ paused: false });
+    expect(store.machine()).toEqual({ pausedAt: null });
+    server.step();
+    expect(store.events().length).toBeGreaterThan(before + 1);
+  });
+
+  it('pauses and resumes one agent, refusing what cannot change', async () => {
+    const server = createDemoServer();
+    const { intents, store } = parts(server);
+    const builder = store
+      .rows('agents')
+      .find((agent) => agent.role === 'builder' && !server.world.isGone(agent));
+    const agentId = builder?.id ?? '';
+    await expect(
+      intents.agent.resume({ project, agentId }),
+    ).rejects.toMatchObject({ status: 409 });
+    await intents.agent.pause({ project, agentId });
+    expect(store.find('agents', agentId)?.status).toBe('paused');
+    await intents.agent.resume({ project, agentId });
+    expect(store.find('agents', agentId)?.status).toBe('idle');
+  });
+
+  it('opens on a layout the grid accepts', () => {
+    expect(parseGridLayout(DEMO_LAYOUT)).toEqual(DEMO_LAYOUT);
   });
 
   it('ends a round on request and starts one with the asked goal', async () => {
