@@ -75,6 +75,35 @@ A prompt that throws still gets `output.md` and `updates.jsonl` with what arrive
 
 While a prompt runs the agent is `working`; afterwards it is `idle` again. Only an `idle` or `working` agent is moved, so a pause or kill set meanwhile stands.
 
+## Replay
+
+```ts
+import { projectTurnsDir, replayDriverChain } from '@quarterdeck/server';
+
+const replay = await replayDriverChain({
+  client, // an AcpClient for the runtime to replay against
+  cwd: repoPath,
+  turnsDir: projectTurnsDir('commander'),
+  agentId: driver.id,
+  through: 7,
+  onTurn: (turn) => console.log(turn.seq, turn.result),
+});
+```
+
+`replayDriverChain` sends a Driver's saved prompts 1..n again, in order, in one new ACP session: each turn's `input.md`, birth and re-prompts included, exactly as it was sent. It reads every input first (`readTurnChain`), so a missing `input.md` rejects with `TurnInputMissingError` (its `seq` and `path`) before any session opens.
+
+Replay writes nothing: no `turns` row, no event, no agent change and no turn file. The session gets no MCP servers, so the bus tools (`ask`, `report`, `status`, `verdict`, `read`) are not there to write through either; what the agent's own tools may do is up to the client's permission handler.
+
+Each `ReplayTurn` holds the `seq`, the `input` sent, the `savedOutput` from `output.md` (null if there is none), the replayed `output`, its `stopReason` and `result`, the reply parsed as a Driver turn result (`ParsedTurnResult`). Every prompt is sent whatever the one before it returned; a prompt that throws rejects the replay.
+
+`replayCommand({ project, agentId, through })` is the command the dashboard shows beside a Driver turn to replay the chain up to it:
+
+```sh
+npx quarterdeck replay commander 7d0f3a4e-2b1c-4c5d-9e8f-0a1b2c3d4e5f 7
+```
+
+It refuses a project that is not a slug, an agent id that is not a uuid and an `n` that is not a positive integer, so the line is always safe to paste. `agentId` is checked the same way by `readTurnChain`, since it names a folder under `turnsDir`.
+
 ## Events
 
 | `kind`                 | Payload                                   |

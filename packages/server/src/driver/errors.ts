@@ -18,6 +18,20 @@ export class RoundEndedError extends Error {
   }
 }
 
+export class TurnInputMissingError extends Error {
+  readonly agentId: string;
+  readonly seq: number;
+  readonly path: string;
+
+  constructor(agentId: string, seq: number, path: string) {
+    super(`Agent ${agentId} has no saved input for turn ${seq} (${path})`);
+    this.name = 'TurnInputMissingError';
+    this.agentId = agentId;
+    this.seq = seq;
+    this.path = path;
+  }
+}
+
 export class NotADriverError extends Error {
   readonly agentId: string;
 

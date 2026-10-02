@@ -102,7 +102,10 @@ const endTurn = (
     );
   });
 
-const collectUpdates = (client: TurnClient, sessionId: string) => {
+export const collectUpdates = (
+  client: Pick<AcpClient, 'subscribe'>,
+  sessionId: string,
+) => {
   const updates: SessionUpdate[] = [];
   const stop = client.subscribe((event) => {
     if (event.type === 'session_update' && event.sessionId === sessionId) {

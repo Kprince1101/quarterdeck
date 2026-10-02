@@ -9,6 +9,7 @@ export {
   NotADriverError,
   RoundEndedError,
   RoundNotFoundError,
+  TurnInputMissingError,
 } from './errors.js';
 export { TURN_FILES, turnDir, turnFile, type TurnFile } from './files.js';
 export {
@@ -23,6 +24,19 @@ export {
   type ParsedTurnResult,
   type TurnFormat,
 } from './result.js';
+export {
+  REPLAY_COMMAND,
+  readTurnChain,
+  replayCommand,
+  replayDriverChain,
+  type Replay,
+  type ReplayChain,
+  type ReplayClient,
+  type ReplayCommandParts,
+  type ReplayOptions,
+  type ReplayTurn,
+  type SavedTurn,
+} from './replay.js';
 export {
   ROUND_STARTED_EVENT,
   openDriverRound,
