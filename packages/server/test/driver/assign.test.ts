@@ -448,7 +448,7 @@ describe('builder assignment and continue', () => {
       const { builder } = await assignAndSettle(held);
       const { rows } = await store.db.query<{ id: string }>(
         `insert into agents (project_id, name, role, status)
-         values ($1, 'thimble', 'reviewer', 'idle') returning id`,
+         values ($1, 'reviewer-1', 'reviewer', 'idle') returning id`,
         [store.projectId],
       );
       const reviewer = rows[0]?.id ?? '';

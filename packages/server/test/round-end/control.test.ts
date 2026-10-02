@@ -183,7 +183,7 @@ describe('End and Kill from the dashboard', { timeout: TIMEOUT }, () => {
     const { roundId, driverId, driver } = await openRound(1);
     const builder = await insertAgent(store, { name: 'pike', roundId });
     const reviewer = await insertAgent(store, {
-      name: 'thimble',
+      name: 'reviewer-1',
       role: 'reviewer',
     });
     const ask = await insertCard(store, { agentId: builder });

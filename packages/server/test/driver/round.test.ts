@@ -201,7 +201,7 @@ describe('Driver turn loop', () => {
     'opens one session with the bus and births the Driver with the active notebook',
     async () => {
       const older = await addNote(
-        'Reviews go to thimble.',
+        'Reviews go to reviewer-1.',
         false,
         '2026-01-01',
       );
@@ -235,9 +235,9 @@ describe('Driver turn loop', () => {
       expect(input).toContain('Ship the turn loop.');
       expect(input).toContain('### Entry 1 (pinned)\n\nPRs need tests.');
       expect(input.indexOf('PRs need tests.')).toBeLessThan(
-        input.indexOf('Reviews go to thimble.'),
+        input.indexOf('Reviews go to reviewer-1.'),
       );
-      expect(input.indexOf('Reviews go to thimble.')).toBeLessThan(
+      expect(input.indexOf('Reviews go to reviewer-1.')).toBeLessThan(
         input.indexOf('Never touch main.'),
       );
       expect(input).toContain('```json');
@@ -324,7 +324,7 @@ describe('Driver turn loop', () => {
       const round = await open();
       await round.birth;
       const second = await round.turn('heron reported QD1.');
-      const third = await round.turn('thimble approved QD1.');
+      const third = await round.turn('reviewer-1 approved QD1.');
 
       expect(second.status === 'result' && second.result.summary).toBe(
         'Assigned QD1.',
@@ -340,7 +340,7 @@ describe('Driver turn loop', () => {
       ]);
       expect(scripted.prompts.slice(1).map((prompt) => prompt.text)).toEqual([
         'heron reported QD1.',
-        'thimble approved QD1.',
+        'reviewer-1 approved QD1.',
       ]);
       expect((await turnRows(round.agent.id)).map((row) => row.seq)).toEqual([
         1, 2, 3,
@@ -531,7 +531,7 @@ describe('Driver turn loop', () => {
 
       expect(await stall(builderId, ticketId, 'b'.repeat(40))).toBe(true);
       expect((await round.turn('crane is idle.')).status).toBe('stopped');
-      await expect(round.turn('thimble approved QD1.')).rejects.toThrow(
+      await expect(round.turn('reviewer-1 approved QD1.')).rejects.toThrow(
         'agent crashed',
       );
       await round.turn('try again');
@@ -809,7 +809,7 @@ describe('Driver turn loop', () => {
     ]);
 
     const first = round.turn('heron reported QD1.\nThe PR is open.');
-    const second = round.turn('thimble approved QD1.');
+    const second = round.turn('reviewer-1 approved QD1.');
     await settle(async () => {
       expect(await events('pause.held')).toHaveLength(1);
     });
@@ -833,7 +833,7 @@ describe('Driver turn loop', () => {
 
     expect(scripted.prompts.slice(1).map((prompt) => prompt.text)).toEqual([
       'heron reported QD1.\nThe PR is open.',
-      'thimble approved QD1.',
+      'reviewer-1 approved QD1.',
     ]);
     expect(await events('pause.held')).toHaveLength(1);
   });

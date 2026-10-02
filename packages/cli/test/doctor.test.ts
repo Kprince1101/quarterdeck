@@ -37,7 +37,8 @@ const ghFake = (status: string, statusExit = 0) => `case "$*" in
   *) exit 64 ;;
 esac`;
 
-const GH_SIGNED_IN = '  ✓ Logged in to github.com account legion (keyring)';
+const GH_SIGNED_IN =
+  '  ✓ Logged in to github.com account example-org (keyring)';
 
 const GH_TOKEN_ONLY = `case "$*" in
   --version) echo "gh version 2.81.0 (2025-09-01)" ;;
@@ -166,11 +167,11 @@ describe.skipIf(IS_WINDOWS)('quarterdeck doctor', () => {
     it('asks the pinned claude-agent-acp, offline and from the public registry', async () => {
       await fake(
         'npx',
-        claudeNpx(log, '{"loggedIn":true,"email":"legion@example.com"}'),
+        claudeNpx(log, '{"loggedIn":true,"email":"user@example.com"}'),
       );
       expect(check(await doctor(), 'claude')).toEqual({
         name: 'claude',
-        state: '2.1.30, signed in (legion@example.com)',
+        state: '2.1.30, signed in (user@example.com)',
         fixes: [],
       });
       const calls = (await readFile(log, 'utf8')).trim().split('\n').toSorted();
@@ -259,7 +260,7 @@ describe.skipIf(IS_WINDOWS)('quarterdeck doctor', () => {
       await fake('gh', ghFake(GH_SIGNED_IN));
       expect(check(await doctor(), 'gh')).toEqual({
         name: 'gh',
-        state: '2.81.0, signed in (legion on github.com)',
+        state: '2.81.0, signed in (example-org on github.com)',
         fixes: [],
       });
     });
@@ -319,7 +320,7 @@ describe.skipIf(IS_WINDOWS)('quarterdeck doctor', () => {
       '  Sign in: kiro-cli login',
       'claude: 2.1.30, signed in (claude.ai)',
       'gemini: 0.9.0, signed in (GEMINI_API_KEY)',
-      'gh: 2.81.0, signed in (legion on github.com)',
+      'gh: 2.81.0, signed in (example-org on github.com)',
       '',
       '1 of 4 need attention. Run the commands above, then quarterdeck doctor again.',
     ]);

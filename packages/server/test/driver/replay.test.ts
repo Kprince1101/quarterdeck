@@ -82,7 +82,7 @@ const BUS: McpServerStdio = {
 
 const birthInput = (round: number): string =>
   buildBirthInput({
-    agent: { name: 'newt' },
+    agent: { name: 'driver-1' },
     round: { number: round, goal: `Goal ${round}.` },
     charter: '# Driver charter',
     notebook: [],
@@ -209,7 +209,7 @@ describe('Driver replay', () => {
         );
         const { rows: agents } = await store.db.query<{ id: string }>(
           `insert into agents (project_id, name, role, status)
-           values ($1, 'newt', 'driver', 'idle') returning id`,
+           values ($1, 'driver-1', 'driver', 'idle') returning id`,
           [store.projectId],
         );
         const agentId = agents[0]?.id ?? '';
@@ -553,7 +553,7 @@ describe('isBirthInput', () => {
 
 describe('readBirth', () => {
   it("reads the Driver's name and round from a birth input", () => {
-    expect(readBirth(birthInput(12))).toEqual({ name: 'newt', round: 12 });
+    expect(readBirth(birthInput(12))).toEqual({ name: 'driver-1', round: 12 });
     expect(readBirth('heron reported QD12.')).toBeUndefined();
   });
 });
@@ -601,7 +601,7 @@ describe('findRoundSessions', () => {
     expect(sessions).toEqual([
       {
         agentId: AGENT_ID,
-        driverName: 'newt',
+        driverName: 'driver-1',
         round: 2,
         firstSeq: 3,
         lastSeq: 5,
@@ -609,7 +609,7 @@ describe('findRoundSessions', () => {
       },
       {
         agentId: OTHER_ID,
-        driverName: 'newt',
+        driverName: 'driver-1',
         round: 2,
         firstSeq: 1,
         lastSeq: 1,
@@ -633,8 +633,8 @@ describe('replayCommand', () => {
     expect(replayCommand({ round: 3, through: 7 })).toBe(
       `${REPLAY_COMMAND} 3 7`,
     );
-    expect(replayCommand({ round: 3, through: 7, project: 'commander' })).toBe(
-      `${REPLAY_COMMAND} 3 7 --project commander`,
+    expect(replayCommand({ round: 3, through: 7, project: 'example' })).toBe(
+      `${REPLAY_COMMAND} 3 7 --project example`,
     );
     expect(REPLAY_COMMAND).toBe('npx quarterdeck replay');
   });

@@ -16,7 +16,7 @@ const round = await openDriverRound({
   roundId,
   cwd: repoPath,
   charter: await loadRule('charter', { repoDir: repoPath }),
-  turnsDir: projectTurnsDir('commander'),
+  turnsDir: projectTurnsDir('example'),
   budget: (await loadRule('lifecycle', { repoDir: repoPath })).budget.window,
   pause, // the project's PauseGate
 });
@@ -96,10 +96,10 @@ const replay = await replayDriverChain({
   runtime: 'kiro',
   connect: ({ cwd, onPermissionRequest }) =>
     KIRO_ADAPTER.connect(
-      { cwd, project: 'commander', agentName: `replay-${through}` },
+      { cwd, project: 'example', agentName: `replay-${through}` },
       { clientName: 'quarterdeck', clientVersion, onPermissionRequest },
     ),
-  turnsDir: projectTurnsDir('commander'),
+  turnsDir: projectTurnsDir('example'),
   agentId: driver.id,
   through,
   onTurn: (turn) => console.log(turn.seq, turn.result),
@@ -132,7 +132,7 @@ Each `ReplayTurn` holds the `seq`, the `input` sent, the `savedOutput` from `out
 
 ```sh
 npx quarterdeck replay 3 7
-npx quarterdeck replay 3 7 --project commander
+npx quarterdeck replay 3 7 --project example
 ```
 
 Round numbers start at 1 in every project, so pass `project` when the machine may have more than one; without it the CLI picks the only project that has the round. `through` counts Driver turns within the round, not `seq`: the turn with `seq` s in a session born at `seq` b is turn s - b + 1.
@@ -187,8 +187,8 @@ const ctx: BuilderContext = {
   runtime: 'kiro',
   repoPath,
   base: 'origin/main',
-  worktreesDir: projectWorktreesDir('commander'),
-  turnsDir: projectTurnsDir('commander'),
+  worktreesDir: projectWorktreesDir('example'),
+  turnsDir: projectTurnsDir('example'),
   budget, // (await loadRule('lifecycle', { repoDir: repoPath })).budget.window
   pause, // the project's PauseGate
 };

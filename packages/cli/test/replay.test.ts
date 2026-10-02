@@ -32,7 +32,7 @@ const OLD_DRIVER = '0b1c2d3e-4f50-4617-8899-aabbccddeeff';
 const BUILDER = '11111111-2222-4333-8444-555555555555';
 const RESULT = '```json\n{ "summary": "Nothing to do.", "actions": [] }\n```';
 
-const birthInput = (round: number, name = 'newt'): string =>
+const birthInput = (round: number, name = 'driver-1'): string =>
   buildBirthInput({
     agent: { name },
     round: { number: round, goal: `Goal ${round}.` },
@@ -199,7 +199,7 @@ describe('quarterdeck replay', () => {
     expect(connection?.launch.cwd).not.toContain(box.home);
     expect(await snapshot(home)).toEqual(before);
     expect(io.lines).toEqual([
-      `Replaying round 2 of deck: Driver newt (${DRIVER}), turns 1 to 3 of 3, on claude.`,
+      `Replaying round 2 of deck: Driver driver-1 (${DRIVER}), turns 1 to 3 of 3, on claude.`,
       'Nothing is saved. The agent has no Quarterdeck tools and every permission is refused.',
       '',
       '--- Turn 1 of 3 ---',
@@ -257,7 +257,7 @@ describe('quarterdeck replay', () => {
       await replayRound(['1', '--runtime', 'kiro'], io, { adapters }),
     ).toBe(0);
     expect(io.lines.slice(0, 2)).toEqual([
-      `Replaying round 1 of deck: Driver newt (${DRIVER}), turns 1 to 1 of 1, on kiro.`,
+      `Replaying round 1 of deck: Driver driver-1 (${DRIVER}), turns 1 to 1 of 1, on kiro.`,
       'Round 1 had 2 Driver sessions; this is the latest.',
     ]);
   });
