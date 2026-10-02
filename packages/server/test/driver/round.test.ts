@@ -11,6 +11,7 @@ import {
   describe,
   expect,
   it,
+  vi,
 } from 'vitest';
 import {
   NotADriverError,
@@ -24,6 +25,7 @@ import {
   type DriverRound,
   type DriverRoundOptions,
 } from '../../src/driver/index.js';
+import { startPauseGate, type PauseGate } from '../../src/pause/index.js';
 import {
   SIGNED_IN,
   SIGN_IN_CARD,
@@ -68,6 +70,7 @@ describe('Driver turn loop', () => {
   let scripted: ScriptedAgent;
   let turnsDir: string;
   let launched: string[];
+  let pauseGate: PauseGate;
 
   beforeAll(async () => {
     store = await openStore({ project: 'deck', dataDir: IN_MEMORY });
@@ -81,14 +84,17 @@ describe('Driver turn loop', () => {
     scripted = await startScriptedAgent();
     turnsDir = await mkdtemp(join(tmpdir(), 'qd-turns-'));
     launched = [];
+    pauseGate = await startPauseGate({ store, home: join(turnsDir, 'home') });
   });
 
   afterEach(async () => {
+    await pauseGate.close();
     await scripted.client.close();
     await rm(turnsDir, { recursive: true, force: true });
     await store.db.exec(
       `delete from events; delete from turns; delete from notebook;
-       delete from cards; delete from agents; delete from rounds;`,
+       delete from cards; delete from agents; delete from rounds;
+       update projects set paused_at = null;`,
     );
   });
 
@@ -140,6 +146,7 @@ describe('Driver turn loop', () => {
     cwd: '/work/deck',
     charter: CHARTER,
     turnsDir,
+    pause: pauseGate,
   });
 
   const open = async (): Promise<DriverRound> => {
@@ -646,5 +653,88 @@ describe('Driver turn loop', () => {
     ).rejects.toBeInstanceOf(NotADriverError);
     expect(scripted.sessions).toEqual([]);
     expect(launched).toEqual([]);
+  });
+
+  it('holds the round launch while the project is paused and opens it on unpause', async () => {
+    const setPaused = async (paused: boolean) => {
+      await store.db.query(
+        `update projects set paused_at = case when $2::boolean then now() end
+         where id = $1`,
+        [store.projectId, paused],
+      );
+      await store.publish({ kind: 'pause.set' });
+    };
+    await setPaused(true);
+    scripted.reply(say(resultText(RESULT)));
+
+    const opening = open();
+    await vi.waitFor(async () => {
+      expect(await events('pause.held')).toHaveLength(1);
+    });
+
+    expect(await events('pause.held')).toEqual([
+      {
+        operation: 'launch',
+        label: 'driver-idle, round 1',
+        scopes: ['project'],
+      },
+    ]);
+    expect(launched).toEqual([]);
+    expect(scripted.sessions).toEqual([]);
+
+    await setPaused(false);
+    const round = await opening;
+
+    expect((await round.birth).status).toBe('result');
+    expect(launched).toEqual([round.agent.id]);
+    expect(await events('pause.replayed')).toEqual([
+      {
+        operation: 'launch',
+        label: 'driver-idle, round 1',
+        heldEventId: expect.any(Number),
+      },
+    ]);
+  });
+
+  it('holds a turn while the Driver is paused and runs it, in order, on resume', async () => {
+    scripted.reply(
+      say(resultText(RESULT)),
+      say(resultText(RESULT)),
+      say(resultText(RESULT)),
+    );
+    const round = await open();
+    await round.birth;
+    await store.db.query(`update agents set status = 'paused' where id = $1`, [
+      round.agent.id,
+    ]);
+
+    const first = round.turn('heron reported QD1.\nThe PR is open.');
+    const second = round.turn('thimble approved QD1.');
+    await vi.waitFor(async () => {
+      expect(await events('pause.held')).toHaveLength(1);
+    });
+
+    expect(await events('pause.held')).toEqual([
+      {
+        operation: 'driver.turn',
+        label: 'turn: heron reported QD1.',
+        scopes: ['agent'],
+      },
+    ]);
+    expect(scripted.prompts).toHaveLength(1);
+    expect((await agentRow(round.agent.id))?.status).toBe('paused');
+
+    await store.db.query(`update agents set status = 'idle' where id = $1`, [
+      round.agent.id,
+    ]);
+    await store.publish({ kind: 'agent.resume', agentId: round.agent.id });
+    await first;
+    await second;
+
+    expect(scripted.prompts.slice(1).map((prompt) => prompt.text)).toEqual([
+      'heron reported QD1.\nThe PR is open.',
+      'thimble approved QD1.',
+    ]);
+    expect(await events('pause.held')).toHaveLength(1);
   });
 });

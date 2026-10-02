@@ -7,6 +7,7 @@ import {
   type SessionHost,
   type WorktreeHost,
 } from '../agents/index.js';
+import type { PauseGuard } from '../pause/index.js';
 import type { Store } from '../store/index.js';
 import { BuilderNotAvailableError, BuilderSessionLostError } from './errors.js';
 import { heldTickets } from './tickets.js';
@@ -31,6 +32,7 @@ export interface BuilderContext {
   base: string;
   worktreesDir: string;
   turnsDir: string;
+  pause: PauseGuard;
   roundId?: string;
 }
 
