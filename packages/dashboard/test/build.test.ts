@@ -45,8 +45,10 @@ describe('dashboard build', () => {
       expect(FakeSocket.opened).toHaveLength(1);
     });
     expect(body.querySelector('[data-widget-mount]')).not.toBeNull();
-    expect(FakeSocket.opened.map(({ url }) => new URL(url).pathname)).toEqual([
-      '/ws',
-    ]);
+    await vi.waitFor(() => {
+      expect(FakeSocket.opened.map(({ url }) => new URL(url).pathname)).toEqual(
+        ['/ws'],
+      );
+    });
   });
 });
