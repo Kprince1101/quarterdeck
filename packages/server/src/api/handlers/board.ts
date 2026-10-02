@@ -15,6 +15,7 @@ import {
 } from '../record.js';
 import { requireRepoPath } from '../repo-path.js';
 import { stageRuleWrite } from '../rule-files.js';
+import { decideNotebook } from './notebook-proposals.js';
 import { TICKET_HANDLERS } from './tickets.js';
 
 type CardIntentName = 'card.answer' | 'card.decline';
@@ -144,6 +145,7 @@ export const BOARD_HANDLERS: IntentHandlers<BoardIntentName> = {
       );
       return { entryId: input.entryId };
     }),
+  'notebook.decide': decideNotebook,
   'charter.decide': decideCharter,
   ...TICKET_HANDLERS,
 };

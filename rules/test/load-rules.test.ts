@@ -187,6 +187,53 @@ describe('rules loader', () => {
     );
   });
 
+  it('ships the auto-end settle time with the other lifecycle defaults', async () => {
+    const lifecycle = await loadRule('lifecycle', sandbox);
+
+    expect(lifecycle.autoEndSettleSeconds).toBe(120);
+  });
+
+  it('lets the repo layer lengthen the auto-end settle time but never shorten it', async () => {
+    await writeLocalJson(sandbox.repoDir, 'lifecycle.json', {
+      autoEndSettleSeconds: 5,
+    });
+
+    expect((await loadRule('lifecycle', sandbox)).autoEndSettleSeconds).toBe(
+      120,
+    );
+
+    await writeLocalJson(sandbox.repoDir, 'lifecycle.json', {
+      autoEndSettleSeconds: 600,
+    });
+
+    expect((await loadRule('lifecycle', sandbox)).autoEndSettleSeconds).toBe(
+      600,
+    );
+  });
+
+  it('lets the home layer shorten the settle time the repo layer cannot', async () => {
+    await writeLocalJson(sandbox.homeDir, 'lifecycle.json', {
+      autoEndSettleSeconds: 10,
+    });
+    await writeLocalJson(sandbox.repoDir, 'lifecycle.json', {
+      autoEndSettleSeconds: 30,
+    });
+
+    expect((await loadRule('lifecycle', sandbox)).autoEndSettleSeconds).toBe(
+      30,
+    );
+  });
+
+  it('refuses a repo settle time that is not a positive whole number', async () => {
+    const path = await writeLocalJson(sandbox.repoDir, 'lifecycle.json', {
+      autoEndSettleSeconds: 0,
+    });
+
+    await expect(loadRule('lifecycle', sandbox)).rejects.toThrow(
+      `${path}: the repo layer may only tighten the auto-end settle time`,
+    );
+  });
+
   it('rejects a merge gate setting that is not a boolean', async () => {
     const path = await writeLocalJson(sandbox.homeDir, 'lifecycle.json', {
       mergeGate: { autoMerge: 'yes' },
