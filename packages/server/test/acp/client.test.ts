@@ -7,14 +7,14 @@ import {
   DEFAULT_INITIALIZE_TIMEOUT_MS,
   DEFAULT_KILL_GRACE_MS,
   spawnAcpClient,
-} from '../../acp/client/index.js';
+} from '@quarterdeck/server';
 import type {
   AcpClient,
   AcpClientEvent,
   AcpClientOptions,
   AgentCommand,
   PermissionHandler,
-} from '../../acp/client/index.js';
+} from '@quarterdeck/server';
 
 type Capabilities = 'resume' | 'load' | 'none';
 type Behavior = 'serve' | 'silent' | 'linger' | 'ignore-sigterm';
