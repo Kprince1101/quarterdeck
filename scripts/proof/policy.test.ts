@@ -106,6 +106,9 @@ describe('permissionAnswer', () => {
       'git push --force-with-lease origin feature',
       'git -C /tmp/qdp-1/wt push origin main',
       'cd /tmp/qdp-1/wt && git push origin feature && git push origin main',
+      'echo git & git push origin main',
+      'echo git git push origin main',
+      'git status; git push origin main',
     ])
       expect(asked(command)).toBe('deny');
   });

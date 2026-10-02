@@ -25,7 +25,7 @@ const REFUSED_PUSH_OPTIONS =
   /^--(?:force|mirror|all|delete|tags|follow-tags|receive-pack|exec|prune)/;
 const REFUSED_PUSH_FLAGS = /^-[a-zA-Z]*[fd]/;
 const GIT_OPTIONS_WITH_VALUE = new Set(['-C', '-c']);
-const COMMAND_SEPARATOR = /&&|\|\||[;|\n]|:\s/;
+const COMMAND_SEPARATOR = /&&|\|\||[;&|\n]|:\s/;
 const QUOTES = /^['"]+|['"]+$/g;
 const TRAILING_PUNCTUATION = /[.,:]+$/;
 
@@ -63,13 +63,14 @@ const gitSubcommandAt = (words: readonly string[], start: number): number => {
   return index;
 };
 
-export const pushArguments = (segment: string): string[] | undefined => {
+export const pushArguments = (segment: string): string[][] => {
   const words = shellWords(segment);
-  const git = words.indexOf('git');
-  if (git === -1) return undefined;
-  const subcommand = gitSubcommandAt(words, git + 1);
-  if (words[subcommand] !== 'push') return undefined;
-  return words.slice(subcommand + 1);
+  return words.flatMap((word, git) => {
+    if (word !== 'git') return [];
+    const subcommand = gitSubcommandAt(words, git + 1);
+    if (words[subcommand] !== 'push') return [];
+    return [words.slice(subcommand + 1)];
+  });
 };
 
 const destinationOf = (refspec: string): string =>
@@ -95,10 +96,7 @@ export const isRefusedPush = (args: readonly string[]): boolean => {
 };
 
 const refusesPush = (question: string): boolean =>
-  question
-    .split(COMMAND_SEPARATOR)
-    .map(pushArguments)
-    .some((args) => args !== undefined && isRefusedPush(args));
+  question.split(COMMAND_SEPARATOR).flatMap(pushArguments).some(isRefusedPush);
 
 const RECOMMENDED_CWD = /should do this in (\/.*)\.$/;
 
