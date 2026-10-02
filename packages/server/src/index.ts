@@ -8,5 +8,6 @@ export * from './driver/index.js';
 export * from './gate/index.js';
 export * from './planner/index.js';
 export * from './store/index.js';
+export * from './tickets/index.js';
 export * from './api/index.js';
 export * from './stream/index.js';

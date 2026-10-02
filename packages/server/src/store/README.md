@@ -22,6 +22,8 @@ External Postgres must be 15 or newer (`0001_init` uses `unique nulls not distin
 
 `~/.quarterdeck/sock/<hash>.sock` (or `$TMPDIR/quarterdeck-<uid>/<hash>.sock` when the home path is too long) is a project's bus MCP socket; see [bus](../bus/README.md#socket-path). It holds no data, exists only while the server is up, and is removed on shutdown. This is the same on both backends.
 
+`~/.quarterdeck/plugins/<name>.mjs` is a ticket-source plugin you put there yourself; see [tickets](../tickets/README.md#plugins). It holds code, not data, and Quarterdeck only reads it. This is the same on both backends.
+
 With `DATABASE_URL`, every project shares that database: one set of tables, rows scoped by `project_id`. Nothing is written under `~/.quarterdeck/` for the store; turn files still are, and a wipe removes `~/.quarterdeck/<project>/` after the rows. The project list comes from the `projects` table (`listProjectSlugs`, `projectRowExists`), read through one `createPostgresPool` that the API keeps for its lifetime. Wiping a project (`wipePostgresProject`) takes its advisory lock, so it fails with `ProjectOpenError` while another process has the project open. It then deletes the project's rows from every `STORE_TABLES` table that has a `project_id` (`deleteProjectRows`), and finally the `projects` row, which also cascades `turns`, all in one transaction.
 
 ## One opener per project
