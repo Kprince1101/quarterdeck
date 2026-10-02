@@ -20,6 +20,13 @@ export const recordEvent = async (
   );
 };
 
+export const intentPayload = (
+  intentId: string | undefined,
+): Record<string, string> => {
+  if (intentId === undefined) return {};
+  return { intentId };
+};
+
 export const findAgent = async (
   store: Store,
   agentId: string,

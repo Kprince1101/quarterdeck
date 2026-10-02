@@ -2,6 +2,7 @@ import { once } from 'node:events';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { homedir } from 'node:os';
+import { closeAllAcpClients } from '../acp/client/index.js';
 import { quarterdeckHome } from '../store/index.js';
 import type { ApiContext } from './context.js';
 import { createProjectStores, type ProjectStores } from './project-stores.js';
@@ -17,6 +18,8 @@ export interface ApiServerOptions {
   allowedOrigins?: string[];
   databaseUrl?: string | undefined;
   dashboardDir?: string | undefined;
+  openProjects?: boolean;
+  onError?: (err: unknown) => void;
 }
 
 export interface ApiServer {
@@ -33,6 +36,7 @@ export const startApiServer = async (
   const stores = createProjectStores(
     quarterdeckHome(homeDir),
     options.databaseUrl,
+    options.onError,
   );
   const ctx: ApiContext = { stores, homeDir };
   let guard = localGuard(0);
@@ -49,6 +53,7 @@ export const startApiServer = async (
   const { port } = server.address() as AddressInfo;
   guard = localGuard(port, options.allowedOrigins);
   const close = async () => {
+    await closeAllAcpClients();
     server.closeAllConnections();
     await new Promise<void>((resolve, reject) => {
       server.close((err) => {
@@ -58,5 +63,13 @@ export const startApiServer = async (
     });
     await stores.closeAll();
   };
+  if (options.openProjects) {
+    try {
+      await stores.openAll();
+    } catch (err) {
+      await close();
+      throw err;
+    }
+  }
   return { url: `http://${API_HOST}:${port}`, port, stores, close };
 };

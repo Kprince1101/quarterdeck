@@ -36,6 +36,7 @@ const listen = async (port: number, io: CliIo): Promise<ApiServer> => {
       port,
       homeDir: io.homeDir,
       dashboardDir: resolveDashboardDir(),
+      openProjects: true,
     });
   } catch (err) {
     if (!isPortTaken(err)) throw err;

@@ -7,6 +7,16 @@ export {
 } from './agent.js';
 export type { BirthRequest } from './birth.js';
 export {
+  AGENT_KILLED_EVENT,
+  AGENT_RESET_EVENT,
+  AgentFinishedError,
+  FINISHED_AGENT_STATUSES,
+  killAgent,
+  resetAgent,
+  type ControlHosts,
+  type ControlOptions,
+} from './kill-reset.js';
+export {
   DISCARD_APPROVED,
   DISCARD_WORKTREE_CARD,
   DiscardNotApprovedError,
@@ -23,8 +33,18 @@ export {
   pickAgentName,
   withNameLock,
 } from './names.js';
+export {
+  PROCESS_SWEPT_EVENT,
+  agentProcess,
+  forgetAgentProcess,
+  recordAgentProcess,
+  sweepAgentProcess,
+  trackAgentProcess,
+  type SweepOutcome,
+  type SweepReason,
+} from './processes.js';
 export { findAgent } from './rows.js';
-export type { RetireOptions } from './retire.js';
+export type { RetireHosts, RetireOptions } from './retire.js';
 export type { SessionHost } from './sessions.js';
 export {
   WORKPLACE_EVENTS,

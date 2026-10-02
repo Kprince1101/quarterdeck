@@ -13,6 +13,7 @@ export const CREW_INTENTS = {
   'agent.end': agentTarget,
   'agent.kill': agentTarget,
   'agent.retire': agentTarget,
+  'agent.reset': agentTarget,
   'agent.message': inProject({ agentId: idSchema, text: textSchema }),
   'planner.message': inProject({ text: textSchema }),
   'planner.new': inProject({}),

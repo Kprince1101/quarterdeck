@@ -2,6 +2,7 @@ import type { Naming } from '@quarterdeck/rules';
 import type { Store } from '../store/index.js';
 import type { Agent } from './agent.js';
 import { insertAgent, openSession, type BirthRequest } from './birth.js';
+import { killAgent, resetAgent, type ControlOptions } from './kill-reset.js';
 import { liveAgentNames, pickAgentName, withNameLock } from './names.js';
 import { retireAgent, type RetireOptions } from './retire.js';
 import type { SessionHost } from './sessions.js';
@@ -13,6 +14,7 @@ export interface AgentLifecycleOptions {
   worktrees: Pick<WorktreeHost, 'remove'>;
   openStores: () => readonly Store[];
   random?: () => number;
+  killGraceMs?: number;
 }
 
 export interface AgentLifecycle {
@@ -21,6 +23,16 @@ export interface AgentLifecycle {
     store: Store,
     agentId: string,
     options?: RetireOptions,
+  ) => Promise<Agent>;
+  kill: (
+    store: Store,
+    agentId: string,
+    options?: ControlOptions,
+  ) => Promise<Agent>;
+  reset: (
+    store: Store,
+    agentId: string,
+    options?: ControlOptions,
   ) => Promise<Agent>;
 }
 
@@ -49,5 +61,17 @@ export const createAgentLifecycle = (
     retireOptions?: RetireOptions,
   ): Promise<Agent> => retireAgent(store, options, agentId, retireOptions);
 
-  return { birth, retire };
+  const kill = (
+    store: Store,
+    agentId: string,
+    controlOptions?: ControlOptions,
+  ): Promise<Agent> => killAgent(store, options, agentId, controlOptions);
+
+  const reset = (
+    store: Store,
+    agentId: string,
+    controlOptions?: ControlOptions,
+  ): Promise<Agent> => resetAgent(store, options, agentId, controlOptions);
+
+  return { birth, retire, kill, reset };
 };

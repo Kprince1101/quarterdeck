@@ -101,6 +101,28 @@ describe(
       },
     );
 
+    it.each(['idle', 'working', 'killed', 'ended'])(
+      'agent.reset queues for an %s agent so its next launch is fresh',
+      async (status) => {
+        const agentId = await insertAgent(status);
+        const res = await t.send('agent.reset', { project, agentId });
+        expect(res.status).toBe(202);
+        expect(await intentRow(store, res.body.id)).toMatchObject({
+          kind: 'agent.reset',
+          status: 'pending',
+        });
+      },
+    );
+
+    it('refuses agent.reset for a retired agent', async () => {
+      const agentId = await insertAgent('retired');
+      const res = await t.send('agent.reset', { project, agentId });
+      expect(res).toMatchObject({
+        status: 409,
+        body: { error: `agent ${agentId} is already retired` },
+      });
+    });
+
     it.each([
       ['agent.pause', {}],
       ['agent.kill', {}],
