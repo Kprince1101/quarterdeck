@@ -1,5 +1,9 @@
 export { createFakeAgent, FAKE_AUTH_METHODS } from './agent.ts';
-export { parseFakeAgentArgs, toFakeAgentArgs } from './args.ts';
+export {
+  FAKE_AGENT_FLAGS,
+  parseFakeAgentArgs,
+  toFakeAgentArgs,
+} from './args.ts';
 export * from './constants.ts';
 export {
   connectFakeAgentInProcess,

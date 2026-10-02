@@ -1,4 +1,8 @@
-import type { AgentContext, StopReason } from '@agentclientprotocol/sdk';
+import type {
+  AgentContext,
+  McpServer,
+  StopReason,
+} from '@agentclientprotocol/sdk';
 
 export type FakeScenario =
   | 'echo'
@@ -6,11 +10,32 @@ export type FakeScenario =
   | 'permission'
   | 'long_output'
   | 'large_output'
-  | 'wait_for_cancel';
+  | 'wait_for_cancel'
+  | 'describe_session'
+  | 'crash';
 
-export interface FakeAgentOptions {
+export type FakeAgentFlag =
+  | 'supportsLoad'
+  | 'supportsResume'
+  | 'announce'
+  | 'silent'
+  | 'linger'
+  | 'ignoreSigterm';
+
+export interface FakeAgentOptions extends Partial<
+  Record<FakeAgentFlag, boolean>
+> {
   requireAuth?: boolean;
   stepDelayMs?: number;
+}
+
+export interface FakeAgentHooks {
+  exitProcess?: (code: number) => void;
+}
+
+export interface FakeSessionSetup {
+  cwd: string;
+  mcpServers: McpServer[];
 }
 
 export interface FakeTurn {
@@ -19,6 +44,8 @@ export interface FakeTurn {
   client: AgentContext;
   signal: AbortSignal;
   stepDelayMs: number;
+  setup: FakeSessionSetup;
+  exitProcess: (code: number) => void;
 }
 
 export type FakeScenarioHandler = (turn: FakeTurn) => Promise<StopReason>;

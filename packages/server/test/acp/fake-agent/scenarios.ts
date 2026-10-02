@@ -7,6 +7,7 @@ import type {
   ToolCallStatus,
 } from '@agentclientprotocol/sdk';
 import {
+  FAKE_CRASH_EXIT_CODE,
   FAKE_PERMISSION_OPTIONS,
   FAKE_PERMISSION_PATH,
   FAKE_PERMISSION_TOOL_CALL_ID,
@@ -168,6 +169,22 @@ const waitForCancel: FakeScenarioHandler = async (turn) => {
   return 'cancelled';
 };
 
+const describeSession: FakeScenarioHandler = async (turn) => {
+  await sendText(
+    turn,
+    JSON.stringify({
+      cwd: turn.setup.cwd,
+      mcpServers: turn.setup.mcpServers.map((server) => server.name),
+    }),
+  );
+  return 'end_turn';
+};
+
+const crash: FakeScenarioHandler = async (turn) => {
+  turn.exitProcess(FAKE_CRASH_EXIT_CODE);
+  return 'refusal';
+};
+
 const SCENARIO_HANDLERS: Record<FakeScenario, FakeScenarioHandler> = {
   echo,
   tool_call: toolCall,
@@ -175,6 +192,8 @@ const SCENARIO_HANDLERS: Record<FakeScenario, FakeScenarioHandler> = {
   long_output: longOutput,
   large_output: largeOutput,
   wait_for_cancel: waitForCancel,
+  describe_session: describeSession,
+  crash,
 };
 
 export const resolveScenario = (text: string): FakeScenario =>

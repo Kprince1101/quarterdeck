@@ -16,6 +16,9 @@ export const LARGE_OUTPUT_PATH = '/fake/project/large.txt';
 export const LARGE_OUTPUT_LINES = 8400;
 export const LARGE_OUTPUT_MIN_BYTES = 1024 * 1024;
 export const WAITING_TEXT = 'waiting for cancel';
+export const FAKE_HISTORY_TEXT = 'earlier prompt';
+export const FAKE_READY_LINE = 'quarterdeck fake agent ready';
+export const FAKE_CRASH_EXIT_CODE = 3;
 
 export const FAKE_SCENARIOS: readonly FakeScenario[] = [
   'echo',
@@ -24,6 +27,8 @@ export const FAKE_SCENARIOS: readonly FakeScenario[] = [
   'long_output',
   'large_output',
   'wait_for_cancel',
+  'describe_session',
+  'crash',
 ];
 
 export const FAKE_PERMISSION_OPTIONS: PermissionOption[] = [
