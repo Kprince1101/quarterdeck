@@ -22,7 +22,7 @@ Every adapter is tested with `describeRuntimeConformance(adapter, base?)` from `
 
 ## kiro
 
-`kiro-cli acp --agent quarterdeck-<project>-<agentName>`. Kiro reads an agent's tools and MCP servers from an agent config file, so `connect` writes one before it starts the process:
+`kiro-cli acp --agent quarterdeck-<project>-<agentName>`, started through `launchAcpClient` (see [../launch/README.md](../launch/README.md)), so every launch records `kiro-cli --version` and retries a spawn that fails to exec. `connect` takes `LaunchOptions`. Kiro reads an agent's tools and MCP servers from an agent config file, so `connect` writes one before it starts the process:
 
 - Path: `~/.kiro/agents/quarterdeck-<project>-<agentName>.json` (`createKiroAdapter({ agentsDir })` changes the folder). The `quarterdeck-` prefix keeps it clear of the user's own agents. The project slug keeps two projects that reuse an agent name from removing each other's config. The file is removed when the client closes or the process exits, and rewritten on the next launch if a crash left it behind.
 - `mcpServers`: the launch's stdio and http servers, converted to Kiro's shape (`env` and `headers` become objects). Kiro's config has no sse or acp transport, so those stay out of the file.

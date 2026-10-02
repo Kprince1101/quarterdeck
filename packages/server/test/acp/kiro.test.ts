@@ -33,8 +33,8 @@ import {
 import type {
   AcpClient,
   AcpClientEvent,
-  AcpClientOptions,
   KiroEvent,
+  LaunchOptions,
 } from '@quarterdeck/server';
 import { afterAll, describe, expect, it } from 'vitest';
 import { fakeAgentLaunch } from './fake-agent/launch.ts';
@@ -58,10 +58,11 @@ const CWD_AGENT = fileURLToPath(
 );
 
 const clientOptions = (
-  overrides: Partial<AcpClientOptions> = {},
-): AcpClientOptions => ({
+  overrides: Partial<LaunchOptions> = {},
+): LaunchOptions => ({
   clientName: 'quarterdeck-kiro-test',
   clientVersion: '0.0.0',
+  spawnRetries: 0,
   onPermissionRequest: async () => ({ outcome: { outcome: 'cancelled' } }),
   ...overrides,
 });
@@ -167,8 +168,9 @@ describe('kiro command', () => {
 });
 
 describe('kiro process directory', () => {
-  it('never runs kiro-cli in the worktree', async () => {
+  it('launches kiro-cli in its own folder, never the worktree', async () => {
     const marker = join(root, 'cwd-marker');
+    const events: AcpClientEvent[] = [];
     const fake = fakeAgentLaunch();
     const client = await adapter.connect(
       {
@@ -184,9 +186,15 @@ describe('kiro process directory', () => {
           }),
         },
       },
-      clientOptions(),
+      clientOptions({ onEvent: (event) => events.push(event) }),
     );
     await client.close();
+    expect(
+      events.flatMap((event) => {
+        if (event.type !== 'agent_version') return [];
+        return [event.stage];
+      }),
+    ).toEqual(['before_spawn', 'after_spawn']);
     const spawnedIn = readFileSync(marker, 'utf8');
     expect(spawnedIn).toBe(realpathSync(processDir));
     expect(spawnedIn).not.toBe(realpathSync(worktree));

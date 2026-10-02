@@ -2,12 +2,18 @@ import { mkdir } from 'node:fs/promises';
 import type { McpServer } from '@agentclientprotocol/sdk';
 import type {
   AcpClient,
-  AcpClientOptions,
+  AgentCommand,
   ResumeSetup,
   SessionSetup,
 } from '../../client/types.js';
-import { defineRuntimeAdapter, launchSite } from '../adapter.js';
-import type { RuntimeAdapter, RuntimeLaunch } from '../adapter.js';
+import { launchAcpClient } from '../../launch/launch.js';
+import type { AgentLaunch, LaunchOptions } from '../../launch/launch.js';
+import { launchSite } from '../adapter.js';
+import type {
+  RuntimeAdapter,
+  RuntimeAdapterSpec,
+  RuntimeLaunch,
+} from '../adapter.js';
 import {
   assertNoWorkspaceShadow,
   buildKiroAgentConfig,
@@ -32,7 +38,7 @@ export interface KiroAdapterOptions {
   processDir?: string;
 }
 
-const withKiroExtensions = (options: AcpClientOptions): AcpClientOptions => ({
+const withKiroExtensions = (options: LaunchOptions): LaunchOptions => ({
   ...options,
   extensionNotifications: [
     ...KIRO_EXTENSION_NOTIFICATIONS,
@@ -74,7 +80,7 @@ export const createKiroAdapter = ({
     cwd: processDir,
   });
 
-  const base = defineRuntimeAdapter({
+  const spec: RuntimeAdapterSpec = {
     runtime: 'kiro',
     displayName: 'Kiro',
     command: (launch: RuntimeLaunch) => ({
@@ -82,11 +88,25 @@ export const createKiroAdapter = ({
       args: kiroArgs(launch),
       ...launchSite(inProcessDir(launch)),
     }),
-  });
+  };
+
+  const kiroCommand = (launch: RuntimeLaunch): AgentCommand => {
+    if (!launch.command) return spec.command(launch);
+    return {
+      ...launchSite(inProcessDir(launch)),
+      ...launch.command,
+      cwd: processDir,
+    };
+  };
+
+  const agentLaunch = (launch: RuntimeLaunch): AgentLaunch => {
+    const command = kiroCommand(launch);
+    return { command, version: { ...command, args: ['--version'] } };
+  };
 
   const connect = async (
     launch: RuntimeLaunch,
-    options: AcpClientOptions,
+    options: LaunchOptions,
   ): Promise<AcpClient> => {
     const name = kiroAgentName(launch.project, launch.agentName);
     await assertNoWorkspaceShadow(launch.cwd, name);
@@ -96,8 +116,8 @@ export const createKiroAdapter = ({
     const remove = () => removeKiroAgentConfig(path);
     let client: AcpClient;
     try {
-      client = await base.connect(
-        inProcessDir(launch),
+      client = await launchAcpClient(
+        agentLaunch(launch),
         withKiroExtensions(options),
       );
     } catch (err) {
@@ -108,7 +128,7 @@ export const createKiroAdapter = ({
     return wrapClient(client, new Set(Object.keys(config.mcpServers)), removed);
   };
 
-  return { ...base, connect };
+  return { ...spec, connect };
 };
 
 export const KIRO_ADAPTER: RuntimeAdapter = createKiroAdapter();
