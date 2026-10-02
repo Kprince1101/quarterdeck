@@ -1,0 +1,28 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import {
+  assertProjectSlug,
+  projectDataDir,
+  quarterdeckHome,
+} from '../../store/index.js';
+
+describe('store paths', () => {
+  it('keeps one Postgres data dir per project under ~/.quarterdeck', () => {
+    expect(quarterdeckHome()).toBe(join(homedir(), '.quarterdeck'));
+    expect(projectDataDir('commander')).toBe(
+      join(homedir(), '.quarterdeck', 'commander', 'pg'),
+    );
+  });
+
+  it('roots the data dir at a custom home', () => {
+    expect(projectDataDir('qd-2', '/tmp/qd')).toBe('/tmp/qd/qd-2/pg');
+  });
+
+  it.each(['', '../escape', 'a/b', 'Upper', '-lead', 'x'.repeat(64)])(
+    'rejects the project slug %j',
+    (slug) => {
+      expect(() => assertProjectSlug(slug)).toThrow('Invalid project slug');
+    },
+  );
+});
