@@ -11,7 +11,7 @@ import type { WorktreeHost } from './worktrees.js';
 export interface AgentLifecycleOptions {
   naming: Naming;
   sessions: SessionHost;
-  worktrees: WorktreeHost;
+  worktrees: Pick<WorktreeHost, 'remove'>;
   openStores: () => readonly Store[];
   budget: () => Promise<BudgetWindow>;
   random?: () => number;
@@ -47,6 +47,7 @@ export const createAgentLifecycle = (
       request.store,
       options.sessions,
       await claimName(request),
+      request.prepare,
     );
   };
 

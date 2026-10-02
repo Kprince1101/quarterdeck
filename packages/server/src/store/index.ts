@@ -52,6 +52,7 @@ export {
   assertProjectSlug,
   projectDataDir,
   projectTurnsDir,
+  projectWorktreesDir,
   quarterdeckHome,
 } from './paths.js';
 export {

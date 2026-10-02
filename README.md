@@ -8,6 +8,15 @@ No API keys. No account. No telemetry. Everything Quarterdeck stores lives in on
 
 Status: being built, by itself. See SPEC.md.
 
+## Getting started
+
+```sh
+npx quarterdeck init path/to/your/repo   # creates ~/.quarterdeck and a project
+npx quarterdeck up                        # starts the server and prints the dashboard URL
+```
+
+`init` writes nothing into your repository unless you agree to a `.quarterdeck/` folder for that project's settings. See `packages/cli/README.md`.
+
 ## Rules
 
 The defaults live in `rules/`: `charter.md`, `reviewer.md`, `permissions.json`, `naming.json`, `lifecycle.json` and `models.json`. Override any of them with a file named `rules.local.<file>`, for example `rules.local.lifecycle.json`. Quarterdeck reads three layers, last one wins:
@@ -19,6 +28,8 @@ The defaults live in `rules/`: `charter.md`, `reviewer.md`, `permissions.json`, 
 JSON layers merge key by key, so an override only needs the keys it changes; arrays are replaced whole. Markdown layers replace the file below them. Every layer is checked against the schema, and an error names the file that broke it. `rules.local.*` files are gitignored.
 
 Permissions are the exception: the repo layer is not merged. It is checked on its own, may only contain `deny` and `ask`, and the stricter of its answer and the machine's answer wins, so a project can tighten permissions but never loosen them. See `packages/server/src/acp/permissions/README.md`.
+
+The merge gate (`mergeGate` in `lifecycle.json`) is tighten-only in the repo layer too: a `require*` flag is on if any layer turns it on, `autoMerge` is on only if no layer turns it off, and the repo layer may not set `base`. See `packages/server/src/gate/README.md`.
 
 ## Workspace packages
 

@@ -3,14 +3,10 @@ import { homedir } from 'node:os';
 import { extname, resolve } from 'node:path';
 import { z } from 'zod';
 import { getErrorMessage, isMissingFile, RulesError } from './errors.js';
-import { tightenRepoLifecycle } from './budget-layers.js';
+import { tightenRepoBudget } from './budget-layers.js';
+import { mergeRepoLifecycle } from './merge-gate-layer.js';
 import { mergeLayer } from './merge-layer.js';
-import {
-  RULE_SCHEMAS,
-  type Lifecycle,
-  type RuleName,
-  type Rules,
-} from './schemas.js';
+import { RULE_SCHEMAS, type RuleName, type Rules } from './schemas.js';
 
 export const DEFAULT_RULES_DIR = resolve(import.meta.dirname, '..');
 export const LOCAL_RULES_DIR = '.quarterdeck';
@@ -99,28 +95,47 @@ const validateLayer = (name: RuleName, path: string, value: unknown) => {
   return result.data;
 };
 
+type RepoLayerMerge = (
+  merged: unknown,
+  layer: unknown,
+  path: string,
+) => unknown;
+
+const REPO_LAYER_MERGES: Partial<Record<RuleName, RepoLayerMerge>> = {
+  lifecycle: (merged, layer, path) =>
+    tightenRepoBudget(merged, mergeRepoLifecycle(merged, layer, path)),
+};
+
+const mergeLocal = (
+  name: RuleName,
+  merged: unknown,
+  layer: unknown,
+  path: string,
+  isRepoLayer: boolean,
+): unknown => {
+  const repoMerge = REPO_LAYER_MERGES[name];
+  if (isRepoLayer && repoMerge) return repoMerge(merged, layer, path);
+  return mergeLayer(merged, layer);
+};
+
 export const loadRule = async <K extends RuleName>(
   name: K,
   options: LoadRulesOptions = {},
 ): Promise<Rules[K]> => {
   const layerOptions = mergedLayerOptions(name, options);
   const layers = ruleLayerPaths(name, layerOptions);
-  const hasRepoLayer = Boolean(layerOptions.repoDir);
+  const repoLayer = layerOptions.repoDir && layers.local.at(-1);
   const defaults = parseLayer(
     layers.defaults,
     await readDefaults(layers.defaults),
   );
   let merged = validateLayer(name, layers.defaults, defaults);
-  let machine: typeof merged | undefined;
-  for (const [index, path] of layers.local.entries()) {
+  for (const path of layers.local) {
     const text = await readLocal(path);
     if (text === undefined) continue;
     const layer = parseLayer(path, text);
-    if (hasRepoLayer && index === layers.local.length - 1) machine = merged;
-    merged = validateLayer(name, path, mergeLayer(merged, layer));
-  }
-  if (name === 'lifecycle' && machine !== undefined) {
-    merged = tightenRepoLifecycle(machine as Lifecycle, merged as Lifecycle);
+    const next = mergeLocal(name, merged, layer, path, path === repoLayer);
+    merged = validateLayer(name, path, next);
   }
   return merged as Rules[K];
 };

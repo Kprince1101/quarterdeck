@@ -14,6 +14,10 @@ await fetch(`${api.url}/api/intents/notebook.add`, {
 await api.close();
 ```
 
+## Dashboard
+
+Everything outside `/api` is the dashboard. `startApiServer({ dashboardDir })` serves the files in that folder with `GET` and `HEAD` (405 otherwise), and `index.html` for any path without a file extension, so the dashboard's own routes load. A path with an extension and no file is a 404, and nothing outside `dashboardDir` is ever served. Without `dashboardDir`, or before it holds an `index.html`, those paths get `DASHBOARD_PLACEHOLDER`, a page that says the server is running. The Host and Origin guard below applies to every path. `quarterdeck up` passes `@quarterdeck/dashboard`'s `dist/`.
+
 ## Requests
 
 `POST /api/intents/<name>` with a JSON body. The schemas live in `src/intents/`, exported as `@quarterdeck/server/intents`. That module imports nothing but `zod` and `@quarterdeck/rules/schemas`, so the dashboard can import it without pulling in Node.

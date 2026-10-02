@@ -1,4 +1,8 @@
-import type { BudgetWindow, Lifecycle } from './schemas.js';
+import {
+  lifecycleSchema,
+  type BudgetWindow,
+  type Lifecycle,
+} from './schemas.js';
 
 const smallerCap = (
   machine: number | null,
@@ -18,13 +22,21 @@ const tightenWindow = (
   holdAtFraction: Math.min(machine.holdAtFraction, repo.holdAtFraction),
 });
 
-export const tightenRepoLifecycle = (
-  machine: Lifecycle,
-  merged: Lifecycle,
-): Lifecycle => ({
-  ...merged,
-  budget: {
-    ...merged.budget,
-    window: tightenWindow(machine.budget.window, merged.budget.window),
-  },
-});
+export const tightenRepoBudget = (
+  machine: unknown,
+  merged: unknown,
+): unknown => {
+  const result = lifecycleSchema.safeParse(merged);
+  if (!result.success) return merged;
+  const next: Lifecycle = result.data;
+  return {
+    ...next,
+    budget: {
+      ...next.budget,
+      window: tightenWindow(
+        (machine as Lifecycle).budget.window,
+        next.budget.window,
+      ),
+    },
+  };
+};

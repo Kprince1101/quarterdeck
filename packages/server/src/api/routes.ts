@@ -10,6 +10,7 @@ import {
   type IntentStatus,
 } from '../intents/index.js';
 import type { ApiContext } from './context.js';
+import { serveDashboard } from './dashboard.js';
 import { dispatchIntent } from './dispatch.js';
 import { HttpError, badRequest, notFound } from './http-error.js';
 import {
@@ -17,6 +18,8 @@ import {
   readJsonBody,
   type RequestGuard,
 } from './request.js';
+
+const API_PATH = '/api';
 
 const STATUS_CODES: Record<IntentStatus, number> = {
   applied: 200,
@@ -34,12 +37,15 @@ const intentNameOf = (req: IncomingMessage): string => {
   return decodeURIComponent(pathname.slice(INTENT_PATH_PREFIX.length));
 };
 
+const isApiPath = (req: IncomingMessage): boolean => {
+  const { pathname } = new URL(req.url ?? '/', 'http://localhost');
+  return pathname === API_PATH || pathname.startsWith(`${API_PATH}/`);
+};
+
 const routeIntent = async (
   ctx: ApiContext,
-  guard: RequestGuard,
   req: IncomingMessage,
 ): Promise<IntentReply> => {
-  assertLocalRequest(req, guard);
   const name = intentNameOf(req);
   if (!isIntentName(name)) throw notFound(`Unknown intent ${name}`);
   if (req.method !== 'POST') {
@@ -82,9 +88,15 @@ export const handleRequest = async (
   guard: RequestGuard,
   req: IncomingMessage,
   res: ServerResponse,
+  dashboardDir?: string,
 ): Promise<void> => {
   try {
-    const reply = await routeIntent(ctx, guard, req);
+    assertLocalRequest(req, guard);
+    if (!isApiPath(req)) {
+      await serveDashboard(dashboardDir, req, res);
+      return;
+    }
+    const reply = await routeIntent(ctx, req);
     sendJson(res, STATUS_CODES[reply.status], reply);
   } catch (err) {
     sendError(res, err);

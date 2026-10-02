@@ -11,6 +11,7 @@ interface PackageManifest {
   engines?: { node?: string };
   workspaces?: string[];
   scripts?: { build?: string };
+  bin?: Record<string, string>;
 }
 
 const CLEAR_DIST = `node -e "require('node:fs').rmSync('dist', { recursive: true, force: true })" && `;
@@ -48,7 +49,7 @@ describe('workspace manifests', () => {
     expect(manifest.engines?.node).toBe('>=22');
   });
 
-  it.each(['rules', 'packages/server'])(
+  it.each(['rules', 'packages/server', 'packages/cli'])(
     '%s clears dist before it builds, so nothing stale ships',
     (dir) => {
       expect(readManifest(dir).scripts?.build?.startsWith(CLEAR_DIST)).toBe(
@@ -58,6 +59,8 @@ describe('workspace manifests', () => {
   );
 
   it('cli ships under the quarterdeck name for npx', () => {
-    expect(readManifest('packages/cli').name).toBe('quarterdeck');
+    const manifest = readManifest('packages/cli');
+    expect(manifest.name).toBe('quarterdeck');
+    expect(manifest.bin).toEqual({ quarterdeck: './dist/bin.js' });
   });
 });

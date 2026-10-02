@@ -12,6 +12,8 @@
   },
   "mergeGate": {
     "requireReviewerApproval": true,
-    "requireChecksPassing": true
+    "requireChecksPassing": true,
+    "requireCopilotReview": false,
+    "autoMerge": false
   }
 }

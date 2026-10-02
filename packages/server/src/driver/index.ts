@@ -1,4 +1,49 @@
 export {
+  BUILDER_ACTION_INSTRUCTIONS,
+  BUILDER_ACTION_KINDS,
+  assignActionSchema,
+  builderActionSchema,
+  continueActionSchema,
+  type AssignAction,
+  type BuilderAction,
+  type ContinueAction,
+} from './action-schemas.js';
+export { applyBuilderAction, type BuilderActionOutcome } from './actions.js';
+export {
+  TICKET_ASSIGNED_EVENT,
+  assignTicket,
+  builderWorktreePath,
+  reassignTickets,
+  type AssignRequest,
+  type Assignment,
+} from './assign.js';
+export {
+  buildAssignmentPrompt,
+  type AssignmentPromptParts,
+} from './assignment-prompt.js';
+export {
+  claimBuilder,
+  releaseBuilder,
+  type BuilderContext,
+  type BuilderSessionHost,
+  type ClaimRules,
+  type ClaimedBuilder,
+} from './builders.js';
+export {
+  BUILDER_CONTINUED_EVENT,
+  continueBuilder,
+  type Continuation,
+  type ContinueContext,
+  type ContinueRequest,
+} from './continue.js';
+export {
+  ACTIVE_TICKET_STATUSES,
+  APPROVED_TICKET_STATUS,
+  findApprovedTicket,
+  heldTickets,
+  type BuilderTicket,
+} from './tickets.js';
+export {
   buildBirthInput,
   readActiveNotebook,
   type BirthInputParts,
@@ -6,9 +51,13 @@ export {
   type Round,
 } from './birth-input.js';
 export {
+  AgentNotRetiredError,
+  BuilderNotAvailableError,
+  BuilderSessionLostError,
   NotADriverError,
   RoundEndedError,
   RoundNotFoundError,
+  TicketNotAssignableError,
 } from './errors.js';
 export { TURN_FILES, turnDir, turnFile, type TurnFile } from './files.js';
 export {
