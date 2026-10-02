@@ -4,11 +4,13 @@ export class FakeSocket extends EventTarget {
   static opened: FakeSocket[] = [];
 
   readonly url: string;
+  readonly protocols: string[] | undefined;
   closedWith: number | undefined;
 
-  constructor(url: string) {
+  constructor(url: string, protocols?: string[]) {
     super();
     this.url = url;
+    this.protocols = protocols;
     FakeSocket.opened.push(this);
   }
 

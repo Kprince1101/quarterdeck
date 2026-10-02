@@ -18,15 +18,16 @@ The server serves that folder at `/`:
 - `GET /assets/<file>` answers the file. The names are content-hashed, so they can be cached for good.
 - Resolve the folder from the package, not the working directory: `dirname(require.resolve('@quarterdeck/dashboard/package.json')) + '/dist'`.
 
-The page talks only to its own origin: intents go to `POST /api/intents/<name>`, the Rules widget reads rule files from `GET /api/rules`, and the stream opens at `ws(s)://<page host>/ws`. Nothing else is fetched.
+The page talks only to its own origin: intents go to `POST /api/intents/<name>`, the Rules widget reads rule files from `GET /api/rules`, and the stream opens at `ws(s)://<page host>/ws`. Nothing else is fetched. Each of those carries the token from the URL `quarterdeck up` prints (see [api](src/api/README.md#token)).
 
 `npm run dev --workspace packages/dashboard` starts Vite on `http://127.0.0.1:5173` and proxies `/api` and `/ws` to the API on `127.0.0.1:4317`. The proxy keeps the browser's `Origin`, so start the API with `allowedOrigins: ['http://127.0.0.1:5173']` for dev.
 
 ## Layout
 
 ```
-src/main.tsx                 mounts <App /> into #root
-src/mount.tsx                mountApp(props): the stylesheets and <App {...props} /> in #root
+src/main.tsx                 mounts livePage() into #root
+src/live.tsx                 livePage(): the API token from #token= and <App /> with it, or "open the link printed by quarterdeck up"
+src/mount.tsx                mountPage(node) / mountApp(props): the stylesheets and the page in #root
 src/app.tsx                  DeckProvider > Shell > DeckLayout; `mode` labels the header
 src/demo/                    demo mode: a fake server in the page, built by site/
 src/deck/deck.tsx            DeckProvider and useDeck(): one stream per tab, plus the intent client

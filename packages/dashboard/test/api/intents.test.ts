@@ -157,5 +157,21 @@ describe('intent client', () => {
       );
       expect(err).toMatchObject({ status: 404, sent: true });
     });
+
+    it.each([undefined, 'not-the-token'])(
+      'is refused with token %s',
+      async (token) => {
+        const client = createIntentClient({ baseUrl: deck.api.url, token });
+        const err = await caught(
+          client.notebook.add({ project: deck.project, body: 'no' }),
+        );
+        expect(err).toMatchObject({
+          intent: 'notebook.add',
+          status: 401,
+          sent: true,
+          message: 'notebook.add failed with HTTP 401',
+        });
+      },
+    );
   });
 });

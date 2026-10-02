@@ -1,4 +1,7 @@
-import type { StreamMessage } from '@quarterdeck/server/stream-schema';
+import {
+  streamProtocols,
+  type StreamMessage,
+} from '@quarterdeck/server/stream-schema';
 import {
   afterAll,
   afterEach,
@@ -174,10 +177,12 @@ describe('stream connection', { timeout: TIMEOUT }, () => {
 
   const connect = (
     url: string,
-    Socket: new (url: string) => WsSocket = WsSocket,
+    Socket: new (url: string, protocols?: string[]) => WsSocket = WsSocket,
+    token: string | null = deck.api.token,
   ): StreamConnection => {
     const connection = openStream({
       url,
+      token: token ?? undefined,
       WebSocket: Socket as unknown as typeof WebSocket,
       retryDelayMs: 10,
       maxRetryDelayMs: 50,
@@ -234,9 +239,9 @@ describe('stream connection', { timeout: TIMEOUT }, () => {
   it('reconnects after the server drops and loses no event', async () => {
     const urls: string[] = [];
     class RecordingSocket extends WsSocket {
-      constructor(url: string | URL) {
+      constructor(url: string | URL, protocols?: string[]) {
         urls.push(String(url));
-        super(url);
+        super(url, protocols);
       }
     }
     const first = await deck.serve();
@@ -264,6 +269,47 @@ describe('stream connection', { timeout: TIMEOUT }, () => {
     const ids = back.events.map(({ id }) => id);
     expect(ids).toEqual(ids.toSorted((a, b) => a - b));
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it.each([
+    ['no', null, undefined],
+    ['a wrong', 'not-the-token', streamProtocols('not-the-token')],
+  ])(
+    'never goes live with %s token, and keeps the token out of the url',
+    async (_, token, protocols) => {
+      const urls: string[] = [];
+      const offered: (string[] | undefined)[] = [];
+      class RecordingSocket extends WsSocket {
+        constructor(url: string | URL, protocols?: string[]) {
+          urls.push(String(url));
+          offered.push(protocols);
+          super(url, protocols);
+        }
+      }
+      const served = await deck.serve();
+      const connection = connect(served.url, RecordingSocket, token);
+      await vi.waitFor(() => expect(urls.length).toBeGreaterThan(2));
+      expect(connection.state.status).toBe('reconnecting');
+      expect(connection.state.cursor).toBeNull();
+      expect(served.stream.clients).toBe(0);
+      expect(new Set(urls)).toEqual(new Set([served.url]));
+      expect(offered[0]).toEqual(protocols);
+    },
+  );
+
+  it('offers the token as a protocol, not in the url', async () => {
+    const urls: string[] = [];
+    class RecordingSocket extends WsSocket {
+      constructor(url: string | URL, protocols?: string[]) {
+        urls.push(String(url));
+        super(url, protocols);
+      }
+    }
+    const served = await deck.serve();
+    const connection = connect(served.url, RecordingSocket);
+    await waitFor(connection, (state) => state.status === 'live');
+    expect(urls).toEqual([served.url]);
+    expect(urls[0]).not.toContain(deck.api.token);
   });
 
   it('stops for good once closed', async () => {

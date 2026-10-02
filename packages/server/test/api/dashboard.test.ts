@@ -97,7 +97,9 @@ describe('dashboard serving', () => {
   });
 
   it('keeps /api routes on the API', async () => {
-    const res = await fetch(`${api.url}/api/other`);
+    const res = await fetch(`${api.url}/api/other`, {
+      headers: { authorization: `Bearer ${api.token}` },
+    });
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: 'No route for /api/other' });
   });

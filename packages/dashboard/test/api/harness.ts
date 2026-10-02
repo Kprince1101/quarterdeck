@@ -25,7 +25,7 @@ export interface Deck {
 export const startDeck = async (project: string): Promise<Deck> => {
   const homeDir = await mkdtemp(join(tmpdir(), 'qd-dashboard-'));
   const api = await startApiServer({ port: 0, homeDir });
-  const client = createIntentClient({ baseUrl: api.url });
+  const client = createIntentClient({ baseUrl: api.url, token: api.token });
   await client.project.create({ project });
   const store = await api.stores.get(project);
   const served: ServedStream[] = [];
@@ -39,6 +39,7 @@ export const startDeck = async (project: string): Promise<Deck> => {
         store,
         port,
         home: api.stores.dataHome,
+        token: api.token,
       });
       served.push(stream);
       return stream;

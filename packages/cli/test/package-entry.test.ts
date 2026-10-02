@@ -1,6 +1,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,7 +12,29 @@ interface CliManifest {
 
 const ROOT = resolve(import.meta.dirname, '..');
 const TIMEOUT = 30_000;
-const RUNNING = /Quarterdeck is running at (http:\/\/127\.0\.0\.1:\d+)/;
+const RUNNING =
+  /Quarterdeck is running at (http:\/\/127\.0\.0\.1:\d+)\/#token=([\w-]+)\n/;
+
+const curlWipeAll = (url: string, headers: string[] = []): string =>
+  spawnSync(
+    'curl',
+    [
+      '-s',
+      '-o',
+      '/dev/null',
+      '-w',
+      '%{http_code}',
+      '-X',
+      'POST',
+      '-H',
+      'content-type: application/json',
+      ...headers.flatMap((header) => ['-H', header]),
+      '-d',
+      JSON.stringify({ confirm: 'wipe everything' }),
+      `${url}/api/intents/wipe.all`,
+    ],
+    { encoding: 'utf8' },
+  ).stdout;
 
 const binPath = async (): Promise<string> => {
   const manifest = JSON.parse(
@@ -78,13 +101,20 @@ describe('quarterdeck bin', { timeout: TIMEOUT }, () => {
       await vi.waitFor(() => expect(stdout).toMatch(RUNNING), {
         timeout: TIMEOUT,
       });
-      const url = RUNNING.exec(stdout)?.[1] ?? '';
+      const [, url = '', token = ''] = RUNNING.exec(stdout) ?? [];
       expect((await fetch(`${url}/`)).status).toBe(200);
+      const tokenFile = join(home, '.quarterdeck', 'api.token');
+      expect((await stat(tokenFile)).mode & 0o777).toBe(0o600);
+      expect(await readFile(tokenFile, 'utf8')).toBe(token);
+      expect(curlWipeAll(url)).toBe('401');
+      expect(curlWipeAll(url, ['authorization: Bearer nope'])).toBe('401');
+      expect(curlWipeAll(url, [`authorization: Bearer ${token}`])).toBe('200');
       child.kill('SIGTERM');
       const [code] = await exited;
       expect(stderr).toBe('');
       expect(code).toBe(0);
       expect(stdout).toContain('Stopped.');
+      expect(existsSync(tokenFile)).toBe(false);
     } finally {
       child.kill('SIGKILL');
     }

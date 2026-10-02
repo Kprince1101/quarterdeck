@@ -3,7 +3,7 @@ import {
   rulesViewSchema,
   type RulesView,
 } from '@quarterdeck/server/intents';
-import type { IntentClientOptions } from './intents.js';
+import { authHeaders, type IntentClientOptions } from './intents.js';
 
 export type RulesReader = (project: string | null) => Promise<RulesView>;
 
@@ -40,7 +40,7 @@ export const createRulesReader = (
   const send = options.fetch ?? ((input, init) => fetch(input, init));
   return async (project) => {
     const response = await send(`${baseUrl}${rulesUrl(project)}`, {
-      headers: { accept: 'application/json' },
+      headers: { accept: 'application/json', ...authHeaders(options.token) },
     });
     const body = await readJson(response);
     if (!response.ok) {

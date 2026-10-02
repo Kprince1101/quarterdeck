@@ -13,7 +13,8 @@ const MAX_PORT = 65_535;
 
 export const UP_USAGE = `Usage: quarterdeck up [--port <port>]
 
-Starts the Quarterdeck server and dashboard on 127.0.0.1 and prints the URL.
+Starts the Quarterdeck server and dashboard on 127.0.0.1 and prints the URL
+to open. The URL carries this run's API token; the dashboard needs it.
 Stop it with Ctrl+C.
 
   --port <port>  Port to listen on (default ${DEFAULT_API_PORT}; 0 picks a free one)`;
@@ -61,7 +62,7 @@ export const runUp: Command = async (args, io) => {
   const port = parsePort(values.port);
   await mkdir(quarterdeckHome(io.homeDir), { recursive: true });
   const api = await listen(port, io);
-  io.out(`Quarterdeck is running at ${api.url}`);
+  io.out(`Quarterdeck is running at ${api.url}/#token=${api.token}`);
   io.out(`Data: ${api.stores.location}`);
   io.out('Press Ctrl+C to stop.');
   await io.untilStopped();

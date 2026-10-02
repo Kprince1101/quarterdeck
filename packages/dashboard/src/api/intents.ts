@@ -29,9 +29,17 @@ export type IntentClient = {
 };
 
 export interface IntentClientOptions {
-  baseUrl?: string;
+  baseUrl?: string | undefined;
+  token?: string | undefined;
   fetch?: typeof fetch;
 }
+
+export const authHeaders = (
+  token: string | undefined,
+): Record<string, string> => {
+  if (token === undefined) return {};
+  return { authorization: `Bearer ${token}` };
+};
 
 export class IntentError extends Error {
   readonly intent: IntentName;
@@ -91,6 +99,7 @@ export const createIntentSender = (
 ): SendIntent => {
   const baseUrl = options.baseUrl ?? '';
   const send = options.fetch ?? ((input, init) => fetch(input, init));
+  const headers = { ...JSON_HEADERS, ...authHeaders(options.token) };
 
   return async <N extends IntentName>(
     name: N,
@@ -108,7 +117,7 @@ export const createIntentSender = (
     }
     const response = await send(`${baseUrl}${intentPath(name)}`, {
       method: 'POST',
-      headers: JSON_HEADERS,
+      headers,
       body: JSON.stringify(input),
     });
     const body = await readJson(response);

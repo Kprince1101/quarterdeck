@@ -7,7 +7,7 @@ import { startApiServer, type ApiServer } from '../../src/api/index.js';
 import { giveProcess } from '../lifecycle/fixtures.js';
 import { insertAgent, lenientSessions } from '../round-end/fixtures.js';
 import { fakeWorktrees } from '../agents/fixtures.js';
-import { TIMEOUT } from './harness.js';
+import { TIMEOUT, bearer } from './harness.js';
 
 vi.mock('../../src/acp/client/process-start.js', async (importOriginal) => ({
   ...(await importOriginal<
@@ -41,7 +41,7 @@ describe(
     const send = async (name: string, body: unknown) => {
       const res = await fetch(`${api.url}/api/intents/${name}`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', ...bearer(api.token) },
         body: JSON.stringify(body),
       });
       return {

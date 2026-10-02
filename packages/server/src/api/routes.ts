@@ -17,6 +17,7 @@ import { dispatchIntent } from './dispatch.js';
 import { HttpError, badRequest, notFound } from './http-error.js';
 import {
   assertLocalRequest,
+  isAuthorized,
   readJsonBody,
   type RequestGuard,
 } from './request.js';
@@ -80,6 +81,14 @@ const sendJson = (
   res.end(JSON.stringify(body));
 };
 
+const sendUnauthorized = (res: ServerResponse) => {
+  res.writeHead(401, {
+    'www-authenticate': 'Bearer',
+    'cache-control': 'no-store',
+  });
+  res.end();
+};
+
 const sendError = (res: ServerResponse, err: unknown) => {
   if (err instanceof HttpError) {
     sendJson(res, err.status, err.toJSON(), err.headers);
@@ -100,6 +109,10 @@ export const handleRequest = async (
     assertLocalRequest(req, guard);
     if (!isApiPath(req)) {
       await serveDashboard(dashboardDir, req, res);
+      return;
+    }
+    if (!isAuthorized(req, guard)) {
+      sendUnauthorized(res);
       return;
     }
     if (pathnameOf(req) === RULES_PATH) {

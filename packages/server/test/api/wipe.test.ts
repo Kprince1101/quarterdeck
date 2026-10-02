@@ -15,7 +15,7 @@ import {
   stopSleepers,
 } from '../lifecycle/fixtures.js';
 import { insertAgent, lenientSessions } from '../round-end/fixtures.js';
-import { TIMEOUT } from './harness.js';
+import { TIMEOUT, bearer } from './harness.js';
 
 describe('wipe stops the agents first', { timeout: TIMEOUT }, () => {
   let homeDir: string;
@@ -44,7 +44,7 @@ describe('wipe stops the agents first', { timeout: TIMEOUT }, () => {
   const send = async (name: string, body: unknown) => {
     const res = await fetch(`${api.url}/api/intents/${name}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...bearer(api.token) },
       body: JSON.stringify(body),
     });
     return {

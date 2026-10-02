@@ -10,3 +10,14 @@ export {
   type ApiServer,
   type ApiServerOptions,
 } from './server.js';
+export {
+  API_TOKEN_BYTES,
+  API_TOKEN_FILE,
+  apiTokenPath,
+  bearerToken,
+  createApiToken,
+  readApiToken,
+  removeApiToken,
+  verifyApiToken,
+  writeApiToken,
+} from './token.js';

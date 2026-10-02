@@ -18,6 +18,8 @@ npx quarterdeck init path/to/your/repo   # creates ~/.quarterdeck and a project,
 npx quarterdeck up                        # starts the server and prints the dashboard URL
 ```
 
+Open the URL exactly as `up` prints it: the `#token=` part is a new token for each start, and the API refuses any request without it, including one from another program on your machine.
+
 `init` writes nothing into your repository unless you agree to a `.quarterdeck/` folder for that project's settings. `quarterdeck wipe <project>` removes a project and everything it stored; `quarterdeck replay <round> [n]` re-runs a round's Driver turns in a fresh session that writes nothing, which is how you ask "why did it decide that?". See `packages/cli/README.md` for every command and flag.
 
 ## How a round works

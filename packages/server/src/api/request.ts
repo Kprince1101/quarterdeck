@@ -1,5 +1,6 @@
 import type { IncomingMessage } from 'node:http';
 import { HttpError, badRequest } from './http-error.js';
+import { bearerToken, verifyApiToken } from './token.js';
 
 export const MAX_BODY_BYTES = 1024 * 1024;
 
@@ -8,10 +9,12 @@ const JSON_TYPE = 'application/json';
 export interface RequestGuard {
   hosts: ReadonlySet<string>;
   origins: ReadonlySet<string>;
+  token: string;
 }
 
 export const localGuard = (
   port: number,
+  token: string,
   extraOrigins: readonly string[] = [],
 ): RequestGuard => {
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
@@ -19,7 +22,7 @@ export const localGuard = (
     ...[...hosts].map((host) => `http://${host}`),
     ...extraOrigins,
   ]);
-  return { hosts, origins };
+  return { hosts, origins, token };
 };
 
 export const assertLocalRequest = (
@@ -34,6 +37,11 @@ export const assertLocalRequest = (
     throw new HttpError(403, 'Origin not allowed');
   }
 };
+
+export const isAuthorized = (
+  req: IncomingMessage,
+  guard: RequestGuard,
+): boolean => verifyApiToken(guard.token, bearerToken(req.headers));
 
 const assertJsonType = (req: IncomingMessage) => {
   const [mediaType = ''] = (req.headers['content-type'] ?? '').split(';');

@@ -8,11 +8,22 @@ import { startApiServer } from '@quarterdeck/server';
 const api = await startApiServer({ port: 4317 });
 await fetch(`${api.url}/api/intents/notebook.add`, {
   method: 'POST',
-  headers: { 'content-type': 'application/json' },
+  headers: {
+    'content-type': 'application/json',
+    authorization: `Bearer ${api.token}`,
+  },
   body: JSON.stringify({ project: 'deck', body: 'remember this' }),
 });
 await api.close();
 ```
+
+## Token
+
+Every start makes a new token, 32 random bytes as base64url (`createApiToken`), and writes it to `~/.quarterdeck/api.token` (`writeApiToken`): any old file is removed first and the new one is created with mode `0600`, never widened then narrowed. `close()` removes the file if it still holds this server's token, so a second server on another port keeps its own. The file is written only once the port is bound, so a start that fails on a taken port leaves the running server's token alone. `api.token` and `api.tokenPath` give it to the caller.
+
+Every `/api` route needs `Authorization: Bearer <token>`: intents, reads like `turn.read` and `data.*`, `GET /api/rules`, and unknown `/api` paths. Without it, or with the wrong one, the answer is `401` with `WWW-Authenticate: Bearer` and an empty body. The check (`verifyApiToken`) compares SHA-256 digests with `crypto.timingSafeEqual`, so neither the content nor the length of the token leaks through timing. The Host and Origin guard below runs first. The dashboard files outside `/api` need no token, and the token is never in them: any local process can fetch the page.
+
+A process that talks to a running server reads the token with `readApiToken()` (`~/.quarterdeck/api.token`). `quarterdeck up` prints the dashboard URL with the token in its fragment, `http://127.0.0.1:<port>/#token=<token>`; browsers never send a fragment to the server, and the dashboard takes it from there (see the dashboard's [api](../../../dashboard/src/api/README.md#token)). The [stream](../stream/README.md#token) takes the same token.
 
 ## Projects
 
@@ -33,6 +44,7 @@ The server binds `127.0.0.1` only. It refuses a `Host` that is not `127.0.0.1:<p
 | 200    | Applied: `{ intent, status: "applied", id, result }`.                                        |
 | 202    | Recorded for the Driver, lifecycle or Planner to apply: `{ intent, status: "pending", id }`. |
 | 400    | Invalid body: `{ error, issues? }`, where `issues` are zod's `{ path, message }`.            |
+| 401    | No `Authorization: Bearer <token>`, or the wrong token. Empty body.                          |
 | 403    | Host or Origin refused.                                                                      |
 | 404    | Unknown route, intent, project, or a row the intent names.                                   |
 | 405    | Not a POST.                                                                                  |
@@ -89,4 +101,4 @@ A read the dashboard needs beyond the stream is an unrecorded intent: `POST /api
 
 ## Reading rules
 
-`GET /api/rules` is the one read route: rule files are not store rows, so they are not on the stream. It answers every rule's layers as `{ project, repoPath, rules: [{ name, file, defaults, machine, repo }] }`, where each layer is `{ path, content }` and `content` is `null` for a file that does not exist. `defaults` is the shipped file, `machine` is `~/.quarterdeck/rules.local.<file>`. `GET /api/rules?project=<slug>` also opens the project and adds `repo`, `<repoPath>/.quarterdeck/rules.local.<file>`; `repo` is `null` without a project or when the project has no `repoPath`. The shape is `rulesViewSchema` in `@quarterdeck/server/intents`. An unknown project is a 404, a bad slug a 400, and any method but `GET` a 405. The Host and Origin guard applies as for intents. Nothing is validated or merged here; the Rules widget does that with the loader's schemas, and `rules.write` checks again before writing.
+`GET /api/rules` is the one read route: rule files are not store rows, so they are not on the stream. It answers every rule's layers as `{ project, repoPath, rules: [{ name, file, defaults, machine, repo }] }`, where each layer is `{ path, content }` and `content` is `null` for a file that does not exist. `defaults` is the shipped file, `machine` is `~/.quarterdeck/rules.local.<file>`. `GET /api/rules?project=<slug>` also opens the project and adds `repo`, `<repoPath>/.quarterdeck/rules.local.<file>`; `repo` is `null` without a project or when the project has no `repoPath`. The shape is `rulesViewSchema` in `@quarterdeck/server/intents`. An unknown project is a 404, a bad slug a 400, and any method but `GET` a 405. The Host and Origin guard and the token apply as for intents. Nothing is validated or merged here; the Rules widget does that with the loader's schemas, and `rules.write` checks again before writing.

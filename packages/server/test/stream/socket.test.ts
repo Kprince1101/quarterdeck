@@ -13,6 +13,7 @@ import {
   vi,
 } from 'vitest';
 import { WebSocket, type ClientOptions } from 'ws';
+import { createApiToken } from '../../src/api/index.js';
 import { setGlobalPause } from '../../src/pause/index.js';
 import { IN_MEMORY, openStore } from '../../src/store/index.js';
 import type { Store } from '../../src/store/index.js';
@@ -22,9 +23,11 @@ import {
   SNAPSHOT_TURNS_PER_AGENT,
   STREAM_HOST,
   STREAM_PATH,
+  STREAM_PROTOCOL,
   createStream,
   serveStream,
   streamMessageSchema,
+  streamProtocols,
 } from '../../src/stream/index.js';
 import type {
   ServedStream,
@@ -57,7 +60,11 @@ describe.each(TEST_BACKENDS)('websocket stream on $name', (backend) => {
 
   const connect = (query = '', options?: ClientOptions): Promise<Client> =>
     new Promise((resolve, reject) => {
-      const ws = new WebSocket(`${served.url}${query}`, options);
+      const ws = new WebSocket(
+        `${served.url}${query}`,
+        streamProtocols(served.token),
+        options,
+      );
       const raw: unknown[] = [];
       const messages = () =>
         raw.map((message) => streamMessageSchema.parse(message));
@@ -88,11 +95,17 @@ describe.each(TEST_BACKENDS)('websocket stream on $name', (backend) => {
       ws.once('error', reject);
     });
 
-  const status = (query: string, headers: Record<string, string>) =>
+  const status = (
+    query: string,
+    headers: Record<string, string>,
+    protocols = streamProtocols(served.token),
+  ) =>
     new Promise<number>((resolve) => {
-      const ws = new WebSocket(`ws://${STREAM_HOST}:${served.port}${query}`, {
-        headers,
-      });
+      const ws = new WebSocket(
+        `ws://${STREAM_HOST}:${served.port}${query}`,
+        protocols,
+        { headers },
+      );
       ws.once('unexpected-response', (_, response) => {
         resolve(response.statusCode ?? 0);
         ws.terminate();
@@ -308,6 +321,24 @@ describe.each(TEST_BACKENDS)('websocket stream on $name', (backend) => {
     expect(await from('http://localhost:3000')).toBe(403);
     expect(await from('https://evil.example')).toBe(403);
   });
+
+  it('refuses an upgrade without the token, before any frame', async () => {
+    const host = `localhost:${served.port}`;
+    expect(await status(STREAM_PATH, { host }, [])).toBe(401);
+    expect(await status(STREAM_PATH, { host }, [STREAM_PROTOCOL])).toBe(401);
+    expect(
+      await status(STREAM_PATH, { host }, streamProtocols(createApiToken())),
+    ).toBe(401);
+    expect(
+      await status(STREAM_PATH, { host }, streamProtocols(`${served.token}x`)),
+    ).toBe(401);
+    expect(await status(STREAM_PATH, { host })).toBe(101);
+  });
+
+  it('answers with the stream protocol, never the token', async () => {
+    const client = await ready(await connect());
+    expect(client.ws.protocol).toBe(STREAM_PROTOCOL);
+  });
 });
 
 describe.each(TEST_BACKENDS)(
@@ -330,8 +361,8 @@ describe.each(TEST_BACKENDS)(
       await store.db.exec(CLEAR_TABLES);
     });
 
-    const listen = (url: string, stallMs = 0) => {
-      const ws = new WebSocket(url);
+    const listen = (served: ServedStream, stallMs = 0) => {
+      const ws = new WebSocket(served.url, streamProtocols(served.token));
       const messages: StreamMessage[] = [];
       const closes: number[] = [];
       ws.once('upgrade', (response) => {
@@ -369,7 +400,7 @@ describe.each(TEST_BACKENDS)(
           await store.publish({ kind: `history-${n}` });
         }
         const served = await serveStream({ store });
-        const client = listen(served.url);
+        const client = listen(served);
 
         await vi.waitFor(() => expect(client.kinds()).toHaveLength(50), {
           timeout: 10_000,
@@ -400,7 +431,7 @@ describe.each(TEST_BACKENDS)(
           await store.publish({ kind });
         }
         const served = await serveStream({ store, maxBufferedBytes: 1024 });
-        const client = listen(served.url, 300);
+        const client = listen(served, 300);
 
         await vi.waitFor(() =>
           expect(client.kinds()).toEqual(['one', 'two', 'three']),
@@ -448,7 +479,7 @@ describe('websocket stream upgrades', () => {
   };
 
   it('leaves other paths to the host server', async () => {
-    const stream = createStream({ store });
+    const stream = createStream({ store, token: createApiToken() });
     const { duplex, written } = socket();
 
     expect(
@@ -463,7 +494,7 @@ describe('websocket stream upgrades', () => {
   });
 
   it('refuses connections from other machines', async () => {
-    const stream = createStream({ store });
+    const stream = createStream({ store, token: createApiToken() });
     const { duplex, written } = socket();
 
     expect(
@@ -481,7 +512,7 @@ describe('websocket stream upgrades', () => {
     'disconnects every client when it closes',
     async () => {
       const served = await serveStream({ store });
-      const ws = new WebSocket(served.url);
+      const ws = new WebSocket(served.url, streamProtocols(served.token));
       const closed = new Promise<number>((done) => {
         ws.once('close', (code) => done(code));
       });

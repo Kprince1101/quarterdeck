@@ -5,6 +5,7 @@ import { initialStreamState, type StreamState } from './stream-state.js';
 export const useStream = (options: StreamOptions = {}): StreamState => {
   const {
     url,
+    token,
     WebSocket,
     retryDelayMs,
     maxRetryDelayMs,
@@ -18,6 +19,7 @@ export const useStream = (options: StreamOptions = {}): StreamState => {
   useEffect(() => {
     const connection = openStream({
       url,
+      token,
       WebSocket,
       retryDelayMs,
       maxRetryDelayMs,
@@ -33,6 +35,7 @@ export const useStream = (options: StreamOptions = {}): StreamState => {
     };
   }, [
     url,
+    token,
     WebSocket,
     retryDelayMs,
     maxRetryDelayMs,

@@ -1,12 +1,16 @@
 import { request } from 'node:http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { API_HOST, MAX_BODY_BYTES } from '../../src/api/index.js';
-import { TIMEOUT, startTestApi, type TestApi } from './harness.js';
+import {
+  API_HOST,
+  MAX_BODY_BYTES,
+  type ApiServer,
+} from '../../src/api/index.js';
+import { TIMEOUT, bearer, startTestApi, type TestApi } from './harness.js';
 
 const DASHBOARD_ORIGIN = 'http://localhost:5173';
 
 const rawPost = (
-  port: number,
+  { port, token }: ApiServer,
   headers: Record<string, string>,
   body = '{}',
 ): Promise<number | undefined> =>
@@ -17,7 +21,11 @@ const rawPost = (
         port,
         method: 'POST',
         path: '/api/intents/planner.message',
-        headers: { 'content-type': 'application/json', ...headers },
+        headers: {
+          'content-type': 'application/json',
+          ...bearer(token),
+          ...headers,
+        },
       },
       (res) => {
         res.resume();
@@ -44,10 +52,8 @@ describe('intent API guard', { timeout: TIMEOUT }, () => {
   });
 
   it('refuses a Host header that is not this server', async () => {
-    expect(await rawPost(t.api.port, { host: 'evil.example' })).toBe(403);
-    expect(await rawPost(t.api.port, { host: `localhost:${t.api.port}` })).toBe(
-      400,
-    );
+    expect(await rawPost(t.api, { host: 'evil.example' })).toBe(403);
+    expect(await rawPost(t.api, { host: `localhost:${t.api.port}` })).toBe(400);
   });
 
   it('refuses a foreign Origin and allows a configured one', async () => {
@@ -71,7 +77,10 @@ describe('intent API guard', { timeout: TIMEOUT }, () => {
   });
 
   it('answers 404 for unknown routes and intents', async () => {
-    const res = await fetch(`${t.api.url}/api/other`, { method: 'POST' });
+    const res = await fetch(`${t.api.url}/api/other`, {
+      method: 'POST',
+      headers: bearer(t.api.token),
+    });
     expect(res.status).toBe(404);
     const unknown = await t.send('round.explode', {});
     expect(unknown).toMatchObject({
@@ -81,7 +90,9 @@ describe('intent API guard', { timeout: TIMEOUT }, () => {
   });
 
   it('only accepts POST', async () => {
-    const res = await fetch(`${t.api.url}/api/intents/pause.set`);
+    const res = await fetch(`${t.api.url}/api/intents/pause.set`, {
+      headers: bearer(t.api.token),
+    });
     expect(res.status).toBe(405);
     expect(res.headers.get('allow')).toBe('POST');
   });
@@ -101,7 +112,7 @@ describe('intent API guard', { timeout: TIMEOUT }, () => {
   });
 
   it('refuses bodies over the size limit', async () => {
-    const declared = await rawPost(t.api.port, {
+    const declared = await rawPost(t.api, {
       host: `127.0.0.1:${t.api.port}`,
       'content-length': String(MAX_BODY_BYTES + 1),
     });

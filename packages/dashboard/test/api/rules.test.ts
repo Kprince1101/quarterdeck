@@ -26,7 +26,7 @@ describe('rules reader', { timeout: TIMEOUT }, () => {
 
   beforeAll(async () => {
     deck = await startDeck('deck');
-    read = createRulesReader({ baseUrl: deck.api.url });
+    read = createRulesReader({ baseUrl: deck.api.url, token: deck.api.token });
   }, TIMEOUT);
 
   afterAll(async () => {

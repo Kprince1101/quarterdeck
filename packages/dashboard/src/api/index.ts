@@ -3,6 +3,7 @@ import { createRulesReader } from './rules.js';
 
 export {
   IntentError,
+  authHeaders,
   createIntentClient,
   createIntentSender,
   type IntentClient,
@@ -40,6 +41,12 @@ export {
   type StreamState,
   type StreamStatus,
 } from './stream-state.js';
+export {
+  TOKEN_PARAM,
+  TOKEN_STORAGE_KEY,
+  takePageToken,
+  type TokenPage,
+} from './token.js';
 export { useStream } from './use-stream.js';
 export type {
   IntentInput,

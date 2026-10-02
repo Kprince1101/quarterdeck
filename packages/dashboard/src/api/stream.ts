@@ -2,6 +2,7 @@ import {
   STREAM_AFTER_PARAM,
   STREAM_PATH,
   streamMessageSchema,
+  streamProtocols,
   type StreamMessage,
 } from '@quarterdeck/server/stream-schema';
 import {
@@ -21,6 +22,7 @@ export const CLOSE_NORMAL = 1000;
 
 export interface StreamOptions {
   url?: string | undefined;
+  token?: string | undefined;
   WebSocket?: typeof WebSocket | undefined;
   retryDelayMs?: number | undefined;
   maxRetryDelayMs?: number | undefined;
@@ -69,7 +71,12 @@ const parseMessage = (data: unknown): StreamMessage => {
 
 export const openStream = (options: StreamOptions = {}): StreamConnection => {
   const url = options.url ?? defaultStreamUrl();
+  const { token } = options;
   const Socket = options.WebSocket ?? globalThis.WebSocket;
+  const open = (target: string): WebSocket => {
+    if (token === undefined) return new Socket(target);
+    return new Socket(target, streamProtocols(token));
+  };
   const retryDelay = options.retryDelayMs ?? RETRY_DELAY_MS;
   const maxRetryDelay = options.maxRetryDelayMs ?? MAX_RETRY_DELAY_MS;
   const limits: StreamLimits = {
@@ -108,7 +115,7 @@ export const openStream = (options: StreamOptions = {}): StreamConnection => {
 
   const connect = (): void => {
     timer = undefined;
-    const ws = new Socket(resumeUrl(url, state.cursor));
+    const ws = open(resumeUrl(url, state.cursor));
     const drop = (reason: string): void => {
       if (socket !== ws) return;
       socket = undefined;
