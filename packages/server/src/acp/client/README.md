@@ -47,3 +47,5 @@ What Quarterdeck does control is permission: every `session/request_permission` 
 | `process_error`  | The child process or its stdin raised an error        |
 | `exit`           | The agent process exited (code, signal)               |
 | `closed`         | The ACP connection closed                             |
+
+`agent_version` and `spawn_retry` come from `launchAcpClient`, which adapters use to start agents; see [`../launch/README.md`](../launch/README.md).
