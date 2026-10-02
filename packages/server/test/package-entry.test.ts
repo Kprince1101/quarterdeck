@@ -37,7 +37,7 @@ describe('@quarterdeck/server package entry', () => {
       expect(result.stderr).toBe('');
       expect(result.status).toBe(0);
       expect(JSON.parse(result.stdout)).toEqual({
-        migrated: ['0001_init'],
+        migrated: ['0001_init', '0002_agent_names'],
         kind: 'entry',
       });
     },

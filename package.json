@@ -9,10 +9,10 @@
     "node": ">=22"
   },
   "workspaces": [
+    "rules",
     "packages/server",
     "packages/dashboard",
     "packages/cli",
-    "rules",
     "site"
   ],
   "scripts": {

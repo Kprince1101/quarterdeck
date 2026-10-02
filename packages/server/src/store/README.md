@@ -57,9 +57,9 @@ Every insert into `events`, through `publish` or plain SQL, fires `pg_notify` on
 
 | Table               | Holds                                                                                                                           |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `projects`          | One row per project: `slug`, `name`, `repo_path`.                                                                               |
+| `projects`          | One row per project: `slug`, `name`, `repo_path`, `archived_at` (set once archived; its agents no longer hold their names).     |
 | `rounds`            | Numbered rounds per project: `status` planning / active / ended, `goal`.                                                        |
-| `agents`            | Planner, Driver, builders, reviewer: `name`, `role`, `runtime` (kiro / claude / gemini), lifecycle `status`.                    |
+| `agents`            | Planner, Driver, builders, reviewer: `name` (unique per project among agents not `retired`), `role`, `runtime`, `status`.       |
 | `tickets`           | Local tickets: `status`, `assignee_id`, `depends_on`, `source` + `external_id` for ticket-source plugins, `pr_url`, `head_sha`. |
 | `cards`             | Human gates: `kind`, `question`, `options`, `status` open / answered / declined / expired, `answer`.                            |
 | `turns`             | One ACP prompt turn per row: `agent_id`, `seq`, `prompt`, `stop_reason`, token counts, `transcript_path`.                       |
