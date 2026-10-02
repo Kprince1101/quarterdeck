@@ -64,6 +64,7 @@ const snapshot = (turns: TurnRow[]): StreamMessage => ({
   type: 'snapshot',
   cursor: 0,
   tables: { ...emptyTables(), projects: [project('deck')], turns },
+  machine: { pausedAt: null },
 });
 
 const mount = async (
