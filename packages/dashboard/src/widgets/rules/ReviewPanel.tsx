@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { RuleView } from '../../api/index.js';
 import type { DiffLine } from '../line-diff.js';
 import { DIFF_MARKS } from './constants.js';
@@ -16,7 +17,10 @@ const DiffRow = ({ line }: { line: DiffLine }) => (
   </span>
 );
 
-export const ReviewPanel = ({ view, rule }: ReviewPanelProps) => {
+export const ReviewPanel = ({
+  view,
+  rule,
+}: ReviewPanelProps): JSX.Element | null => {
   if (view.review === null) return null;
   return (
     <section className="qd-rules-layer" aria-label="Review changes">

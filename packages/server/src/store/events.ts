@@ -43,7 +43,7 @@ const reportError = (err: unknown): void => {
 };
 
 export const reporter =
-  (onError: (err: unknown) => void = reportError) =>
+  (onError: (err: unknown) => void = reportError): ((err: unknown) => void) =>
   (err: unknown): void => {
     try {
       onError(err);

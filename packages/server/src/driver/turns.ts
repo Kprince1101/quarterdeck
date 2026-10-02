@@ -114,7 +114,7 @@ const endTurn = (
 export const collectUpdates = (
   client: Pick<AcpClient, 'subscribe'>,
   sessionId: string,
-) => {
+): { updates: SessionUpdate[]; stop: () => void } => {
   const updates: SessionUpdate[] = [];
   const stop = client.subscribe((event) => {
     if (event.type === 'session_update' && event.sessionId === sessionId) {

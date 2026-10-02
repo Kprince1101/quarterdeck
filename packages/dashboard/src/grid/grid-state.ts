@@ -109,7 +109,9 @@ export const initialGridState = (layout: GridLayout): GridState => ({
 });
 
 export const createGridReducer =
-  (registry: WidgetRegistry) =>
+  (
+    registry: WidgetRegistry,
+  ): ((state: GridState, action: GridStateAction) => GridState) =>
   (state: GridState, action: GridStateAction): GridState => {
     if (action.type === 'load') return load(state, action.layout);
     return edit(state, action, registry);

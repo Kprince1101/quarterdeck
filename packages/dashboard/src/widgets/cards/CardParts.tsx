@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { CardView } from './card-deck.js';
 
 interface CardHeadProps {
@@ -6,7 +7,7 @@ interface CardHeadProps {
   age: string;
 }
 
-export const CardHead = ({ card, at, age }: CardHeadProps) => (
+export const CardHead = ({ card, at, age }: CardHeadProps): JSX.Element => (
   <header className="qd-card-head">
     <span className="qd-card-kind" data-kind={card.kind}>
       {card.label}
@@ -27,7 +28,7 @@ interface CardTicketProps {
   ticket: string | null;
 }
 
-export const CardTicket = ({ ticket }: CardTicketProps) => {
+export const CardTicket = ({ ticket }: CardTicketProps): JSX.Element | null => {
   if (ticket === null) return null;
   return <p className="qd-card-ticket">Ticket: {ticket}</p>;
 };
@@ -46,7 +47,7 @@ interface CardFactsProps {
   card: CardView;
 }
 
-export const CardFacts = ({ card }: CardFactsProps) => {
+export const CardFacts = ({ card }: CardFactsProps): JSX.Element | null => {
   if (card.checked === null && card.recommendation === null) return null;
   return (
     <dl className="qd-card-facts">

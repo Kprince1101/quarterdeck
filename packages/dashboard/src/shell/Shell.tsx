@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, JSX } from 'react';
 import type { StreamState, StreamStatus } from '../api/index.js';
 import { useDeck } from '../deck/DeckProvider.js';
 
@@ -9,7 +9,11 @@ export const STATUS_LABELS: Record<StreamStatus, string> = {
   closed: 'Disconnected',
 };
 
-export const StreamStatusBadge = ({ stream }: { stream: StreamState }) => (
+export const StreamStatusBadge = ({
+  stream,
+}: {
+  stream: StreamState;
+}): JSX.Element => (
   <span
     className="qd-status"
     data-status={stream.status}
@@ -25,7 +29,7 @@ export interface ShellProps {
   children?: ReactNode;
 }
 
-export const Shell = ({ mode, children }: ShellProps) => {
+export const Shell = ({ mode, children }: ShellProps): JSX.Element => {
   const { stream } = useDeck();
   const hasMode = mode !== undefined;
   return (
@@ -48,7 +52,11 @@ export interface PanelProps {
   children?: ReactNode;
 }
 
-export const Panel = ({ title, actions, children }: PanelProps) => (
+export const Panel = ({
+  title,
+  actions,
+  children,
+}: PanelProps): JSX.Element => (
   <section className="qd-panel" aria-label={title}>
     <header className="qd-panel-header">
       <h2 className="qd-panel-title">{title}</h2>

@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { defineWidget } from '../registry.js';
 import { Pager, PathList, RowsTable, TableList } from './DataParts.js';
 import type { PageView } from './data-view.js';
@@ -46,7 +47,7 @@ const StoredData = ({ view }: { view: DataWidgetView }) => {
   );
 };
 
-export const DataWidget = () => {
+export const DataWidget = (): JSX.Element => {
   const view = useDataWidget();
   if (view.project === null) {
     return <p className="qd-empty">Waiting for the project.</p>;

@@ -7,7 +7,7 @@ export interface EventHub<Event> {
   subscribe: (listener: (event: Event) => void) => () => void;
 }
 
-export const logListenerError = (err: unknown) => {
+export const logListenerError = (err: unknown): void => {
   console.error(`ACP client event listener failed: ${getErrorMessage(err)}`);
 };
 

@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { RuleLayer, RuleView } from '../../api/index.js';
 import { REPO_NOT_MERGED_NOTICE } from './constants.js';
 import { LayerHeading, RulesAlert } from './RulesParts.js';
@@ -15,7 +16,10 @@ const RepoBody = ({ repo }: { repo: RuleLayer }) => {
   return <pre className="qd-rules-text">{repo.content}</pre>;
 };
 
-export const RepoLayer = ({ view, rule }: RepoLayerProps) => {
+export const RepoLayer = ({
+  view,
+  rule,
+}: RepoLayerProps): JSX.Element | null => {
   if (!view.showRepoLayer) return null;
   if (rule.repo === null) {
     return (

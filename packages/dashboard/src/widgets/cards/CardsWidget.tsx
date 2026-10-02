@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { defineWidget } from '../registry.js';
 import { LOOKUP_LABEL, type CardView } from './card-deck.js';
 import { CardFacts, CardHead, CardTicket } from './CardParts.js';
@@ -72,7 +73,7 @@ const AnsweredCards = ({ id, cards, hasHistory }: AnsweredCardsProps) => {
   );
 };
 
-export const CardsWidget = () => {
+export const CardsWidget = (): JSX.Element => {
   const view = useCardsWidget();
   return (
     <div className="qd-cards">

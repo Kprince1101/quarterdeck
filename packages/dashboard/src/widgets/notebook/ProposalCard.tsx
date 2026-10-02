@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react';
+import type { ComponentType, JSX } from 'react';
 import type { DiffLine } from '../line-diff.js';
 import { RequestError } from '../RequestError.js';
 import { DiffView } from './DiffView.js';
@@ -71,7 +71,10 @@ export interface ProposalCardProps {
   showProject: boolean;
 }
 
-export const ProposalCard = ({ proposal, showProject }: ProposalCardProps) => {
+export const ProposalCard = ({
+  proposal,
+  showProject,
+}: ProposalCardProps): JSX.Element => {
   const card = useProposalCard(proposal);
   const Body = PROPOSAL_BODIES[proposal.display];
   return (

@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { Panel } from '../shell/Shell.js';
 import {
   useWidgetCell,
@@ -45,7 +46,10 @@ const CellControls = ({ view }: CellControlsProps) => (
   </>
 );
 
-export const WidgetCell = ({ cell, controls }: WidgetCellProps) => {
+export const WidgetCell = ({
+  cell,
+  controls,
+}: WidgetCellProps): JSX.Element => {
   const view = useWidgetCell({ cell, controls });
   return (
     <div

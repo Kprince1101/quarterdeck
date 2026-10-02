@@ -28,7 +28,7 @@ export const localGuard = (
 export const assertLocalRequest = (
   req: IncomingMessage,
   guard: RequestGuard,
-) => {
+): void => {
   if (!guard.hosts.has(req.headers.host ?? '')) {
     throw new HttpError(403, 'Host not allowed');
   }

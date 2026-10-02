@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { defineWidget } from '../registry.js';
 import type { FeedRow, FilterOption } from './event-feed.js';
 import './events.css';
@@ -65,7 +66,7 @@ const EventFeedBody = ({
   return <EventList rows={rows} />;
 };
 
-export const EventsWidget = () => {
+export const EventsWidget = (): JSX.Element => {
   const {
     rows,
     projectOptions,

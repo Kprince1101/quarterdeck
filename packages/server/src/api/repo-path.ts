@@ -29,7 +29,9 @@ const isDirectory = async (path: string): Promise<boolean> => {
   }
 };
 
-export const assertDirectory = async (path: string | null | undefined) => {
+export const assertDirectory = async (
+  path: string | null | undefined,
+): Promise<void> => {
   if (typeof path !== 'string') return;
   if (!(await isDirectory(path))) {
     throw badRequest(`repoPath ${path} is not a directory`);

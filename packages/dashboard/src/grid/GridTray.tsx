@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { GridTrayView, HiddenWidget } from './use-grid-tray.js';
 
 interface GridTrayProps {
@@ -45,7 +46,7 @@ const HiddenItem = ({ widget }: { widget: HiddenWidget }) => (
   </li>
 );
 
-export const GridTray = ({ tray }: GridTrayProps) => (
+export const GridTray = ({ tray }: GridTrayProps): JSX.Element => (
   <section
     ref={tray.trayRef}
     className="qd-grid-tray"

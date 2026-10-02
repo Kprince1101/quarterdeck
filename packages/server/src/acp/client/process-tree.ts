@@ -42,7 +42,7 @@ const signalProcessGroup = (pid: number, signal: TreeSignal) => {
   }
 };
 
-export const signalTree = (pid: number, signal: TreeSignal) => {
+export const signalTree = (pid: number, signal: TreeSignal): void => {
   if (IS_WINDOWS) {
     signalWindowsTree(pid, signal);
     return;
@@ -50,7 +50,7 @@ export const signalTree = (pid: number, signal: TreeSignal) => {
   signalProcessGroup(pid, signal);
 };
 
-export const isTreeAlive = (pid: number) => {
+export const isTreeAlive = (pid: number): boolean => {
   try {
     process.kill(treeTarget(pid), 0);
     return true;

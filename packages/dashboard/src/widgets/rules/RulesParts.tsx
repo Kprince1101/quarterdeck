@@ -1,10 +1,11 @@
+import type { JSX } from 'react';
 import type { RuleView } from '../../api/index.js';
 
 interface MessageProps {
   message: string | null;
 }
 
-export const RulesAlert = ({ message }: MessageProps) => {
+export const RulesAlert = ({ message }: MessageProps): JSX.Element | null => {
   if (message === null) return null;
   return (
     <pre className="qd-rules-error" role="alert">
@@ -13,7 +14,7 @@ export const RulesAlert = ({ message }: MessageProps) => {
   );
 };
 
-export const RulesStatus = ({ message }: MessageProps) => {
+export const RulesStatus = ({ message }: MessageProps): JSX.Element | null => {
   if (message === null) return null;
   return (
     <p className="qd-rules-ok" role="status">
@@ -32,7 +33,7 @@ export const LayerHeading = ({
   title,
   path,
   readOnly = false,
-}: LayerHeadingProps) => (
+}: LayerHeadingProps): JSX.Element => (
   <header className="qd-rules-layer-head">
     <h3>
       {title}
@@ -46,7 +47,7 @@ interface DefaultsLayerProps {
   rule: RuleView;
 }
 
-export const DefaultsLayer = ({ rule }: DefaultsLayerProps) => (
+export const DefaultsLayer = ({ rule }: DefaultsLayerProps): JSX.Element => (
   <section className="qd-rules-layer" aria-label="Shipped defaults">
     <LayerHeading title="Shipped defaults" path={rule.defaults.path} readOnly />
     <p className="qd-rules-note">

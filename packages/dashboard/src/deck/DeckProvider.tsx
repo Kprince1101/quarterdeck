@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, useContext, type ReactNode, type JSX } from 'react';
 import {
   useDeckProvider,
   type Deck,
@@ -13,7 +13,10 @@ export interface DeckProviderProps extends DeckSources {
 
 const DeckContext = createContext<Deck | null>(null);
 
-export const DeckProvider = ({ children, ...sources }: DeckProviderProps) => {
+export const DeckProvider = ({
+  children,
+  ...sources
+}: DeckProviderProps): JSX.Element => {
   const deck = useDeckProvider(sources);
   return <DeckContext value={deck}>{children}</DeckContext>;
 };

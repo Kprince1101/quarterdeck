@@ -1,4 +1,4 @@
-import type { KeyboardEvent, ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode, JSX } from 'react';
 import type { TabPanelView, TabView } from './use-tabs.js';
 import './tab-bar.css';
 
@@ -30,7 +30,11 @@ export interface TabBarProps {
   onKeyDown: (event: KeyboardEvent) => void;
 }
 
-export const TabBar = ({ label, tabs, onKeyDown }: TabBarProps) => (
+export const TabBar = ({
+  label,
+  tabs,
+  onKeyDown,
+}: TabBarProps): JSX.Element => (
   <div
     className="qd-tab-bar"
     role="tablist"
@@ -48,7 +52,7 @@ export interface TabPanelProps {
   children?: ReactNode;
 }
 
-export const TabPanel = ({ panel, children }: TabPanelProps) => (
+export const TabPanel = ({ panel, children }: TabPanelProps): JSX.Element => (
   <div
     className="qd-tab-panel"
     role="tabpanel"

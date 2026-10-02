@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { RuleView } from '../../api/index.js';
 import { LayerHeading, RulesAlert } from './RulesParts.js';
 import type { RulesWidgetView } from './use-rules-widget.js';
@@ -27,7 +28,10 @@ const ShellWarnings = ({ warnings }: { warnings: string[] }) => {
   );
 };
 
-export const MachineLayer = ({ view, rule }: MachineLayerProps) => (
+export const MachineLayer = ({
+  view,
+  rule,
+}: MachineLayerProps): JSX.Element => (
   <section className="qd-rules-layer" aria-label="Machine layer">
     <LayerHeading title="Machine layer" path={rule.machine.path} />
     <p className="qd-rules-note">

@@ -1,9 +1,10 @@
+import type { JSX } from 'react';
 import { defineWidget } from '../registry.js';
 import { AgentCard } from './AgentCard.js';
 import { useAgentsWidget } from './use-agents-widget.js';
 import './agents.css';
 
-export const AgentsWidget = () => {
+export const AgentsWidget = (): JSX.Element => {
   const { agents, showProject, isEmpty } = useAgentsWidget();
   if (isEmpty) return <p className="qd-empty">No agents yet.</p>;
   return (

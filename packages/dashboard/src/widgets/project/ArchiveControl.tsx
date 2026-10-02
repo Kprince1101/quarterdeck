@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { RequestError } from '../RequestError.js';
 import type { ProjectPanel } from './project-model.js';
 import { useArchiveProject } from './use-archive-project.js';
@@ -6,7 +7,7 @@ export interface ArchiveControlProps {
   panel: ProjectPanel;
 }
 
-export const ArchiveControl = ({ panel }: ArchiveControlProps) => {
+export const ArchiveControl = ({ panel }: ArchiveControlProps): JSX.Element => {
   const { archiveLabel, isPending, error, handleArchive } =
     useArchiveProject(panel);
   return (

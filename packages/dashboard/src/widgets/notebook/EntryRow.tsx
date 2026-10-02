@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { RequestError } from '../RequestError.js';
 import type { EntryView } from './notebook-model.js';
 import { ProjectTag } from './ProjectTag.js';
@@ -8,7 +9,10 @@ export interface EntryRowProps {
   showProject: boolean;
 }
 
-export const EntryRow = ({ entry, showProject }: EntryRowProps) => {
+export const EntryRow = ({
+  entry,
+  showProject,
+}: EntryRowProps): JSX.Element => {
   const { isPending, error, handleTogglePin } = useEntryRow(entry);
   return (
     <li className="qd-notebook-entry" data-entry-id={entry.id}>

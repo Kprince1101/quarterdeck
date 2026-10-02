@@ -1,7 +1,8 @@
+import type { JSX } from 'react';
 import { defineWidget } from '../registry.js';
 import { useTablesWidget } from './use-tables-widget.js';
 
-export const TablesWidget = () => {
+export const TablesWidget = (): JSX.Element => {
   const { counts } = useTablesWidget();
   return (
     <dl className="qd-table-counts">

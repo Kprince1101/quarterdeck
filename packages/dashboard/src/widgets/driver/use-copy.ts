@@ -12,7 +12,12 @@ const writeText = async (text: string): Promise<void> => {
   await clipboard.writeText(text);
 };
 
-export const useCopy = (text: string) => {
+export interface CopyView {
+  state: CopyState;
+  copy: () => void;
+}
+
+export const useCopy = (text: string): CopyView => {
   const [copied, setCopied] = useState<{ text: string; state: CopyState }>({
     text,
     state: 'idle',

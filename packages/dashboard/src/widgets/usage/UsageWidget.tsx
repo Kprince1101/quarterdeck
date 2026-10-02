@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { defineWidget } from '../registry.js';
 import { NO_CAP, type UsageView } from './usage-model.js';
 import { useUsageWidget } from './use-usage-widget.js';
@@ -46,7 +47,7 @@ const UsageError = ({ error }: UsageErrorProps) => {
   );
 };
 
-export const UsageWidget = () => {
+export const UsageWidget = (): JSX.Element => {
   const { view, error } = useUsageWidget();
   return (
     <div className="qd-usage">

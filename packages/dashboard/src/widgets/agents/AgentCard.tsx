@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { RequestError } from '../RequestError.js';
 import type { AgentTicketView, AgentView } from './agents-model.js';
 import type { HeldWorkView } from './held-work.js';
@@ -58,7 +59,10 @@ export interface AgentCardProps {
   showProject: boolean;
 }
 
-export const AgentCard = ({ agent, showProject }: AgentCardProps) => {
+export const AgentCard = ({
+  agent,
+  showProject,
+}: AgentCardProps): JSX.Element => {
   const card = useAgentCard(agent);
   return (
     <li

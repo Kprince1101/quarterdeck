@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { TurnReadResult } from '@quarterdeck/server/intents';
 import { replayCommand } from '@quarterdeck/server/replay-command';
 import type { DriverTurn } from './driver-turns.js';
@@ -136,7 +137,7 @@ export const TurnDetailView = ({
   project,
   selected,
   detail,
-}: TurnDetailViewProps) => {
+}: TurnDetailViewProps): JSX.Element => {
   const { turn, driver } = selected;
   return (
     <section className="qd-driver-detail" aria-label="Turn detail">

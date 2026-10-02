@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { WidgetRegistry } from '../widgets/registry.js';
 import { WidgetMount } from '../widgets/WidgetMount.js';
 import { LayoutBar } from './LayoutBar.js';
@@ -8,7 +9,10 @@ export interface DeckLayoutProps {
   saveDelayMs?: number | undefined;
 }
 
-export const DeckLayout = ({ registry, saveDelayMs }: DeckLayoutProps) => {
+export const DeckLayout = ({
+  registry,
+  saveDelayMs,
+}: DeckLayoutProps): JSX.Element => {
   const view = useDeckLayout({ saveDelayMs });
   return (
     <div className="qd-layout">

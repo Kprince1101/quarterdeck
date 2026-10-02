@@ -5,6 +5,18 @@
   "ignorePatterns": ["node_modules/**", "dist/**", "coverage/**"],
   "overrides": [
     {
+      "files": ["packages/*/src/**/*.ts", "packages/*/src/**/*.tsx"],
+      "rules": {
+        "typescript/explicit-module-boundary-types": [
+          "error",
+          {
+            "allowHigherOrderFunctions": false,
+            "allowDirectConstAssertionInArrowFunctions": false
+          }
+        ]
+      }
+    },
+    {
       "files": ["packages/dashboard/src/**/*.tsx"],
       "rules": {
         "unicorn/filename-case": [
