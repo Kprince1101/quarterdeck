@@ -7,5 +7,16 @@
   "author": "Kristopher Prince",
   "engines": {
     "node": ">=22"
+  },
+  "dependencies": {
+    "@quarterdeck/server": "0.0.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "happy-dom": "^20.14.5"
   }
 }
