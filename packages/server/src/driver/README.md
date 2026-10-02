@@ -126,15 +126,20 @@ Each `ReplayTurn` holds the `seq`, the `input` sent, the `savedOutput` from `out
 
 ### The dashboard's command
 
-`replayCommand({ project, agentId, through })` is the command the dashboard shows beside a Driver turn to replay its round up to that turn:
+`replayCommand({ round, through?, project? })` is the command the Driver widget shows to replay a round up to its `through`th Driver turn (1 is the birth), or the whole round without `through`. It runs [`quarterdeck replay`](../../../cli/README.md#replay):
 
 ```sh
-npx quarterdeck replay commander 7d0f3a4e-2b1c-4c5d-9e8f-0a1b2c3d4e5f 7
+npx quarterdeck replay 3 7
+npx quarterdeck replay 3 7 --project commander
 ```
 
-`packages/cli` has no `replay` subcommand yet (ticket QD11d). Until then, the line shows the command's agreed shape, but it doesn't run.
+Round numbers start at 1 in every project, so pass `project` when the machine may have more than one; without it the CLI picks the only project that has the round. `through` counts Driver turns within the round, not `seq`: the turn with `seq` s in a session born at `seq` b is turn s - b + 1.
 
-It refuses a project that is not a slug, an agent id that is not a uuid and an `n` that is not a positive integer, so the line is always safe to paste. `agentId` is checked the same way by `readTurnChain`, since it names a folder under `turnsDir`.
+It refuses a round or `n` that is not a positive integer and a project that is not a slug, so the line is always safe to paste. `readTurnChain` checks `agentId` is a uuid, since it names a folder under `turnsDir`.
+
+### Finding a round's Driver
+
+`findRoundSessions(turnsDir, round)` finds a round's Driver sessions from the turn files alone, so it works while `quarterdeck up` has the store open. It reads each agent folder's first input; a Driver's is a birth input (`readBirth` gives the Driver's name and round from its first line). Each birth starts a session that runs through the turns after it, up to the next birth. It resolves to the sessions of `round`, oldest birth first (by `input.md`'s modification time), each with `agentId`, `driverName`, `firstSeq`, `lastSeq` and `bornAt`. A round has more than one when its Driver session was opened again or another Driver took the round over.
 
 ## Events
 
