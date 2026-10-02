@@ -5,6 +5,7 @@ import {
   assertProjectSlug,
   projectDataDir,
   projectTurnsDir,
+  projectWorktreesDir,
   quarterdeckHome,
 } from '../../src/store/index.js';
 
@@ -26,6 +27,18 @@ describe('store paths', () => {
     );
     expect(projectTurnsDir('qd-2', '/tmp/qd')).toBe('/tmp/qd/qd-2/turns');
     expect(() => projectTurnsDir('../escape')).toThrow('Invalid project slug');
+  });
+
+  it('keeps builder worktrees next to the data dir', () => {
+    expect(projectWorktreesDir('commander')).toBe(
+      join(homedir(), '.quarterdeck', 'commander', 'worktrees'),
+    );
+    expect(projectWorktreesDir('qd-2', '/tmp/qd')).toBe(
+      '/tmp/qd/qd-2/worktrees',
+    );
+    expect(() => projectWorktreesDir('../escape')).toThrow(
+      'Invalid project slug',
+    );
   });
 
   it.each(['', '../escape', 'a/b', 'Upper', '-lead', 'x'.repeat(64)])(

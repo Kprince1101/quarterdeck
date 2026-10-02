@@ -51,6 +51,20 @@ describe('gitWorktrees', () => {
 
   const registered = () => git(repo, 'worktree', 'list', '--porcelain');
 
+  it('adds a detached worktree at the base, creating its parent folder', async () => {
+    const path = join(root, 'worktrees', 'crane-1234');
+    const base = git(repo, 'rev-parse', 'HEAD').trim();
+
+    await gitWorktrees.add({ repoPath: repo, path, base });
+
+    expect(git(path, 'rev-parse', 'HEAD').trim()).toBe(base);
+    expect(git(path, 'branch', '--show-current').trim()).toBe('');
+    expect(registered()).toContain(path);
+    await expect(
+      gitWorktrees.add({ repoPath: repo, path, base }),
+    ).rejects.toThrow();
+  });
+
   it('removes a clean worktree and unregisters it', async () => {
     git(repo, 'worktree', 'add', '--quiet', '-b', 'crane/qd5a', worktree);
     git(worktree, 'commit', '--quiet', '--allow-empty', '-m', 'done');
