@@ -53,6 +53,8 @@ describe('round cleanup', { timeout: TIMEOUT }, () => {
       sessions,
       worktrees,
       openStores: () => [store],
+      budget: () =>
+        Promise.resolve({ hours: 5, capTokens: null, holdAtFraction: 0.8 }),
     });
   };
 

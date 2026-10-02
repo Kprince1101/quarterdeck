@@ -96,6 +96,9 @@ describe('valueSources', () => {
       stuckAfterMinutes: 'repo',
       'budget.maxTokensPerTicket': 'defaults',
       'budget.warnAtFraction': 'machine',
+      'budget.window.hours': 'defaults',
+      'budget.window.capTokens': 'defaults',
+      'budget.window.holdAtFraction': 'defaults',
       'mergeGate.requireReviewerApproval': 'defaults',
       'mergeGate.requireChecksPassing': 'defaults',
       'mergeGate.requireCopilotReview': 'defaults',
@@ -135,6 +138,25 @@ describe('valueSources', () => {
     expect(sourcesOf(longer, draft)['autoEndSettleSeconds']).toBe('repo');
   });
 
+  it('lets the repo layer only tighten the budget window', () => {
+    const draft = '{ "budget": { "window": { "capTokens": 1000 } } }';
+    const lifted = ruleView(
+      'lifecycle',
+      { repo: '{ "budget": { "window": { "capTokens": null, "hours": 1 } } }' },
+      REPO,
+    );
+    expect(checkDraft(lifted, draft).effective).toMatchObject({
+      budget: { window: { hours: 5, capTokens: 1000 } },
+    });
+    expect(sourcesOf(lifted, draft)['budget.window.capTokens']).toBe('machine');
+    const smaller = ruleView(
+      'lifecycle',
+      { repo: '{ "budget": { "window": { "capTokens": 400 } } }' },
+      REPO,
+    );
+    expect(sourcesOf(smaller, draft)['budget.window.capTokens']).toBe('repo');
+  });
+
   it('marks the values the repo layer can only tighten', () => {
     const rule = ruleView('lifecycle');
     const check = checkDraft(rule, '{}');
@@ -143,6 +165,9 @@ describe('valueSources', () => {
       .map(({ key }) => key);
     expect(tight).toEqual([
       'autoEndSettleSeconds',
+      'budget.window.hours',
+      'budget.window.capTokens',
+      'budget.window.holdAtFraction',
       'mergeGate.requireReviewerApproval',
       'mergeGate.requireChecksPassing',
       'mergeGate.requireCopilotReview',

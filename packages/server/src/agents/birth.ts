@@ -9,6 +9,7 @@ export interface BirthRequest {
   role: AgentRole;
   runtime: Runtime;
   roundId?: string;
+  ticketId?: string;
   prepare?: (agent: Agent) => Promise<Agent>;
 }
 

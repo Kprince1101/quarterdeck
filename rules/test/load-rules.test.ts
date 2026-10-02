@@ -103,8 +103,112 @@ describe('rules loader', () => {
     expect(lifecycle.budget).toEqual({
       maxTokensPerTicket: 500,
       warnAtFraction: 0.8,
+      window: { hours: 5, capTokens: null, holdAtFraction: 0.8 },
     });
     expect(lifecycle.stuckAfterMinutes).toBe(30);
+  });
+
+  it('ships no window cap and lets a local layer set one', async () => {
+    expect((await loadRule('lifecycle', sandbox)).budget.window.capTokens).toBe(
+      null,
+    );
+    await writeLocalJson(sandbox.homeDir, 'lifecycle.json', {
+      budget: { window: { capTokens: 1_000_000 } },
+    });
+
+    const lifecycle = await loadRule('lifecycle', sandbox);
+
+    expect(lifecycle.budget.window).toEqual({
+      hours: 5,
+      capTokens: 1_000_000,
+      holdAtFraction: 0.8,
+    });
+  });
+
+  it('lets the repo layer only tighten the budget window', async () => {
+    await writeLocalJson(sandbox.homeDir, 'lifecycle.json', {
+      budget: { window: { capTokens: 1000, holdAtFraction: 0.7 } },
+    });
+    await writeLocalJson(sandbox.repoDir, 'lifecycle.json', {
+      stuckAfterMinutes: 45,
+      budget: {
+        maxTokensPerTicket: 500,
+        window: { hours: 1, capTokens: null, holdAtFraction: 0.9 },
+      },
+    });
+
+    const lifecycle = await loadRule('lifecycle', sandbox);
+
+    expect(lifecycle.stuckAfterMinutes).toBe(45);
+    expect(lifecycle.budget).toEqual({
+      maxTokensPerTicket: 500,
+      warnAtFraction: 0.8,
+      window: { hours: 5, capTokens: 1000, holdAtFraction: 0.7 },
+    });
+  });
+
+  it('lets the repo layer set a smaller cap and a lower hold line', async () => {
+    await writeLocalJson(sandbox.homeDir, 'lifecycle.json', {
+      budget: { window: { capTokens: 1000 } },
+    });
+    await writeLocalJson(sandbox.repoDir, 'lifecycle.json', {
+      budget: { window: { hours: 8, capTokens: 400, holdAtFraction: 0.5 } },
+    });
+
+    const lifecycle = await loadRule('lifecycle', sandbox);
+
+    expect(lifecycle.budget.window).toEqual({
+      hours: 8,
+      capTokens: 400,
+      holdAtFraction: 0.5,
+    });
+  });
+
+  it('lets the repo layer set a cap when the machine has none', async () => {
+    await writeLocalJson(sandbox.repoDir, 'lifecycle.json', {
+      budget: { window: { capTokens: 400 } },
+    });
+
+    const lifecycle = await loadRule('lifecycle', sandbox);
+
+    expect(lifecycle.budget.window.capTokens).toBe(400);
+  });
+
+  it('tightens the budget window, the merge gate and the settle time from one repo layer', async () => {
+    await writeLocalJson(sandbox.homeDir, 'lifecycle.json', {
+      autoEndSettleSeconds: 300,
+      budget: { window: { capTokens: 1000 } },
+      mergeGate: { autoMerge: true },
+    });
+    await writeLocalJson(sandbox.repoDir, 'lifecycle.json', {
+      autoEndSettleSeconds: 60,
+      budget: { window: { capTokens: null, holdAtFraction: 0.5 } },
+      mergeGate: { autoMerge: true, requireCopilotReview: true },
+    });
+
+    const lifecycle = await loadRule('lifecycle', sandbox);
+
+    expect(lifecycle.autoEndSettleSeconds).toBe(300);
+    expect(lifecycle.budget.window).toEqual({
+      hours: 5,
+      capTokens: 1000,
+      holdAtFraction: 0.5,
+    });
+    expect(lifecycle.mergeGate).toMatchObject({
+      autoMerge: true,
+      requireCopilotReview: true,
+    });
+  });
+
+  it('rejects a window cap that is not a positive integer', async () => {
+    const path = await writeLocalJson(sandbox.repoDir, 'lifecycle.json', {
+      budget: { window: { capTokens: 0 } },
+    });
+
+    await expect(loadRule('lifecycle', sandbox)).rejects.toMatchObject({
+      path,
+      message: expect.stringContaining('budget.window.capTokens'),
+    });
   });
 
   it('ships the merge gate with auto merge and the Copilot gate off', async () => {
