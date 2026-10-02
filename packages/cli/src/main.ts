@@ -1,5 +1,6 @@
 import { RulesError } from '@quarterdeck/rules';
 import { HttpError } from '@quarterdeck/server';
+import { runDoctor } from './doctor.js';
 import { runInit } from './init.js';
 import { CliError, type CliIo, type Command } from './io.js';
 import { runUp } from './up.js';
@@ -11,10 +12,15 @@ export const USAGE = `Usage: quarterdeck <command> [options]
 Commands:
   up                Start the server and dashboard and print the URL
   init [repo-path]  Create a project from a git repository
+  doctor            Check kiro-cli, claude, gemini and gh are installed and signed in
 
 Run quarterdeck <command> --help for a command's options.`;
 
-const COMMANDS: Record<string, Command> = { up: runUp, init: runInit };
+const COMMANDS: Record<string, Command> = {
+  up: runUp,
+  init: runInit,
+  doctor: runDoctor,
+};
 
 const HELP = new Set(['help', '--help', '-h']);
 
