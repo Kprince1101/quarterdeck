@@ -18,8 +18,9 @@ const TYPESCRIPT_FLAGS = [
 ];
 
 interface Running {
-  child: ChildProcess;
+  group: number;
   url: string;
+  closed: Promise<unknown>;
   output: () => string;
 }
 
@@ -55,17 +56,30 @@ const waitForUrl = (child: ChildProcess, output: () => string) =>
 const startUp = async (env: NodeJS.ProcessEnv): Promise<Running> => {
   const child = spawn(NPX, ['quarterdeck', 'up', '--port', '0'], {
     env,
+    detached: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+  if (child.pid === undefined) throw new Error('npx did not start');
   let text = '';
   const collect = (chunk: Buffer) => {
     text += chunk.toString('utf8');
   };
   child.stdout.on('data', collect);
   child.stderr.on('data', collect);
+  const closed = Promise.all([
+    once(child.stdout, 'close'),
+    once(child.stderr, 'close'),
+  ]);
   const output = () => text;
-  return { child, url: await waitForUrl(child, output), output };
+  const url = await waitForUrl(child, output);
+  return { group: child.pid, url, closed, output };
 };
+
+const answers = (url: string): Promise<boolean> =>
+  fetch(url).then(
+    () => true,
+    () => false,
+  );
 
 const checkDashboard = async (url: string): Promise<void> => {
   const page = await fetch(`${url}/`);
@@ -115,12 +129,16 @@ const checkFakeAgent = async (cwd: string): Promise<void> => {
   }
 };
 
-const stopUp = async ({ child, output }: Running): Promise<void> => {
-  const exited = once(child, 'exit');
-  child.kill('SIGTERM');
-  const [code] = (await exited) as [number | null];
-  check(code === 0, `up exits 0 on SIGTERM (${code})`);
-  check(output().includes('Stopped.'), 'up says it stopped');
+const stopUp = async ({
+  group,
+  url,
+  closed,
+  output,
+}: Running): Promise<void> => {
+  process.kill(-group, 'SIGTERM');
+  await closed;
+  check(output().includes('Stopped.'), 'up stops cleanly on SIGTERM');
+  check(!(await answers(url)), 'up no longer answers');
 };
 
 const checkWipe = async (

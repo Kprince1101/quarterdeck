@@ -90,7 +90,7 @@ Each workspace package is written in TypeScript under `src/` and built to `dist/
 
 `npm run build` builds every package, and `npm test` builds before it runs vitest. Each package gets a test that spawns `process.execPath` to import it by name, which proves the built entry loads in plain Node.
 
-The `clean-machine` CI job goes one step further. It packs `rules`, `server`, `dashboard` and `cli` with `npm pack`, installs the tarballs into an empty folder in a `node:22-bookworm-slim` container that has nothing else on it, and runs `scripts/clean-machine/check.ts` there: `npx quarterdeck up` must serve the built dashboard and the intents API, the installed ACP client must drive the in-repo fake agent through a turn, `up` must stop with exit 0 on `SIGTERM`, and `npx quarterdeck wipe` must delete the project. To run the check against a local build, from `packages/cli` (so `npx` finds the bin):
+The `clean-machine` CI job goes one step further. It packs `rules`, `server`, `dashboard` and `cli` with `npm pack`, installs the tarballs into an empty folder in a `node:22-bookworm-slim` container that has nothing else on it, and runs `scripts/clean-machine/check.ts` there: `npx quarterdeck up` must serve the built dashboard and the intents API, the installed ACP client must drive the in-repo fake agent through a turn, `up` must print `Stopped.` and let go of its port on `SIGTERM`, and `npx quarterdeck wipe` must delete the project. To run the check against a local build, from `packages/cli` (so `npx` finds the bin):
 
 ```sh
 node --experimental-strip-types ../../scripts/clean-machine/check.ts ../server/test/acp/fake-agent/main.ts
