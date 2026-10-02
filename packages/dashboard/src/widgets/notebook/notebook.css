@@ -77,12 +77,6 @@
   font-size: var(--qd-text-sm);
 }
 
-.qd-notebook-error {
-  margin: 0;
-  color: var(--qd-danger);
-  font-size: var(--qd-text-sm);
-}
-
 .qd-notebook-diff {
   margin: 0;
   padding: 0;

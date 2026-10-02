@@ -3,6 +3,12 @@
   color: var(--qd-faint);
 }
 
+.qd-request-error {
+  margin: 0;
+  color: var(--qd-danger);
+  font-size: var(--qd-text-sm);
+}
+
 .qd-table-counts {
   display: grid;
   grid-template-columns: 1fr auto;

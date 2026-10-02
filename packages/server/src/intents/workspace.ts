@@ -31,6 +31,7 @@ export const WORKSPACE_INTENTS = {
     (input) => changesSomething(input, PROJECT_FIELDS),
     'project.update needs name or repoPath',
   ),
+  'project.archive': inProject({ archived: z.boolean() }),
   'rules.write': z.discriminatedUnion('scope', [
     z.strictObject({ ...machineRule, content: ruleContentSchema }),
     inProject({ ...projectRule, content: ruleContentSchema }),

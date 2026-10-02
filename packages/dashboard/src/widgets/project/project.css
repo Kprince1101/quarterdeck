@@ -1,0 +1,112 @@
+.qd-project,
+.qd-project-body {
+  display: grid;
+  gap: var(--qd-space-3);
+}
+
+.qd-project-section {
+  display: grid;
+  gap: var(--qd-space-2);
+}
+
+.qd-project-heading {
+  margin: 0;
+  color: var(--qd-muted);
+  font-size: var(--qd-text-sm);
+  font-weight: 600;
+}
+
+.qd-project-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--qd-space-1);
+  color: var(--qd-muted);
+  font-size: var(--qd-text-sm);
+}
+
+.qd-project-picker select,
+.qd-project-input {
+  min-width: 0;
+  padding: var(--qd-space-1) var(--qd-space-2);
+  border: 1px solid var(--qd-line);
+  border-radius: var(--qd-radius);
+  background: var(--qd-surface-raised);
+  color: var(--qd-fg);
+  font: inherit;
+}
+
+.qd-project-input {
+  flex: 1;
+}
+
+.qd-project-picker select:focus-visible,
+.qd-project-input:focus-visible {
+  outline: 2px solid var(--qd-accent);
+  outline-offset: 1px;
+}
+
+.qd-project-round {
+  display: grid;
+  gap: var(--qd-space-1);
+  margin: 0;
+}
+
+.qd-project-round-label {
+  color: var(--qd-accent);
+  font-family: var(--qd-mono);
+  font-size: var(--qd-text-sm);
+}
+
+.qd-project-goal {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.qd-project-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--qd-space-2);
+}
+
+.qd-project-actions button {
+  padding: var(--qd-space-1) var(--qd-space-2);
+  border: 1px solid var(--qd-line);
+  border-radius: var(--qd-radius);
+  background: var(--qd-surface);
+  color: var(--qd-fg);
+  font: inherit;
+  font-size: var(--qd-text-sm);
+  cursor: pointer;
+}
+
+.qd-project-actions .qd-project-danger {
+  border-color: var(--qd-danger);
+  color: var(--qd-danger);
+}
+
+.qd-project-actions button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.qd-project-confirm {
+  display: grid;
+  gap: var(--qd-space-2);
+  padding: var(--qd-space-2) var(--qd-space-3);
+  border: 1px solid var(--qd-danger);
+  border-radius: var(--qd-radius);
+}
+
+.qd-project-warning {
+  margin: 0;
+  font-size: var(--qd-text-sm);
+}
+
+.qd-project-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--qd-space-1);
+  color: var(--qd-faint);
+  font-size: var(--qd-text-sm);
+}
