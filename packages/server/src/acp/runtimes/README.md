@@ -1,6 +1,6 @@
 # Runtime adapters
 
-One adapter per runtime turns a `RuntimeLaunch` into the command that starts that runtime's ACP agent, and connects to it with `spawnAcpClient` (see [../client/README.md](../client/README.md)). kiro and claude go through `launchAcpClient` ([../launch/README.md](../launch/README.md)), which adds the version probe and spawn retry.
+One adapter per runtime turns a `RuntimeLaunch` into the command that starts that runtime's ACP agent, and connects to it. `defineRuntimeAdapter` connects with `spawnAcpClient` (see [../client/README.md](../client/README.md)). The kiro, gemini and claude adapters connect with `launchAcpClient` (see [../launch/README.md](../launch/README.md)), so every launch records the runtime's version and retries a spawn that fails to exec. Their `connect` takes `LaunchOptions`. None of them runs its CLI in the agent's worktree: the worktree is only the `cwd` the caller passes to `session/new`.
 
 ```ts
 const client = await KIRO_ADAPTER.connect(
@@ -76,9 +76,81 @@ It needs a signed-in `kiro-cli` on `PATH` and is skipped unless `QUARTERDECK_LIV
 QUARTERDECK_LIVE=1 npx vitest run packages/server/test/acp/kiro-live.test.ts
 ```
 
+## gemini
+
+`gemini --acp --approval-mode default --admin-policy ~/.quarterdeck/gemini/admin-policy.toml`, started through `launchAcpClient`. `--acp` is Gemini CLI's native ACP mode; it replaced `--experimental-acp`. The process gets two extra variables:
+
+- `GEMINI_CLI_SYSTEM_SETTINGS_PATH=~/.quarterdeck/gemini/system-settings.json`
+- `GEMINI_CLI_TRUST_WORKSPACE=false`
+
+`createGeminiAdapter({ dir })` changes the folder. The `gemini --version` probe gets the same folder and environment. `project` and `agentName` are ignored. `mcpServers` is ignored too: the caller passes the bus to `session/new`.
+
+### The worktree is never the process directory
+
+`gemini` runs in `~/.quarterdeck/gemini/`. That also applies to a `launch.command` override. The worktree is only the `cwd` passed to `session/new`, and Gemini scopes the session's tools to that cwd.
+
+### Every tool call asks
+
+`--approval-mode default` alone is not enough. Gemini CLI also reads the user's `~/.gemini/settings.json` and `~/.gemini/policies/*.toml`, and the workspace's `.gemini/settings.json` and `.env`, which sit inside the repo the agent edits. All of these can let a tool run with no `session/request_permission`, or change the account the agent bills:
+
+- `tools.allowed`
+- MCP servers with `trust: true`
+- saved "always allow" answers
+- user policy `allow` rules
+- hooks
+- `GOOGLE_API_KEY` or `GOOGLE_CLOUD_PROJECT` in a project `.env`
+
+The adapter locks all of these down. `connect` rewrites both Quarterdeck-owned files before every launch, so an agent's edit to them does not survive into the next launch.
+
+| Layer                                                            | What it does                                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| System settings (`GEMINI_SYSTEM_SETTINGS`)                       | Gemini merges system settings last, over user and workspace. Ours set `tools.allowed: []`, `security.disableYoloMode`, `security.disableAlwaysAllow` (no "always allow" options, and saved ones are ignored), `general.defaultApprovalMode: "default"`, `hooksConfig.enabled: false` and `advanced.ignoreLocalEnv` (no project `.env`).                          |
+| `GEMINI_CLI_TRUST_WORKSPACE=false`                               | The session folder is untrusted. Gemini then ignores workspace settings and `.gemini/.env`, refuses `session/set_mode` to `yolo` or `auto_edit`, and does not honour MCP `trust: true` (the settings schema cannot force `trust` off). The cost is that Gemini does not load project `GEMINI.md`, hooks or skills; Quarterdeck passes its charter in the prompt. |
+| Admin policy (`GEMINI_ADMIN_POLICY`, passed by `--admin-policy`) | `ask_user` for every tool at Gemini's admin tier, which outranks user policy files and the rules Gemini derives from settings. The shell rule carries an `argsPattern` so Gemini's "known safe command" heuristic cannot turn ask into allow.                                                                                                                    |
+
+Every tool call, reads included, reaches Quarterdeck as `session/request_permission` and is answered from the project's rules. `rules/permissions.json` allows `read`, `search` and `think`.
+
+A `launch.command` override always gets the folder and the environment. It also gets `--admin-policy` when the command's file name is `gemini` (or `gemini.cmd`, `.exe`, `.ps1`; see `isGeminiCommand`). Any other wrapper has to pass `--admin-policy` itself.
+
+### Administrator policy
+
+`connect` refuses to start gemini when Gemini CLI administrator policy is already on the machine, and spawns nothing. It throws `GeminiAdminPolicyError`, which has `cardKind: 'gemini.admin_policy'` (`GEMINI_ADMIN_POLICY_CARD`), `source` and `path`, so the server can raise a card.
+
+| `source`          | Found                                                                                                                                                                                                      |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `env`             | `GEMINI_CLI_SYSTEM_SETTINGS_PATH` already set to another file. Quarterdeck would replace it.                                                                                                               |
+| `system_settings` | Gemini's standard system settings file (`/Library/Application Support/GeminiCli/settings.json`, `/etc/gemini-cli/settings.json`, `C:\ProgramData\gemini-cli\settings.json`). Quarterdeck would replace it. |
+| `system_policies` | `.toml` files in the standard system `policies/` folder. Gemini then ignores `--admin-policy`.                                                                                                             |
+
+Quarterdeck does not merge an unknown administrator policy under its own, because the combination is hard to reason about.
+
+### Sign-in
+
+Sign-in stays with Gemini CLI. When it has no usable credentials, `session/new` fails with auth required, which `isAuthRequiredError` recognises. The methods it offers (Google sign-in, Gemini API key, Vertex AI) are in `client.agent.authMethods`. Quarterdeck surfaces that to the dashboard and never calls `authenticate` on its own.
+
+### Live test
+
+`test/acp/gemini.test.ts` has a live test against the real `gemini`. It runs three steps:
+
+1. A tool-free reply.
+2. A shell command in a worktree whose `.gemini/settings.json` lists `run_shell_command` in `tools.allowed`. The test asserts the command still arrives as `session/request_permission`.
+3. An allowed `write_file`. The test asserts the file lands in the session cwd, not in Gemini's process folder.
+
+It is skipped unless `QUARTERDECK_LIVE=1` (or `QUARTERDECK_GEMINI_LIVE=1`). It is also skipped when:
+
+- `gemini --version` fails or takes longer than 10s;
+- `session/new` reports that Gemini CLI is not signed in;
+- the adapter refuses an administrator policy.
+
+```sh
+QUARTERDECK_LIVE=1 npx vitest run packages/server/test/acp/gemini.test.ts
+```
+
 ## claude
 
-`npx --yes @agentclientprotocol/claude-agent-acp@0.85.0` (`CLAUDE_AGENT_ACP_VERSION`), started through `launchAcpClient` like kiro. Every launch therefore records `claude --version` (`CLAUDE_VERSION_COMMAND`) and retries a spawn that fails to exec. `connect` takes `LaunchOptions`. The version is pinned so that an upgrade is a deliberate change. On Windows the command goes through `cmd.exe /d /s /c`, because `npx` there is a `.cmd` shim and Node only starts those through a shell.
+`npx --yes @agentclientprotocol/claude-agent-acp@0.85.0` (`CLAUDE_AGENT_ACP_VERSION`), started through `launchAcpClient`. The version is pinned so that an upgrade is a deliberate change. On Windows the command goes through `cmd.exe /d /s /c`, because `npx` there is a `.cmd` shim and Node only starts those through a shell.
+
+The version probe is `npx --yes --offline @agentclientprotocol/claude-agent-acp@0.85.0 --cli --version` (`claudeVersionCommand()`). It runs from the same folder and env as the agent. `--cli` makes claude-agent-acp pass `--version` to the Claude Code binary it bundles, so the `agent_version` event reports the CLI the agent really runs, not a standalone `claude` on `PATH`. `--offline` keeps the probe from starting the download itself. On the very first launch the `before_spawn` probe therefore reports `version: null`, and the `after_spawn` probe, which runs once npx has fetched the package, reports the version. claude-agent-acp's own version is `client.agent.agentInfo.version`.
 
 ### The worktree is never the process directory
 

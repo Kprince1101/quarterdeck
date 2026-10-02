@@ -9,12 +9,12 @@ import {
   CLAUDE_DEFAULT_MODE_ID,
   CLAUDE_INITIALIZE_TIMEOUT_MS,
   CLAUDE_PERMISSION_SETTINGS,
-  CLAUDE_VERSION_COMMAND,
   ClaudePermissionSettingsError,
   DEFAULT_INITIALIZE_TIMEOUT_MS,
   NPM_PUBLIC_REGISTRY,
   claudeAgentCommand,
   claudeRuntimeDir,
+  claudeVersionCommand,
   claudeSettingsFiles,
   createClaudeAdapter,
   findClaudeSettingsOverrides,
@@ -162,6 +162,24 @@ describe('claude adapter command', () => {
     const { command, args } = claudeAgentCommand('win32');
     expect(command).toMatch(/cmd(\.exe)?$/i);
     expect(args).toEqual(['/d', '/s', '/c', 'npx', '--yes', PINNED]);
+  });
+
+  it('asks the pinned package, offline, for its bundled Claude Code version', () => {
+    expect(claudeVersionCommand('linux')).toEqual({
+      command: 'npx',
+      args: ['--yes', '--offline', PINNED, '--cli', '--version'],
+    });
+    expect(claudeVersionCommand('win32').args).toEqual([
+      '/d',
+      '/s',
+      '/c',
+      'npx',
+      '--yes',
+      '--offline',
+      PINNED,
+      '--cli',
+      '--version',
+    ]);
   });
 
   it('runs npx from the Quarterdeck runtime folder, never the session cwd', () => {
@@ -412,10 +430,13 @@ describe.skipIf(IS_WINDOWS)('claude adapter default npx path', () => {
     const config = await tempDir('qd-claude-config-');
     const agent = fakeAgentLaunch();
     await writeScript(join(bin, 'npx'), [
+      `if [ "$*" = "${claudeVersionCommand().args.join(' ')}" ]; then`,
+      `  echo "${FAKE_CLAUDE_VERSION} from $(pwd -P)"`,
+      '  exit 0',
+      'fi',
       'echo "npx cwd=$(pwd -P) registry=$npm_config_registry args=$*" >&2',
       `exec '${agent.command}' ${agent.args.map((arg) => `'${arg}'`).join(' ')}`,
     ]);
-    await writeScript(join(bin, 'claude'), [`echo '${FAKE_CLAUDE_VERSION}'`]);
     const launch: RuntimeLaunch = {
       cwd,
       env: {
@@ -428,7 +449,7 @@ describe.skipIf(IS_WINDOWS)('claude adapter default npx path', () => {
     return { adapter, launch, cwd, config, processDir };
   };
 
-  it('runs npx in its own folder with the npmjs registry and logs claude --version', async () => {
+  it('runs npx in its own folder with the npmjs registry and logs the bundled CLI version', async () => {
     const { adapter, launch, processDir } = await pinnedPath();
 
     const { events } = await connectClaude(launch, adapter);
@@ -437,13 +458,17 @@ describe.skipIf(IS_WINDOWS)('claude adapter default npx path', () => {
       type: 'stderr',
       line: `npx cwd=${processDir} registry=${NPM_PUBLIC_REGISTRY} args=--yes ${PINNED}`,
     });
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'agent_version',
-        command: CLAUDE_VERSION_COMMAND,
-        version: FAKE_CLAUDE_VERSION,
-      }),
-    );
+    const versions = events.filter((event) => event.type === 'agent_version');
+    expect(versions.map((event) => event.stage)).toEqual([
+      'before_spawn',
+      'after_spawn',
+    ]);
+    versions.forEach((event) => {
+      expect(event).toMatchObject({
+        command: 'npx',
+        version: `${FAKE_CLAUDE_VERSION} from ${processDir}`,
+      });
+    });
   });
 
   it('refuses before launch when the worktree settings allow tools', async () => {

@@ -23,7 +23,6 @@ import type { ClaudeSettingsOverride } from './settings.js';
 
 export const CLAUDE_AGENT_ACP_PACKAGE = '@agentclientprotocol/claude-agent-acp';
 export const CLAUDE_AGENT_ACP_VERSION = '0.85.0';
-export const CLAUDE_VERSION_COMMAND = 'claude';
 export const CLAUDE_INITIALIZE_TIMEOUT_MS = 300_000;
 export const CLAUDE_DEFAULT_MODE_ID = 'default';
 export const NPM_PUBLIC_REGISTRY = 'https://registry.npmjs.org/';
@@ -33,25 +32,37 @@ export const CLAUDE_LOCKED_OPTIONS = {
   allowDangerouslySkipPermissions: false,
 } as const;
 
-const NPX_ARGS = [
+const PINNED_PACKAGE = `${CLAUDE_AGENT_ACP_PACKAGE}@${CLAUDE_AGENT_ACP_VERSION}`;
+const NPX_ARGS = ['--yes', PINNED_PACKAGE];
+const VERSION_NPX_ARGS = [
   '--yes',
-  `${CLAUDE_AGENT_ACP_PACKAGE}@${CLAUDE_AGENT_ACP_VERSION}`,
+  '--offline',
+  PINNED_PACKAGE,
+  '--cli',
+  '--version',
 ];
 
 export const claudeRuntimeDir = (home: string = quarterdeckHome()): string =>
   join(home, 'runtimes', 'claude');
 
-const npxThroughWindowsShell = (): AgentCommand => ({
-  command: process.env['ComSpec'] ?? 'cmd.exe',
-  args: ['/d', '/s', '/c', 'npx', ...NPX_ARGS],
-});
+const npxCommand = (
+  npxArgs: string[],
+  platform: NodeJS.Platform,
+): AgentCommand => {
+  if (platform !== 'win32') return { command: 'npx', args: npxArgs };
+  return {
+    command: process.env['ComSpec'] ?? 'cmd.exe',
+    args: ['/d', '/s', '/c', 'npx', ...npxArgs],
+  };
+};
 
 export const claudeAgentCommand = (
   platform: NodeJS.Platform = process.platform,
-): AgentCommand => {
-  if (platform === 'win32') return npxThroughWindowsShell();
-  return { command: 'npx', args: NPX_ARGS };
-};
+): AgentCommand => npxCommand(NPX_ARGS, platform);
+
+export const claudeVersionCommand = (
+  platform: NodeJS.Platform = process.platform,
+): AgentCommand => npxCommand(VERSION_NPX_ARGS, platform);
 
 const recordAt = (
   record: Record<string, unknown>,
@@ -123,14 +134,7 @@ export const createClaudeAdapter = ({
       return { command, version: { ...command, args: ['--version'] } };
     }
     const command = spec.command(launch);
-    return {
-      command,
-      version: {
-        ...command,
-        command: CLAUDE_VERSION_COMMAND,
-        args: ['--version'],
-      },
-    };
+    return { command, version: { ...command, ...claudeVersionCommand() } };
   };
 
   const refused = (
