@@ -1,0 +1,45 @@
+.qd-usage {
+  display: grid;
+  gap: var(--qd-space-1);
+}
+
+.qd-usage p {
+  margin: 0;
+}
+
+.qd-usage-percent {
+  color: var(--qd-ok);
+  font-family: var(--qd-mono);
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.qd-usage-percent[data-level='amber'] {
+  color: var(--qd-warn);
+}
+
+.qd-usage-percent[data-level='red'] {
+  color: var(--qd-danger);
+}
+
+.qd-usage-of-cap {
+  color: var(--qd-muted);
+  font-family: var(--qd-font);
+  font-size: var(--qd-text-sm);
+  font-weight: 400;
+}
+
+.qd-usage-no-cap {
+  color: var(--qd-faint);
+}
+
+.qd-usage-tokens {
+  color: var(--qd-muted);
+  font-family: var(--qd-mono);
+  font-size: var(--qd-text-sm);
+}
+
+.qd-usage-error {
+  color: var(--qd-danger);
+  font-size: var(--qd-text-sm);
+}

@@ -1,6 +1,6 @@
 import { useId, useMemo, useState } from 'react';
 import { useDeck } from '../../deck/deck.js';
-import { useNow } from '../events/use-now.js';
+import { useNow } from '../../lib/use-now.js';
 import { cardDeck, type CardDeck } from './card-deck.js';
 
 export interface CardsWidgetView extends CardDeck {
