@@ -96,6 +96,8 @@ describe('permissionAnswer', () => {
       'git checkout -b docs/fix-typo origin/main',
       'git checkout HEAD -- README.md',
       'git branch --show-current',
+      'git --no-pager log -1',
+      'git -C /tmp/qdp-1/wt -P diff',
     ])
       expect(asked(command)).toBe('allow');
   });
@@ -172,6 +174,10 @@ describe('permissionAnswer', () => {
       'git --config-env=alias.ship=SHIP ship origin main',
       'git config alias.ship push && git ship origin main',
       'git config --local alias.ship push',
+      'git --work-tree rules push origin main',
+      'git --git-dir .git push origin fix',
+      'git --exec-path=/tmp/qdp-1 push origin fix',
+      'git -p push origin main',
       'echo git git push origin main',
       'git status; git push origin main',
     ])
@@ -202,6 +208,8 @@ describe('permissionAnswer', () => {
       'rm -f -r /tmp/qdp-1/wt',
       'cd /tmp/qdp-1 && rm -fR wt',
       'git reset --hard HEAD~1',
+      'git reset -q --hard HEAD',
+      'git reset --quiet --hard',
       'curl https://example.com',
     ])
       expect(asked(command)).toBe('deny');

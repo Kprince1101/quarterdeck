@@ -18,7 +18,7 @@ const REFUSED_COMMANDS: readonly RegExp[] = [
   /\bsudo\b/,
   /\bcurl\b/,
   /\bwget\b/,
-  /\breset\s+--hard\b/,
+  /\breset\b[^;&|]*\s--hard\b/,
 ];
 
 const PROTECTED_BRANCHES = new Set(['HEAD', 'main', 'master']);
@@ -35,7 +35,7 @@ const SHELL_QUOTING = /['"\\$`]/;
 const GIT_SUBCOMMAND = /^[a-z][a-z-]*$/;
 const BRANCH_MOVERS = new Set(['switch', 'checkout', 'branch', 'update-ref']);
 const GIT_OPTIONS_WITH_VALUE = new Set(['-C', '-c']);
-const CONFIG_OVERRIDE = /^(?:-c|--config-env)(?:=|$)|^-c./;
+const SAFE_GIT_OPTIONS = new Set(['--no-pager', '-P']);
 const COMMAND_SEPARATOR = /&&|\|\||[;&|\n]|:\s/;
 const TRAILING_PUNCTUATION = /[.,:]+$/;
 
@@ -57,7 +57,7 @@ interface GitCall {
   subcommand: string;
   args: string[];
   quoted: boolean;
-  overridesConfig: boolean;
+  unknownOptions: boolean;
 }
 
 const rawWords = (segment: string): string[] =>
@@ -83,6 +83,17 @@ const gitSubcommandAt = (words: readonly string[], start: number): number => {
   return index;
 };
 
+const onlySafeGitOptions = (options: readonly string[]): boolean => {
+  let index = 0;
+  while (index < options.length) {
+    const option = options[index] ?? '';
+    if (option === '-C') index += 2;
+    else if (SAFE_GIT_OPTIONS.has(option)) index += 1;
+    else return false;
+  }
+  return true;
+};
+
 export const gitCalls = (segment: string): GitCall[] => {
   const words = rawWords(segment);
   return words.flatMap((word, git) => {
@@ -93,10 +104,8 @@ export const gitCalls = (segment: string): GitCall[] => {
     const quoted = [word, subcommand, ...args].some((part) =>
       SHELL_QUOTING.test(part),
     );
-    const overridesConfig = words
-      .slice(git + 1, at)
-      .some((option) => CONFIG_OVERRIDE.test(unquoted(option)));
-    return [{ subcommand, args, quoted, overridesConfig }];
+    const unknownOptions = !onlySafeGitOptions(words.slice(git + 1, at));
+    return [{ subcommand, args, quoted, unknownOptions }];
   });
 };
 
@@ -132,9 +141,9 @@ const isRefusedGitCall = ({
   subcommand,
   args,
   quoted,
-  overridesConfig,
+  unknownOptions,
 }: GitCall): boolean => {
-  if (overridesConfig) return true;
+  if (unknownOptions) return true;
   if (!GIT_SUBCOMMAND.test(subcommand) && subcommand !== '') return true;
   if (subcommand === 'push') return quoted || !isAllowedPush(args);
   if (BRANCH_MOVERS.has(subcommand))

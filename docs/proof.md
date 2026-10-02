@@ -64,9 +64,9 @@ The script also denies:
 - a request whose working directory is outside the repository or the temp home. The policy's canonical `cwd` comes from the card's recommendation, and a card without one is denied;
 - any `git` call whose subcommand is quoted or escaped;
 - `git switch`, `git checkout`, `git branch` or `git update-ref` that names `main` or `master` (bare or as `refs/heads/…`), or whose text is quoted or escaped;
-- any `git -c …` or `git --config-env …` before the subcommand, and any `git config` that sets an `alias.`, since an alias can hide a push;
+- any `git` option before the subcommand other than `-C <dir>`, `--no-pager` and `-P` (so `-c`, `--config-env`, `--work-tree`, `--git-dir` and the rest), and any `git config` that sets an `alias.`, since an alias or an unparsed option can hide a push;
 - `gh pr merge` however it is spaced or flagged, and `gh api` calls to a pull request's `merge` endpoint;
-- `--force` anywhere, recursive `rm` in any flag form (`-r`, `-R`, `-rf`, `-fr`, `--recursive`, or `-r` after other flags), `sudo`, `curl`/`wget` and `reset --hard`;
+- `--force` anywhere, recursive `rm` in any flag form (`-r`, `-R`, `-rf`, `-fr`, `--recursive`, or `-r` after other flags), `sudo`, `curl`/`wget` and `reset … --hard` with any options between;
 - any absolute path outside the repository or the temp home (including `/` itself), and anything it cannot resolve from the text: a `..` segment, `~`, a `$` variable or substitution, or a backtick.
 
 It allows everything else, and logs every answer. Any other kind of card waits for a person. None came up.
