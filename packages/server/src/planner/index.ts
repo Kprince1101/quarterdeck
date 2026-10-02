@@ -12,6 +12,7 @@ export {
 export {
   NO_REPO_PATH,
   PLANNER_CLEARED_EVENT,
+  PROJECT_ARCHIVED,
   SUPERSEDED,
   startPlanner,
   type ClearReason,

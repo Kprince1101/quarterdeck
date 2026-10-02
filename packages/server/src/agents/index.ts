@@ -5,7 +5,11 @@ export {
   type AgentRole,
   type AgentStatus,
 } from './agent.js';
-export type { BirthRequest } from './birth.js';
+export {
+  BIRTH_CANCELLED_EVENT,
+  BirthCancelledError,
+  type BirthRequest,
+} from './birth.js';
 export {
   AGENT_KILLED_EVENT,
   AGENT_RESET_EVENT,

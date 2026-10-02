@@ -29,7 +29,9 @@ await pause.close();
 
 One gate per project store. It subscribes to the store's events and, on every `pause.set`, `pause.all` and `agent.resume` (`UNPAUSE_KINDS`) and every `agent.killed` and `agent.retired` (`FINISH_KINDS`), re-checks each held item in the order they were held. An item whose `agentId` is now `ended`, `killed` or `retired` is dropped with reason `finished`, so a killed Driver's held turn does not hang the turns queued behind it. The rest start once nothing pauses them any more, recording `pause.replayed` first. Items still paused, for example by their agent after the project unpauses, stay queued. Replayed work is started in order but not awaited one by one, so a long turn does not hold back the next launch. While anything is held or a replay is running, new work that nothing pauses joins the back of the queue instead of running at once, so it cannot start before work held earlier. It records no `pause.held` or `pause.replayed`, and the next sweep, which `hold` triggers itself, starts it.
 
-Held work lives in the process. `hold(..., { signal })` drops an item when `signal` aborts; `close()` drops everything still held. Either way, and when its agent finishes, the caller's promise rejects with `PauseDroppedError` (`reason: 'aborted' | 'closed' | 'finished'`) and `pause.dropped` is recorded. A `pause.held` left by a run that ended without closing its gate is dropped at the next startup with reason `restart` by [recovery](../lifecycle/README.md#recovery). After `close()`, work that is paused is dropped at once rather than held; work that is not paused still runs.
+An archived project runs nothing. While `projects.archived_at` is set, `hold` refuses at once with `PauseDroppedError` (`reason: 'archived'`) and never calls `run`, whatever else pauses it. A `project.archive` event re-checks the queue: if the project is now archived, everything held is dropped with `reason: 'archived'` and `pause.dropped` is recorded for each item that had a `pause.held`. Archived work is not replayed on unarchive. After unarchive the same gate lets work through again, so nothing needs a restart.
+
+Held work lives in the process. `hold(..., { signal })` drops an item when `signal` aborts; `close()` drops everything still held. Either way, and when its agent finishes, the caller's promise rejects with `PauseDroppedError` (`reason: 'aborted' | 'closed' | 'finished'`, or `'archived'` as above) and `pause.dropped` is recorded. A `pause.held` left by a run that ended without closing its gate is dropped at the next startup with reason `restart` by [recovery](../lifecycle/README.md#recovery). After `close()`, work that is paused is dropped at once rather than held; work that is not paused still runs.
 
 | Operation      | Who holds it                                       | `agentId`               | `ticketId` | `label`                             |
 | -------------- | -------------------------------------------------- | ----------------------- | ---------- | ----------------------------------- |
@@ -50,7 +52,7 @@ Labels are cut to `MAX_LABEL_LENGTH` (80) characters with `pauseLabel(prefix, te
 | `pause.replayed` | `{ operation, label, heldEventId }`         |
 | `pause.dropped`  | `{ operation, label, heldEventId, reason }` |
 
-`scopes` lists what paused the work, in the order `global`, `project`, `agent`. `reason` is `aborted`, `closed`, `finished` or `restart`. Each event carries the subject's `agentId` and `ticketId` when it has them; `heldEventId` is the id of the `pause.held` event.
+`scopes` lists what paused the work, in the order `global`, `project`, `agent`. `reason` is `aborted`, `closed`, `archived`, `finished` or `restart`. Each event carries the subject's `agentId` and `ticketId` when it has them; `heldEventId` is the id of the `pause.held` event.
 
 ## API
 
@@ -63,3 +65,4 @@ Labels are cut to `MAX_LABEL_LENGTH` (80) characters with `pauseLabel(prefix, te
 | `PauseGate.close()`                           | Stops listening and drops what is held.                                                       |
 | `pausedScopes(db, projectId, home, agentId?)` | The scopes pausing work for that project and agent, `[]` when none.                           |
 | `setGlobalPause(home, paused)`                | Writes or removes `pause.json`. `isGloballyPaused(home)` and `globalPausePath(home)` read it. |
+| `isProjectArchived(db, projectId)`            | Whether the project's `archived_at` is set. `ARCHIVE_KIND` is the event that re-checks it.    |

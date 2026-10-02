@@ -57,7 +57,7 @@ export const createAgentLifecycle = (
     });
     return openSession(
       request.store,
-      options.sessions,
+      options,
       await claimName(request),
       request.prepare,
     );
