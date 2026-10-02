@@ -49,4 +49,19 @@ describe('@quarterdeck/rules package entry', () => {
     expect(result.stderr).toBe('');
     expect(JSON.parse(result.stdout)).toEqual(RULE_NAMES);
   });
+
+  it('exposes the layer merge alone from plain Node', () => {
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '--eval',
+        "const { mergeLayer } = await import('@quarterdeck/rules/merge');\nprocess.stdout.write(JSON.stringify(mergeLayer({ a: 1, b: { c: 2 } }, { b: { c: 3 } })));",
+      ],
+      { cwd: ROOT, encoding: 'utf8' },
+    );
+
+    expect(result.stderr).toBe('');
+    expect(JSON.parse(result.stdout)).toEqual({ a: 1, b: { c: 3 } });
+  });
 });

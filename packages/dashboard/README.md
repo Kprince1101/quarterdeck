@@ -18,7 +18,7 @@ The server serves that folder at `/`:
 - `GET /assets/<file>` answers the file. The names are content-hashed, so they can be cached for good.
 - Resolve the folder from the package, not the working directory: `dirname(require.resolve('@quarterdeck/dashboard/package.json')) + '/dist'`.
 
-The page talks only to its own origin: intents go to `POST /api/intents/<name>` and the stream opens at `ws(s)://<page host>/ws`. Nothing else is fetched.
+The page talks only to its own origin: intents go to `POST /api/intents/<name>`, the Rules widget reads rule files from `GET /api/rules`, and the stream opens at `ws(s)://<page host>/ws`. Nothing else is fetched.
 
 `npm run dev --workspace packages/dashboard` starts Vite on `http://127.0.0.1:5173` and proxies `/api` and `/ws` to the API on `127.0.0.1:4317`. The proxy keeps the browser's `Origin`, so start the API with `allowedOrigins: ['http://127.0.0.1:5173']` for dev.
 
@@ -35,6 +35,7 @@ src/widgets/widget-mount.tsx WidgetMount: the grid over WIDGETS
 src/widgets/starter/         the Tables starter widget
 src/widgets/events/          Events: the feed, filtered by project and kind
 src/widgets/data/            Data: table counts, rows a page at a time, paths on disk
+src/widgets/rules/           Rules: edit rules.local.* with validation, a diff and provenance
 src/grid/                    the grid: layout JSON, actions, drag, resize, keyboard, tray
 src/theme/tokens.css         dark theme tokens (--qd-*) and the page base
 src/theme/tokens.ts          the same token names, typed: token('accent') is 'var(--qd-accent)'
@@ -72,17 +73,27 @@ export default defineWidget({
 
 That is the whole registration. `src/widgets/widgets.ts` picks up every `*.widget.tsx` with `import.meta.glob`, so no shared list is edited and widget tickets never conflict with each other. `defineWidget` types the definition:
 
-| Field       | Meaning                                                                     |
-| ----------- | --------------------------------------------------------------------------- |
-| `type`      | Stable kebab-case id. Layout JSON stores it, so never rename a shipped one. |
-| `title`     | The panel title. Copies are numbered: `Notebook`, `Notebook 2`.             |
-| `component` | Renders the panel body. Gets `{ instanceId }`, unique per copy on the grid. |
-| `size`      | Default size in grid cells (12 columns by 12 rows).                         |
-| `minSize`   | Smallest size a resize may reach. Defaults to 1 by 1.                       |
+| Field         | Meaning                                                                     |
+| ------------- | --------------------------------------------------------------------------- |
+| `type`        | Stable kebab-case id. Layout JSON stores it, so never rename a shipped one. |
+| `title`       | The panel title. Copies are numbered: `Notebook`, `Notebook 2`.             |
+| `component`   | Renders the panel body. Gets `{ instanceId }`, unique per copy on the grid. |
+| `size`        | Default size in grid cells (12 columns by 12 rows).                         |
+| `minSize`     | Smallest size a resize may reach. Defaults to 1 by 1.                       |
+| `startHidden` | `true` puts it in the tray, not on the grid, in the default layout.         |
 
 The grid draws the `Panel` (title, move, duplicate, hide, resize), so the component renders only its body. `createRegistry` throws at load on a repeated `type`, a type that is not kebab-case, or a `size` under `minSize`; a `*.widget.tsx` without a `defineWidget` default export fails the same way.
 
-`useDeck()` gives every widget the same `StreamState` (see [`src/api`](src/api/README.md)) and the same `IntentClient`, so a dashboard with ten widgets still opens one socket. `DeckProvider` takes `stream` options and an `intents` client, which is how tests and the site's demo mode feed it fake data.
+`useDeck()` gives every widget the same `StreamState` (see [`src/api`](src/api/README.md)), the same `IntentClient` and the same `RulesReader`, so a dashboard with ten widgets still opens one socket. `DeckProvider` takes `stream` options, an `intents` client and a `rules` reader, which is how tests and the site's demo mode feed it fake data.
+
+## The Rules widget
+
+`rules` starts in the tray. It edits the machine layer, `~/.quarterdeck/rules.local.<file>`, of any rule in place:
+
+- **Validation as you type.** The draft is parsed, merged over the shipped defaults and checked with the same zod schemas and merge code the loader uses (`@quarterdeck/rules/schemas` and `@quarterdeck/rules/merge`). A refusal names the machine file, like the loader's error. The server checks it again on save.
+- **A diff before every write.** _Review changes_ shows the line diff against the file on disk; only _Save_ in that panel sends `rules.write`. _Remove file_ shows what goes and sends `rules.reset`. Both use `scope: "machine"`; the widget never writes the shipped defaults or a repo layer.
+- **Where each value comes from.** The _In effect after saving_ table lists every key with its value and its layer: `defaults`, `machine` or `repo`. Arrays are one value, since a layer replaces them; a Markdown rule is one value from its highest layer.
+- **The repo layer, read-only.** Pick a project and its `<repo>/.quarterdeck/rules.local.<file>` is shown, read-only, and applied on top. The widget says plainly that the repo layer can only tighten permissions (decided on their own, `deny` or `ask` only), `mergeGate` (a flag can only turn a gate on) and `autoEndSettleSeconds` (only lengthened); those keys carry a `tighten-only` tag, and a repo value that tightened nothing is not credited to the repo.
 
 ## The grid
 

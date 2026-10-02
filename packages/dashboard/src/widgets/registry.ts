@@ -15,6 +15,7 @@ export interface WidgetDefinition {
   component: ComponentType<WidgetProps>;
   size: WidgetSize;
   minSize?: WidgetSize;
+  startHidden?: boolean;
 }
 
 export type WidgetRegistry = ReadonlyMap<string, WidgetDefinition>;
