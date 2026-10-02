@@ -47,6 +47,8 @@ export {
   buildBirthInput,
   isBirthInput,
   readActiveNotebook,
+  readBirth,
+  type Birth,
   type BirthInputParts,
   type NotebookEntry,
   type Round,
@@ -104,6 +106,7 @@ export {
   type ReplayTurn,
   type SavedTurn,
 } from './replay.js';
+export { findRoundSessions, type RoundSession } from './replay-round.js';
 export {
   ROUND_STARTED_EVENT,
   openDriverRound,
