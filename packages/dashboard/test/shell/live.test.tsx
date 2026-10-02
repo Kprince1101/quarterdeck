@@ -111,7 +111,15 @@ describe('dashboard on a live server', () => {
       await vi.waitFor(async () => {
         expect(await savedLayout()).toEqual([LAYOUT_PRESETS.minimal]);
       }, WAIT);
-      expect(container.querySelector('[data-grid-item]')).toBe(null);
+      const { WIDGETS } = await import('../../src/widgets/widgets.js');
+      const rendered = all(container, '[data-widget]').map((cell) =>
+        cell.getAttribute('data-widget'),
+      );
+      expect(rendered).toEqual(
+        LAYOUT_PRESETS.minimal.items
+          .map(({ widget }) => widget)
+          .filter((widget) => WIDGETS.has(widget)),
+      );
       unmount();
     },
     TIMEOUT,

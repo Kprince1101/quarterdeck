@@ -143,6 +143,7 @@ The schema lives in the server (`@quarterdeck/server/layouts`), so the dashboard
 
 `src/layouts/` keeps the grid in step with the server. The layout lives in the project's `layouts` table under the name `dashboard`, and the stream already carries that table, so the dashboard reads it from `useDeck().stream` and writes it with intents:
 
+- Layouts are saved per project under the name `dashboard`, so every tab open on a project shares one layout.
 - On load the grid shows the saved layout, or the `default` preset until the snapshot brings one. A stored spec the grid cannot parse is ignored.
 - Each edit is sent as `layout.save` once edits pause for 300 ms. One write is in flight at a time and only the newest queued one follows it. The change the server streams back for our own write is recognised and dropped, so a slow echo never undoes a newer edit. A change made anywhere else (another tab, the CLI) loads into the grid.
 - The bar above the grid picks a preset and resets to it: the grid switches at once and `layout.reset` writes the same preset on the server. A refused write shows its error under the bar.
