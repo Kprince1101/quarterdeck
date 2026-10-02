@@ -42,7 +42,8 @@ export interface GeminiPaths {
   adminPolicy: string;
 }
 
-export const defaultGeminiDir = (): string => join(quarterdeckHome(), 'gemini');
+export const defaultGeminiDir = (home: string = quarterdeckHome()): string =>
+  join(home, 'gemini');
 
 export const geminiPaths = (dir: string): GeminiPaths => ({
   dir,

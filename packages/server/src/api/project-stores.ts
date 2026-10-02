@@ -8,9 +8,11 @@ import { lockDataDir } from '../store/lock.js';
 import {
   configuredDatabaseUrl,
   createPostgresPool,
+  dataDirLockPath,
   listProjectSlugs,
   openStore,
   projectDataDir,
+  projectDir,
   projectRowExists,
   redactUrl,
   wipePostgresProject,
@@ -57,9 +59,9 @@ const directoryCatalog = (dataHome: string): ProjectCatalog => ({
   list: () => projectDirs(dataHome),
   wipe: async (project) => {
     const pgDir = projectDataDir(project, dataHome);
-    const lock = await lockDataDir(`${pgDir}.lock`, project);
+    const lock = await lockDataDir(dataDirLockPath(pgDir), project);
     try {
-      await rm(join(dataHome, project), { recursive: true, force: true });
+      await rm(projectDir(project, dataHome), { recursive: true, force: true });
     } finally {
       await lock.release();
     }
@@ -75,7 +77,7 @@ const postgresCatalog = (url: string, dataHome: string): ProjectCatalog => {
     list: () => listProjectSlugs(pool),
     wipe: async (project) => {
       await wipePostgresProject(url, project);
-      await rm(join(dataHome, project), { recursive: true, force: true });
+      await rm(projectDir(project, dataHome), { recursive: true, force: true });
     },
     close: () => pool.close(),
   };

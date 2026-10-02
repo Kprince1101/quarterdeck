@@ -9,6 +9,7 @@ import {
 } from '@quarterdeck/rules';
 import {
   TURN_FILES,
+  dataPaths,
   projectDataDir,
   projectTurnsDir,
   projectWorktreesDir,
@@ -215,5 +216,21 @@ describe('data page', () => {
     expect(text).toContain(
       `<repo>/${LOCAL_RULES_DIR}/${LOCAL_RULES_PREFIX}<file>`,
     );
+  });
+
+  it.each(
+    dataPaths({ homeDir: '/home/me', project: 'project', repoPath: '/repo' }),
+  )('names $label ($scope) as the Data widget lists it', ({ path, kind }) => {
+    const documented = path
+      .replace(/^\/home\/me/, '~')
+      .replace(/^\/repo/, '<repo>')
+      .replace('/project/', '/<project>/')
+      .replace(/rules\.local\.[^/]+$/, `${LOCAL_RULES_PREFIX}<file>`);
+    const suffix: Record<typeof kind, string> = {
+      directory: '/',
+      file: '',
+      database: '',
+    };
+    expect(text).toContain(`${documented}${suffix[kind]}`);
   });
 });
