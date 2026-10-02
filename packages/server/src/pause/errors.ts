@@ -1,6 +1,6 @@
 import type { PauseSubject } from './gate.js';
 
-export type DropReason = 'aborted' | 'closed';
+export type DropReason = 'aborted' | 'closed' | 'archived' | 'finished';
 
 export class PauseDroppedError extends Error {
   readonly subject: PauseSubject;

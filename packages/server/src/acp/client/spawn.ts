@@ -8,7 +8,7 @@ import { getErrorMessage } from '../../lib/errors.js';
 import { connectAcpClient, createClientEvents } from './connection.js';
 import { AcpClientError } from './errors.js';
 import type { EventHub } from './event-hub.js';
-import { SPAWN_DETACHED, signalTree, waitForTreeExit } from './process-tree.js';
+import { SPAWN_DETACHED, stopTree } from './process-tree.js';
 import type {
   AcpClient,
   AcpClientEvent,
@@ -58,18 +58,26 @@ const watchProcess = (
 };
 
 export const DEFAULT_KILL_GRACE_MS = 5_000;
-const KILL_SETTLE_MS = 2_000;
+
+interface OpenClient {
+  close: () => Promise<void>;
+}
+
+const openClients = new Set<OpenClient>();
+
+export const openAcpClientCount = (): number => openClients.size;
+
+export const closeAllAcpClients = async (): Promise<void> => {
+  await Promise.allSettled([...openClients].map((open) => open.close()));
+};
 
 const terminate = async (
   pid: number,
   exited: Promise<void>,
   graceMs: number,
 ) => {
-  signalTree(pid, 'SIGTERM');
-  const stopped = await waitForTreeExit(pid, graceMs);
-  if (!stopped) signalTree(pid, 'SIGKILL');
+  await stopTree(pid, graceMs);
   await exited;
-  await waitForTreeExit(pid, KILL_SETTLE_MS);
 };
 
 export const spawnAcpClient = async (
@@ -81,16 +89,32 @@ export const spawnAcpClient = async (
   const exited = watchProcess(child, events);
   events.emit({ type: 'spawned', pid });
 
-  const dispose = () =>
-    terminate(pid, exited, options.killGraceMs ?? DEFAULT_KILL_GRACE_MS);
+  let stopping: Promise<void> | undefined;
+  const dispose = (): Promise<void> => {
+    stopping ??= terminate(
+      pid,
+      exited,
+      options.killGraceMs ?? DEFAULT_KILL_GRACE_MS,
+    ).finally(() => openClients.delete(open));
+    return stopping;
+  };
+  const open: OpenClient = { close: dispose };
+  openClients.add(open);
 
-  return connectAcpClient({
-    stream: ndJsonStream(
-      Writable.toWeb(child.stdin),
-      Readable.toWeb(child.stdout) as ReadableStream<Uint8Array>,
-    ),
-    options,
-    events,
-    dispose,
-  });
+  try {
+    const client = await connectAcpClient({
+      stream: ndJsonStream(
+        Writable.toWeb(child.stdin),
+        Readable.toWeb(child.stdout) as ReadableStream<Uint8Array>,
+      ),
+      options,
+      events,
+      dispose,
+    });
+    open.close = client.close;
+    return client;
+  } catch (err) {
+    await dispose();
+    throw err;
+  }
 };

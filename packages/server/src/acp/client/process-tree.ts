@@ -3,8 +3,11 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 export type TreeSignal = 'SIGTERM' | 'SIGKILL';
 
-const IS_WINDOWS = process.platform === 'win32';
+export type TreeStop = 'gone' | 'terminated' | 'killed';
+
+export const IS_WINDOWS = process.platform === 'win32';
 const TREE_POLL_MS = 25;
+export const TREE_KILL_SETTLE_MS = 2_000;
 
 export const SPAWN_DETACHED = !IS_WINDOWS;
 
@@ -63,4 +66,16 @@ export const waitForTreeExit = async (
     await sleep(TREE_POLL_MS);
   }
   return !isTreeAlive(pid);
+};
+
+export const stopTree = async (
+  pid: number,
+  graceMs: number,
+): Promise<TreeStop> => {
+  if (!isTreeAlive(pid)) return 'gone';
+  signalTree(pid, 'SIGTERM');
+  if (await waitForTreeExit(pid, graceMs)) return 'terminated';
+  signalTree(pid, 'SIGKILL');
+  await waitForTreeExit(pid, TREE_KILL_SETTLE_MS);
+  return 'killed';
 };

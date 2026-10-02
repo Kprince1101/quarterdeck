@@ -14,11 +14,13 @@ import {
   vi,
 } from 'vitest';
 import {
+  BirthCancelledError,
   WorktreeDirtyError,
   createAgentLifecycle,
   gitWorktrees,
   type AgentLifecycle,
 } from '../../src/agents/index.js';
+import { retireArchivedAgents } from '../../src/archive/index.js';
 import { BudgetHeldError } from '../../src/budget/index.js';
 import {
   AgentNotRetiredError,
@@ -144,7 +146,7 @@ describe('builder assignment and continue', () => {
     await store.db.exec(
       `delete from events; delete from turns; delete from cards;
        delete from tickets; delete from agents;
-       update projects set paused_at = null;`,
+       update projects set paused_at = null, archived_at = null;`,
     );
   });
 
@@ -244,6 +246,69 @@ describe('builder assignment and continue', () => {
     await assignment.turn;
     return assignment;
   };
+
+  it(
+    'stops a birth the archive retired while its session opened: no live builder, no turn',
+    async () => {
+      const ticketId = await insertTicket();
+      let reach = () => {};
+      let release = () => {};
+      const reached = new Promise<void>((resolve) => {
+        reach = resolve;
+      });
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const slowLifecycle = createAgentLifecycle({
+        naming: BIRDS,
+        sessions: {
+          open: async (agent) => {
+            reach();
+            await released;
+            return sessions.open(agent);
+          },
+          close: sessions.close,
+        },
+        worktrees: gitWorktrees,
+        openStores: () => [store],
+        budget: () => Promise.resolve(NO_CAP),
+        random: () => 0,
+      });
+      const assigning = assignTicket(
+        { ...ctx, lifecycle: slowLifecycle },
+        { ticketId },
+      );
+      await reached;
+
+      await store.db.query(
+        'update projects set archived_at = now() where id = $1',
+        [store.projectId],
+      );
+      const pass = await retireArchivedAgents({ store, lifecycle });
+      expect(pass.retired).toHaveLength(1);
+      release();
+
+      await expect(assigning).rejects.toBeInstanceOf(BirthCancelledError);
+      const [opened] = sessions.opened;
+      expect(sessions.closed).toEqual([opened?.sessionId]);
+      expect(await agentRow(pass.retired[0] ?? '')).toEqual({
+        name: 'crane',
+        status: 'retired',
+        sessionId: null,
+        worktreePath: null,
+      });
+      expect(await ticketRow(ticketId)).toEqual({
+        status: 'open',
+        assigneeId: null,
+      });
+      expect(await turnTickets(pass.retired[0] ?? '')).toEqual([]);
+      expect(await events(TICKET_ASSIGNED_EVENT)).toEqual([]);
+      expect(
+        existsSync(join(root, 'worktrees', `crane-${ticketId.slice(0, 8)}`)),
+      ).toBe(false);
+    },
+    TIMEOUT,
+  );
 
   it(
     'gives an approved ticket to a new builder in its own worktree',
@@ -783,6 +848,31 @@ describe('builder assignment and continue', () => {
         ),
       ).toEqual([null, first.builder.id]);
       expect(await reassignTickets(ctx, first.builder.id)).toEqual([]);
+    },
+    TIMEOUT,
+  );
+
+  it(
+    'hands the ticket a killed builder blocked to a new builder once it retires',
+    async () => {
+      const ticketId = await insertTicket();
+      const first = await assignAndSettle(ticketId);
+      await store.db.query(
+        `update tickets set status = 'in_progress' where id = $1`,
+        [ticketId],
+      );
+
+      await lifecycle.kill(store, first.builder.id);
+      expect((await ticketRow(ticketId))?.status).toBe('blocked');
+      await lifecycle.retire(store, first.builder.id);
+      scripted.reply(say('Picking it up.'));
+      const [next] = await reassignTickets(ctx, first.builder.id);
+      await next?.turn;
+
+      expect(await ticketRow(ticketId)).toEqual({
+        status: 'assigned',
+        assigneeId: next?.builder.id,
+      });
     },
     TIMEOUT,
   );

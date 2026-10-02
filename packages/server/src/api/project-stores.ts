@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { hasErrorCode } from '../lib/errors.js';
 import { pathExists } from '../lib/fs.js';
 import { PROJECT_SLUG } from '../lib/slug.js';
+import { recoverProject } from '../lifecycle/recover.js';
 import { lockDataDir } from '../store/lock.js';
 import {
   configuredDatabaseUrl,
@@ -26,6 +27,7 @@ export interface ProjectStores {
   create: (project: string) => Promise<Store>;
   list: () => Promise<string[]>;
   wipe: (project: string) => Promise<void>;
+  openAll: () => Promise<string[]>;
   wipeAll: () => Promise<string[]>;
   closeAll: () => Promise<void>;
 }
@@ -90,9 +92,14 @@ const chooseCatalog = (
   return postgresCatalog(databaseUrl, dataHome);
 };
 
+const reportError = (err: unknown): void => {
+  console.error(err);
+};
+
 export const createProjectStores = (
   dataHome: string,
   databaseUrl?: string,
+  onError: (err: unknown) => void = reportError,
 ): ProjectStores => {
   const url = configuredDatabaseUrl(databaseUrl);
   const catalog = chooseCatalog(dataHome, url);
@@ -101,8 +108,15 @@ export const createProjectStores = (
   const exists = async (project: string) =>
     open.has(project) || catalog.exists(project);
 
-  const openProject = (project: string) =>
-    openStore({ project, home: dataHome, databaseUrl: url });
+  const openProject = async (project: string) => {
+    const store = await openStore({
+      project,
+      home: dataHome,
+      databaseUrl: url,
+    });
+    await recoverProject(store).catch(onError);
+    return store;
+  };
 
   const claim = (
     project: string,
@@ -166,6 +180,18 @@ export const createProjectStores = (
         throw notFound(`project ${project} does not exist`);
       }
       await wipeProject(project);
+    },
+    openAll: async () => {
+      const opened: string[] = [];
+      for (const project of await catalog.list()) {
+        try {
+          await openCached(project);
+          opened.push(project);
+        } catch (err) {
+          onError(err);
+        }
+      }
+      return opened;
     },
     wipeAll: async () => {
       const projects = await catalog.list();

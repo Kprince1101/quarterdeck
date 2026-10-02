@@ -13,6 +13,7 @@ import {
   SITE_ID,
   BUSY_BUILDER_ID,
   RETIRED_ID,
+  agent,
   projectTables,
   round,
   ticket,
@@ -86,6 +87,16 @@ describe('project model', () => {
       ({ assigneeId }) => assigneeId !== RETIRED_ID,
     );
     expect(reopen()).toBe(2);
+  });
+
+  it('counts the tickets a kill would reopen, blocked ones held by killed round builders included', () => {
+    const tables = projectTables();
+    const killedId = '00000000-0000-4000-8000-0000000000c9';
+    tables.agents.push(
+      agent(killedId, 'petrel', { roundId: ROUND_ID, status: 'killed' }),
+    );
+    tables.tickets.push(ticket(7, killedId, 'blocked'));
+    expect(buildProject(tables, DECK_ID).panel?.round?.reopenCount).toBe(4);
   });
 
   it('takes the newest unended round, planning included', () => {

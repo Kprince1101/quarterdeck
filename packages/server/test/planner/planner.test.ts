@@ -9,7 +9,7 @@ import {
   it,
   vi,
 } from 'vitest';
-import { PLANNER_BRIEF } from '../../src/planner/index.js';
+import { PLANNER_BRIEF, PROJECT_ARCHIVED } from '../../src/planner/index.js';
 import {
   SIGNED_IN,
   SIGN_IN_CARD,
@@ -615,6 +615,70 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     ]);
     expect(await p.agents()).toEqual([]);
     expect(p.errors).toEqual([]);
+  });
+
+  it('ends the conversation when the project is archived, refuses messages until unarchived, then starts afresh', async () => {
+    const p = await open();
+    await p.start();
+    await say(p, 'hello');
+    const [first] = await p.agents();
+
+    expect((await p.send('project.archive', { archived: true })).status).toBe(
+      200,
+    );
+    await settle(async () => {
+      expect((await p.agents())[0]?.status).toBe('retired');
+    });
+    await p.fake.clients[0]?.closed;
+    const refused = await say(p, 'still there?');
+
+    expect(await p.intent(refused)).toEqual({
+      status: 'rejected',
+      result: { error: PROJECT_ARCHIVED },
+    });
+    expect(p.fake.launches).toHaveLength(1);
+    const cleared = (await p.events()).find(
+      (event) => event.kind === 'planner.cleared',
+    );
+    expect(cleared).toEqual({
+      kind: 'planner.cleared',
+      agentId: first?.id,
+      payload: { reason: 'archived', intentId: null },
+    });
+
+    await p.send('project.archive', { archived: false });
+    const back = await say(p, 'back again');
+
+    expect(await p.intent(back)).toMatchObject({ status: 'applied' });
+    expect((await p.agents()).map((agent) => agent.status)).toEqual([
+      'retired',
+      'idle',
+    ]);
+    expect(p.fake.launches).toHaveLength(2);
+    expect(p.errors).toEqual([]);
+  });
+
+  it('starts afresh when its Planner was retired from outside', async () => {
+    const p = await open();
+    await p.start();
+    await say(p, 'hello');
+    const [first] = await p.agents();
+    await p.store.db.query(
+      `update agents set status = 'retired', session_id = null where id = $1`,
+      [first?.id],
+    );
+
+    const next = await say(p, 'are you there?');
+
+    expect(await p.intent(next)).toMatchObject({ status: 'applied' });
+    await p.fake.clients[0]?.closed;
+    expect((await p.agents()).map((agent) => agent.status)).toEqual([
+      'retired',
+      'idle',
+    ]);
+    expect(
+      (await p.events()).find((event) => event.kind === 'planner.cleared'),
+    ).toMatchObject({ payload: { reason: 'retired', intentId: null } });
   });
 
   it('drops a held message on close and leaves it pending', async () => {

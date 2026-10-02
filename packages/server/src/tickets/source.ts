@@ -10,6 +10,7 @@ export const TICKET_STATUSES = [
   'in_progress',
   'in_review',
   'bounced',
+  'blocked',
   'done',
   'cancelled',
   'rejected',

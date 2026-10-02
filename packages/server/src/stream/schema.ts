@@ -73,6 +73,7 @@ export const ticketRowSchema = z.object({
     'in_progress',
     'in_review',
     'bounced',
+    'blocked',
     'done',
     'cancelled',
     'rejected',

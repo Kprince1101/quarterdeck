@@ -13,6 +13,7 @@ export {
   ASK_PROGRESS_MS,
   awaitCard,
   expireCard,
+  expireOverdueCards,
   raiseAskCard,
   raiseCard,
   type AskCard,
