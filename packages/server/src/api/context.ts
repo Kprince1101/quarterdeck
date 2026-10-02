@@ -27,6 +27,16 @@ export type ProjectWork = (
   projectId: string,
 ) => Promise<IntentResult | null>;
 
+export interface StagedWork {
+  result: IntentResult | null;
+  afterCommit: () => Promise<void>;
+}
+
+export type StagedProjectWork = (
+  tx: Transaction,
+  projectId: string,
+) => Promise<StagedWork>;
+
 export type ProjectCheck = (
   tx: Transaction,
   projectId: string,

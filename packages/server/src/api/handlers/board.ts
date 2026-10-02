@@ -1,10 +1,20 @@
 import type { Transaction } from '@electric-sql/pglite';
 import type { BoardIntentName } from '../../intents/index.js';
-import type { ApiContext, IntentHandler, IntentHandlers } from '../context.js';
+import type {
+  ApiContext,
+  IntentHandler,
+  IntentHandlers,
+  StagedWork,
+} from '../context.js';
 import { badRequest, conflict } from '../http-error.js';
-import { applyInProject, findRow } from '../record.js';
+import {
+  applyInProject,
+  applyStagedInProject,
+  findRow,
+  nothingAfterCommit,
+} from '../record.js';
 import { requireRepoPath } from '../repo-path.js';
-import { writeRuleLayer } from '../rule-files.js';
+import { stageRuleWrite } from '../rule-files.js';
 import { TICKET_HANDLERS } from './tickets.js';
 
 type CardIntentName = 'card.answer' | 'card.decline';
@@ -59,21 +69,21 @@ const answerCard: IntentHandler<CardIntentName> = (ctx, input, name) =>
     return settleCard(tx, input.cardId, 'answered', input.answer);
   });
 
-const acceptCharter = async (
+const stageCharter = async (
   ctx: ApiContext,
   tx: Transaction,
   projectId: string,
   body: string,
-) => {
+): Promise<StagedWork> => {
   const repoDir = await requireRepoPath(tx, projectId);
-  return writeRuleLayer(
+  return stageRuleWrite(
     { name: 'charter', homeDir: ctx.homeDir, repoDir },
     body,
   );
 };
 
 const decideCharter: IntentHandler<'charter.decide'> = (ctx, input, name) =>
-  applyInProject(ctx, name, input, async (tx, projectId) => {
+  applyStagedInProject(ctx, name, input, async (tx, projectId) => {
     const proposal = await findRow<{ status: string; body: string }>(
       tx,
       `select status, body from charter_proposals
@@ -92,9 +102,11 @@ const decideCharter: IntentHandler<'charter.decide'> = (ctx, input, name) =>
       [input.proposalId, input.decision],
     );
     const result = { proposalId: input.proposalId, decision: input.decision };
-    if (input.decision === 'rejected') return result;
-    const path = await acceptCharter(ctx, tx, projectId, proposal.body);
-    return { ...result, path };
+    if (input.decision === 'rejected') {
+      return { result, afterCommit: nothingAfterCommit };
+    }
+    const staged = await stageCharter(ctx, tx, projectId, proposal.body);
+    return { ...staged, result: { ...result, ...staged.result } };
   });
 
 export const BOARD_HANDLERS: IntentHandlers<BoardIntentName> = {

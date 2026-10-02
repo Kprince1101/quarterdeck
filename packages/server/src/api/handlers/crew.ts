@@ -10,8 +10,10 @@ import { findRow, queueInProject } from '../record.js';
 type AgentIntentName = Extract<CrewIntentName, `agent.${string}`>;
 
 const FINISHED_AGENT_STATUSES = new Set(['ended', 'killed', 'retired']);
+const RETIRED_AGENT_STATUSES = new Set(['retired']);
 
-const requireLiveAgent =
+const requireAgentNotIn =
+  (refused: ReadonlySet<string>) =>
   (agentId: string): ProjectCheck =>
   async (tx, projectId) => {
     const agent = await findRow<{ status: string }>(
@@ -20,10 +22,14 @@ const requireLiveAgent =
       [agentId, projectId],
       `agent ${agentId} not found`,
     );
-    if (FINISHED_AGENT_STATUSES.has(agent.status)) {
+    if (refused.has(agent.status)) {
       throw conflict(`agent ${agentId} is already ${agent.status}`);
     }
   };
+
+const requireLiveAgent = requireAgentNotIn(FINISHED_AGENT_STATUSES);
+
+const requireUnretiredAgent = requireAgentNotIn(RETIRED_AGENT_STATUSES);
 
 const requireOpenRound =
   (roundId: string): ProjectCheck =>
@@ -54,7 +60,8 @@ export const CREW_HANDLERS: IntentHandlers<CrewIntentName> = {
   'agent.resume': queueForAgent,
   'agent.end': queueForAgent,
   'agent.kill': queueForAgent,
-  'agent.retire': queueForAgent,
+  'agent.retire': (ctx, input, name) =>
+    queueInProject(ctx, name, input, requireUnretiredAgent(input.agentId)),
   'agent.message': queueForAgent,
   'planner.message': queue,
 };

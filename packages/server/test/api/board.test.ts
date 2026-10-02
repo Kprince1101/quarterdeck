@@ -7,7 +7,7 @@ import { TIMEOUT, intentRow, startTestApi, type TestApi } from './harness.js';
 
 const project = 'board';
 
-describe('board intents', () => {
+describe('board intents', { timeout: TIMEOUT }, () => {
   let t: TestApi;
   let store: Store;
   let repoDir = '';
@@ -269,6 +269,23 @@ describe('board intents', () => {
         decision: 'accepted',
         path,
       });
+      expect(await readFile(path, 'utf8')).toBe('# Charter\n\nShip small.');
+    });
+
+    it('leaves the proposal open and the charter alone when the body is refused', async () => {
+      const proposalId = await insertProposal('   ');
+      const refused = await t.send('charter.decide', {
+        project,
+        proposalId,
+        decision: 'accepted',
+      });
+      expect(refused.status).toBe(400);
+      const { rows } = await store.db.query(
+        'select status from charter_proposals where id = $1',
+        [proposalId],
+      );
+      expect(rows).toEqual([{ status: 'open' }]);
+      const path = join(repoDir, '.quarterdeck', 'rules.local.charter.md');
       expect(await readFile(path, 'utf8')).toBe('# Charter\n\nShip small.');
     });
   });

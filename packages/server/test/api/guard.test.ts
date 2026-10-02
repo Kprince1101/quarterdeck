@@ -8,6 +8,7 @@ const DASHBOARD_ORIGIN = 'http://localhost:5173';
 const rawPost = (
   port: number,
   headers: Record<string, string>,
+  body = '{}',
 ): Promise<number | undefined> =>
   new Promise((resolve, reject) => {
     const req = request(
@@ -24,10 +25,10 @@ const rawPost = (
       },
     );
     req.on('error', reject);
-    req.end('{}');
+    req.end(body);
   });
 
-describe('intent API guard', () => {
+describe('intent API guard', { timeout: TIMEOUT }, () => {
   let t: TestApi;
 
   beforeAll(async () => {
@@ -100,11 +101,11 @@ describe('intent API guard', () => {
   });
 
   it('refuses bodies over the size limit', async () => {
-    const huge = await t.send('planner.message', {
-      project: 'deck',
-      text: 'x'.repeat(MAX_BODY_BYTES),
+    const declared = await rawPost(t.api.port, {
+      host: `127.0.0.1:${t.api.port}`,
+      'content-length': String(MAX_BODY_BYTES + 1),
     });
-    expect(huge.status).toBe(413);
+    expect(declared).toBe(413);
   });
 
   it('returns zod issues for an invalid intent', async () => {

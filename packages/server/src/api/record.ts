@@ -6,7 +6,12 @@ import type {
   IntentStatus,
 } from '../intents/index.js';
 import { publishEvent } from '../store/index.js';
-import type { ApiContext, ProjectCheck, ProjectWork } from './context.js';
+import type {
+  ApiContext,
+  ProjectCheck,
+  ProjectWork,
+  StagedProjectWork,
+} from './context.js';
 import { notFound } from './http-error.js';
 
 interface ProjectInput {
@@ -47,34 +52,55 @@ const recordIntent = async (
   return id;
 };
 
+export const nothingAfterCommit = (): Promise<void> => Promise.resolve();
+
 const runInProject = async (
   ctx: ApiContext,
   name: IntentName,
   input: ProjectInput,
   status: IntentStatus,
-  work: ProjectWork,
+  work: StagedProjectWork,
 ): Promise<IntentReply> => {
   const store = await ctx.stores.get(input.project);
-  return store.db.transaction(async (tx) => {
-    const result = await work(tx, store.projectId);
+  const { reply, afterCommit } = await store.db.transaction(async (tx) => {
+    const staged = await work(tx, store.projectId);
     const id = await recordIntent(
       tx,
       store.projectId,
       name,
       input,
       status,
-      result,
+      staged.result,
     );
-    return { intent: name, status, id, result };
+    const committed: IntentReply = {
+      intent: name,
+      status,
+      id,
+      result: staged.result,
+    };
+    return { reply: committed, afterCommit: staged.afterCommit };
   });
+  await afterCommit();
+  return reply;
 };
+
+export const applyStagedInProject = (
+  ctx: ApiContext,
+  name: IntentName,
+  input: ProjectInput,
+  work: StagedProjectWork,
+): Promise<IntentReply> => runInProject(ctx, name, input, 'applied', work);
 
 export const applyInProject = (
   ctx: ApiContext,
   name: IntentName,
   input: ProjectInput,
   work: ProjectWork,
-): Promise<IntentReply> => runInProject(ctx, name, input, 'applied', work);
+): Promise<IntentReply> =>
+  applyStagedInProject(ctx, name, input, async (tx, projectId) => ({
+    result: await work(tx, projectId),
+    afterCommit: nothingAfterCommit,
+  }));
 
 export const queueInProject = (
   ctx: ApiContext,
@@ -84,12 +110,12 @@ export const queueInProject = (
 ): Promise<IntentReply> =>
   runInProject(ctx, name, input, 'pending', async (tx, projectId) => {
     await check?.(tx, projectId);
-    return null;
+    return { result: null, afterCommit: nothingAfterCommit };
   });
 
 export const unrecorded = (
   name: IntentName,
-  result: IntentResult,
+  result: IntentResult | null,
 ): IntentReply => ({ intent: name, status: 'applied', id: null, result });
 
 export const findRow = async <Row>(

@@ -22,7 +22,7 @@ const BOARD_LAYOUT = {
   ],
 };
 
-describe('workspace intents', () => {
+describe('workspace intents', { timeout: TIMEOUT }, () => {
   let t: TestApi;
   let repoDir = '';
 
@@ -57,6 +57,16 @@ describe('workspace intents', () => {
       expect((await t.send('project.create', { project: 'deck' })).status).toBe(
         409,
       );
+    });
+
+    it('lets only one of two concurrent creates win', async () => {
+      const replies = await Promise.all([
+        t.send('project.create', { project: 'race' }),
+        t.send('project.create', { project: 'race' }),
+      ]);
+      expect(replies.map((reply) => reply.status).toSorted()).toEqual([
+        200, 409,
+      ]);
     });
 
     it('refuses a repoPath that is not a directory', async () => {
@@ -211,7 +221,7 @@ describe('workspace intents', () => {
       const refused = await t.send('wipe.all', { confirm: 'yes' });
       expect(refused.status).toBe(400);
       const res = await t.send('wipe.all', { confirm: WIPE_ALL_CONFIRMATION });
-      expect(res.body.result).toEqual({ wiped: ['deck', 'other'] });
+      expect(res.body.result).toEqual({ wiped: ['deck', 'other', 'race'] });
       expect(existsSync(join(t.homeDir, '.quarterdeck', 'deck'))).toBe(false);
       expect(existsSync(machineRule('lifecycle.json'))).toBe(true);
     });

@@ -1,6 +1,7 @@
-import { access, readdir, rm } from 'node:fs/promises';
+import { readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { hasErrorCode } from '../lib/errors.js';
+import { pathExists } from '../lib/fs.js';
 import { PROJECT_SLUG } from '../lib/slug.js';
 import { lockDataDir } from '../store/lock.js';
 import { openStore, projectDataDir, type Store } from '../store/index.js';
@@ -14,16 +15,6 @@ export interface ProjectStores {
   wipeAll: () => Promise<string[]>;
   closeAll: () => Promise<void>;
 }
-
-const pathExists = async (path: string): Promise<boolean> => {
-  try {
-    await access(path);
-    return true;
-  } catch (err) {
-    if (hasErrorCode(err, 'ENOENT')) return false;
-    throw err;
-  }
-};
 
 const projectDirs = async (dataHome: string): Promise<string[]> => {
   try {
@@ -41,21 +32,35 @@ const projectDirs = async (dataHome: string): Promise<string[]> => {
 export const createProjectStores = (dataHome: string): ProjectStores => {
   const open = new Map<string, Promise<Store>>();
 
-  const exists = async (project: string) =>
-    open.has(project) ||
+  const dataDirExists = (project: string) =>
     pathExists(join(projectDataDir(project, dataHome), 'PG_VERSION'));
 
-  const openCached = (project: string): Promise<Store> => {
-    const cached = open.get(project);
-    if (cached) return cached;
-    const opening = openStore({ project, home: dataHome }).catch(
-      (err: unknown) => {
-        open.delete(project);
-        throw asLockConflict(err);
-      },
-    );
+  const exists = async (project: string) =>
+    open.has(project) || dataDirExists(project);
+
+  const openProject = (project: string) =>
+    openStore({ project, home: dataHome });
+
+  const claim = (
+    project: string,
+    start: (project: string) => Promise<Store>,
+  ): Promise<Store> => {
+    const opening = start(project).catch((err: unknown) => {
+      if (open.get(project) === opening) open.delete(project);
+      throw asLockConflict(err);
+    });
     open.set(project, opening);
     return opening;
+  };
+
+  const openCached = (project: string): Promise<Store> =>
+    open.get(project) ?? claim(project, openProject);
+
+  const openNew = async (project: string): Promise<Store> => {
+    if (await dataDirExists(project)) {
+      throw conflict(`project ${project} already exists`);
+    }
+    return openProject(project);
   };
 
   const release = async (project: string) => {
@@ -89,11 +94,11 @@ export const createProjectStores = (dataHome: string): ProjectStores => {
       }
       return openCached(project);
     },
-    create: async (project) => {
-      if (await exists(project)) {
-        throw conflict(`project ${project} already exists`);
+    create: (project) => {
+      if (open.has(project)) {
+        return Promise.reject(conflict(`project ${project} already exists`));
       }
-      return openCached(project);
+      return claim(project, openNew);
     },
     wipe: async (project) => {
       if (!(await exists(project))) {

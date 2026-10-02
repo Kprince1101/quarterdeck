@@ -1,21 +1,35 @@
 import type { RuleName } from '@quarterdeck/rules';
-import type { IntentResult } from '../../intents/index.js';
-import type { ApiContext, IntentHandler, IntentHandlers } from '../context.js';
-import { applyInProject, unrecorded } from '../record.js';
+import type {
+  ApiContext,
+  IntentHandler,
+  IntentHandlers,
+  StagedWork,
+} from '../context.js';
+import { applyStagedInProject, unrecorded } from '../record.js';
 import { requireRepoPath } from '../repo-path.js';
 import {
-  removeRuleLayer,
-  writeRuleLayer,
+  stageRuleRemoval,
+  stageRuleWrite,
   type RuleLayerTarget,
 } from '../rule-files.js';
 
 type RulesIntentName = 'rules.write' | 'rules.reset';
 
-type LayerChange = (target: RuleLayerTarget) => Promise<IntentResult>;
+type LayerChange = (target: RuleLayerTarget) => Promise<StagedWork>;
 
 type RulesInput =
   | { scope: 'machine'; name: RuleName }
   | { scope: 'project'; project: string; name: RuleName };
+
+const changeMachineLayer = async (
+  intent: RulesIntentName,
+  target: RuleLayerTarget,
+  change: LayerChange,
+) => {
+  const staged = await change(target);
+  await staged.afterCommit();
+  return unrecorded(intent, staged.result);
+};
 
 const changeLayer = (
   ctx: ApiContext,
@@ -25,22 +39,20 @@ const changeLayer = (
 ) => {
   const target = { name: input.name, homeDir: ctx.homeDir };
   if (input.scope === 'machine') {
-    return change(target).then((result) => unrecorded(intent, result));
+    return changeMachineLayer(intent, target, change);
   }
-  return applyInProject(ctx, intent, input, async (tx, projectId) =>
+  return applyStagedInProject(ctx, intent, input, async (tx, projectId) =>
     change({ ...target, repoDir: await requireRepoPath(tx, projectId) }),
   );
 };
 
 const writeRules: IntentHandler<'rules.write'> = (ctx, input, intent) =>
-  changeLayer(ctx, intent, input, async (target) => ({
-    path: await writeRuleLayer(target, input.content),
-  }));
+  changeLayer(ctx, intent, input, (target) =>
+    stageRuleWrite(target, input.content),
+  );
 
 const resetRules: IntentHandler<'rules.reset'> = (ctx, input, intent) =>
-  changeLayer(ctx, intent, input, async (target) => ({
-    ...(await removeRuleLayer(target)),
-  }));
+  changeLayer(ctx, intent, input, stageRuleRemoval);
 
 export const RULES_HANDLERS: IntentHandlers<RulesIntentName> = {
   'rules.write': writeRules,

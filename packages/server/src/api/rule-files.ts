@@ -16,6 +16,8 @@ import {
   type RuleName,
 } from '@quarterdeck/rules';
 import { hasErrorCode } from '../lib/errors.js';
+import { pathExists } from '../lib/fs.js';
+import type { StagedWork } from './context.js';
 import { badRequest } from './http-error.js';
 
 export interface RuleLayerTarget {
@@ -73,25 +75,32 @@ const validateLayer = async (target: RuleLayerTarget, content: string) => {
   }
 };
 
-export const writeRuleLayer = async (
-  target: RuleLayerTarget,
-  content: string,
-): Promise<string> => {
-  await validateLayer(target, content);
-  const path = ruleLayerPath(target);
-  await writeAtomically(path, content);
-  return path;
-};
-
-export const removeRuleLayer = async (
-  target: RuleLayerTarget,
-): Promise<{ path: string; removed: boolean }> => {
-  const path = ruleLayerPath(target);
+const unlinkIfPresent = async (path: string) => {
   try {
     await unlink(path);
-    return { path, removed: true };
   } catch (err) {
-    if (hasErrorCode(err, 'ENOENT')) return { path, removed: false };
-    throw err;
+    if (!hasErrorCode(err, 'ENOENT')) throw err;
   }
+};
+
+export const stageRuleWrite = async (
+  target: RuleLayerTarget,
+  content: string,
+): Promise<StagedWork> => {
+  await validateLayer(target, content);
+  const path = ruleLayerPath(target);
+  return {
+    result: { path },
+    afterCommit: () => writeAtomically(path, content),
+  };
+};
+
+export const stageRuleRemoval = async (
+  target: RuleLayerTarget,
+): Promise<StagedWork> => {
+  const path = ruleLayerPath(target);
+  return {
+    result: { path, removed: await pathExists(path) },
+    afterCommit: () => unlinkIfPresent(path),
+  };
 };

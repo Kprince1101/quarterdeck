@@ -21,7 +21,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').cpSync('src/store/migrations', 'dist/store/migrations', { recursive: true })\""
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc -p tsconfig.build.json && node -e \"require('node:fs').cpSync('src/store/migrations', 'dist/store/migrations', { recursive: true })\""
   },
   "engines": {
     "node": ">=22"
