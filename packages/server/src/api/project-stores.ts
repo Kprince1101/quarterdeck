@@ -1,9 +1,15 @@
 import { readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { WipeResult } from '../intents/index.js';
 import { hasErrorCode } from '../lib/errors.js';
 import { pathExists } from '../lib/fs.js';
 import { PROJECT_SLUG } from '../lib/slug.js';
 import { recoverProject } from '../lifecycle/recover.js';
+import {
+  DEFAULT_STOP_HOSTS,
+  stopProjectAgents,
+  type StopHosts,
+} from '../lifecycle/stop.js';
 import { lockDataDir } from '../store/lock.js';
 import {
   configuredDatabaseUrl,
@@ -20,15 +26,17 @@ import {
 } from '../store/index.js';
 import { asLockConflict, conflict, notFound } from './http-error.js';
 
+type StoppedAgent = WipeResult['stopped'][number];
+
 export interface ProjectStores {
   dataHome: string;
   location: string;
   get: (project: string) => Promise<Store>;
   create: (project: string) => Promise<Store>;
   list: () => Promise<string[]>;
-  wipe: (project: string) => Promise<void>;
+  wipe: (project: string) => Promise<WipeResult>;
   openAll: () => Promise<string[]>;
-  wipeAll: () => Promise<string[]>;
+  wipeAll: () => Promise<WipeResult>;
   closeAll: () => Promise<void>;
 }
 
@@ -100,6 +108,7 @@ export const createProjectStores = (
   dataHome: string,
   databaseUrl?: string,
   onError: (err: unknown) => void = reportError,
+  stopHosts: StopHosts = DEFAULT_STOP_HOSTS,
 ): ProjectStores => {
   const url = configuredDatabaseUrl(databaseUrl);
   const catalog = chooseCatalog(dataHome, url);
@@ -148,11 +157,29 @@ export const createProjectStores = (
     await store?.close();
   };
 
-  const wipeProject = async (project: string) => {
+  const stopAgents = async (project: string): Promise<StoppedAgent[]> => {
+    if (!(await exists(project))) return [];
+    const store = await openCached(project);
+    const { killed, running } = await stopProjectAgents(
+      store,
+      stopHosts,
+      onError,
+    );
+    if (running.length > 0) {
+      throw conflict(
+        `could not confirm that ${running.join(', ')} stopped; ${project} is kept so the next start sweeps them`,
+      );
+    }
+    return killed.map((agent) => ({ project, agent }));
+  };
+
+  const wipeProject = async (project: string): Promise<StoppedAgent[]> => {
+    const stopped = await stopAgents(project);
     await release(project);
     await catalog.wipe(project).catch((err: unknown) => {
       throw asLockConflict(err);
     });
+    return stopped;
   };
 
   return {
@@ -179,7 +206,7 @@ export const createProjectStores = (
       if (!(await exists(project))) {
         throw notFound(`project ${project} does not exist`);
       }
-      await wipeProject(project);
+      return { wiped: [project], stopped: await wipeProject(project) };
     },
     openAll: async () => {
       const opened: string[] = [];
@@ -195,8 +222,11 @@ export const createProjectStores = (
     },
     wipeAll: async () => {
       const projects = await catalog.list();
-      for (const project of projects) await wipeProject(project);
-      return projects;
+      const stopped: StoppedAgent[] = [];
+      for (const project of projects) {
+        stopped.push(...(await wipeProject(project)));
+      }
+      return { wiped: projects, stopped };
     },
     closeAll: async () => {
       await Promise.all([...open.keys()].map(release));

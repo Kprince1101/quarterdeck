@@ -74,7 +74,10 @@ describe.runIf(POSTGRES_URL !== '')(
       });
 
       expect(res.status).toBe(200);
-      expect(res.body['result']).toEqual({ wiped: ['deck'] });
+      expect(res.body['result']).toEqual({
+        wiped: ['deck'],
+        stopped: [{ project: 'deck', agent: 'pangolin' }],
+      });
       expect(await projectRowCounts(db, deck)).toEqual(everyTable(0));
       expect(await projectRowCounts(db, hold)).toEqual(holdBefore);
       expect(await slugs()).toEqual(['hold']);
@@ -107,7 +110,13 @@ describe.runIf(POSTGRES_URL !== '')(
       const res = await t.send('wipe.all', { confirm: WIPE_ALL_CONFIRMATION });
 
       expect(res.status).toBe(200);
-      expect(res.body['result']).toEqual({ wiped: ['deck', 'hold'] });
+      expect(res.body['result']).toEqual({
+        wiped: ['deck', 'hold'],
+        stopped: [
+          { project: 'deck', agent: 'pangolin' },
+          { project: 'hold', agent: 'pangolin' },
+        ],
+      });
       expect(await projectRowCounts(db, deck)).toEqual(everyTable(0));
       expect(await projectRowCounts(db, hold)).toEqual(everyTable(0));
       expect(await slugs()).toEqual([]);

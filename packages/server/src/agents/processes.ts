@@ -12,7 +12,7 @@ import { recordEvent } from './rows.js';
 
 export const PROCESS_SWEPT_EVENT = 'agent.process_swept';
 
-export type SweepReason = 'kill' | 'reset' | 'retire' | 'restart';
+export type SweepReason = 'kill' | 'reset' | 'retire' | 'restart' | 'wipe';
 
 export type SweepOutcome = 'none' | OwnedTreeStop;
 
