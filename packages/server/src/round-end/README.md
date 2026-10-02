@@ -1,12 +1,14 @@
 # round-end
 
-A round ends itself once it has settled. The Driver gets one wrap-up turn to propose what the next Driver should be born with, then the round's agents are retired and the round is marked `ended`. Nothing the Driver proposes takes effect until the human approves it.
+A round ends itself once it has settled, or when the human presses End or Kill. Ending closes the round's cards and retires its builders, gives the Driver one wrap-up turn to propose what the next Driver should be born with, then retires the Driver and marks the round `ended`. Nothing the Driver proposes takes effect until the human approves it. Killing does the same cleanup with no wrap-up and puts the round's tickets back to `open`.
 
 ```
-settled ─▶ settle timer (autoEndSettleSeconds) ─▶ round.settled ─▶ wrap-up turn ─▶ proposals ─▶ cleanup ─▶ round.ended
-   ▲            │                                                                   │
-   │            ├─ work comes back: disarmed                                         └─ notebook.decide / charter.decide ─▶ next Driver's birth
-   └────────────┴─ late merge (ticket.merged): re-armed from zero
+settled ─▶ settle timer (autoEndSettleSeconds) ─▶ round.settled ─┐
+   ▲            │                                                 ├─▶ release ─▶ wrap-up turn ─▶ proposals ─▶ cleanup ─▶ round.ended
+   │            ├─ work comes back: disarmed       round.end ─────┘                 │
+   └────────────┴─ late merge: re-armed from zero                                   └─ notebook.decide / charter.decide ─▶ next Driver's birth
+
+round.kill ─▶ cleanup + tickets reopened ─▶ round.ended (reason: killed)
 ```
 
 ## When a round is settled
@@ -85,7 +87,43 @@ The next Driver's birth (`openDriverRound`) reads the active notebook (`retired_
 
 ## Cleanup
 
-`cleanUpRound({ store, lifecycle, roundId, reason })` retires every agent of the round whose role is `driver` or `builder` (`ROUND_AGENT_ROLES`) and is not retired yet, oldest first, through `lifecycle.retire`: the session closes, the worktree is removed, the name is freed. The project's reviewer and Planner are not round agents and stay. A worktree with unsaved work is not discarded: a `worktree.discard` card is raised for it (`requestWorktreeDiscard`) and the agent stays unretired. Then the round becomes `ended` (`ended_at` set) and `round.ended` is recorded with `{ roundId, round, reason, retired, discardCards }`, in one transaction. Any other error is thrown before the round is ended; calling it again carries on where it stopped and never ends a round twice (`ended: false`).
+The round's agents are its `driver` and `builder` agents (`ROUND_AGENT_ROLES`, matched on `agents.round_id`). The project's reviewer and Planner are not round agents: they are never retired, and the reviewer is free for the next round as soon as this one ends.
+
+`releaseRound({ store, lifecycle, roundId, reason })` is the part that runs before the wrap-up:
+
+1. **Close cards.** Every `open` card raised by a round agent (an `ask`, a sign-in card) becomes `expired`, and `card.expired` is recorded for each with `{ cardId, roundId, reason }`, in one transaction. A turn waiting on one sees it expired, as it would on a timeout. `worktree.discard` cards stay open: they are the human's to answer. Cards nobody in the round raised (the gate's merge cards, the reviewer's own) are left alone.
+2. **Retire builders.** Every builder of the round that is not retired yet, oldest first, through `lifecycle.retire` (`agents/retire.ts`): the session closes, the worktree is removed, the name is freed. A worktree with unsaved work is not discarded: a `worktree.discard` card is raised for it (`requestWorktreeDiscard`) and the builder stays unretired. A builder that already has an open discard card is skipped, so running it again never raises a second one.
+
+It resolves to `{ closedCards, retired, discardCards }`.
+
+`cleanUpRound({ store, lifecycle, roundId, reason, reopen? })` runs `releaseRound` again (cards or builders that appeared since), retires the Driver the same way, then, in one transaction, marks the round `ended` (`ended_at` set), reopens its tickets if `reopen` is set (see [Kill](#kill)), and records `round.ended` with `{ roundId, round, reason, closedCards, retired, discardCards, reopened }`. Any other error is thrown before the round is ended; calling it again carries on where it stopped and never ends a round twice (`ended: false`, nothing reopened).
+
+## End
+
+`endRound({ store, round, charter, lifecycle, reason? })` is `releaseRound`, then `wrapUpRound`, then `cleanUpRound`: the builders are gone and the round's cards closed before the Driver's wrap-up turn, and the Driver is retired after it. Its `cleanup` lists what all three steps closed and retired. Auto-end runs it with `reason: 'settled'` (`SETTLED_REASON`); End from the dashboard with `'ended'` (`ENDED_REASON`).
+
+`endRoundWithoutDriver({ store, lifecycle, roundId })` is the same when there is no live Driver session to wrap up in (the server restarted, the Driver died): the wrap-up is recorded as missed with `NO_DRIVER_SESSION` (`missWrapUp`) and the round still ends.
+
+## Kill
+
+`killRound({ store, lifecycle, roundId })` is `cleanUpRound` with `reason: 'killed'` (`KILLED_REASON`) and `reopen: true`. There is no wrap-up turn and no proposals. Inside the transaction that ends the round, every ticket held by one of the round's builders (retired or not) and still `assigned`, `in_progress`, `in_review` or `bounced` goes back to `open` with no assignee; `pr_url` and `head_sha` stay so the next builder can pick up an open pull request. `ticket.reopened` is recorded for each with `{ roundId, previousStatus, previousAssigneeId }`, and any card still open on those tickets (a merge card) is expired. Tickets other rounds assigned, tickets never assigned, and `done` tickets are not touched. The reviewer gate only evaluates `in_review` tickets, so a review it was waiting on for a reopened ticket is dropped, and a verdict on it is refused.
+
+## End and Kill from the dashboard
+
+The Project widget sends `round.end` or `round.kill` `{ project, roundId }` (see [api](../api/README.md#intents)). Both are recorded `pending` after checking the round exists and has not ended. `startRoundControl` applies them:
+
+```ts
+import { startRoundControl } from '@quarterdeck/server';
+
+const control = await startRoundControl({
+  store,
+  lifecycle, // createAgentLifecycle(...)
+  driver: (roundId) => liveRounds.get(roundId), // { round: DriverRound, charter }
+});
+await control.close();
+```
+
+It reads pending `round.end` and `round.kill` intents when it starts and on every new one, oldest first. Each is checked again (a round that ended meanwhile is `rejected` with `round <id> has already ended`), then applied: End runs `endRound` with the live Driver round `driver(roundId)` gives, or `endRoundWithoutDriver` when it gives none; Kill runs `killRound`. The intent becomes `applied` with `{ roundId, round, ended, closedCards, retired, discardCards, reopened }` (plus `wrapUp` for End), or `rejected` with `{ error }` if it throws. Intents for one round run in order, except that a Kill never waits behind an End's wrap-up turn: killing retires the Driver, so the turn ends. `drain()` resolves once everything pending has settled; `close()` stops listening and waits for what is running.
 
 ## API
 
@@ -105,13 +143,18 @@ const auto = await startRoundAutoEnd({
 await auto.close();
 ```
 
-| Export                                                    | What it does                                                                                                   |
-| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `startRoundAutoEnd(options)`                              | `startAutoEnd` whose `end` is `endRound` for the Driver round. `onEnded(ended)` is called with its result.     |
-| `startAutoEnd(options)`, `timerScheduler`, `Scheduler`    | The settle timer alone, with any `end`.                                                                        |
-| `endRound({ store, round, charter, lifecycle, reason? })` | `wrapUpRound`, then `cleanUpRound` (`reason` defaults to `SETTLED_REASON`). Resolves to `{ wrapUp, cleanup }`. |
-| `wrapUpRound(options)`                                    | The wrap-up turn and its proposals, on their own.                                                              |
-| `cleanUpRound(options)`                                   | Retire the round's agents and end the round, on its own.                                                       |
-| `readSettleState`, `isSettled`                            | Whether a round is settled.                                                                                    |
-| `buildWrapUpPrompt`, `wrapUpFormat`, `wrapUpResultSchema` | The wrap-up prompt and the shape of its result.                                                                |
-| `AUTO_END_EVENTS`, `WRAP_UP_EVENTS`, `ROUND_ENDED_EVENT`  | `round.settling`, `round.settled`; `round.wrapped_up`, `round.wrap_up_missed`; `round.ended`.                  |
+| Export                                                    | What it does                                                                                                                   |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `startRoundAutoEnd(options)`                              | `startAutoEnd` whose `end` is `endRound` for the Driver round. `onEnded(ended)` is called with its result.                     |
+| `startAutoEnd(options)`, `timerScheduler`, `Scheduler`    | The settle timer alone, with any `end`.                                                                                        |
+| `startRoundControl(options)`, `ROUND_INTENTS`             | Apply the `round.end` and `round.kill` intents.                                                                                |
+| `endRound({ store, round, charter, lifecycle, reason? })` | `releaseRound`, `wrapUpRound`, then `cleanUpRound` (`reason` defaults to `SETTLED_REASON`). Resolves to `{ wrapUp, cleanup }`. |
+| `endRoundWithoutDriver({ store, lifecycle, roundId })`    | End with the wrap-up recorded as missed (`NO_DRIVER_SESSION`).                                                                 |
+| `killRound({ store, lifecycle, roundId })`                | `cleanUpRound` with `reason: 'killed'` and the round's tickets reopened.                                                       |
+| `wrapUpRound(options)`, `missWrapUp`                      | The wrap-up turn and its proposals, on their own; record a wrap-up that could not run.                                         |
+| `releaseRound(options)`, `closeRoundCards`                | Close the round's cards and retire its builders; close its cards only.                                                         |
+| `cleanUpRound(options)`                                   | Release, retire the Driver and end the round, on its own.                                                                      |
+| `readSettleState`, `isSettled`                            | Whether a round is settled.                                                                                                    |
+| `buildWrapUpPrompt`, `wrapUpFormat`, `wrapUpResultSchema` | The wrap-up prompt and the shape of its result.                                                                                |
+| `AUTO_END_EVENTS`, `WRAP_UP_EVENTS`, `ROUND_ENDED_EVENT`  | `round.settling`, `round.settled`; `round.wrapped_up`, `round.wrap_up_missed`; `round.ended`.                                  |
+| `CARD_EXPIRED_EVENT`, `TICKET_REOPENED_EVENT`             | `card.expired` for a card the cleanup closed; `ticket.reopened` for a ticket a Kill put back.                                  |

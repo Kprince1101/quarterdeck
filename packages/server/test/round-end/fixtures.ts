@@ -89,20 +89,37 @@ export const insertAgent = async (
 export const insertTicket = async (
   store: Store,
   status: string,
+  assigneeId: string | null = null,
 ): Promise<string> => {
   const { rows } = await store.db.query<{ id: string }>(
-    `insert into tickets (project_id, title, status)
-     values ($1, 'QD5f', $2) returning id`,
-    [store.projectId, status],
+    `insert into tickets (project_id, title, status, assignee_id)
+     values ($1, 'QD5f', $2, $3) returning id`,
+    [store.projectId, status, assigneeId],
   );
   return rows[0]?.id ?? '';
 };
 
-export const insertCard = async (store: Store): Promise<string> => {
+export interface CardSeed {
+  agentId?: string;
+  ticketId?: string;
+  kind?: string;
+  status?: string;
+}
+
+export const insertCard = async (
+  store: Store,
+  seed: CardSeed = {},
+): Promise<string> => {
   const { rows } = await store.db.query<{ id: string }>(
-    `insert into cards (project_id, kind, question)
-     values ($1, 'question', 'Ship it?') returning id`,
-    [store.projectId],
+    `insert into cards (project_id, agent_id, ticket_id, kind, status, question)
+     values ($1, $2, $3, $4, $5, 'Ship it?') returning id`,
+    [
+      store.projectId,
+      seed.agentId ?? null,
+      seed.ticketId ?? null,
+      seed.kind ?? 'question',
+      seed.status ?? 'open',
+    ],
   );
   return rows[0]?.id ?? '';
 };
