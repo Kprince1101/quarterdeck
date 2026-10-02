@@ -101,16 +101,16 @@ describe('ticket-source plugins', () => {
     ]);
   });
 
-  it('opens the named plugin instead of the tickets table', async () => {
-    await writePlugin('tracker', RECORDING_PLUGIN);
+  it('opens a named plugin only from the real ~/.quarterdeck/plugins', async () => {
+    const name = 'qd-test-absent-tracker';
+    await writePlugin(name, RECORDING_PLUGIN);
+    const withHome = { project: 'deck', plugin: name, home };
     const store = await openStore({ project: 'deck', dataDir: IN_MEMORY });
     try {
-      const source = await openTicketSource(store, {
-        project: 'deck',
-        plugin: 'tracker',
-        home,
-      });
-      expect(source.name).toBe('tracker');
+      await expect(openTicketSource(store, withHome)).rejects.toThrow(
+        join(homedir(), '.quarterdeck', 'plugins'),
+      );
+      expect(calls()).toEqual([]);
     } finally {
       await store.close();
     }
@@ -158,6 +158,35 @@ describe('ticket-source plugins', () => {
     await expect(
       loadTicketSource('tracker', { project: 'deck', home }),
     ).rejects.toThrow('outside');
+    expect(calls()).toEqual([]);
+  });
+
+  it('refuses a plugins folder that is a symlink', async () => {
+    const repo = join(root, 'repo');
+    await mkdir(repo);
+    await writeFile(join(repo, 'tracker.mjs'), RECORDING_PLUGIN);
+    await rm(plugins, { recursive: true });
+    await symlink(repo, plugins);
+    await expect(
+      loadTicketSource('tracker', { project: 'deck', home }),
+    ).rejects.toThrow(
+      `${plugins} resolves to ${repo}; the plugins folder cannot be reached through a symlink`,
+    );
+    expect(calls()).toEqual([]);
+  });
+
+  it('refuses a plugins folder under a symlinked home', async () => {
+    const elsewhere = join(root, 'elsewhere');
+    await mkdir(join(elsewhere, 'plugins'), { recursive: true });
+    await writeFile(
+      join(elsewhere, 'plugins', 'tracker.mjs'),
+      RECORDING_PLUGIN,
+    );
+    const linkedHome = join(root, 'linked');
+    await symlink(elsewhere, linkedHome);
+    await expect(
+      loadTicketSource('tracker', { project: 'deck', home: linkedHome }),
+    ).rejects.toBeInstanceOf(TicketSourcePluginError);
     expect(calls()).toEqual([]);
   });
 

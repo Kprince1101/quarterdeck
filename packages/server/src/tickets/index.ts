@@ -12,6 +12,8 @@ export {
 export {
   LOCAL_TICKET_SOURCE,
   TICKET_NOTED_EVENT,
+  TICKET_PR_ATTACHED_EVENT,
+  TICKET_STATUS_SET_EVENT,
   localTicketSource,
 } from './local.js';
 export {

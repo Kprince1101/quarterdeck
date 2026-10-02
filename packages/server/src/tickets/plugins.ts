@@ -1,5 +1,5 @@
 import { realpath } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { getErrorMessage, hasErrorCode } from '../lib/errors.js';
 import { PROJECT_SLUG } from '../lib/slug.js';
@@ -35,7 +35,8 @@ export interface LoadTicketSourceOptions {
   home?: string;
 }
 
-export interface OpenTicketSourceOptions extends LoadTicketSourceOptions {
+export interface OpenTicketSourceOptions {
+  project: string;
   plugin?: string | undefined;
 }
 
@@ -60,13 +61,20 @@ export const ticketPluginPath = (
 };
 
 const realPluginsDir = async (name: string, dir: string): Promise<string> => {
+  let real: string;
   try {
-    return await realpath(dir);
+    real = await realpath(dir);
   } catch (err) {
     if (hasErrorCode(err, 'ENOENT'))
       throw new TicketSourcePluginError(name, `there is no folder ${dir}`);
     throw err;
   }
+  if (real !== resolve(dir))
+    throw new TicketSourcePluginError(
+      name,
+      `${dir} resolves to ${real}; the plugins folder cannot be reached through a symlink`,
+    );
+  return real;
 };
 
 const resolvePluginInside = async (
@@ -163,5 +171,5 @@ export const openTicketSource = async (
   options: OpenTicketSourceOptions,
 ): Promise<TicketSource> => {
   if (options.plugin === undefined) return localTicketSource(store);
-  return loadTicketSource(options.plugin, options);
+  return loadTicketSource(options.plugin, { project: options.project });
 };

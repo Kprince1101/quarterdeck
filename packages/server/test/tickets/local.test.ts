@@ -3,6 +3,8 @@ import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
 import {
   LOCAL_TICKET_SOURCE,
   TICKET_NOTED_EVENT,
+  TICKET_PR_ATTACHED_EVENT,
+  TICKET_STATUS_SET_EVENT,
   TicketNotFoundError,
   TicketSourceInputError,
   localTicketSource,
@@ -14,10 +16,19 @@ const TIMEOUT = 30_000;
 const HEAD = 'a'.repeat(40);
 const MISSING = '00000000-0000-4000-8000-000000000000';
 
+const LONG_AGO = '2020-01-01T00:00:00Z';
+
 interface TicketRow {
   status: string;
   prUrl: string | null;
   headSha: string | null;
+  touched: boolean;
+}
+
+interface TicketEvent {
+  kind: string;
+  ticketId: string;
+  payload: unknown;
 }
 
 describe('the local ticket source', () => {
@@ -48,20 +59,30 @@ describe('the local ticket source', () => {
     projectId = store.projectId,
   ): Promise<string> => {
     const { rows } = await store.db.query<{ id: string }>(
-      `insert into tickets (project_id, title, body, status)
-       values ($1, $2, $3, $4) returning id`,
-      [projectId, title, `${title} body`, status],
+      `insert into tickets (project_id, title, body, status, updated_at)
+       values ($1, $2, $3, $4, $5) returning id`,
+      [projectId, title, `${title} body`, status, LONG_AGO],
     );
     return rows[0]?.id ?? '';
   };
 
   const ticketRow = async (id: string): Promise<TicketRow | undefined> => {
     const { rows } = await store.db.query<TicketRow>(
-      `select status, pr_url as "prUrl", head_sha as "headSha"
+      `select status, pr_url as "prUrl", head_sha as "headSha",
+              updated_at > $2 as touched
        from tickets where id = $1`,
-      [id],
+      [id, LONG_AGO],
     );
     return rows[0];
+  };
+
+  const ticketEvents = async (): Promise<TicketEvent[]> => {
+    const { rows } = await store.db.query<TicketEvent>(
+      `select kind, ticket_id as "ticketId", payload from events
+       where project_id = $1 order by id`,
+      [store.projectId],
+    );
+    return rows;
   };
 
   it('is named local and is what openTicketSource gives without a plugin', async () => {
@@ -82,10 +103,20 @@ describe('the local ticket source', () => {
     ]);
   });
 
-  it('sets a ticket status', async () => {
-    const id = await insertTicket('QD1');
+  it('sets a ticket status and records ticket.status_set', async () => {
+    const id = await insertTicket('QD1', 'in_review');
     await source.setStatus(id, 'done');
-    expect((await ticketRow(id))?.status).toBe('done');
+    expect(await ticketRow(id)).toMatchObject({
+      status: 'done',
+      touched: true,
+    });
+    expect(await ticketEvents()).toEqual([
+      {
+        kind: TICKET_STATUS_SET_EVENT,
+        ticketId: id,
+        payload: { status: 'done', from: 'in_review' },
+      },
+    ]);
   });
 
   it('refuses a status that is not a ticket status', async () => {
@@ -93,7 +124,11 @@ describe('the local ticket source', () => {
     await expect(
       source.setStatus(id, 'shipped' as 'done'),
     ).rejects.toBeInstanceOf(TicketSourceInputError);
-    expect((await ticketRow(id))?.status).toBe('open');
+    expect(await ticketRow(id)).toMatchObject({
+      status: 'open',
+      touched: false,
+    });
+    expect(await ticketEvents()).toEqual([]);
   });
 
   it.each([MISSING, 'not-a-uuid'])(
@@ -119,22 +154,22 @@ describe('the local ticket source', () => {
     await expect(source.note(id, 'hi')).rejects.toBeInstanceOf(
       TicketNotFoundError,
     );
-    expect((await ticketRow(id))?.status).toBe('open');
+    await expect(
+      source.attachPr(id, { url: 'https://x.test/pr/1', head: null }),
+    ).rejects.toBeInstanceOf(TicketNotFoundError);
+    expect(await ticketRow(id)).toMatchObject({
+      status: 'open',
+      prUrl: null,
+      touched: false,
+    });
+    expect(await ticketEvents()).toEqual([]);
   });
 
   it('records a note as a ticket.noted event', async () => {
     const id = await insertTicket('QD1');
     await source.note(id, '  CI is green.  ');
-    const { rows } = await store.db.query<{
-      kind: string;
-      ticketId: string;
-      payload: unknown;
-    }>(
-      `select kind, ticket_id as "ticketId", payload from events
-       where project_id = $1 order by id`,
-      [store.projectId],
-    );
-    expect(rows).toEqual([
+    expect((await ticketRow(id))?.touched).toBe(true);
+    expect(await ticketEvents()).toEqual([
       {
         kind: TICKET_NOTED_EVENT,
         ticketId: id,
@@ -150,14 +185,34 @@ describe('the local ticket source', () => {
     );
   });
 
-  it('attaches a pull request and its head', async () => {
+  it('attaches a pull request and its head and records ticket.pr_attached', async () => {
     const id = await insertTicket('QD1', 'assigned');
     await source.attachPr(id, { url: 'https://x.test/pr/7', head: HEAD });
     expect(await ticketRow(id)).toEqual({
       status: 'assigned',
       prUrl: 'https://x.test/pr/7',
       headSha: HEAD,
+      touched: true,
     });
+    expect(await ticketEvents()).toEqual([
+      {
+        kind: TICKET_PR_ATTACHED_EVENT,
+        ticketId: id,
+        payload: { url: 'https://x.test/pr/7', head: HEAD },
+      },
+    ]);
+  });
+
+  it('records a pull request attached without a head', async () => {
+    const id = await insertTicket('QD1', 'assigned');
+    await source.attachPr(id, { url: 'https://x.test/pr/8', head: null });
+    expect(await ticketEvents()).toEqual([
+      {
+        kind: TICKET_PR_ATTACHED_EVENT,
+        ticketId: id,
+        payload: { url: 'https://x.test/pr/8', head: null },
+      },
+    ]);
   });
 
   it.each([
@@ -169,5 +224,6 @@ describe('the local ticket source', () => {
       TicketSourceInputError,
     );
     expect((await ticketRow(id))?.prUrl).toBeNull();
+    expect(await ticketEvents()).toEqual([]);
   });
 });
