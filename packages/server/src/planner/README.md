@@ -30,6 +30,7 @@ A message is refused (intent `rejected` with `{ error }`, plus a `planner.failed
 - the project has no `repo_path`;
 - the sign-in card is declined or expires (`SignInRequiredError`, whose message names the command);
 - the wait for sign-in is stopped;
+- the budget holds the birth (`BudgetHeldError`; see [budget](../budget/README.md));
 - the agent cannot be born. If a turn fails, for example because the agent process died, the conversation ends and the next message starts a fresh one.
 
 When the Planner starts it retires any Planner agent still live from an earlier run, because that agent's process is gone. `close()` cancels a running turn and retires the conversation.
