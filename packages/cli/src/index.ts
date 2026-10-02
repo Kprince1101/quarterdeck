@@ -2,6 +2,7 @@ export {
   DOCTOR_FIXES,
   DOCTOR_PROBE_TIMEOUT_MS,
   DOCTOR_USAGE,
+  checkShellRules,
   runDoctor,
   runDoctorChecks,
   type DoctorCheck,

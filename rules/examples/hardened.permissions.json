@@ -1,0 +1,30 @@
+{
+  "default": "ask",
+  "rules": [
+    { "kind": "read", "decision": "allow" },
+    { "kind": "search", "decision": "allow" },
+    { "kind": "think", "decision": "allow" },
+    { "kind": "other", "decision": "allow" },
+    { "kind": "execute", "pattern": "git status", "decision": "allow" },
+    { "kind": "execute", "pattern": "git status *", "decision": "allow" },
+    { "kind": "execute", "pattern": "git diff", "decision": "allow" },
+    { "kind": "execute", "pattern": "git diff *", "decision": "allow" },
+    { "kind": "execute", "pattern": "git log", "decision": "allow" },
+    { "kind": "execute", "pattern": "git log *", "decision": "allow" },
+    { "kind": "execute", "pattern": "git show", "decision": "allow" },
+    { "kind": "execute", "pattern": "git show *", "decision": "allow" },
+    { "kind": "execute", "pattern": "git rev-parse *", "decision": "allow" },
+    {
+      "kind": "execute",
+      "pattern": "git branch --show-current",
+      "decision": "allow"
+    },
+    { "kind": "execute", "pattern": "ls", "decision": "allow" },
+    { "kind": "execute", "pattern": "pwd", "decision": "allow" },
+    { "kind": "execute", "pattern": "* --output*", "decision": "ask" },
+    { "kind": "execute", "pattern": "* --ext-diff*", "decision": "ask" },
+    { "kind": "execute", "pattern": "* --textconv*", "decision": "ask" },
+    { "kind": "execute", "pattern": "git -c *", "decision": "deny" },
+    { "kind": "execute", "pattern": "git --config-env*", "decision": "deny" }
+  ]
+}

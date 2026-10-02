@@ -212,6 +212,119 @@
   ]
 }</code></pre>
 
+      <h3 id="shell-rules">Any shell allow can run arbitrary code</h3>
+      <p>
+        Many programs run other programs when given the right flag, config value
+        or alias (<code>git -c</code>, <code>npm run</code>, <code>make</code>,
+        <code>find -exec</code>), and an interpreter (<code>sh</code>,
+        <code>bash</code>, <code>zsh</code>, <code>node</code>,
+        <code>python</code>, <code>npx</code> and the like) runs whatever it is
+        handed. An <code>execute</code> allow for one of them lets an agent run
+        anything it can be made to run, without a card.
+      </p>
+      <p>
+        A pattern is matched against the whole of each command, and
+        <code>*</code> matches any run of characters, spaces and dashes
+        included. So a pattern is a prefix match: <code>git *</code> allows git
+        with any arguments, including <code>git -c alias.x='!sh' x</code>, which
+        runs a shell. A command that chains several (<code>&amp;&amp;</code>,
+        <code>;</code>, <code>|</code> and the like) is split, and every part
+        must be allowed on its own.
+      </p>
+      <p>
+        Allow the subcommands you mean instead, such as
+        <code>git status *</code> and <code>git diff *</code>. A pattern ending
+        in a space and <code>*</code> needs something after the space, so list
+        the bare command too. Each row below is a machine layer holding only
+        that one <code>execute</code> allow, with the default of
+        <code>ask</code>:
+      </p>
+      <table id="shell-examples">
+        <thead>
+          <tr>
+            <th>Pattern</th>
+            <th>Command</th>
+            <th>Allowed without a card</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>git *</code></td>
+            <td><code>git status</code></td>
+            <td>yes</td>
+          </tr>
+          <tr>
+            <td><code>git *</code></td>
+            <td><code>git -c alias.x='!sh' x</code></td>
+            <td>yes</td>
+          </tr>
+          <tr>
+            <td><code>git *</code></td>
+            <td><code>git -c core.pager=less push</code></td>
+            <td>yes</td>
+          </tr>
+          <tr>
+            <td><code>git status *</code></td>
+            <td><code>git status --short</code></td>
+            <td>yes</td>
+          </tr>
+          <tr>
+            <td><code>git status *</code></td>
+            <td><code>git status</code></td>
+            <td>no</td>
+          </tr>
+          <tr>
+            <td><code>git status</code></td>
+            <td><code>git status</code></td>
+            <td>yes</td>
+          </tr>
+          <tr>
+            <td><code>git status *</code></td>
+            <td><code>git -c core.pager=less status</code></td>
+            <td>no</td>
+          </tr>
+          <tr>
+            <td><code>git status *</code></td>
+            <td><code>git status &amp;&amp; git push</code></td>
+            <td>no</td>
+          </tr>
+          <tr>
+            <td><code>git diff *</code></td>
+            <td><code>git diff --stat</code></td>
+            <td>yes</td>
+          </tr>
+          <tr>
+            <td><code>npm test</code></td>
+            <td><code>npm test -- --watch</code></td>
+            <td>no</td>
+          </tr>
+          <tr>
+            <td><code>bash *</code></td>
+            <td><code>bash -c 'echo anything'</code></td>
+            <td>yes</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        The <a href="widgets.html#rules">Rules widget</a> and
+        <code>npx quarterdeck doctor</code> warn about every
+        <code>execute</code> allow that is a bare command plus a wildcard (<code
+          >git *</code
+        >, <code>*</code>), names an interpreter or has no pattern, and about a
+        <code>default</code> of <code>allow</code>.
+      </p>
+      <p>
+        For a safe start, copy
+        <code>rules/examples/hardened.permissions.json</code> to
+        <code>~/.quarterdeck/rules.local.permissions.json</code>. It allows
+        reads, searches, the bus tools (kind <code>other</code>) and a short
+        list of read-only commands (<code>git status</code>,
+        <code>git diff</code>, <code>git log</code>, <code>git show</code>,
+        <code>git rev-parse</code>, <code>git branch --show-current</code>,
+        <code>ls</code>, <code>pwd</code>), denies <code>git -c</code> and
+        <code>git --config-env</code>, and asks for everything else.
+      </p>
+
       <h2 id="lifecycle">lifecycle.json</h2>
       <table>
         <thead>

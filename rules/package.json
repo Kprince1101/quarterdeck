@@ -20,6 +20,11 @@
       "@quarterdeck/source": "./src/merge.ts",
       "types": "./dist/merge.d.ts",
       "default": "./dist/merge.js"
+    },
+    "./shell-warnings": {
+      "@quarterdeck/source": "./src/shell-warnings.ts",
+      "types": "./dist/shell-warnings.d.ts",
+      "default": "./dist/shell-warnings.js"
     }
   },
   "files": [

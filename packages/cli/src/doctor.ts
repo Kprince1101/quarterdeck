@@ -2,6 +2,7 @@ import { stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
+import { RulesError, loadRule, shellAllowWarnings } from '@quarterdeck/rules';
 import {
   CLAUDE_AGENT_ACP_PACKAGE,
   CLAUDE_AGENT_ACP_VERSION,
@@ -367,6 +368,22 @@ const render = (io: CliIo, checks: DoctorCheck[], misses: number) => {
   );
 };
 
+const SHELL_RULES_CHECK = 'permissions';
+
+export const checkShellRules = async (io: CliIo): Promise<DoctorCheck[]> => {
+  try {
+    const permissions = await loadRule('permissions', { homeDir: io.homeDir });
+    return shellAllowWarnings(permissions).map((warning) => ({
+      name: SHELL_RULES_CHECK,
+      state: warning,
+      fixes: [],
+    }));
+  } catch (err) {
+    if (!(err instanceof RulesError)) throw err;
+    return [{ name: SHELL_RULES_CHECK, state: err.message, fixes: [] }];
+  }
+};
+
 export const runDoctor: Command = async (args, io) => {
   const { values, positionals } = parseArgs({
     args,
@@ -378,7 +395,10 @@ export const runDoctor: Command = async (args, io) => {
     return 0;
   }
   if (positionals.length > 0) throw new CliError('doctor takes no arguments');
-  const checks = await runDoctorChecks(io);
+  const checks = [
+    ...(await runDoctorChecks(io)),
+    ...(await checkShellRules(io)),
+  ];
   const misses = checks.filter((check) => check.fixes.length > 0).length;
   render(io, checks, misses);
   if (misses > 0) return 1;

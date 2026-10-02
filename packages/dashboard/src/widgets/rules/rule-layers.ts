@@ -7,8 +7,10 @@ import {
 import {
   RULE_SCHEMAS,
   repoPermissionsSchema,
+  type Permissions,
   type RuleName,
 } from '@quarterdeck/rules/schemas';
+import { shellAllowWarnings } from '@quarterdeck/rules/shell-warnings';
 import { z } from 'zod';
 import type { RuleView } from '../../api/index.js';
 import { getErrorMessage } from '../../lib/errors.js';
@@ -137,6 +139,11 @@ export const checkDraft = (rule: RuleView, draft: string): DraftCheck => {
   } catch (err) {
     return refused(err);
   }
+};
+
+export const shellWarnings = (rule: RuleView, check: DraftCheck): string[] => {
+  if (rule.name !== 'permissions' || check.error !== null) return [];
+  return shellAllowWarnings(check.merged as Permissions);
 };
 
 const leaves = (value: unknown, path: Path = []): [Path, unknown][] => {

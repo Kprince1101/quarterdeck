@@ -102,6 +102,12 @@
   white-space: pre-wrap;
 }
 
+.qd-rules-warnings {
+  margin: 0;
+  padding-left: var(--qd-space-3);
+  color: var(--qd-warn);
+}
+
 .qd-rules-actions {
   display: flex;
   gap: var(--qd-space-2);
