@@ -24,7 +24,7 @@ const next = await round.turn('heron reported QD12: <report>');
 
 `openDriverRound` checks the round (`RoundNotFoundError` for one outside the project, `RoundEndedError` once it has ended) and the agent (`NotADriverError` unless it is a `driver` that is not `ended`, `killed` or `retired`). It then:
 
-1. Launches the bus for the Driver (`bus.launch(agentId)`) and opens one ACP session with `client.newSession({ cwd, mcpServers: [bus] })`. Every turn of the round goes to that session; nothing else opens one.
+1. Launches the bus for the Driver (`bus.launch(agentId)`) and opens one ACP session with `client.newSession({ cwd, mcpServers: [bus] })`. Every turn of the round goes to that session; nothing else opens one. If the runtime needs sign-in, a sign-in card waits for the person and the session opens after, with a fresh bus launch (see [../signin/README.md](../signin/README.md)).
 2. Reads the active notebook: every `notebook` row of the project, pinned entries first, then oldest first.
 3. Stores the session on the agent (`session_id`, `round_id`; a `starting` agent becomes `idle`) and records `driver.round_started` with `{ roundId, round, sessionId, notebook }`, where `notebook` lists the entry ids the Driver was born with.
 4. Queues the birth turn and returns. `round.birth` settles with its outcome; await it.
@@ -60,6 +60,8 @@ A turn's outcome (`TurnOutcome`) is one of:
 
 On a miss the loop sends one re-prompt in the same session (`repromptText`): the error and the format instructions again. `turns` lists every prompt the turn took, so a re-prompted turn has two. A prompt that throws (the agent died, the connection closed) closes its row, records `turn.failed` and rejects the turn.
 
+A prompt the runtime refuses for sign-in raises a sign-in card and waits, its turn still open and the agent still `working`. Once the person answers, the same input goes to the same session again in the same `turns` row. A declined or expired card rejects the turn with `SignInRequiredError` and records `turn.failed` (see [../signin/README.md](../signin/README.md)).
+
 ## Turn files
 
 Each ACP prompt, birth and re-prompt included, is one `turns` row (`seq` counts per agent from 1, `prompt` is the input, `stop_reason` and token counts come from the prompt response) and one folder, `turnDir(turnsDir, agentId, seq)`: `~/.quarterdeck/<project>/turns/<agent-id>/<seq>/` with `seq` zero-padded to 4 digits. `transcript_path` names the folder.
@@ -86,6 +88,7 @@ import {
 
 const through = 7;
 const replay = await replayDriverChain({
+  runtime: 'kiro',
   connect: ({ cwd, onPermissionRequest }) =>
     KIRO_ADAPTER.connect(
       { cwd, project: 'commander', agentName: `replay-${through}` },
@@ -112,6 +115,7 @@ No `turns` row, event, card, agent change or turn file. Replay owns everything t
 - **Its permissions.** The handler is `REPLAY_PERMISSIONS`: every request gets a reject option (`reject_once`, else `reject_always`), or `cancelled` when none is offered. It never allows and never raises a card, so a replayed turn can't run a shell command, edit a file or page the human.
 - **Its directory.** Without `cwd` the agent is launched and the session opened in a fresh temporary directory, removed afterwards, so read-only tools can't see the live repo or work done since the original turn. A caller that passes `cwd` gets that directory, which replay leaves in place.
 - **Its servers.** The session gets no MCP servers, so the bus tools (`ask`, `report`, `status`, `verdict`, `read`) are not there.
+- **Its sign-in.** If opening the session or a prompt fails with auth required, replay raises no sign-in card. It rejects with `ReplaySignInError`, whose message and `command` give the sign-in command for `runtime` (`signInCommand(runtime, client.agent.authMethods)`). Sign in, then replay again.
 
 The Driver therefore replies without its tools; a turn that leaned on them can read differently from the original.
 

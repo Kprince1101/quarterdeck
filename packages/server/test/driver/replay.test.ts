@@ -31,6 +31,7 @@ import {
   NoBirthTurnError,
   REPLAY_COMMAND,
   REPLAY_PERMISSIONS,
+  ReplaySignInError,
   TurnInputMissingError,
   buildBirthInput,
   isBirthInput,
@@ -51,10 +52,16 @@ import { connectFakeAgentInProcess } from '../acp/fake-agent/index.ts';
 import {
   resultText,
   say,
+  signInNeeded,
   startScriptedAgent,
   type ScriptedAgent,
+  type ScriptedAgentOptions,
   type ScriptedReply,
 } from './scripted-agent.js';
+import {
+  CLAUDE_LOGIN,
+  CLAUDE_TERMINAL_COMMAND,
+} from '../signin/auth-methods.js';
 
 const TIMEOUT = 30_000;
 const AGENT_ID = '7d0f3a4e-2b1c-4c5d-9e8f-0a1b2c3d4e5f';
@@ -96,15 +103,28 @@ interface Connection {
   closed: boolean;
 }
 
-const scriptedConnect = (...replies: ScriptedReply[]) => {
+interface ScriptedConnectOptions {
+  agent?: ScriptedAgentOptions;
+  signIns?: number;
+}
+
+const scriptedConnectWith = (
+  options: ScriptedConnectOptions,
+  ...replies: ScriptedReply[]
+) => {
   const connections: Connection[] = [];
   const connect: ConnectReplay = async (setup) => {
-    const agent = await startScriptedAgent(setup.onPermissionRequest);
+    const agent = await startScriptedAgent({
+      ...options.agent,
+      onPermissionRequest: setup.onPermissionRequest,
+    });
     agent.reply(...replies);
+    agent.requireSignIn(options.signIns ?? 0);
     const connection: Connection = { setup, agent, closed: false };
     connections.push(connection);
     const { client } = agent;
     return {
+      agent: client.agent,
       newSession: client.newSession.bind(client),
       prompt: client.prompt.bind(client),
       subscribe: client.subscribe.bind(client),
@@ -116,6 +136,9 @@ const scriptedConnect = (...replies: ScriptedReply[]) => {
   };
   return { connect, connections };
 };
+
+const scriptedConnect = (...replies: ScriptedReply[]) =>
+  scriptedConnectWith({}, ...replies);
 
 describe('Driver replay', () => {
   let turnsDir: string;
@@ -136,6 +159,7 @@ describe('Driver replay', () => {
   };
 
   const chain = (through: number) => ({
+    runtime: 'claude' as const,
     turnsDir,
     agentId: AGENT_ID,
     through,
@@ -224,6 +248,7 @@ describe('Driver replay', () => {
         );
         const seen: number[] = [];
         const replay = await replayDriverChain({
+          runtime: 'claude',
           connect,
           turnsDir,
           agentId,
@@ -326,6 +351,34 @@ describe('Driver replay', () => {
         expect(answered).toEqual([
           { outcome: { outcome: 'selected', optionId: 'reject-once' } },
         ]);
+        expect(await counts()).toEqual(before);
+      },
+      TIMEOUT,
+    );
+
+    it.each([
+      ['opening the session', { signIns: 1 }, []],
+      ['a prompt', {}, [say(resultText(BIRTH)), signInNeeded()]],
+    ] as const)(
+      'names the sign-in command when %s needs sign-in, with no card or event',
+      async (_, options, replies) => {
+        await save(1, birthInput(1));
+        await save(2, 'poke');
+        const before = await counts();
+        const { connect, connections } = scriptedConnectWith(
+          { ...options, agent: { authMethods: [CLAUDE_LOGIN] } },
+          ...replies,
+        );
+
+        const replay = replayDriverChain({ ...chain(2), connect });
+
+        await expect(replay).rejects.toBeInstanceOf(ReplaySignInError);
+        await expect(replay).rejects.toMatchObject({
+          runtime: 'claude',
+          command: CLAUDE_TERMINAL_COMMAND,
+          message: expect.stringContaining(`\`${CLAUDE_TERMINAL_COMMAND}\``),
+        });
+        expect(connections[0]?.closed).toBe(true);
         expect(await counts()).toEqual(before);
       },
       TIMEOUT,

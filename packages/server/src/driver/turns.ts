@@ -2,6 +2,7 @@ import type { SessionUpdate, StopReason } from '@agentclientprotocol/sdk';
 import type { AcpClient } from '../acp/client/index.js';
 import type { Agent } from '../agents/index.js';
 import { getErrorMessage } from '../lib/errors.js';
+import { withSignIn, type SignInGate } from '../signin/index.js';
 import type { PublishInput, Store } from '../store/index.js';
 import {
   turnDir,
@@ -22,16 +23,23 @@ export const TURN_EVENTS = {
 
 const STOPPING: ReadonlySet<StopReason> = new Set(['cancelled', 'refusal']);
 
-export type TurnClient = Pick<AcpClient, 'prompt' | 'subscribe'>;
+export type TurnClient = Pick<AcpClient, 'agent' | 'prompt' | 'subscribe'>;
 
 export interface TurnTarget {
   store: Store;
   client: TurnClient;
-  agent: Pick<Agent, 'id'>;
+  agent: Pick<Agent, 'id' | 'runtime'>;
   sessionId: string;
   turnsDir: string;
   ticketId?: string;
 }
+
+const signInGate = (target: TurnTarget): SignInGate => ({
+  store: target.store,
+  agentId: target.agent.id,
+  runtime: target.agent.runtime,
+  authMethods: () => target.client.agent.authMethods,
+});
 
 export interface TurnRecord {
   id: number;
@@ -167,7 +175,11 @@ export const runPrompt = async (
   const collected = collectUpdates(target.client, target.sessionId);
   try {
     await writeTurnInput(turn.dir, input);
-    const response = await target.client.prompt(target.sessionId, input);
+    const response = await withSignIn(
+      signInGate(target),
+      'session/prompt',
+      () => target.client.prompt(target.sessionId, input),
+    );
     collected.stop();
     const text = replyText(collected.updates);
     await writeTurnOutput(turn.dir, text, collected.updates);

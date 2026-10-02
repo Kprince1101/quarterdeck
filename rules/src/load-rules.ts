@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { extname, resolve } from 'node:path';
 import { z } from 'zod';
 import { getErrorMessage, isMissingFile, RulesError } from './errors.js';
+import { mergeRepoLifecycle } from './merge-gate-layer.js';
 import { mergeLayer } from './merge-layer.js';
 import { RULE_SCHEMAS, type RuleName, type Rules } from './schemas.js';
 
@@ -93,11 +94,35 @@ const validateLayer = (name: RuleName, path: string, value: unknown) => {
   return result.data;
 };
 
+type RepoLayerMerge = (
+  merged: unknown,
+  layer: unknown,
+  path: string,
+) => unknown;
+
+const REPO_LAYER_MERGES: Partial<Record<RuleName, RepoLayerMerge>> = {
+  lifecycle: mergeRepoLifecycle,
+};
+
+const mergeLocal = (
+  name: RuleName,
+  merged: unknown,
+  layer: unknown,
+  path: string,
+  isRepoLayer: boolean,
+): unknown => {
+  const repoMerge = REPO_LAYER_MERGES[name];
+  if (isRepoLayer && repoMerge) return repoMerge(merged, layer, path);
+  return mergeLayer(merged, layer);
+};
+
 export const loadRule = async <K extends RuleName>(
   name: K,
   options: LoadRulesOptions = {},
 ): Promise<Rules[K]> => {
-  const layers = ruleLayerPaths(name, mergedLayerOptions(name, options));
+  const layerOptions = mergedLayerOptions(name, options);
+  const layers = ruleLayerPaths(name, layerOptions);
+  const repoLayer = layerOptions.repoDir && layers.local.at(-1);
   const defaults = parseLayer(
     layers.defaults,
     await readDefaults(layers.defaults),
@@ -107,7 +132,8 @@ export const loadRule = async <K extends RuleName>(
     const text = await readLocal(path);
     if (text === undefined) continue;
     const layer = parseLayer(path, text);
-    merged = validateLayer(name, path, mergeLayer(merged, layer));
+    const next = mergeLocal(name, merged, layer, path, path === repoLayer);
+    merged = validateLayer(name, path, next);
   }
   return merged as Rules[K];
 };

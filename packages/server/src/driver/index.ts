@@ -57,6 +57,7 @@ export {
   BuilderSessionLostError,
   NoBirthTurnError,
   NotADriverError,
+  ReplaySignInError,
   RoundEndedError,
   RoundNotFoundError,
   TicketNotAssignableError,

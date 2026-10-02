@@ -2,12 +2,22 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { StopReason } from '@agentclientprotocol/sdk';
-import type { AcpClient, PermissionHandler } from '../acp/client/index.js';
+import type { Runtime } from '@quarterdeck/rules';
+import {
+  isAuthRequiredError,
+  type AcpClient,
+  type PermissionHandler,
+} from '../acp/client/index.js';
 import { answerPermission } from '../acp/permissions/index.js';
 import { hasErrorCode } from '../lib/errors.js';
+import { signInCommand } from '../signin/commands.js';
 import { assertProjectSlug } from '../store/paths.js';
 import { isBirthInput } from './birth-input.js';
-import { NoBirthTurnError, TurnInputMissingError } from './errors.js';
+import {
+  NoBirthTurnError,
+  ReplaySignInError,
+  TurnInputMissingError,
+} from './errors.js';
 import { turnDir, turnFile } from './files.js';
 import {
   DRIVER_TURN_FORMAT,
@@ -27,7 +37,7 @@ export const REPLAY_PERMISSIONS: PermissionHandler = async (request) =>
 
 export type ReplayClient = Pick<
   AcpClient,
-  'newSession' | 'prompt' | 'subscribe' | 'close'
+  'agent' | 'newSession' | 'prompt' | 'subscribe' | 'close'
 >;
 
 export interface ReplaySetup {
@@ -44,6 +54,7 @@ export interface ReplayChain {
 }
 
 export interface ReplayOptions extends ReplayChain {
+  runtime: Runtime;
   connect: ConnectReplay;
   cwd?: string;
   onTurn?: (turn: ReplayTurn) => void;
@@ -151,6 +162,20 @@ const replayTurn = async (
   }
 };
 
+const signedIn = async <T>(
+  runtime: Runtime,
+  client: ReplayClient,
+  run: () => Promise<T>,
+): Promise<T> => {
+  try {
+    return await run();
+  } catch (err) {
+    if (!isAuthRequiredError(err)) throw err;
+    const signIn = signInCommand(runtime, client.agent.authMethods);
+    throw new ReplaySignInError(signIn, err);
+  }
+};
+
 const replayIn = async (
   cwd: string,
   options: ReplayOptions,
@@ -160,11 +185,15 @@ const replayIn = async (
     cwd,
     onPermissionRequest: REPLAY_PERMISSIONS,
   });
+  const run = <T>(task: () => Promise<T>) =>
+    signedIn(options.runtime, client, task);
   try {
-    const { sessionId } = await client.newSession({ cwd, mcpServers: [] });
+    const { sessionId } = await run(() =>
+      client.newSession({ cwd, mcpServers: [] }),
+    );
     const turns: ReplayTurn[] = [];
     for (const turn of saved) {
-      const replayed = await replayTurn(client, sessionId, turn);
+      const replayed = await run(() => replayTurn(client, sessionId, turn));
       turns.push(replayed);
       options.onTurn?.(replayed);
     }
