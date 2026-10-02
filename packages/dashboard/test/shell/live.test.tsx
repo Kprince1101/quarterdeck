@@ -37,27 +37,34 @@ describe('dashboard on a live server', () => {
     async () => {
       const { all, render, textOf } = await import('./page.js');
       const { App } = await import('../../src/app.js');
+      const { DeckProvider } = await import('../../src/deck/deck.js');
+      const { TablesWidget } =
+        await import('../../src/widgets/starter/tables.widget.js');
       const served = await deck.serve();
+      const stream = {
+        url: served.url,
+        WebSocket: WsSocket as unknown as typeof WebSocket,
+      };
       const { container, unmount } = render(
-        <App
-          stream={{
-            url: served.url,
-            WebSocket: WsSocket as unknown as typeof WebSocket,
-          }}
-          intents={deck.client}
-        />,
+        <App stream={stream} intents={deck.client} />,
+      );
+      const tables = render(
+        <DeckProvider stream={stream} intents={deck.client}>
+          <TablesWidget />
+        </DeckProvider>,
       );
       await vi.waitFor(() => {
         expect(textOf(container, '[role="status"]')).toBe('Live');
+        expect(count(all, tables.container, 'notebook')).toBe('0');
       });
-      expect(count(all, container, 'notebook')).toBe('0');
 
       await deck.client.notebook.add({ project: deck.project, body: 'hi' });
 
       await vi.waitFor(() => {
-        expect(count(all, container, 'notebook')).toBe('1');
+        expect(count(all, tables.container, 'notebook')).toBe('1');
         expect(textOf(container, '.qd-event-list code')).toBe('notebook.add');
       });
+      tables.unmount();
       unmount();
     },
     TIMEOUT,

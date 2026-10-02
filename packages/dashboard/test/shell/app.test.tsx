@@ -13,6 +13,7 @@ import {
 } from '../../src/api/index.js';
 import { App } from '../../src/app.js';
 import { DeckProvider, useDeck, type Deck } from '../../src/deck/deck.js';
+import { TablesWidget } from '../../src/widgets/starter/tables.widget.js';
 import { FAKE_WEBSOCKET, FakeSocket } from '../api/fake-socket.js';
 import { all, render, textOf } from './page.js';
 
@@ -101,21 +102,34 @@ describe('dashboard shell', () => {
     unmount();
   });
 
-  it('wires the starter panels to the stream', () => {
+  it('wires the default panels to the stream', () => {
     const { container, unmount } = render(<App stream={stream} />);
     expect(textOf(container, '[aria-label="Events"]')).toContain(
       'No events yet.',
     );
 
     deliver(SNAPSHOT, event(1, 'project.created'), event(2, 'notebook.added'));
-    const tables = all(container, '.qd-table-counts dt').map(
-      ({ textContent }) => textContent,
+    expect(textOf(container, '[aria-label="Cards"]')).toContain(
+      'No open cards.',
     );
-    expect(tables).toEqual(STREAM_TABLES);
     const kinds = all(container, '.qd-event-list code').map(
       ({ textContent }) => textContent,
     );
     expect(kinds).toEqual(['notebook.added', 'project.created']);
+    unmount();
+  });
+
+  it('counts every table in the Tables starter widget', () => {
+    const { container, unmount } = render(
+      <DeckProvider stream={stream}>
+        <TablesWidget />
+      </DeckProvider>,
+    );
+    deliver(SNAPSHOT);
+    const tables = all(container, '.qd-table-counts dt').map(
+      ({ textContent }) => textContent,
+    );
+    expect(tables).toEqual(STREAM_TABLES);
     unmount();
   });
 

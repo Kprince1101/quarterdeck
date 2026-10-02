@@ -11,6 +11,7 @@
     "**/dist",
     "packages/server/test",
     "packages/dashboard/src",
-    "packages/dashboard/test/primitives"
+    "packages/dashboard/test/primitives",
+    "packages/dashboard/test/widgets/cards"
   ]
 }
