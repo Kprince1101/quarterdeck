@@ -8,6 +8,7 @@ import { conflict } from '../http-error.js';
 import { findRow, queueInProject } from '../record.js';
 
 type AgentIntentName = Extract<CrewIntentName, `agent.${string}`>;
+type RoundIntentName = Extract<CrewIntentName, 'round.end' | 'round.kill'>;
 
 const FINISHED_AGENT_STATUSES = new Set(['ended', 'killed', 'retired']);
 const RETIRED_AGENT_STATUSES = new Set(['retired']);
@@ -48,13 +49,16 @@ const requireOpenRound =
 const queue: IntentHandler<CrewIntentName> = (ctx, input, name) =>
   queueInProject(ctx, name, input);
 
+const queueForRound: IntentHandler<RoundIntentName> = (ctx, input, name) =>
+  queueInProject(ctx, name, input, requireOpenRound(input.roundId));
+
 const queueForAgent: IntentHandler<AgentIntentName> = (ctx, input, name) =>
   queueInProject(ctx, name, input, requireLiveAgent(input.agentId));
 
 export const CREW_HANDLERS: IntentHandlers<CrewIntentName> = {
   'round.start': queue,
-  'round.end': (ctx, input, name) =>
-    queueInProject(ctx, name, input, requireOpenRound(input.roundId)),
+  'round.end': queueForRound,
+  'round.kill': queueForRound,
   'pause.set': queue,
   'agent.pause': queueForAgent,
   'agent.resume': queueForAgent,
