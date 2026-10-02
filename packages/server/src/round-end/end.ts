@@ -80,14 +80,14 @@ export const killRound = (options: RoundStepOptions): Promise<RoundCleanup> =>
 export interface RoundAutoEndOptions
   extends
     EndRoundOptions,
-    Pick<AutoEndOptions, 'settleSeconds' | 'schedule' | 'onError'> {
+    Pick<AutoEndOptions, 'settleSeconds' | 'schedule' | 'home' | 'onError'> {
   onEnded?: (ended: EndedRound) => void;
 }
 
 export const startRoundAutoEnd = (
   options: RoundAutoEndOptions,
 ): Promise<AutoEnd> => {
-  const { settleSeconds, schedule, onError, onEnded, ...end } = options;
+  const { settleSeconds, schedule, home, onError, onEnded, ...end } = options;
   const auto: AutoEndOptions = {
     store: options.store,
     roundId: options.round.round.id,
@@ -98,6 +98,7 @@ export const startRoundAutoEnd = (
     },
   };
   if (schedule !== undefined) auto.schedule = schedule;
+  if (home !== undefined) auto.home = home;
   if (onError !== undefined) auto.onError = onError;
   return startAutoEnd(auto);
 };

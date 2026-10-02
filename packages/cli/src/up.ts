@@ -15,7 +15,9 @@ export const UP_USAGE = `Usage: quarterdeck up [--port <port>]
 
 Starts the Quarterdeck server and dashboard on 127.0.0.1 and prints the URL
 to open. The URL carries this run's API token; the dashboard needs it.
-Stop it with Ctrl+C.
+Every project's crew runs in it: the Planner, the Driver and its builders,
+the reviewer and the merge gate. A round left open by an earlier run is
+ended when it starts. Stop it with Ctrl+C; that stops every agent first.
 
   --port <port>  Port to listen on (default ${DEFAULT_API_PORT}; 0 picks a free one)`;
 

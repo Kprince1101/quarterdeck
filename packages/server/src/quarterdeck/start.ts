@@ -2,6 +2,8 @@ import { homedir } from 'node:os';
 import type { ProjectHooks } from '../api/project-stores.js';
 import { startApiServer, type ApiServer } from '../api/server.js';
 import { createApiToken } from '../api/token.js';
+import type { GitHubHost } from '../gate/index.js';
+import type { PlannerAdapters } from '../planner/sessions.js';
 import { quarterdeckHome } from '../store/index.js';
 import { routeStreams, type Stream } from '../stream/socket.js';
 import {
@@ -18,6 +20,9 @@ export interface QuarterdeckOptions {
   databaseUrl?: string | undefined;
   allowedOrigins?: string[];
   onError?: (err: unknown) => void;
+  adapters?: PlannerAdapters;
+  github?: GitHubHost;
+  gatePollMs?: number;
 }
 
 export interface Quarterdeck {
@@ -34,13 +39,18 @@ export const startQuarterdeck = async (
   options: QuarterdeckOptions = {},
 ): Promise<Quarterdeck> => {
   const homeDir = options.homeDir ?? homedir();
+  const running = new Map<string, RunningProject>();
   const context: ProjectServicesContext = {
     home: quarterdeckHome(homeDir),
+    homeDir,
     token: createApiToken(),
     allowedOrigins: options.allowedOrigins,
     onError: options.onError,
+    openStores: () => [...running.values()].map(({ store }) => store),
+    adapters: options.adapters,
+    github: options.github,
+    gatePollMs: options.gatePollMs,
   };
-  const running = new Map<string, RunningProject>();
   let stopping = false;
 
   const projectHooks: ProjectHooks = {

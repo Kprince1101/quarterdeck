@@ -20,6 +20,7 @@ import {
   FAKE_INITIAL_MODE_ID,
   FAKE_MODES,
 } from './constants.ts';
+import { runCrewTurn } from './crew.ts';
 import { runScenario } from './scenarios.ts';
 import type {
   FakeAgentHooks,
@@ -92,6 +93,8 @@ export const createFakeAgent = (
   const stepDelayMs = options.stepDelayMs ?? 0;
   const exitProcess = hooks.exitProcess ?? refuseCrashInProcess;
   const state = { authenticated: !options.requireAuth, sessionCount: 0 };
+  let sessionPrefix = 'fake-session-';
+  if (options.crew) sessionPrefix = `fake-${process.pid}-session-`;
 
   const findSession = (sessionId: string): FakeSession => {
     const session = sessions.get(sessionId);
@@ -139,7 +142,7 @@ export const createFakeAgent = (
         throw RequestError.authRequired({ authMethods: FAKE_AUTH_METHODS });
       }
       state.sessionCount += 1;
-      const sessionId = `fake-session-${state.sessionCount}`;
+      const sessionId = `${sessionPrefix}${state.sessionCount}`;
       return { sessionId, modes: restoreSession(sessionId, params) };
     })
     .onRequest('session/resume', ({ params }) => {
@@ -169,7 +172,7 @@ export const createFakeAgent = (
       const turn = new AbortController();
       session.turn = turn;
       try {
-        const stopReason = await runScenario({
+        const fakeTurn = {
           sessionId: params.sessionId,
           text: promptText(params.prompt),
           client,
@@ -177,8 +180,10 @@ export const createFakeAgent = (
           stepDelayMs,
           setup: session.setup,
           exitProcess,
-        });
-        return { stopReason };
+        };
+        if (options.crew)
+          return { stopReason: await runCrewTurn(fakeTurn, options) };
+        return { stopReason: await runScenario(fakeTurn) };
       } finally {
         if (session.turn === turn) session.turn = undefined;
       }

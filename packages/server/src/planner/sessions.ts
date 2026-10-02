@@ -70,12 +70,13 @@ export const plannerSignInGate = (
 const connectOnce = async (
   site: PlannerSessionSite,
   agent: Agent,
+  cwd: string,
   connected: { client?: AcpClient },
 ): Promise<PlannerSession> => {
   const bus = await site.bus.launch(agent.id);
   const client = await site.adapters[agent.runtime].connect(
     {
-      cwd: site.repoPath,
+      cwd,
       env: { pass: site.passEnv ?? [] },
       project: site.slug,
       agentName: agent.name,
@@ -85,7 +86,7 @@ const connectOnce = async (
       clientName: PLANNER_CLIENT_NAME,
       clientVersion: PLANNER_CLIENT_VERSION,
       onPermissionRequest: createPermissionPolicy({
-        repoDir: site.repoPath,
+        repoDir: cwd,
         cardHuman: site.cardHuman,
       }),
       onEvent: trackAgentProcess(site.store, agent.id),
@@ -94,7 +95,7 @@ const connectOnce = async (
   connected.client = client;
   try {
     const { sessionId } = await client.newSession({
-      cwd: site.repoPath,
+      cwd,
       mcpServers: [bus],
     });
     return { agentId: agent.id, sessionId, client };
@@ -104,9 +105,10 @@ const connectOnce = async (
   }
 };
 
-const connectPlanner = (
+export const connectAgentSession = (
   site: PlannerSessionSite,
   agent: Agent,
+  cwd: string = site.repoPath,
 ): Promise<PlannerSession> => {
   const connected: { client?: AcpClient } = {};
   const gate = plannerSignInGate(
@@ -116,7 +118,7 @@ const connectPlanner = (
     () => connected.client?.agent.authMethods,
   );
   return withSignIn(gate, 'session/new', () =>
-    connectOnce(site, agent, connected),
+    connectOnce(site, agent, cwd, connected),
   );
 };
 
@@ -127,7 +129,7 @@ export const createPlannerSessionHost = (
 
   const open = async (agent: Agent): Promise<string> => {
     try {
-      session = await connectPlanner(site, agent);
+      session = await connectAgentSession(site, agent);
       return session.sessionId;
     } catch (err) {
       site.bus.revoke(agent.id);
