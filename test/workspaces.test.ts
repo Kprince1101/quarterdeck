@@ -14,10 +14,10 @@ interface PackageManifest {
 
 const ROOT = resolve(import.meta.dirname, '..');
 const WORKSPACES = [
+  'rules',
   'packages/server',
   'packages/dashboard',
   'packages/cli',
-  'rules',
   'site',
 ];
 const ALL_MANIFESTS = ['.', ...WORKSPACES];
@@ -28,7 +28,7 @@ const readManifest = (dir: string): PackageManifest =>
   ) as PackageManifest;
 
 describe('workspace manifests', () => {
-  it('root declares every workspace', () => {
+  it('root declares every workspace, rules first so it builds before server', () => {
     expect(readManifest('.').workspaces).toEqual(WORKSPACES);
   });
 
