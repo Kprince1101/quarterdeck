@@ -5,10 +5,17 @@ export {
   LOCAL_RULES_PREFIX,
   RULE_FILES,
   RULE_NAMES,
+  TIGHTEN_ONLY_RULES,
   loadRule,
   loadRules,
   ruleLayerPaths,
   type LoadRulesOptions,
   type RuleLayers,
 } from './load-rules.js';
+export {
+  loadPermissionLayers,
+  loadRepoPermissions,
+  repoPermissionsPath,
+  type PermissionLayers,
+} from './permission-layers.js';
 export * from './schemas.js';

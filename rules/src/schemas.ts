@@ -33,6 +33,19 @@ export const permissionsSchema = z.strictObject({
   rules: z.array(permissionRuleSchema),
 });
 
+export const tighteningDecisionSchema = z.enum(['deny', 'ask']);
+
+export const tighteningRuleSchema = z.strictObject({
+  kind: toolKindSchema,
+  pattern: z.string().min(1).optional(),
+  decision: tighteningDecisionSchema,
+});
+
+export const repoPermissionsSchema = z.strictObject({
+  default: tighteningDecisionSchema.optional(),
+  rules: z.array(tighteningRuleSchema).optional(),
+});
+
 export const namingSchema = z.strictObject({
   theme: z.string().min(1),
   names: z
@@ -85,6 +98,9 @@ export type Decision = z.infer<typeof decisionSchema>;
 export type ToolKind = z.infer<typeof toolKindSchema>;
 export type PermissionRule = z.infer<typeof permissionRuleSchema>;
 export type Permissions = z.infer<typeof permissionsSchema>;
+export type TighteningDecision = z.infer<typeof tighteningDecisionSchema>;
+export type TighteningRule = z.infer<typeof tighteningRuleSchema>;
+export type RepoPermissions = z.infer<typeof repoPermissionsSchema>;
 export type Naming = z.infer<typeof namingSchema>;
 export type Lifecycle = z.infer<typeof lifecycleSchema>;
 export type Runtime = z.infer<typeof runtimeSchema>;

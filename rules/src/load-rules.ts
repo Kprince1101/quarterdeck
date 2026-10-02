@@ -21,6 +21,10 @@ export const RULE_FILES: Record<RuleName, string> = {
 
 export const RULE_NAMES = Object.keys(RULE_FILES) as RuleName[];
 
+export const TIGHTEN_ONLY_RULES: ReadonlySet<RuleName> = new Set([
+  'permissions',
+]);
+
 export interface LoadRulesOptions {
   defaultsDir?: string;
   homeDir?: string;
@@ -46,6 +50,15 @@ export const ruleLayerPaths = (
   };
 };
 
+const mergedLayerOptions = (
+  name: RuleName,
+  options: LoadRulesOptions,
+): LoadRulesOptions => {
+  if (!TIGHTEN_ONLY_RULES.has(name)) return options;
+  const { repoDir: _repoDir, ...machine } = options;
+  return machine;
+};
+
 const readDefaults = async (path: string): Promise<string> => {
   try {
     return await readFile(path, 'utf8');
@@ -54,7 +67,7 @@ const readDefaults = async (path: string): Promise<string> => {
   }
 };
 
-const readLocal = async (path: string): Promise<string | undefined> => {
+export const readLocal = async (path: string): Promise<string | undefined> => {
   try {
     return await readFile(path, 'utf8');
   } catch (err) {
@@ -63,7 +76,7 @@ const readLocal = async (path: string): Promise<string | undefined> => {
   }
 };
 
-const parseLayer = (path: string, text: string): unknown => {
+export const parseLayer = (path: string, text: string): unknown => {
   if (extname(path) === '.md') return text;
   try {
     return JSON.parse(text) as unknown;
@@ -84,7 +97,7 @@ export const loadRule = async <K extends RuleName>(
   name: K,
   options: LoadRulesOptions = {},
 ): Promise<Rules[K]> => {
-  const layers = ruleLayerPaths(name, options);
+  const layers = ruleLayerPaths(name, mergedLayerOptions(name, options));
   const defaults = parseLayer(
     layers.defaults,
     await readDefaults(layers.defaults),

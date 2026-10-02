@@ -21,7 +21,7 @@ The returned client offers:
 
 `initialize` advertises `fs: { readTextFile: false, writeTextFile: false }` and `terminal: false` on purpose. Quarterdeck does not serve file reads, file writes or terminals to agents. Each runtime (kiro, claude, gemini) reads files, writes files and runs commands with its own built-in tools, inside the session `cwd`.
 
-What Quarterdeck does control is permission: every `session/request_permission` goes to `onPermissionRequest`, which answers from the project's rules. Runtime adapters should expect agents to use their own tools, and should not count on client-side `fs/*` or `terminal/*` callbacks.
+What Quarterdeck does control is permission: every `session/request_permission` goes to `onPermissionRequest`, which answers from the project's rules through `createPermissionPolicy` (see `../permissions/README.md`). Runtime adapters should expect agents to use their own tools, and should not count on client-side `fs/*` or `terminal/*` callbacks.
 
 ## Lifecycle guarantees
 

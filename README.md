@@ -18,6 +18,8 @@ The defaults live in `rules/`: `charter.md`, `reviewer.md`, `permissions.json`, 
 
 JSON layers merge key by key, so an override only needs the keys it changes; arrays are replaced whole. Markdown layers replace the file below them. Every layer is checked against the schema, and an error names the file that broke it. `rules.local.*` files are gitignored.
 
+Permissions are the exception: the repo layer is not merged. It is checked on its own, may only contain `deny` and `ask`, and the stricter of its answer and the machine's answer wins, so a project can tighten permissions but never loosen them. See `packages/server/src/acp/permissions/README.md`.
+
 ## Workspace packages
 
 Each workspace package is written in TypeScript under `src/` and built to `dist/` by its own `build` script (`tsc -p tsconfig.build.json`). Node refuses to strip types from files under `node_modules`, so a published package has to ship JavaScript. Its `exports` map lists three conditions, in this order:

@@ -3,6 +3,7 @@ import type {
   AcpClient,
   AcpClientEvent,
   AcpClientOptions,
+  PermissionHandler,
 } from '@quarterdeck/server';
 import type {
   ConformanceAdapter,
@@ -31,10 +32,23 @@ const forwardUpdates =
     }
   };
 
-export const createClientAdapter = (
+export type PermissionWiring = (hooks: ConformanceHooks) => PermissionHandler;
+
+export interface ClientAdapterOptions {
+  name?: string;
+  spawnClient?: SpawnClient;
+  permissions?: PermissionWiring;
+}
+
+const askTheRecorder: PermissionWiring = (hooks) => async (request) => ({
+  outcome: await hooks.decidePermission(request),
+});
+
+export const createClientAdapter = ({
   name = 'spawnAcpClient',
-  spawnClient: SpawnClient = spawnAcpClient,
-): ClientAdapter => {
+  spawnClient = spawnAcpClient,
+  permissions = askTheRecorder,
+}: ClientAdapterOptions = {}): ClientAdapter => {
   const spawnedPids: number[] = [];
 
   const connect = async (
@@ -44,9 +58,7 @@ export const createClientAdapter = (
     const client = await spawnClient(launch, {
       clientName: 'quarterdeck-conformance',
       clientVersion: '0.0.0',
-      onPermissionRequest: async (request) => ({
-        outcome: await hooks.decidePermission(request),
-      }),
+      onPermissionRequest: permissions(hooks),
       onEvent: forwardUpdates(hooks, spawnedPids),
     });
     const authMethods = client.agent.authMethods ?? [];
