@@ -95,6 +95,8 @@ describe('End and Kill from the dashboard', { timeout: TIMEOUT }, () => {
       sessions: lenientSessions(),
       worktrees: fakeWorktrees(),
       openStores: () => [store],
+      budget: () =>
+        Promise.resolve({ hours: 5, capTokens: null, holdAtFraction: 0.8 }),
     });
     return {
       retire: async (on, agentId, options) => {
@@ -159,6 +161,7 @@ describe('End and Kill from the dashboard', { timeout: TIMEOUT }, () => {
       cwd: repoDir,
       charter: await loadRule('charter', { homeDir: t.homeDir, repoDir }),
       turnsDir,
+      budget: { hours: 5, capTokens: null, holdAtFraction: 0.8 },
     });
     await round.birth;
     const driver: RoundDriver = {

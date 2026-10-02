@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { tightenRepoBudget } from './budget-layers.js';
 import { RulesError } from './errors.js';
 import { isJsonObject, mergeLayer, type JsonObject } from './merge-layer.js';
 import {
@@ -84,9 +85,9 @@ export const mergeRepoLifecycle = (
     ...rest
   } = layer;
   const next = mergeLayer(merged, rest) as Lifecycle;
-  return {
+  return tightenRepoBudget(merged, {
     ...next,
     autoEndSettleSeconds: repoSettleSeconds(next, layer, path),
     mergeGate: repoMergeGate(next, layer, path),
-  };
+  });
 };
