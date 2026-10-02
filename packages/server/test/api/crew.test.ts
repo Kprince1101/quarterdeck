@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EVENTS_CHANNEL, type Store } from '../../src/store/index.js';
@@ -179,7 +180,7 @@ describe('crew intents are recorded or applied', { timeout: TIMEOUT }, () => {
         intent: 'pause.all',
         status: 'applied',
         id: null,
-        result: { paused: true, projects: ['crew', 'crew2'] },
+        result: { paused: true, projects: ['crew', 'crew2'], failed: [] },
       },
     });
     expect(existsSync(file)).toBe(true);
@@ -194,6 +195,32 @@ describe('crew intents are recorded or applied', { timeout: TIMEOUT }, () => {
     expect(unpaused.status).toBe(200);
     expect(existsSync(file)).toBe(false);
     expect(await recorded(other)).toHaveLength(2);
+  });
+
+  it('records pause.all in every project it can open and lists the rest', async () => {
+    const pg = join(t.api.stores.dataHome, 'locked', 'pg');
+    await mkdir(pg, { recursive: true });
+    await writeFile(join(pg, 'PG_VERSION'), '17');
+    await writeFile(`${pg}.lock`, String(process.ppid));
+    try {
+      const paused = await t.send('pause.all', { paused: true });
+
+      expect(paused.status).toBe(200);
+      expect(paused.body.result).toEqual({
+        paused: true,
+        projects: ['crew', 'crew2'],
+        failed: [
+          { project: 'locked', error: expect.stringContaining('already open') },
+        ],
+      });
+      expect(existsSync(join(t.api.stores.dataHome, 'pause.json'))).toBe(true);
+    } finally {
+      await t.send('pause.all', { paused: false });
+      await rm(join(t.api.stores.dataHome, 'locked'), {
+        recursive: true,
+        force: true,
+      });
+    }
   });
 
   it('pauses a live agent and resumes it to idle, or working mid-turn', async () => {

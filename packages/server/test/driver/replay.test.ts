@@ -226,6 +226,7 @@ describe('Driver replay', () => {
           cwd: '/work/deck',
           charter: '# Driver charter',
           turnsDir,
+          pause: { hold: (_subject, run) => run() },
         });
         await round.birth;
         await round.turn('heron reported QD12.');

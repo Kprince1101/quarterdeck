@@ -57,7 +57,7 @@ export interface PauseGateOptions {
 
 interface Held {
   subject: PauseSubject;
-  heldEventId: number;
+  heldEventId: number | null;
   start: () => void;
   drop: (reason: DropReason) => void;
   detach: () => void;
@@ -111,17 +111,20 @@ export const startPauseGate = async (
     return true;
   };
 
-  const publish = (input: PublishInput): Promise<void> =>
-    store.publish(input).then(() => undefined, report);
+  const publishAbout = (
+    entry: Held,
+    kind: string,
+    extra: Record<string, unknown> = {},
+  ): Promise<void> => {
+    const { heldEventId } = entry;
+    if (heldEventId === null) return Promise.resolve();
+    const event = subjectEvent(kind, entry.subject, { heldEventId, ...extra });
+    return store.publish(event).then(() => undefined, report);
+  };
 
   const dropped = (entry: Held, reason: DropReason): Promise<void> => {
     entry.drop(reason);
-    return publish(
-      subjectEvent(PAUSE_EVENTS.dropped, entry.subject, {
-        heldEventId: entry.heldEventId,
-        reason,
-      }),
-    );
+    return publishAbout(entry, PAUSE_EVENTS.dropped, { reason });
   };
 
   const sweep = async (): Promise<void> => {
@@ -129,14 +132,12 @@ export const startPauseGate = async (
       if (!queue.includes(entry)) continue;
       const scopes = await scopesOf(entry.subject);
       if (scopes.length > 0 || !take(entry)) continue;
-      await publish(
-        subjectEvent(PAUSE_EVENTS.replayed, entry.subject, {
-          heldEventId: entry.heldEventId,
-        }),
-      );
+      await publishAbout(entry, PAUSE_EVENTS.replayed);
       entry.start();
     }
   };
+
+  const replaying = (): boolean => queue.length > 0 || running !== undefined;
 
   const loop = async (): Promise<void> => {
     again = false;
@@ -163,19 +164,23 @@ export const startPauseGate = async (
   ): Promise<T> => {
     const { signal } = holdOptions;
     const scopes = await scopesOf(subject);
-    if (scopes.length === 0) return run();
+    if (scopes.length === 0 && (closed || !replaying())) return run();
     if (closed) throw new PauseDroppedError(subject, 'closed');
     if (signal?.aborted) throw new PauseDroppedError(subject, 'aborted');
-    const event = await store.publish(
-      subjectEvent(PAUSE_EVENTS.held, subject, { scopes }),
-    );
+    let heldEventId: number | null = null;
+    if (scopes.length > 0) {
+      const event = await store.publish(
+        subjectEvent(PAUSE_EVENTS.held, subject, { scopes }),
+      );
+      heldEventId = event.id;
+    }
     const waiting = new Promise<T>((resolve, reject) => {
       const onAbort = () => {
         if (take(entry)) void dropped(entry, 'aborted');
       };
       const entry: Held = {
         subject,
-        heldEventId: event.id,
+        heldEventId,
         start: () => {
           Promise.resolve().then(run).then(resolve, reject);
         },

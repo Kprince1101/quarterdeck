@@ -1,3 +1,4 @@
+import { getErrorMessage } from '../../lib/errors.js';
 import { setGlobalPause } from '../../pause/index.js';
 import type { Queryable } from '../../store/index.js';
 import type { IntentHandler, IntentHandlers } from '../context.js';
@@ -48,14 +49,20 @@ const setPauseEverywhere: IntentHandler<'pause.all'> = async (
   name,
 ) => {
   await setGlobalPause(ctx.stores.dataHome, input.paused);
-  const projects = await ctx.stores.list();
-  for (const project of projects) {
+  const projects: string[] = [];
+  const failed: { project: string; error: string }[] = [];
+  for (const project of await ctx.stores.list()) {
     const recorded = { project, paused: input.paused };
-    await applyInProject(ctx, name, recorded, () =>
-      Promise.resolve({ paused: input.paused }),
-    );
+    try {
+      await applyInProject(ctx, name, recorded, () =>
+        Promise.resolve({ paused: input.paused }),
+      );
+      projects.push(project);
+    } catch (err) {
+      failed.push({ project, error: getErrorMessage(err) });
+    }
   }
-  return unrecorded(name, { paused: input.paused, projects });
+  return unrecorded(name, { paused: input.paused, projects, failed });
 };
 
 const pauseAgent: IntentHandler<'agent.pause'> = (ctx, input, name) =>

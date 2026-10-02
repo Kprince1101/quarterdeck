@@ -248,6 +248,34 @@ describe('pause gate', () => {
     TIMEOUT,
   );
 
+  it('queues new work behind held work so it cannot overtake it', async () => {
+    const ran: string[] = [];
+    const work = (name: string) => () => {
+      ran.push(name);
+      return Promise.resolve(name);
+    };
+    await pauseProject(true);
+    const held = gate.hold(LAUNCH, work('held'));
+    await heldCount(1);
+    await store.db.query('update projects set paused_at = null where id = $1', [
+      store.projectId,
+    ]);
+
+    const fresh = gate.hold(
+      { operation: 'continue', label: 'continue: next' },
+      work('fresh'),
+    );
+
+    expect(await fresh).toBe('fresh');
+    expect(await held).toBe('held');
+    expect(ran).toEqual(['held', 'fresh']);
+    expect((await events()).map((event) => event.kind)).toEqual([
+      PAUSE_EVENTS.held,
+      PAUSE_EVENTS.replayed,
+    ]);
+    expect(await gate.hold(LAUNCH, work('alone'))).toBe('alone');
+  });
+
   it('passes the error of replayed work to its caller', async () => {
     await pauseProject(true);
     const held = gate.hold(LAUNCH, () => Promise.reject(new Error('no repo')));
