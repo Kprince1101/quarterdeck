@@ -16,6 +16,7 @@ export interface ApiServerOptions {
   homeDir?: string;
   allowedOrigins?: string[];
   databaseUrl?: string | undefined;
+  dashboardDir?: string | undefined;
 }
 
 export interface ApiServer {
@@ -36,10 +37,15 @@ export const startApiServer = async (
   const ctx: ApiContext = { stores, homeDir };
   let guard = localGuard(0);
   const server = createServer((req, res) => {
-    void handleRequest(ctx, guard, req, res);
+    void handleRequest(ctx, guard, req, res, options.dashboardDir);
   });
   server.listen(options.port ?? DEFAULT_API_PORT, API_HOST);
-  await once(server, 'listening');
+  try {
+    await once(server, 'listening');
+  } catch (err) {
+    await stores.closeAll();
+    throw err;
+  }
   const { port } = server.address() as AddressInfo;
   guard = localGuard(port, options.allowedOrigins);
   const close = async () => {

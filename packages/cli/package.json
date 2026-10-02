@@ -5,7 +5,28 @@
   "type": "module",
   "license": "MIT",
   "author": "Kristopher Prince",
+  "bin": {
+    "quarterdeck": "./dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "@quarterdeck/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc -p tsconfig.build.json"
+  },
   "engines": {
     "node": ">=22"
+  },
+  "dependencies": {
+    "@quarterdeck/dashboard": "0.0.0",
+    "@quarterdeck/rules": "0.0.0",
+    "@quarterdeck/server": "0.0.0"
   }
 }

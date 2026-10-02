@@ -1,3 +1,4 @@
+export { DASHBOARD_PLACEHOLDER } from './dashboard.js';
 export { INTENT_HANDLERS, dispatchIntent } from './dispatch.js';
 export { HttpError } from './http-error.js';
 export { createProjectStores, type ProjectStores } from './project-stores.js';
