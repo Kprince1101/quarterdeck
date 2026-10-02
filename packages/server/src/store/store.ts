@@ -1,5 +1,14 @@
 import { mkdir } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
+import {
+  publishEvent,
+  subscribeEvents,
+  type EventHandler,
+  type PublishInput,
+  type StoreEvent,
+  type SubscribeOptions,
+  type Subscription,
+} from './events.js';
 import { NO_LOCK, lockDataDir, type DataDirLock } from './lock.js';
 import { migrate } from './migrate.js';
 import { assertProjectSlug, projectDataDir } from './paths.js';
@@ -20,8 +29,6 @@ export const STORE_TABLES = [
 
 export type StoreTable = (typeof STORE_TABLES)[number];
 
-export const EVENTS_CHANNEL = 'quarterdeck_events';
-
 export const IN_MEMORY = 'memory://';
 
 export interface StoreOptions {
@@ -35,6 +42,11 @@ export interface Store {
   dataDir: string;
   projectId: string;
   migrated: string[];
+  publish: (input: PublishInput) => Promise<StoreEvent>;
+  subscribe: (
+    handler: EventHandler,
+    options?: SubscribeOptions,
+  ) => Promise<Subscription>;
   close: () => Promise<void>;
 }
 
@@ -74,14 +86,41 @@ const startDatabase = async (
   try {
     const migrated = await migrate(db);
     const projectId = await ensureProject(db, project);
+    const subscriptions = new Set<() => Promise<void>>();
+    const publish = (input: PublishInput) => publishEvent(db, projectId, input);
+    const subscribe = async (
+      handler: EventHandler,
+      options?: SubscribeOptions,
+    ): Promise<Subscription> => {
+      const subscription = await subscribeEvents(
+        db,
+        projectId,
+        handler,
+        options,
+      );
+      const release = (): Promise<void> => {
+        subscriptions.delete(release);
+        return subscription.close();
+      };
+      subscriptions.add(release);
+      return {
+        get cursor() {
+          return subscription.cursor;
+        },
+        close: release,
+      };
+    };
     const close = async () => {
       try {
+        await Promise.allSettled(
+          [...subscriptions].map((release) => release()),
+        );
         await db.close();
       } finally {
         await lock.release();
       }
     };
-    return { db, dataDir, projectId, migrated, close };
+    return { db, dataDir, projectId, migrated, publish, subscribe, close };
   } catch (err) {
     await db.close();
     throw err;

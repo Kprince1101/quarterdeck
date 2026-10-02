@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { loadMigrations, migrate } from '../../store/index.js';
+import { loadMigrations, migrate } from '../../src/store/index.js';
 
 describe('migrate', () => {
   let dir = '';
