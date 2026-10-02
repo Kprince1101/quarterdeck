@@ -14,12 +14,15 @@ import {
 import { App } from '../../src/app.js';
 import { DeckProvider, useDeck, type Deck } from '../../src/deck/deck.js';
 import { FAKE_WEBSOCKET, FakeSocket } from '../api/fake-socket.js';
-import { click } from '../grid/events.js';
+import {
+  PROJECT_ID,
+  STARTER_LAYOUT,
+  layoutRow,
+  snapshotWith,
+} from '../layouts/stream-rows.js';
 import { all, render, textOf } from './page.js';
-import { showOnly } from './show-only.js';
 
 const STREAM_URL = 'ws://127.0.0.1:4317/ws';
-const PROJECT_ID = '00000000-0000-4000-8000-000000000001';
 
 const SNAPSHOT: StreamMessage = {
   type: 'snapshot',
@@ -91,6 +94,7 @@ describe('dashboard shell', () => {
 
   it('gives every panel its own scrolling body', () => {
     const { container, unmount } = render(<App stream={stream} />);
+    deliver(snapshotWith(layoutRow(STARTER_LAYOUT)));
     const panels = all(
       container,
       '[data-widget-mount] .qd-grid-cell > .qd-panel',
@@ -105,7 +109,25 @@ describe('dashboard shell', () => {
 
   it('registers the Driver widget', () => {
     const { container, unmount } = render(<App stream={stream} />);
-    showOnly(container, ['Driver'], click);
+    deliver(
+      snapshotWith(
+        layoutRow({
+          columns: 12,
+          rows: 12,
+          items: [
+            {
+              id: 'driver-1',
+              widget: 'driver',
+              x: 0,
+              y: 0,
+              w: 12,
+              h: 12,
+              hidden: false,
+            },
+          ],
+        }),
+      ),
+    );
     expect(textOf(container, '[aria-label="Driver"]')).toContain(
       'No rounds yet.',
     );
@@ -114,12 +136,15 @@ describe('dashboard shell', () => {
 
   it('wires the starter panels to the stream', () => {
     const { container, unmount } = render(<App stream={stream} />);
-    showOnly(container, ['Events', 'Tables'], click);
     expect(textOf(container, '[aria-label="Events"]')).toContain(
       'No events yet.',
     );
 
-    deliver(SNAPSHOT, event(1, 'project.created'), event(2, 'notebook.added'));
+    deliver(
+      snapshotWith(layoutRow(STARTER_LAYOUT)),
+      event(1, 'project.created'),
+      event(2, 'notebook.added'),
+    );
     const tables = all(container, '.qd-table-counts dt').map(
       ({ textContent }) => textContent,
     );

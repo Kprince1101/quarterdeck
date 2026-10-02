@@ -1,20 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import type { GridAction } from '../../src/grid/actions.js';
 import {
+  LAYOUT_LOADED,
   createGridReducer,
+  initialGridState,
   type GridState,
 } from '../../src/grid/grid-state.js';
 import { board, item, REGISTRY } from './fixtures.js';
 
 const reduce = createGridReducer(REGISTRY);
 
-const start: GridState = {
-  layout: board(
+const start: GridState = initialGridState(
+  board(
     item('alpha-1', { x: 0, y: 0, w: 4, h: 4 }),
     item('beta-1', { x: 4, y: 0, w: 4, h: 4 }),
   ),
-  announcement: '',
-};
+);
 
 const said = (action: GridAction, state: GridState = start): string =>
   reduce(state, action).announcement;
@@ -60,15 +61,48 @@ describe('grid announcements', () => {
   });
 
   it('says when there is no room to show a widget', () => {
-    const full: GridState = {
-      layout: board(
+    const full = initialGridState(
+      board(
         item('alpha-1', { x: 0, y: 0, w: 4, h: 4 }, true),
         item('beta-1', { x: 0, y: 0, w: 12, h: 12 }),
       ),
-      announcement: '',
-    };
+    );
     expect(said({ type: 'show', id: 'alpha-1' }, full)).toBe(
       'No room to show Alpha.',
     );
+  });
+});
+
+describe('grid origin', () => {
+  it('marks a change from a control as an edit and a refusal as nothing new', () => {
+    const moved = reduce(start, { type: 'move', id: 'alpha-1', x: 0, y: 5 });
+    expect(moved.origin).toBe('edit');
+    const refused = reduce(start, { type: 'move', id: 'alpha-1', x: 4, y: 0 });
+    expect(refused.origin).toBe('initial');
+    expect(refused.layout).toBe(start.layout);
+  });
+
+  it('loads a different layout as a load and ignores the same one', () => {
+    const other = board(item('beta-1', { x: 0, y: 0, w: 6, h: 6 }));
+    const loaded = reduce(start, { type: 'load', layout: other });
+    expect(loaded).toEqual({
+      layout: other,
+      announcement: LAYOUT_LOADED,
+      origin: 'load',
+    });
+    const reordered = {
+      items: start.layout.items.map(({ hidden, h, w, y, x, widget, id }) => ({
+        hidden,
+        h,
+        w,
+        y,
+        x,
+        widget,
+        id,
+      })),
+      rows: start.layout.rows,
+      columns: start.layout.columns,
+    };
+    expect(reduce(start, { type: 'load', layout: reordered })).toBe(start);
   });
 });
