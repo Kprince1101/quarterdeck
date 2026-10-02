@@ -1,9 +1,9 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { PROJECT_SLUG } from '../lib/slug.js';
 
-const PROJECT_SLUG = /^[a-z0-9][a-z0-9_-]{0,62}$/;
-
-export const quarterdeckHome = (): string => join(homedir(), '.quarterdeck');
+export const quarterdeckHome = (homeDir: string = homedir()): string =>
+  join(homeDir, '.quarterdeck');
 
 export const assertProjectSlug = (project: string): string => {
   if (!PROJECT_SLUG.test(project)) {

@@ -1,13 +1,11 @@
 import { open, readFile, rm } from 'node:fs/promises';
+import { hasErrorCode as hasCode } from '../lib/errors.js';
 
 export interface DataDirLock {
   release: () => Promise<void>;
 }
 
 export const NO_LOCK: DataDirLock = { release: () => Promise.resolve() };
-
-const hasCode = (err: unknown, code: string): boolean =>
-  err instanceof Error && 'code' in err && err.code === code;
 
 const isAlive = (pid: number): boolean => {
   try {

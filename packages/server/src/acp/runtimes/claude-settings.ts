@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { getErrorMessage } from '../../lib/errors.js';
+import { getErrorMessage, hasErrorCode } from '../../lib/errors.js';
 
 export const CLAUDE_PERMISSION_SETTINGS = 'claude_permission_settings';
 
@@ -43,14 +43,11 @@ export const claudeSettingsPaths = (
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const isMissing = (err: unknown): boolean =>
-  isRecord(err) && err['code'] === 'ENOENT';
-
 const readText = async (path: string): Promise<string | undefined> => {
   try {
     return await readFile(path, 'utf8');
   } catch (err) {
-    if (isMissing(err)) return undefined;
+    if (hasErrorCode(err, 'ENOENT')) return undefined;
     throw err;
   }
 };

@@ -1,4 +1,4 @@
-import type { PGlite } from '@electric-sql/pglite';
+import type { PGlite, Transaction } from '@electric-sql/pglite';
 
 export const EVENTS_CHANNEL = 'quarterdeck_events';
 
@@ -40,8 +40,18 @@ const reportError = (err: unknown): void => {
   console.error('quarterdeck event subscriber failed', err);
 };
 
+export const reporter =
+  (onError: (err: unknown) => void = reportError) =>
+  (err: unknown): void => {
+    try {
+      onError(err);
+    } catch (failure) {
+      reportError(failure);
+    }
+  };
+
 export const publishEvent = async (
-  db: PGlite,
+  db: PGlite | Transaction,
   projectId: string,
   input: PublishInput,
 ): Promise<StoreEvent> => {
@@ -94,14 +104,7 @@ export const subscribeEvents = async (
   handler: EventHandler,
   options: SubscribeOptions = {},
 ): Promise<Subscription> => {
-  const onError = options.onError ?? reportError;
-  const report = (err: unknown): void => {
-    try {
-      onError(err);
-    } catch (failure) {
-      reportError(failure);
-    }
-  };
+  const report = reporter(options.onError);
   let cursor = options.after ?? (await latestEventId(db, projectId));
   let closed = false;
   let queued = false;

@@ -39,6 +39,22 @@ const ENTRY_SCRIPT = [
   "  events: events.map((event) => event.type).filter((type) => type !== 'stderr'),",
   '}));',
 ].join('\n');
+const SCHEMA_SCRIPT = [
+  "const schema = await import('@quarterdeck/server/stream-schema');",
+  'const message = schema.streamMessageSchema.parse({',
+  "  type: 'event',",
+  '  event: {',
+  '    id: 1,',
+  "    projectId: '00000000-0000-4000-8000-000000000000',",
+  '    agentId: null,',
+  '    ticketId: null,',
+  "    kind: 'entry',",
+  '    payload: {},',
+  "    createdAt: '2026-10-01T00:00:00.000Z',",
+  '  },',
+  '});',
+  'process.stdout.write(JSON.stringify({ path: schema.STREAM_PATH, type: message.type }));',
+].join('\n');
 
 describe('@quarterdeck/server package entry', () => {
   let home = '';
@@ -70,12 +86,55 @@ describe('@quarterdeck/server package entry', () => {
       expect(result.status).toBe(0);
       const report = JSON.parse(result.stdout) as EntryReport;
       expect(report).toMatchObject({
-        migrated: ['0001_init', '0002_agent_names'],
+        migrated: [
+          '0001_init',
+          '0002_agent_names',
+          '0003_intents',
+          '0004_table_changes',
+        ],
         kind: 'entry',
         agent: FAKE_AGENT_NAME,
         events: ['spawned', 'closed', 'exit'],
       });
       expect(isAlive(report.pid)).toBe(false);
+    },
+    TIMEOUT,
+  );
+
+  it('exposes the intent schemas and the API server from plain Node', () => {
+    const script = [
+      "const { INTENT_NAMES } = await import('@quarterdeck/server/intents');",
+      "const { startApiServer } = await import('@quarterdeck/server');",
+      'process.stdout.write(JSON.stringify({ count: INTENT_NAMES.length, start: typeof startApiServer }));',
+    ].join('\n');
+    const result = spawnSync(
+      process.execPath,
+      ['--input-type=module', '--eval', script],
+      { cwd: ROOT, encoding: 'utf8' },
+    );
+
+    expect(result.stderr).toBe('');
+    expect(JSON.parse(result.stdout)).toEqual({
+      count: 27,
+      start: 'function',
+    });
+  });
+
+  it(
+    'exposes the stream schema on its own subpath',
+    () => {
+      const result = spawnSync(
+        process.execPath,
+        ['--input-type=module', '--eval', SCHEMA_SCRIPT],
+        { cwd: ROOT, encoding: 'utf8' },
+      );
+
+      expect(result.stderr).toBe('');
+      expect(result.status).toBe(0);
+      expect(JSON.parse(result.stdout)).toEqual({
+        path: '/ws',
+        type: 'event',
+      });
     },
     TIMEOUT,
   );

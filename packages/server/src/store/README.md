@@ -31,10 +31,12 @@ await store.close();
 | `Store.dataDir` / `Store.migrated`                       | The data dir in use, and the migration versions this open applied.                                                                                   |
 | `Store.publish({ kind, payload?, agentId?, ticketId? })` | Inserts one `events` row for this project and resolves to it as a `StoreEvent`.                                                                      |
 | `Store.subscribe(handler, { after?, onError? })`         | Calls `handler` with every event of this project, in id order, one at a time. See [Event bus](#event-bus).                                           |
-| `Store.close()`                                          | Closes open subscriptions and the database, then releases the lock. Call it on shutdown.                                                             |
+| `Store.watch(handler, { onError? })`                     | Calls `handler` with every row change of this project's tables, one at a time. See [Table changes](#table-changes).                                  |
+| `Store.close()`                                          | Closes open subscriptions and watchers and the database, then releases the lock. Call it on shutdown.                                                |
 | `IN_MEMORY`                                              | Pass as `dataDir` for a throwaway in-memory database (tests).                                                                                        |
 | `STORE_TABLES`                                           | Every table name, for the Data widget and wipe.                                                                                                      |
 | `EVENTS_CHANNEL`                                         | `quarterdeck_events`. Every insert into `events` sends `{"id","project_id","kind"}` on it via `pg_notify`.                                           |
+| `CHANGES_CHANNEL` / `WATCHED_TABLES`                     | `quarterdeck_changes`, and the tables whose row changes are sent on it.                                                                              |
 | `projectDataDir(project, home?)`                         | The data dir path for a project. Slugs are `[a-z0-9][a-z0-9_-]{0,62}`; anything else throws.                                                         |
 | `migrate(db, dir?)`                                      | Applies pending migrations from `dir` (default `migrations/`) and returns their versions. Used by `openStore`.                                       |
 
@@ -48,6 +50,14 @@ Every insert into `events`, through `publish` or plain SQL, fires `pg_notify` on
 - `subscription.close()` stops delivery and waits for the handler call in flight. Calling it twice is safe.
 
 `StoreEvent` is `{ id, projectId, agentId, ticketId, kind, payload, createdAt }`.
+
+## Table changes
+
+Every insert, update and delete on a table in `WATCHED_TABLES` (every table but the `events` and `intents` logs; each recorded intent already writes an event) fires `pg_notify` on `CHANGES_CHANNEL` (`quarterdeck_changes`) with `{"table","op","id","project_id"}`. A watcher drops other projects' notices, re-reads the row by `id` and calls `handler` with a `TableChange`: `{ table, op, id, row }`, where `row` has camelCase keys and is `null` for a delete (or a row deleted before it was read). Because the row is read at delivery, it is always the latest state, never an older version.
+
+Changes have no cursor: a notification sent while nobody is watching is gone. Read the tables again after reconnecting (`readRows(db, projectId, table, { turnsPerAgent? })`), which is what the stream's snapshot does; `turnsPerAgent` keeps only each agent's latest turns.
+
+`turns` rows, from `watch` and `readRows`, leave out `prompt`: it can be large and lives in the table, so read it on demand. A turn's project comes from its agent. When an agent is deleted its turns go with it by cascade and have no project left to report, so those turn deletes reach no watcher. Drop an agent's turns when its delete arrives.
 
 ## Migrations
 
@@ -68,3 +78,4 @@ Every insert into `events`, through `publish` or plain SQL, fires `pg_notify` on
 | `charter_proposals` | Proposed charter changes: `body`, `rationale`, `status` open / accepted / rejected.                                             |
 | `budget`            | Token and USD limits and spend, one row per (project, round, agent) scope; null round/agent is wider.                           |
 | `layouts`           | This project's saved dashboard layouts as JSON `spec`, unique by `name`. Shipped presets live in code or `rules/`, not here.    |
+| `intents`           | Every intent the HTTP API accepted: `kind`, `input`, `status` pending / applied / rejected, `result`, `settled_at`.             |

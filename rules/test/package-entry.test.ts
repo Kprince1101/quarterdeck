@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { loadRules } from '@quarterdeck/rules';
+import { RULE_NAMES, loadRules } from '@quarterdeck/rules';
 
 const ROOT = resolve(import.meta.dirname, '../..');
 const ENTRY_SCRIPT = [
@@ -33,5 +33,20 @@ describe('@quarterdeck/rules package entry', () => {
     expect(result.stderr).toBe('');
     expect(result.status).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual(await loadRules({ homeDir }));
+  });
+
+  it('exposes the schemas alone from plain Node', () => {
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '--eval',
+        "const { RULE_SCHEMAS } = await import('@quarterdeck/rules/schemas');\nprocess.stdout.write(JSON.stringify(Object.keys(RULE_SCHEMAS)));",
+      ],
+      { cwd: ROOT, encoding: 'utf8' },
+    );
+
+    expect(result.stderr).toBe('');
+    expect(JSON.parse(result.stdout)).toEqual(RULE_NAMES);
   });
 });

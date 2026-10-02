@@ -18,6 +18,21 @@ export {
   type Subscription,
 } from './events.js';
 export {
+  CHANGES_CHANNEL,
+  WATCHED_TABLES,
+  readRow,
+  readRows,
+  watchChanges,
+  type ChangeHandler,
+  type ChangeOp,
+  type ReadRowsOptions,
+  type Row,
+  type TableChange,
+  type WatchOptions,
+  type WatchedTable,
+  type Watcher,
+} from './changes.js';
+export {
   MIGRATIONS_DIR,
   loadMigrations,
   migrate,
