@@ -3,11 +3,22 @@
 The Planner turns a conversation with the human into proposed tickets. There is one conversation per project at a time, held in one ACP session with a Planner agent. The human approves, edits or rejects each proposal; only approved tickets reach the Driver. Starting a new conversation ends the old one.
 
 ```ts
-import { openStore, startBusHost, startPlanner } from '@quarterdeck/server';
+import {
+  openStore,
+  startBusHost,
+  startPauseGate,
+  startPlanner,
+} from '@quarterdeck/server';
 
 const store = await openStore({ project: 'deck' });
 const bus = await startBusHost({ store });
-const planner = await startPlanner({ store, bus, openStores: () => [store] });
+const pause = await startPauseGate({ store });
+const planner = await startPlanner({
+  store,
+  bus,
+  pause,
+  openStores: () => [store],
+});
 await planner.close();
 ```
 
@@ -32,6 +43,8 @@ A message is refused (intent `rejected` with `{ error }`, plus a `planner.failed
 - the wait for sign-in is stopped;
 - the agent cannot be born. If a turn fails, for example because the agent process died, the conversation ends and the next message starts a fresh one.
 
+Each message goes through the [pause](../pause/README.md) guard (`pause`) before its turn, and before the birth when it starts a conversation. While the Planner agent, the project or everything is paused the message is held as `planner.turn` and stays `pending`; the messages behind it wait, and it is answered on unpause. A `planner.new` drops a held message, which is then rejected as superseded like any other message queued before it; `close()` drops it and leaves it `pending` for the next start.
+
 When the Planner starts it retires any Planner agent still live from an earlier run, because that agent's process is gone. `close()` cancels a running turn and retires the conversation.
 
 ## Events
@@ -48,10 +61,10 @@ When the Planner starts it retires any Planner agent still live from an earlier 
 
 ## API
 
-| Export                  | What it does                                                                                                                                                                  |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `startPlanner(options)` | Starts applying one project's Planner intents. `store`, `bus` (`launch`, `revoke`) and `openStores` are required; `adapters`, `homeDir`, `cardHuman`, `onError` are optional. |
-| `Planner.drain()`       | Applies every pending Planner intent and resolves once none is left.                                                                                                          |
-| `Planner.close()`       | Stops listening, cancels a running turn and retires the conversation.                                                                                                         |
-| `PLANNER_BRIEF`         | The text that opens every conversation, before the charter.                                                                                                                   |
-| `PLANNER_ADAPTERS`      | The runtime adapters used when `adapters` is not given.                                                                                                                       |
+| Export                  | What it does                                                                                                                                                                           |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `startPlanner(options)` | Starts applying one project's Planner intents. `store`, `bus` (`launch`, `revoke`), `pause` and `openStores` are required; `adapters`, `homeDir`, `cardHuman`, `onError` are optional. |
+| `Planner.drain()`       | Applies every pending Planner intent and resolves once none is left.                                                                                                                   |
+| `Planner.close()`       | Stops listening, cancels a running turn and retires the conversation.                                                                                                                  |
+| `PLANNER_BRIEF`         | The text that opens every conversation, before the charter.                                                                                                                            |
+| `PLANNER_ADAPTERS`      | The runtime adapters used when `adapters` is not given.                                                                                                                                |

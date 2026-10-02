@@ -22,6 +22,7 @@ export interface ProjectStores {
   location: string;
   get: (project: string) => Promise<Store>;
   create: (project: string) => Promise<Store>;
+  list: () => Promise<string[]>;
   wipe: (project: string) => Promise<void>;
   wipeAll: () => Promise<string[]>;
   closeAll: () => Promise<void>;
@@ -152,6 +153,11 @@ export const createProjectStores = (
         return Promise.reject(conflict(`project ${project} already exists`));
       }
       return claim(project, openNew);
+    },
+    list: async () => {
+      const listed = await catalog.list();
+      const found = await Promise.all(listed.map(exists));
+      return listed.filter((_project, index) => found[index]);
     },
     wipe: async (project) => {
       if (!(await exists(project))) {

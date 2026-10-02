@@ -7,6 +7,7 @@ export const CREW_INTENTS = {
   'round.start': inProject({ goal: textSchema }),
   'round.end': inProject({ roundId: idSchema }),
   'pause.set': inProject({ paused: z.boolean() }),
+  'pause.all': z.strictObject({ paused: z.boolean() }),
   'agent.pause': agentTarget,
   'agent.resume': agentTarget,
   'agent.end': agentTarget,

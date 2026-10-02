@@ -6,6 +6,11 @@ import {
 } from '../agents/index.js';
 import { findAgent, firstRow, recordEvent } from '../agents/rows.js';
 import type { BusHost } from '../bus/index.js';
+import {
+  pauseLabel,
+  type PauseGuard,
+  type PauseSubject,
+} from '../pause/index.js';
 import { withSignIn } from '../signin/index.js';
 import type { Store } from '../store/index.js';
 import {
@@ -40,6 +45,7 @@ export interface DriverRoundOptions {
   cwd: string;
   charter: string;
   turnsDir: string;
+  pause: PauseGuard;
 }
 
 export type DriverTurnOutcome = TurnOutcome<DriverTurnResult>;
@@ -112,7 +118,7 @@ const serialize = () => {
   };
 };
 
-export const openDriverRound = async (
+const launchRound = async (
   options: DriverRoundOptions,
 ): Promise<DriverRound> => {
   const { store, client } = options;
@@ -146,8 +152,14 @@ export const openDriverRound = async (
     turnsDir: options.turnsDir,
   };
   const enqueue = serialize();
-  const turn = (input: string) =>
-    enqueue(() => runTurn(target, input, DRIVER_TURN_FORMAT));
+  const heldTurn = (label: string, input: string) =>
+    enqueue(() =>
+      options.pause.hold(
+        { operation: 'driver.turn', label, agentId: agent.id },
+        () => runTurn(target, input, DRIVER_TURN_FORMAT),
+      ),
+    );
+  const turn = (input: string) => heldTurn(pauseLabel('turn', input), input);
   const birthInput = buildBirthInput({
     agent,
     round,
@@ -155,7 +167,20 @@ export const openDriverRound = async (
     notebook,
     instructions: DRIVER_TURN_FORMAT.instructions,
   });
-  const birth = turn(birthInput);
+  const birth = heldTurn(`birth turn, round ${round.number}`, birthInput);
   birth.catch(() => undefined);
   return { agent, round, sessionId, notebook, birth, turn };
+};
+
+export const openDriverRound = async (
+  options: DriverRoundOptions,
+): Promise<DriverRound> => {
+  const round = await findRound(options.store, options.roundId);
+  const driver = await findDriver(options.store, options.agentId);
+  const subject: PauseSubject = {
+    operation: 'launch',
+    label: `${driver.name}, round ${round.number}`,
+    agentId: driver.id,
+  };
+  return options.pause.hold(subject, () => launchRound(options));
 };

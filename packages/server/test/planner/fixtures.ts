@@ -9,6 +9,7 @@ import {
   type RuntimeLaunch,
 } from '../../src/index.js';
 import { startBusHost, type BusHost } from '../../src/bus/index.js';
+import { startPauseGate, type PauseGate } from '../../src/pause/index.js';
 import {
   startPlanner,
   type Planner,
@@ -78,6 +79,7 @@ export interface PlannerProject {
   store: Store;
   repoDir: string;
   bus: BusHost;
+  pause: PauseGate;
   fake: FakeRuntime;
   errors: unknown[];
   send: (name: string, body?: Record<string, unknown>) => Promise<Reply>;
@@ -118,6 +120,7 @@ export const openPlannerProject = async (
   await t.send('project.create', created);
   const store = await t.store(project);
   const bus = await startBusHost({ store, home: t.homeDir });
+  const pause = await startPauseGate({ store, home: t.api.stores.dataHome });
   const fake = fakeRuntime(options.fake);
   const errors: unknown[] = [];
   let running: Planner | undefined;
@@ -127,6 +130,7 @@ export const openPlannerProject = async (
       store,
       bus,
       openStores: () => [store],
+      pause,
       adapters: fake.adapters,
       homeDir: t.homeDir,
       onError: (err) => errors.push(err),
@@ -176,6 +180,7 @@ export const openPlannerProject = async (
     store,
     repoDir,
     bus,
+    pause,
     fake,
     errors,
     send: (name, body = {}) => t.send(name, { project, ...body }),
@@ -186,6 +191,7 @@ export const openPlannerProject = async (
     intent,
     close: async () => {
       await running?.close();
+      await pause.close();
       await bus.close();
       await rm(repoDir, { recursive: true, force: true });
     },
