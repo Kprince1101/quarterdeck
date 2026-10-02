@@ -111,6 +111,10 @@ export const connectAcpClient = async ({
 
   const agent = await initialize();
 
+  const authenticate = async (methodId: string) => {
+    await connection.agent.request(methods.agent.authenticate, { methodId });
+  };
+
   const newSession = ({ cwd, mcpServers }: SessionSetup) =>
     connection.agent.request(methods.agent.session.new, { cwd, mcpServers });
 
@@ -138,6 +142,7 @@ export const connectAcpClient = async ({
 
   return {
     agent,
+    authenticate,
     newSession,
     resumeSession: resume,
     prompt,

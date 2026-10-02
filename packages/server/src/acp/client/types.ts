@@ -117,6 +117,7 @@ export type AcpClientListener = (event: AcpClientEvent) => void;
 
 export interface AcpClient {
   readonly agent: InitializeResponse;
+  authenticate: (methodId: string) => Promise<void>;
   newSession: (setup: SessionSetup) => Promise<NewSessionResponse>;
   resumeSession: (setup: ResumeSetup) => Promise<ResumedSession>;
   prompt: (sessionId: SessionId, input: PromptInput) => Promise<PromptResponse>;

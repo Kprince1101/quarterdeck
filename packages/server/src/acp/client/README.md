@@ -9,7 +9,8 @@ Quarterdeck's Agent Client Protocol client. It drives one agent process over std
 
 The returned client offers:
 
-- `newSession({ cwd, mcpServers })`
+- `newSession({ cwd, mcpServers })`. When the agent needs sign-in, this rejects with an error that `isAuthRequiredError(err)` recognises. Its auth methods are in `client.agent.authMethods`.
+- `authenticate(methodId)`, which is only called once a person has chosen to sign in. The client never signs in on its own.
 - `prompt(sessionId, input)`
 - `cancel(sessionId)`
 - `resumeSession({ sessionId, cwd, mcpServers })`, which uses `session/resume` when the agent supports it and `session/load` otherwise

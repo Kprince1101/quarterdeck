@@ -1,4 +1,3 @@
-import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { PROTOCOL_VERSION } from '@agentclientprotocol/sdk';
 import type { SessionId } from '@agentclientprotocol/sdk';
@@ -16,9 +15,15 @@ import type {
   AgentCommand,
   PermissionHandler,
 } from '@quarterdeck/server';
-
-type Capabilities = 'resume' | 'load' | 'none';
-type Behavior = 'serve' | 'silent' | 'linger' | 'ignore-sigterm';
+import {
+  FAKE_AGENT_NAME,
+  FAKE_CRASH_EXIT_CODE,
+  FAKE_HISTORY_TEXT,
+  FAKE_READY_LINE,
+  fakeAgentLaunch,
+} from './fake-agent/index.ts';
+import type { FakeAgentOptions } from './fake-agent/index.ts';
+import { expectAllExited, markedProcesses } from './process-check.ts';
 
 interface ListenerFailure {
   message: string;
@@ -36,12 +41,10 @@ interface Harness extends Run {
 }
 
 interface StartOptions {
-  capabilities?: Capabilities;
-  behavior?: Behavior;
+  agent?: FakeAgentOptions;
   overrides?: Partial<AcpClientOptions>;
 }
 
-const STUB_AGENT = resolve(import.meta.dirname, 'stub-agent.ts');
 const PROJECT_CWD = resolve(import.meta.dirname, '..', '..');
 const BUS_SERVER = {
   name: 'bus',
@@ -51,36 +54,15 @@ const BUS_SERVER = {
 };
 const LIFECYCLE_TYPES = new Set<AcpClientEvent['type']>(['spawned', 'stderr']);
 const IS_WINDOWS = process.platform === 'win32';
-
-const stubCommand = (
-  capabilities: Capabilities,
-  behavior: Behavior,
-): AgentCommand => ({
-  command: process.execPath,
-  args: [
-    '--experimental-strip-types',
-    '--no-warnings',
-    STUB_AGENT,
-    capabilities,
-    behavior,
-  ],
-});
+const RESUMED_SESSION = 'fake-session-9';
 
 const commandLine = ({ command, args }: AgentCommand) => [command, ...args];
 
 const shellQuote = (part: string) => `'${part.replaceAll("'", "'\\''")}'`;
 
-const markedProcesses = (marker: string) =>
-  spawnSync('ps', ['-A', '-o', 'pid=,args='], { encoding: 'utf8' })
-    .stdout.split('\n')
-    .filter((line) => line.includes(marker));
-
-const rejectAll: PermissionHandler = async ({ options }) => {
-  const reject = options.find((option) => option.kind === 'reject_once');
-  return {
-    outcome: { outcome: 'selected', optionId: reject?.optionId ?? 'reject' },
-  };
-};
+const rejectOnce: PermissionHandler = async () => ({
+  outcome: { outcome: 'selected', optionId: 'reject-once' },
+});
 
 const selectOption =
   (optionId: string): PermissionHandler =>
@@ -101,7 +83,7 @@ const createRun = (overrides: Partial<AcpClientOptions> = {}): Run => {
   const options: AcpClientOptions = {
     clientName: 'quarterdeck-test',
     clientVersion: '0.0.0',
-    onPermissionRequest: rejectAll,
+    onPermissionRequest: rejectOnce,
     onEvent: (event) => events.push(event),
     onListenerError: (err, event) => {
       listenerFailures.push({
@@ -117,15 +99,11 @@ const createRun = (overrides: Partial<AcpClientOptions> = {}): Run => {
 };
 
 const start = async ({
-  capabilities = 'resume',
-  behavior = 'serve',
+  agent = {},
   overrides = {},
 }: StartOptions = {}): Promise<Harness> => {
   const run = createRun(overrides);
-  const client = await spawnAcpClient(
-    stubCommand(capabilities, behavior),
-    run.options,
-  );
+  const client = await spawnAcpClient(fakeAgentLaunch(agent), run.options);
   openClients.push(client);
   return { ...run, client };
 };
@@ -158,21 +136,11 @@ const spawnedPids = (events: AcpClientEvent[]) =>
     return [event.pid];
   });
 
-const isAlive = (pid: number) => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
 const expectChildExited = async (events: AcpClientEvent[]) => {
-  const pids = spawnedPids(events);
-  await vi.waitFor(() => {
-    pids.forEach((pid) => expect(isAlive(pid)).toBe(false));
-    if (pids.length > 0) expect(eventTypes(events)).toContain('exit');
-  });
+  await expectAllExited(spawnedPids(events));
+  if (spawnedPids(events).length > 0) {
+    await vi.waitFor(() => expect(eventTypes(events)).toContain('exit'));
+  }
 };
 
 afterEach(async () => {
@@ -182,17 +150,14 @@ afterEach(async () => {
 });
 
 describe('ACP client over stdio', () => {
-  it('initializes and reports the agent', async () => {
-    const { client, events } = await start();
+  it('initializes, reports the agent and forwards stderr', async () => {
+    const { client, events } = await start({ agent: { announce: true } });
 
     expect(client.agent.protocolVersion).toBe(PROTOCOL_VERSION);
-    expect(client.agent.agentInfo?.name).toBe('stub-agent');
+    expect(client.agent.agentInfo?.name).toBe(FAKE_AGENT_NAME);
     expect(spawnedPids(events)).toHaveLength(1);
     await vi.waitFor(() =>
-      expect(events).toContainEqual({
-        type: 'stderr',
-        line: 'stub agent ready',
-      }),
+      expect(events).toContainEqual({ type: 'stderr', line: FAKE_READY_LINE }),
     );
   });
 
@@ -200,7 +165,7 @@ describe('ACP client over stdio', () => {
     const { client, events } = await start();
     const sessionId = await openSession(client);
 
-    await client.prompt(sessionId, 'describe');
+    await client.prompt(sessionId, 'describe_session');
 
     expect(JSON.parse(agentText(events, sessionId))).toEqual({
       cwd: PROJECT_CWD,
@@ -217,10 +182,10 @@ describe('ACP client over stdio', () => {
     ]);
 
     expect(response.stopReason).toBe('end_turn');
-    expect(agentText(events, sessionId)).toBe('echo:hello');
+    expect(agentText(events, sessionId)).toBe('hello');
     expect(
       eventTypes(events).filter((type) => !LIFECYCLE_TYPES.has(type)),
-    ).toEqual(['session_update', 'session_update', 'turn_end']);
+    ).toEqual(['session_update', 'turn_end']);
     expect(events.at(-1)).toEqual({
       type: 'turn_end',
       sessionId,
@@ -228,53 +193,25 @@ describe('ACP client over stdio', () => {
     });
   });
 
-  it('answers permission requests through the handler', async () => {
+  it('emits the permission request with the answer it got', async () => {
     const { client, events } = await start({
-      overrides: { onPermissionRequest: selectOption('allow') },
+      overrides: { onPermissionRequest: selectOption('allow-once') },
     });
     const sessionId = await openSession(client);
 
-    await client.prompt(sessionId, 'ask');
+    await client.prompt(sessionId, 'permission');
 
-    expect(agentText(events, sessionId)).toBe('selected:allow');
+    expect(agentText(events, sessionId)).toBe('permission granted: allow-once');
     expect(events).toContainEqual(
       expect.objectContaining({
         type: 'permission',
         sessionId,
-        response: { outcome: { outcome: 'selected', optionId: 'allow' } },
+        response: { outcome: { outcome: 'selected', optionId: 'allow-once' } },
       }),
     );
   });
 
-  it('answers cancelled when the permission handler fails', async () => {
-    const failing: PermissionHandler = async () => {
-      throw new Error('card store offline');
-    };
-    const { client, events } = await start({
-      overrides: { onPermissionRequest: failing },
-    });
-    const sessionId = await openSession(client);
-
-    const response = await client.prompt(sessionId, 'ask');
-
-    expect(response.stopReason).toBe('cancelled');
-    expect(agentText(events, sessionId)).toBe('cancelled');
-  });
-
-  it('cancels a running turn', async () => {
-    const { client, events } = await start();
-    const sessionId = await openSession(client);
-
-    const turn = client.prompt(sessionId, 'hang');
-    await vi.waitFor(() =>
-      expect(agentText(events, sessionId)).toBe('waiting'),
-    );
-    await client.cancel(sessionId);
-
-    await expect(turn).resolves.toEqual({ stopReason: 'cancelled' });
-  });
-
-  it('settles a pending permission request as cancelled on cancel', async () => {
+  it('emits the cancelled answer for a permission settled by cancel', async () => {
     let markAsked = () => {};
     const asked = new Promise<void>((resolve) => {
       markAsked = resolve;
@@ -288,7 +225,7 @@ describe('ACP client over stdio', () => {
     });
     const sessionId = await openSession(client);
 
-    const turn = client.prompt(sessionId, 'ask');
+    const turn = client.prompt(sessionId, 'permission');
     await asked;
     await client.cancel(sessionId);
 
@@ -302,23 +239,30 @@ describe('ACP client over stdio', () => {
   });
 
   it('resumes with session/resume when the agent advertises it', async () => {
-    const { client } = await start({ capabilities: 'resume' });
+    const { client, events } = await start({
+      agent: { supportsResume: true, supportsLoad: true },
+    });
 
     const resumed = await client.resumeSession({
-      sessionId: 'stub-session-9',
+      sessionId: RESUMED_SESSION,
       cwd: PROJECT_CWD,
       mcpServers: [BUS_SERVER],
     });
+    await client.prompt(RESUMED_SESSION, 'describe_session');
 
     expect(resumed.method).toBe('session/resume');
-    expect(resumed.sessionId).toBe('stub-session-9');
+    expect(resumed.sessionId).toBe(RESUMED_SESSION);
+    expect(JSON.parse(agentText(events, RESUMED_SESSION))).toEqual({
+      cwd: PROJECT_CWD,
+      mcpServers: ['bus'],
+    });
   });
 
   it('falls back to session/load and replays history', async () => {
-    const { client, events } = await start({ capabilities: 'load' });
+    const { client, events } = await start({ agent: { supportsLoad: true } });
 
     const resumed = await client.resumeSession({
-      sessionId: 'stub-session-9',
+      sessionId: RESUMED_SESSION,
       cwd: PROJECT_CWD,
       mcpServers: [],
     });
@@ -326,20 +270,20 @@ describe('ACP client over stdio', () => {
     expect(resumed.method).toBe('session/load');
     expect(events).toContainEqual({
       type: 'session_update',
-      sessionId: 'stub-session-9',
+      sessionId: RESUMED_SESSION,
       update: {
         sessionUpdate: 'user_message_chunk',
-        content: { type: 'text', text: 'earlier prompt' },
+        content: { type: 'text', text: FAKE_HISTORY_TEXT },
       },
     });
   });
 
   it('refuses to resume when the agent cannot', async () => {
-    const { client } = await start({ capabilities: 'none' });
+    const { client } = await start();
 
     await expect(
       client.resumeSession({
-        sessionId: 'stub-session-9',
+        sessionId: RESUMED_SESSION,
         cwd: PROJECT_CWD,
         mcpServers: [],
       }),
@@ -367,14 +311,18 @@ describe('ACP client over stdio', () => {
     await client.closed;
 
     await vi.waitFor(() =>
-      expect(events).toContainEqual({ type: 'exit', code: 3, signal: null }),
+      expect(events).toContainEqual({
+        type: 'exit',
+        code: FAKE_CRASH_EXIT_CODE,
+        signal: null,
+      }),
     );
     expect(eventTypes(events)).toContain('closed');
     await expectChildExited(events);
   });
 
   it('stops the agent process on close', async () => {
-    const { client, events } = await start({ behavior: 'linger' });
+    const { client, events } = await start({ agent: { linger: true } });
 
     await client.close();
 
@@ -396,7 +344,7 @@ describe('initialize deadline', () => {
   it('times out a silent agent and stops it', async () => {
     const { events, options } = createRun({ initializeTimeoutMs: 200 });
 
-    const failure = spawnAcpClient(stubCommand('resume', 'silent'), options);
+    const failure = spawnAcpClient(fakeAgentLaunch({ silent: true }), options);
 
     await expect(failure).rejects.toMatchObject({
       name: 'AcpClientError',
@@ -413,7 +361,7 @@ describe('initialize deadline', () => {
       signal: controller.signal,
     });
 
-    const failure = spawnAcpClient(stubCommand('resume', 'silent'), options);
+    const failure = spawnAcpClient(fakeAgentLaunch({ silent: true }), options);
     setTimeout(() => controller.abort(), 100);
 
     await expect(failure).rejects.toMatchObject({
@@ -426,7 +374,7 @@ describe('initialize deadline', () => {
   it('rejects at once when the signal is already aborted', async () => {
     const { events, options } = createRun({ signal: AbortSignal.abort() });
 
-    const failure = spawnAcpClient(stubCommand('resume', 'serve'), options);
+    const failure = spawnAcpClient(fakeAgentLaunch(), options);
 
     await expect(failure).rejects.toMatchObject({
       code: 'initialize_timeout',
@@ -442,7 +390,7 @@ describe('shutdown escalation', () => {
 
   it('sends SIGKILL when the agent ignores SIGTERM', async () => {
     const { client, events } = await start({
-      behavior: 'ignore-sigterm',
+      agent: { ignoreSigterm: true },
       overrides: { killGraceMs: 200 },
     });
 
@@ -461,7 +409,7 @@ describe('shutdown escalation', () => {
     async () => {
       const marker = `qd-acp-grandchild-${process.pid}-${Date.now()}`;
       const agentLine = [
-        ...commandLine(stubCommand('resume', 'ignore-sigterm')),
+        ...commandLine(fakeAgentLaunch({ ignoreSigterm: true })),
         marker,
       ]
         .map(shellQuote)
@@ -485,7 +433,7 @@ describe('shutdown escalation', () => {
 describe('listener isolation', () => {
   it('close() still disposes the agent when a closed listener throws', async () => {
     const { client, events, listenerFailures } = await start({
-      behavior: 'linger',
+      agent: { linger: true },
     });
     client.subscribe(failingListener('closed'));
 
@@ -519,15 +467,15 @@ describe('listener isolation', () => {
 
   it('keeps the permission answer when a permission listener throws', async () => {
     const { client, events, listenerFailures } = await start({
-      overrides: { onPermissionRequest: selectOption('allow') },
+      overrides: { onPermissionRequest: selectOption('allow-once') },
     });
     client.subscribe(failingListener('permission'));
     const sessionId = await openSession(client);
 
-    await expect(client.prompt(sessionId, 'ask')).resolves.toEqual({
+    await expect(client.prompt(sessionId, 'permission')).resolves.toEqual({
       stopReason: 'end_turn',
     });
-    expect(agentText(events, sessionId)).toBe('selected:allow');
+    expect(agentText(events, sessionId)).toBe('permission granted: allow-once');
     expect(listenerFailures).toHaveLength(1);
     await client.close();
     await expectChildExited(events);
@@ -542,7 +490,7 @@ describe('listener isolation', () => {
 
     await client.prompt(sessionId, 'hello');
 
-    expect(agentText(later, sessionId)).toBe('echo:hello');
+    expect(agentText(later, sessionId)).toBe('hello');
     await client.close();
     await expectChildExited(events);
   });

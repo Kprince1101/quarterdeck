@@ -8,8 +8,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   connectFakeAgentInProcess,
   FAKE_AGENT_ENTRY,
+  FAKE_AGENT_FLAGS,
   FAKE_AGENT_NAME,
   FAKE_AUTH_METHOD_ID,
+  FAKE_HISTORY_TEXT,
   expectedLargeOutput,
   fakeAgentLaunch,
   LARGE_OUTPUT_MIN_BYTES,
@@ -20,6 +22,8 @@ import {
 import type { FakeAgentOptions } from './fake-agent/index.ts';
 
 const INVALID_PARAMS = -32602;
+const METHOD_NOT_FOUND = -32601;
+const INTERNAL_ERROR = -32603;
 const AUTH_REQUIRED = -32000;
 
 interface InProcessSetup {
@@ -65,6 +69,26 @@ describe('fake agent arguments', () => {
     expect(toFakeAgentArgs({})).toEqual([]);
   });
 
+  it('round-trips every process and capability flag', () => {
+    const options = {
+      requireAuth: false,
+      supportsLoad: true,
+      supportsResume: true,
+      announce: true,
+      silent: true,
+      linger: true,
+      ignoreSigterm: true,
+    };
+    expect(parseFakeAgentArgs(toFakeAgentArgs(options))).toEqual(options);
+    expect(toFakeAgentArgs(options)).toEqual(Object.values(FAKE_AGENT_FLAGS));
+  });
+
+  it('ignores arguments it does not know', () => {
+    expect(parseFakeAgentArgs(['qd-marker-123'])).toEqual({
+      requireAuth: false,
+    });
+  });
+
   it('rejects a malformed step delay', () => {
     expect(() => parseFakeAgentArgs(['--step-delay-ms=soon'])).toThrow(
       /non-negative integer/,
@@ -86,6 +110,8 @@ describe('fake agent scenarios', () => {
     ['long_output', 'long_output'],
     ['large_output', 'large_output'],
     ['wait_for_cancel', 'wait_for_cancel'],
+    ['describe_session', 'describe_session'],
+    ['crash', 'crash'],
     ['anything else', 'echo'],
   ])('resolves %j to %s', (text, scenario) => {
     expect(resolveScenario(text)).toBe(scenario);
@@ -177,6 +203,88 @@ describe('fake agent protocol', () => {
         prompt: [{ type: 'text', text: 'permission' }],
       }),
     ).rejects.toMatchObject({ code: INVALID_PARAMS });
+  });
+
+  it('advertises neither load nor resume by default', async () => {
+    const { agent } = connect();
+    const response = await initialize(agent);
+    expect(response.agentCapabilities).toEqual({ loadSession: false });
+    await expect(
+      agent.request('session/load', {
+        sessionId: 'fake-session-9',
+        cwd: '/fake',
+        mcpServers: [],
+      }),
+    ).rejects.toMatchObject({ code: METHOD_NOT_FOUND });
+  });
+
+  it('advertises and serves load and resume when asked', async () => {
+    const { agent, updates } = connect({
+      agent: { supportsLoad: true, supportsResume: true },
+    });
+    const response = await initialize(agent);
+    expect(response.agentCapabilities).toEqual({
+      loadSession: true,
+      sessionCapabilities: { resume: {} },
+    });
+    await agent.request('session/resume', {
+      sessionId: 'fake-session-8',
+      cwd: '/fake',
+    });
+    await agent.request('session/load', {
+      sessionId: 'fake-session-9',
+      cwd: '/fake',
+      mcpServers: [],
+    });
+    expect(updates).toEqual([
+      {
+        sessionUpdate: 'user_message_chunk',
+        content: { type: 'text', text: FAKE_HISTORY_TEXT },
+      },
+    ]);
+    await expect(
+      agent.request('session/prompt', {
+        sessionId: 'fake-session-8',
+        prompt: [{ type: 'text', text: 'hi' }],
+      }),
+    ).resolves.toEqual({ stopReason: 'end_turn' });
+  });
+
+  it('describes the session cwd and MCP servers', async () => {
+    const { agent, updates } = connect();
+    await initialize(agent);
+    const { sessionId } = await agent.request('session/new', {
+      cwd: '/fake/project',
+      mcpServers: [{ name: 'bus', command: 'node', args: [], env: [] }],
+    });
+    await agent.request('session/prompt', {
+      sessionId,
+      prompt: [{ type: 'text', text: 'describe_session' }],
+    });
+    expect(updates).toEqual([
+      {
+        sessionUpdate: 'agent_message_chunk',
+        content: {
+          type: 'text',
+          text: JSON.stringify({ cwd: '/fake/project', mcpServers: ['bus'] }),
+        },
+      },
+    ]);
+  });
+
+  it('refuses to crash when running in process', async () => {
+    const { agent } = connect();
+    await initialize(agent);
+    const { sessionId } = await agent.request('session/new', {
+      cwd: '/fake',
+      mcpServers: [],
+    });
+    await expect(
+      agent.request('session/prompt', {
+        sessionId,
+        prompt: [{ type: 'text', text: 'crash' }],
+      }),
+    ).rejects.toMatchObject({ code: INTERNAL_ERROR });
   });
 
   it('honours the step delay between tool call updates', async () => {
