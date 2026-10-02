@@ -1,0 +1,182 @@
+.qd-planner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qd-space-2);
+  height: 100%;
+  min-height: 0;
+}
+
+.qd-planner-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--qd-space-2) var(--qd-space-3);
+  font-size: var(--qd-text-sm);
+}
+
+.qd-planner-project {
+  display: flex;
+  align-items: center;
+  gap: var(--qd-space-1);
+  color: var(--qd-muted);
+}
+
+.qd-planner-project select,
+.qd-proposal-editor input,
+.qd-proposal-editor textarea {
+  padding: var(--qd-space-1) var(--qd-space-2);
+  border: 1px solid var(--qd-line);
+  border-radius: var(--qd-radius);
+  background: var(--qd-surface-raised);
+  color: var(--qd-fg);
+  font: inherit;
+}
+
+.qd-planner-project select {
+  max-width: 14rem;
+}
+
+.qd-planner button {
+  padding: var(--qd-space-1) var(--qd-space-3);
+  border: 1px solid var(--qd-line);
+  border-radius: var(--qd-radius);
+  background: var(--qd-surface-raised);
+  color: var(--qd-fg);
+  font: inherit;
+  font-size: var(--qd-text-sm);
+  cursor: pointer;
+}
+
+.qd-planner button:disabled {
+  color: var(--qd-faint);
+  cursor: default;
+}
+
+.qd-planner select:focus-visible,
+.qd-planner button:focus-visible,
+.qd-proposal-editor input:focus-visible,
+.qd-proposal-editor textarea:focus-visible {
+  outline: 2px solid var(--qd-accent);
+  outline-offset: 1px;
+}
+
+.qd-planner-new {
+  margin-left: auto;
+}
+
+.qd-planner-log {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--qd-space-2);
+}
+
+.qd-planner > .qd-empty {
+  flex: 1 1 auto;
+}
+
+.qd-planner-message p,
+.qd-proposal-body {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.qd-planner-author {
+  display: block;
+  color: var(--qd-faint);
+  font-size: var(--qd-text-sm);
+}
+
+.qd-planner-message[data-author='planner'] .qd-planner-author {
+  color: var(--qd-accent);
+}
+
+.qd-planner-message[data-author='pending'] p {
+  color: var(--qd-muted);
+}
+
+.qd-planner-message[data-author='failed'] p,
+.qd-planner-error,
+.qd-proposal-error {
+  margin: 0;
+  color: var(--qd-danger);
+  font-size: var(--qd-text-sm);
+}
+
+.qd-proposal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qd-space-2);
+  padding: var(--qd-space-2) var(--qd-space-3);
+  border: 1px solid var(--qd-line);
+  border-left: 3px solid var(--qd-accent);
+  border-radius: var(--qd-radius);
+  background: var(--qd-surface-raised);
+}
+
+.qd-proposal-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--qd-space-2);
+}
+
+.qd-proposal-head h3 {
+  margin: 0;
+  font-size: var(--qd-text-md);
+}
+
+.qd-proposal-status,
+.qd-proposal-deps {
+  margin: 0;
+  color: var(--qd-muted);
+  font-size: var(--qd-text-sm);
+}
+
+.qd-proposal-deps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--qd-space-1) var(--qd-space-2);
+}
+
+.qd-proposal-dep {
+  font-family: var(--qd-mono);
+  color: var(--qd-fg);
+}
+
+.qd-proposal-actions {
+  display: flex;
+  gap: var(--qd-space-2);
+}
+
+.qd-planner .qd-proposal-approve {
+  border-color: var(--qd-ok);
+}
+
+.qd-planner .qd-proposal-reject {
+  border-color: var(--qd-danger);
+}
+
+.qd-proposal-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qd-space-2);
+}
+
+.qd-proposal-editor label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qd-space-1);
+  color: var(--qd-muted);
+  font-size: var(--qd-text-sm);
+}
+
+.qd-proposal-editor textarea {
+  resize: vertical;
+}
