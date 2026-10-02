@@ -1,4 +1,5 @@
-export type AcpClientErrorCode = 'resume_unsupported' | 'spawn_failed';
+export type AcpClientErrorCode =
+  'initialize_timeout' | 'resume_unsupported' | 'spawn_failed';
 
 export class AcpClientError extends Error {
   readonly code: AcpClientErrorCode;

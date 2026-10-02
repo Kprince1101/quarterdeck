@@ -111,37 +111,61 @@ const replayHistory = (client: AgentContext, sessionId: SessionId) =>
     },
   });
 
-agent({ name: 'stub-agent' })
-  .onRequest(methods.agent.initialize, () => ({
-    protocolVersion: PROTOCOL_VERSION,
-    agentCapabilities: capabilities,
-    agentInfo: { name: 'stub-agent', version: '0.0.0' },
-  }))
-  .onRequest(methods.agent.session.new, ({ params }) => {
-    sessionCount += 1;
-    const sessionId = `stub-session-${sessionCount}`;
-    sessions.set(sessionId, {
-      cwd: params.cwd,
-      mcpServers: params.mcpServers.map((server) => server.name),
-    });
-    return { sessionId };
-  })
-  .onRequest(methods.agent.session.resume, () => ({}))
-  .onRequest(methods.agent.session.load, async ({ client, params }) => {
-    await replayHistory(client, params.sessionId);
-    return {};
-  })
-  .onRequest(methods.agent.session.prompt, ({ client, params }) => {
-    const text = firstText(params.prompt);
-    const script = SCRIPTS[text] ?? echo;
-    return script({ client, sessionId: params.sessionId, text });
-  })
-  .onNotification(methods.agent.session.cancel, ({ params }) => {
-    cancelWaiters.get(params.sessionId)?.();
-    cancelWaiters.delete(params.sessionId);
-  })
-  .connect(
-    ndJsonStream(Writable.toWeb(process.stdout), Readable.toWeb(process.stdin)),
-  );
+const serve = () => {
+  agent({ name: 'stub-agent' })
+    .onRequest(methods.agent.initialize, () => ({
+      protocolVersion: PROTOCOL_VERSION,
+      agentCapabilities: capabilities,
+      agentInfo: { name: 'stub-agent', version: '0.0.0' },
+    }))
+    .onRequest(methods.agent.session.new, ({ params }) => {
+      sessionCount += 1;
+      const sessionId = `stub-session-${sessionCount}`;
+      sessions.set(sessionId, {
+        cwd: params.cwd,
+        mcpServers: params.mcpServers.map((server) => server.name),
+      });
+      return { sessionId };
+    })
+    .onRequest(methods.agent.session.resume, () => ({}))
+    .onRequest(methods.agent.session.load, async ({ client, params }) => {
+      await replayHistory(client, params.sessionId);
+      return {};
+    })
+    .onRequest(methods.agent.session.prompt, ({ client, params }) => {
+      const text = firstText(params.prompt);
+      const script = SCRIPTS[text] ?? echo;
+      return script({ client, sessionId: params.sessionId, text });
+    })
+    .onNotification(methods.agent.session.cancel, ({ params }) => {
+      cancelWaiters.get(params.sessionId)?.();
+      cancelWaiters.delete(params.sessionId);
+    })
+    .connect(
+      ndJsonStream(
+        Writable.toWeb(process.stdout),
+        Readable.toWeb(process.stdin),
+      ),
+    );
+};
 
+const keepAlive = () => {
+  setInterval(() => {}, 1_000);
+};
+
+const BEHAVIORS: Record<string, () => void> = {
+  serve,
+  silent: keepAlive,
+  linger: () => {
+    keepAlive();
+    serve();
+  },
+  'ignore-sigterm': () => {
+    process.on('SIGTERM', () => {});
+    keepAlive();
+    serve();
+  },
+};
+
+(BEHAVIORS[process.argv[3] ?? 'serve'] ?? serve)();
 process.stderr.write('stub agent ready\n');

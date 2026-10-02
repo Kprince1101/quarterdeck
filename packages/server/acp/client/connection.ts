@@ -1,5 +1,10 @@
 import { client, methods, PROTOCOL_VERSION } from '@agentclientprotocol/sdk';
 import type { ContentBlock, SessionId, Stream } from '@agentclientprotocol/sdk';
+import {
+  createInitializeDeadline,
+  DEFAULT_INITIALIZE_TIMEOUT_MS,
+  raceAbort,
+} from './deadline.js';
 import { createEventHub } from './event-hub.js';
 import type { EventHub } from './event-hub.js';
 import { createPermissionGate } from './permission-gate.js';
@@ -30,7 +35,7 @@ const noop = async () => {};
 export const createClientEvents = (
   options: AcpClientOptions,
 ): EventHub<AcpClientEvent> => {
-  const events = createEventHub<AcpClientEvent>();
+  const events = createEventHub<AcpClientEvent>(options.onListenerError);
   if (options.onEvent) events.subscribe(options.onEvent);
   return events;
 };
@@ -70,24 +75,34 @@ export const connectAcpClient = async ({
   const closed = connection.closed.then(markClosed, markClosed);
 
   const close = async () => {
-    connection.close();
-    await closed;
-    await dispose();
+    try {
+      connection.close();
+      await closed;
+    } finally {
+      await dispose();
+    }
   };
 
   const initialize = async () => {
+    const deadline = createInitializeDeadline(
+      options.initializeTimeoutMs ?? DEFAULT_INITIALIZE_TIMEOUT_MS,
+      options.signal,
+    );
     try {
-      return await connection.agent.request(methods.agent.initialize, {
-        protocolVersion: PROTOCOL_VERSION,
-        clientCapabilities: {
-          fs: { readTextFile: false, writeTextFile: false },
-          terminal: false,
-        },
-        clientInfo: {
-          name: options.clientName,
-          version: options.clientVersion,
-        },
-      });
+      return await raceAbort(
+        connection.agent.request(methods.agent.initialize, {
+          protocolVersion: PROTOCOL_VERSION,
+          clientCapabilities: {
+            fs: { readTextFile: false, writeTextFile: false },
+            terminal: false,
+          },
+          clientInfo: {
+            name: options.clientName,
+            version: options.clientVersion,
+          },
+        }),
+        deadline,
+      );
     } catch (err) {
       await close();
       throw err;

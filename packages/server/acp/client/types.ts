@@ -43,11 +43,25 @@ export type PermissionHandler = (
   request: RequestPermissionRequest,
 ) => Promise<RequestPermissionResponse>;
 
+export type ListenerErrorHandler = (
+  err: unknown,
+  event: AcpClientEvent,
+) => void;
+
 export interface AcpClientOptions {
   clientName: string;
   clientVersion: string;
   onPermissionRequest: PermissionHandler;
   onEvent?: AcpClientListener;
+  onListenerError?: ListenerErrorHandler;
+  initializeTimeoutMs?: number;
+  killGraceMs?: number;
+  signal?: AbortSignal;
+}
+
+export interface SpawnedEvent {
+  type: 'spawned';
+  pid: number;
 }
 
 export interface SessionUpdateEvent {
@@ -90,6 +104,7 @@ export interface ClosedEvent {
 }
 
 export type AcpClientEvent =
+  | SpawnedEvent
   | SessionUpdateEvent
   | PermissionEvent
   | TurnEndEvent

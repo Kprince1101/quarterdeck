@@ -2,19 +2,42 @@ import { resolve } from 'node:path';
 import { PROTOCOL_VERSION } from '@agentclientprotocol/sdk';
 import type { SessionId } from '@agentclientprotocol/sdk';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AcpClientError, spawnAcpClient } from '../../acp/client/index.js';
+import {
+  AcpClientError,
+  DEFAULT_INITIALIZE_TIMEOUT_MS,
+  DEFAULT_KILL_GRACE_MS,
+  spawnAcpClient,
+} from '../../acp/client/index.js';
 import type {
   AcpClient,
   AcpClientEvent,
+  AcpClientOptions,
   AgentCommand,
   PermissionHandler,
 } from '../../acp/client/index.js';
 
 type Capabilities = 'resume' | 'load' | 'none';
+type Behavior = 'serve' | 'silent' | 'linger' | 'ignore-sigterm';
 
-interface Harness {
-  client: AcpClient;
+interface ListenerFailure {
+  message: string;
+  eventType: AcpClientEvent['type'];
+}
+
+interface Run {
   events: AcpClientEvent[];
+  listenerFailures: ListenerFailure[];
+  options: AcpClientOptions;
+}
+
+interface Harness extends Run {
+  client: AcpClient;
+}
+
+interface StartOptions {
+  capabilities?: Capabilities;
+  behavior?: Behavior;
+  overrides?: Partial<AcpClientOptions>;
 }
 
 const STUB_AGENT = resolve(import.meta.dirname, 'stub-agent.ts');
@@ -25,14 +48,19 @@ const BUS_SERVER = {
   args: ['bus.js'],
   env: [],
 };
+const LIFECYCLE_TYPES = new Set<AcpClientEvent['type']>(['spawned', 'stderr']);
 
-const stubCommand = (capabilities: Capabilities): AgentCommand => ({
+const stubCommand = (
+  capabilities: Capabilities,
+  behavior: Behavior,
+): AgentCommand => ({
   command: process.execPath,
   args: [
     '--experimental-strip-types',
     '--no-warnings',
     STUB_AGENT,
     capabilities,
+    behavior,
   ],
 });
 
@@ -47,21 +75,48 @@ const selectOption =
   (optionId: string): PermissionHandler =>
   async () => ({ outcome: { outcome: 'selected', optionId } });
 
+const failingListener = (type: AcpClientEvent['type']) => {
+  return (event: AcpClientEvent) => {
+    if (event.type === type) throw new Error(`listener failed on ${type}`);
+  };
+};
+
+const runs: Run[] = [];
 const openClients: AcpClient[] = [];
 
-const start = async (
-  capabilities: Capabilities = 'resume',
-  onPermissionRequest: PermissionHandler = rejectAll,
-): Promise<Harness> => {
+const createRun = (overrides: Partial<AcpClientOptions> = {}): Run => {
   const events: AcpClientEvent[] = [];
-  const client = await spawnAcpClient(stubCommand(capabilities), {
+  const listenerFailures: ListenerFailure[] = [];
+  const options: AcpClientOptions = {
     clientName: 'quarterdeck-test',
     clientVersion: '0.0.0',
-    onPermissionRequest,
+    onPermissionRequest: rejectAll,
     onEvent: (event) => events.push(event),
-  });
+    onListenerError: (err, event) => {
+      listenerFailures.push({
+        message: String(err),
+        eventType: event.type,
+      });
+    },
+    ...overrides,
+  };
+  const run = { events, listenerFailures, options };
+  runs.push(run);
+  return run;
+};
+
+const start = async ({
+  capabilities = 'resume',
+  behavior = 'serve',
+  overrides = {},
+}: StartOptions = {}): Promise<Harness> => {
+  const run = createRun(overrides);
+  const client = await spawnAcpClient(
+    stubCommand(capabilities, behavior),
+    run.options,
+  );
   openClients.push(client);
-  return { client, events };
+  return { ...run, client };
 };
 
 const openSession = async (client: AcpClient) => {
@@ -86,8 +141,33 @@ const agentText = (events: AcpClientEvent[], sessionId: SessionId) =>
 const eventTypes = (events: AcpClientEvent[]) =>
   events.map((event) => event.type);
 
+const spawnedPids = (events: AcpClientEvent[]) =>
+  events.flatMap((event) => {
+    if (event.type !== 'spawned') return [];
+    return [event.pid];
+  });
+
+const isAlive = (pid: number) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const expectChildExited = async (events: AcpClientEvent[]) => {
+  const pids = spawnedPids(events);
+  await vi.waitFor(() => {
+    pids.forEach((pid) => expect(isAlive(pid)).toBe(false));
+    if (pids.length > 0) expect(eventTypes(events)).toContain('exit');
+  });
+};
+
 afterEach(async () => {
   await Promise.all(openClients.splice(0).map((client) => client.close()));
+  const finished = runs.splice(0);
+  await Promise.all(finished.map((run) => expectChildExited(run.events)));
 });
 
 describe('ACP client over stdio', () => {
@@ -96,6 +176,7 @@ describe('ACP client over stdio', () => {
 
     expect(client.agent.protocolVersion).toBe(PROTOCOL_VERSION);
     expect(client.agent.agentInfo?.name).toBe('stub-agent');
+    expect(spawnedPids(events)).toHaveLength(1);
     await vi.waitFor(() =>
       expect(events).toContainEqual({
         type: 'stderr',
@@ -126,11 +207,9 @@ describe('ACP client over stdio', () => {
 
     expect(response.stopReason).toBe('end_turn');
     expect(agentText(events, sessionId)).toBe('echo:hello');
-    expect(eventTypes(events).filter((type) => type !== 'stderr')).toEqual([
-      'session_update',
-      'session_update',
-      'turn_end',
-    ]);
+    expect(
+      eventTypes(events).filter((type) => !LIFECYCLE_TYPES.has(type)),
+    ).toEqual(['session_update', 'session_update', 'turn_end']);
     expect(events.at(-1)).toEqual({
       type: 'turn_end',
       sessionId,
@@ -139,7 +218,9 @@ describe('ACP client over stdio', () => {
   });
 
   it('answers permission requests through the handler', async () => {
-    const { client, events } = await start('resume', selectOption('allow'));
+    const { client, events } = await start({
+      overrides: { onPermissionRequest: selectOption('allow') },
+    });
     const sessionId = await openSession(client);
 
     await client.prompt(sessionId, 'ask');
@@ -158,7 +239,9 @@ describe('ACP client over stdio', () => {
     const failing: PermissionHandler = async () => {
       throw new Error('card store offline');
     };
-    const { client, events } = await start('resume', failing);
+    const { client, events } = await start({
+      overrides: { onPermissionRequest: failing },
+    });
     const sessionId = await openSession(client);
 
     const response = await client.prompt(sessionId, 'ask');
@@ -189,7 +272,9 @@ describe('ACP client over stdio', () => {
       markAsked();
       return new Promise(() => {});
     };
-    const { client, events } = await start('resume', unanswered);
+    const { client, events } = await start({
+      overrides: { onPermissionRequest: unanswered },
+    });
     const sessionId = await openSession(client);
 
     const turn = client.prompt(sessionId, 'ask');
@@ -206,7 +291,7 @@ describe('ACP client over stdio', () => {
   });
 
   it('resumes with session/resume when the agent advertises it', async () => {
-    const { client } = await start('resume');
+    const { client } = await start({ capabilities: 'resume' });
 
     const resumed = await client.resumeSession({
       sessionId: 'stub-session-9',
@@ -219,7 +304,7 @@ describe('ACP client over stdio', () => {
   });
 
   it('falls back to session/load and replays history', async () => {
-    const { client, events } = await start('load');
+    const { client, events } = await start({ capabilities: 'load' });
 
     const resumed = await client.resumeSession({
       sessionId: 'stub-session-9',
@@ -239,7 +324,7 @@ describe('ACP client over stdio', () => {
   });
 
   it('refuses to resume when the agent cannot', async () => {
-    const { client } = await start('none');
+    const { client } = await start({ capabilities: 'none' });
 
     await expect(
       client.resumeSession({
@@ -251,17 +336,16 @@ describe('ACP client over stdio', () => {
   });
 
   it('reports a command that cannot start', async () => {
+    const { events, options } = createRun();
+
     const failure = spawnAcpClient(
       { command: resolve(PROJECT_CWD, 'missing-agent'), args: [] },
-      {
-        clientName: 'quarterdeck-test',
-        clientVersion: '0.0.0',
-        onPermissionRequest: rejectAll,
-      },
+      options,
     );
 
     await expect(failure).rejects.toBeInstanceOf(AcpClientError);
     await expect(failure).rejects.toMatchObject({ code: 'spawn_failed' });
+    expect(spawnedPids(events)).toEqual([]);
   });
 
   it('rejects the turn and emits exit when the agent dies', async () => {
@@ -275,15 +359,155 @@ describe('ACP client over stdio', () => {
       expect(events).toContainEqual({ type: 'exit', code: 3, signal: null }),
     );
     expect(eventTypes(events)).toContain('closed');
+    await expectChildExited(events);
   });
 
   it('stops the agent process on close', async () => {
-    const { client, events } = await start();
+    const { client, events } = await start({ behavior: 'linger' });
 
     await client.close();
 
-    expect(eventTypes(events)).toEqual(
-      expect.arrayContaining(['closed', 'exit']),
-    );
+    expect(events).toContainEqual({
+      type: 'exit',
+      code: null,
+      signal: 'SIGTERM',
+    });
+    expect(eventTypes(events)).toContain('closed');
+    await expectChildExited(events);
+  });
+});
+
+describe('initialize deadline', () => {
+  it('defaults to a bounded wait', () => {
+    expect(DEFAULT_INITIALIZE_TIMEOUT_MS).toBe(30_000);
+  });
+
+  it('times out a silent agent and stops it', async () => {
+    const { events, options } = createRun({ initializeTimeoutMs: 200 });
+
+    const failure = spawnAcpClient(stubCommand('resume', 'silent'), options);
+
+    await expect(failure).rejects.toMatchObject({
+      name: 'AcpClientError',
+      code: 'initialize_timeout',
+    });
+    expect(spawnedPids(events)).toHaveLength(1);
+    await expectChildExited(events);
+  });
+
+  it('aborts initialize when the signal fires and stops the agent', async () => {
+    const controller = new AbortController();
+    const { events, options } = createRun({
+      initializeTimeoutMs: 60_000,
+      signal: controller.signal,
+    });
+
+    const failure = spawnAcpClient(stubCommand('resume', 'silent'), options);
+    setTimeout(() => controller.abort(), 100);
+
+    await expect(failure).rejects.toMatchObject({
+      code: 'initialize_timeout',
+      message: 'ACP initialize was aborted',
+    });
+    await expectChildExited(events);
+  });
+
+  it('rejects at once when the signal is already aborted', async () => {
+    const { events, options } = createRun({ signal: AbortSignal.abort() });
+
+    const failure = spawnAcpClient(stubCommand('resume', 'serve'), options);
+
+    await expect(failure).rejects.toMatchObject({
+      code: 'initialize_timeout',
+    });
+    await expectChildExited(events);
+  });
+});
+
+describe('shutdown escalation', () => {
+  it('defaults the grace period to five seconds', () => {
+    expect(DEFAULT_KILL_GRACE_MS).toBe(5_000);
+  });
+
+  it('sends SIGKILL when the agent ignores SIGTERM', async () => {
+    const { client, events } = await start({
+      behavior: 'ignore-sigterm',
+      overrides: { killGraceMs: 200 },
+    });
+
+    await expect(client.close()).resolves.toBeUndefined();
+
+    expect(events).toContainEqual({
+      type: 'exit',
+      code: null,
+      signal: 'SIGKILL',
+    });
+    await expectChildExited(events);
+  });
+});
+
+describe('listener isolation', () => {
+  it('close() still disposes the agent when a closed listener throws', async () => {
+    const { client, events, listenerFailures } = await start({
+      behavior: 'linger',
+    });
+    client.subscribe(failingListener('closed'));
+
+    await expect(client.close()).resolves.toBeUndefined();
+
+    expect(events).toContainEqual({
+      type: 'exit',
+      code: null,
+      signal: 'SIGTERM',
+    });
+    expect(listenerFailures).toEqual([
+      { message: 'Error: listener failed on closed', eventType: 'closed' },
+    ]);
+    await expectChildExited(events);
+  });
+
+  it('prompt() resolves when a turn_end listener throws', async () => {
+    const { client, events, listenerFailures } = await start();
+    client.subscribe(failingListener('turn_end'));
+    const sessionId = await openSession(client);
+
+    await expect(client.prompt(sessionId, 'hello')).resolves.toEqual({
+      stopReason: 'end_turn',
+    });
+    expect(listenerFailures).toEqual([
+      { message: 'Error: listener failed on turn_end', eventType: 'turn_end' },
+    ]);
+    await client.close();
+    await expectChildExited(events);
+  });
+
+  it('keeps the permission answer when a permission listener throws', async () => {
+    const { client, events, listenerFailures } = await start({
+      overrides: { onPermissionRequest: selectOption('allow') },
+    });
+    client.subscribe(failingListener('permission'));
+    const sessionId = await openSession(client);
+
+    await expect(client.prompt(sessionId, 'ask')).resolves.toEqual({
+      stopReason: 'end_turn',
+    });
+    expect(agentText(events, sessionId)).toBe('selected:allow');
+    expect(listenerFailures).toHaveLength(1);
+    await client.close();
+    await expectChildExited(events);
+  });
+
+  it('keeps delivering to other listeners after one throws', async () => {
+    const { client, events } = await start();
+    const later: AcpClientEvent[] = [];
+    client.subscribe(failingListener('session_update'));
+    client.subscribe((event) => later.push(event));
+    const sessionId = await openSession(client);
+
+    await client.prompt(sessionId, 'hello');
+
+    expect(agentText(later, sessionId)).toBe('echo:hello');
+    await client.close();
+    await expectChildExited(events);
   });
 });

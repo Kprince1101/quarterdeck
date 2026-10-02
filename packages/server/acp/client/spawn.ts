@@ -53,8 +53,30 @@ const watchProcess = (
   });
 };
 
+export const DEFAULT_KILL_GRACE_MS = 5_000;
+
 const isRunning = (child: ChildProcessWithoutNullStreams) =>
   child.exitCode === null && child.signalCode === null;
+
+const terminate = async (
+  child: ChildProcessWithoutNullStreams,
+  exited: Promise<void>,
+  graceMs: number,
+) => {
+  if (!isRunning(child)) {
+    await exited;
+    return;
+  }
+  child.kill('SIGTERM');
+  const escalation = setTimeout(() => {
+    if (isRunning(child)) child.kill('SIGKILL');
+  }, graceMs);
+  try {
+    await exited;
+  } finally {
+    clearTimeout(escalation);
+  }
+};
 
 export const spawnAcpClient = async (
   command: AgentCommand,
@@ -63,11 +85,10 @@ export const spawnAcpClient = async (
   const events = createClientEvents(options);
   const child = await startProcess(command);
   const exited = watchProcess(child, events);
+  if (child.pid !== undefined) events.emit({ type: 'spawned', pid: child.pid });
 
-  const dispose = async () => {
-    if (isRunning(child)) child.kill('SIGTERM');
-    await exited;
-  };
+  const dispose = () =>
+    terminate(child, exited, options.killGraceMs ?? DEFAULT_KILL_GRACE_MS);
 
   return connectAcpClient({
     stream: ndJsonStream(
