@@ -28,7 +28,7 @@ export const readActiveNotebook = async (
 ): Promise<NotebookEntry[]> => {
   const { rows } = await db.query<NotebookEntry>(
     `select id, body, pinned from notebook
-     where project_id = $1
+     where project_id = $1 and retired_at is null
      order by pinned desc, created_at, id`,
     [projectId],
   );

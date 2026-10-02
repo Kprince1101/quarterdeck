@@ -126,6 +126,24 @@ export const READ_TABLES = {
       body: 'text',
       pinned: 'bool',
       created_at: 'time',
+      retired_at: 'time',
+    },
+    scope: PROJECT_SCOPE,
+    order: 'created_at desc',
+  },
+  notebook_proposals: {
+    columns: {
+      id: 'uuid',
+      round_id: 'uuid',
+      agent_id: 'uuid',
+      op: 'text',
+      entry_id: 'uuid',
+      body: 'text',
+      pinned: 'bool',
+      rationale: 'text',
+      status: 'text',
+      created_at: 'time',
+      decided_at: 'time',
     },
     scope: PROJECT_SCOPE,
     order: 'created_at desc',
@@ -133,6 +151,7 @@ export const READ_TABLES = {
   charter_proposals: {
     columns: {
       id: 'uuid',
+      round_id: 'uuid',
       agent_id: 'uuid',
       body: 'text',
       rationale: 'text',
