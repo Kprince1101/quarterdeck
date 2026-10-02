@@ -95,6 +95,8 @@ const retireLeftovers = async (ctx: PlannerContext): Promise<void> => {
     },
     worktrees: gitWorktrees,
     openStores: ctx.openStores,
+    budget: async () =>
+      (await loadRule('lifecycle', { homeDir: ctx.homeDir })).budget.window,
   });
   await leftovers.reduce(async (previous, agentId) => {
     await previous;

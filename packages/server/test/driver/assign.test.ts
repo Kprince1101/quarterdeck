@@ -1,8 +1,8 @@
-import { existsSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Naming } from '@quarterdeck/rules';
+import type { BudgetWindow, Naming } from '@quarterdeck/rules';
 import {
   afterAll,
   afterEach,
@@ -19,6 +19,7 @@ import {
   gitWorktrees,
   type AgentLifecycle,
 } from '../../src/agents/index.js';
+import { BudgetHeldError } from '../../src/budget/index.js';
 import {
   AgentNotRetiredError,
   BUILDER_STUCK_EVENT,
@@ -57,6 +58,7 @@ import {
 const TIMEOUT = 30_000;
 const settle = (check: () => unknown) => vi.waitFor(check, { timeout: 10_000 });
 const BIRDS: Naming = { theme: 'birds', names: ['crane', 'heron', 'ibis'] };
+const NO_CAP: BudgetWindow = { hours: 5, capTokens: null, holdAtFraction: 0.8 };
 
 interface TicketSeed {
   title?: string;
@@ -113,6 +115,7 @@ describe('builder assignment and continue', () => {
       sessions,
       worktrees: gitWorktrees,
       openStores: () => [store],
+      budget: () => Promise.resolve(ctx.budget),
       random: () => 0,
     });
     ctx = {
@@ -125,9 +128,14 @@ describe('builder assignment and continue', () => {
       base,
       worktreesDir: join(root, 'worktrees'),
       turnsDir: join(root, 'turns'),
+      budget: NO_CAP,
       pause: pauseGate,
     };
   });
+
+  const capBudget = (budget: BudgetWindow): void => {
+    ctx = { ...ctx, budget };
+  };
 
   afterEach(async () => {
     await pauseGate.close();
@@ -811,6 +819,62 @@ describe('builder assignment and continue', () => {
       expect(scripted.prompts.map((prompt) => prompt.text)[1]).toBe(
         'Push your branch.',
       );
+    },
+    TIMEOUT,
+  );
+
+  it(
+    'holds a new builder, a moved builder and a continue at the budget line',
+    async () => {
+      const first = await insertTicket({ title: 'QD1' });
+      const second = await insertTicket({ title: 'QD2' });
+      const { builder, worktreePath } = await assignAndSettle(first);
+      await store.db.query(
+        `insert into turns (agent_id, seq, prompt, input_tokens, ended_at)
+         values ($1, 100, 'earlier work', 800, now())`,
+        [builder.id],
+      );
+      capBudget({ hours: 5, capTokens: 1000, holdAtFraction: 0.8 });
+
+      await expect(
+        continueBuilder(ctx, { builderId: builder.id, prompt: 'Push.' }),
+      ).rejects.toBeInstanceOf(BudgetHeldError);
+      await expect(
+        assignTicket(ctx, { ticketId: second }),
+      ).rejects.toBeInstanceOf(BudgetHeldError);
+      await store.db.query(`update tickets set status = 'done' where id = $1`, [
+        first,
+      ]);
+      await expect(
+        assignTicket(ctx, { ticketId: second, builderId: builder.id }),
+      ).rejects.toBeInstanceOf(BudgetHeldError);
+
+      expect(await agentCount()).toBe(1);
+      expect(await agentRow(builder.id)).toMatchObject({
+        status: 'idle',
+        sessionId: builder.sessionId,
+        worktreePath,
+      });
+      expect(readdirSync(ctx.worktreesDir)).toEqual([
+        `crane-${first.slice(0, 8)}`,
+      ]);
+      expect(sessions.opened).toHaveLength(1);
+      expect(sessions.closed).toEqual([]);
+      expect(scripted.prompts).toHaveLength(1);
+      expect(
+        (await events('budget.held')).map(({ agentId, ticketId }) => ({
+          agentId,
+          ticketId,
+        })),
+      ).toEqual([
+        { agentId: builder.id, ticketId: null },
+        { agentId: null, ticketId: second },
+        { agentId: builder.id, ticketId: second },
+      ]);
+      expect(await ticketRow(second)).toEqual({
+        status: 'open',
+        assigneeId: null,
+      });
     },
     TIMEOUT,
   );

@@ -229,6 +229,7 @@ describe('Driver replay', () => {
           cwd: '/work/deck',
           charter: '# Driver charter',
           turnsDir,
+          budget: { hours: 5, capTokens: null, holdAtFraction: 0.8 },
           pause: { hold: (_subject, run) => run() },
         });
         await round.birth;

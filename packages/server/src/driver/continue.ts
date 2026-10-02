@@ -1,4 +1,5 @@
 import type { Agent } from '../agents/index.js';
+import { assertLaunchBudget } from '../budget/index.js';
 import { pauseLabel, type PauseSubject } from '../pause/index.js';
 import type { PublishInput } from '../store/index.js';
 import {
@@ -15,7 +16,7 @@ export { BUILDER_CONTINUED_EVENT };
 
 export type ContinueContext = Pick<
   BuilderContext,
-  'store' | 'sessions' | 'turnsDir' | 'pause'
+  'store' | 'sessions' | 'turnsDir' | 'budget' | 'pause'
 >;
 
 export interface ContinueRequest {
@@ -34,6 +35,7 @@ const sendContinue = async (
   builderId: string,
   prompt: string,
 ): Promise<Continuation> => {
+  await assertLaunchBudget(ctx.store, ctx.budget, { agentId: builderId });
   const { builder, ticketId } = await claimBuilder(ctx.store, builderId, {
     free: false,
     session: true,

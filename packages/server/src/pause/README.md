@@ -25,7 +25,7 @@ const result = await pause.hold(
 await pause.close();
 ```
 
-`hold` checks the global pause, the project and, when the subject names an `agentId`, that agent. If none is paused it calls `run` at once and returns its promise. Otherwise it records `pause.held`, queues `run`, and returns a promise that settles with `run`'s result once it is replayed. The caller simply waits longer.
+`hold` checks the global pause, the project and, when the subject names an `agentId`, that agent. If none is paused it calls `run` at once and returns its promise. Otherwise it records `pause.held`, queues `run`, and returns a promise that settles with `run`'s result once it is replayed. The caller simply waits longer. The pause comes first: the [budget](../budget/README.md) check and sign-in sit inside the held work, so they run when it is replayed, against the state at that time.
 
 One gate per project store. It subscribes to the store's events and, on every `pause.set`, `pause.all` and `agent.resume`, re-checks each held item in the order they were held and starts the ones nothing pauses any more, recording `pause.replayed` first. Items still paused, for example by their agent after the project unpauses, stay queued. Replayed work is started in order but not awaited one by one, so a long turn does not hold back the next launch. While anything is held or a replay is running, new work that nothing pauses joins the back of the queue instead of running at once, so it cannot start before work held earlier. It records no `pause.held` or `pause.replayed`, and the next sweep, which `hold` triggers itself, starts it.
 

@@ -41,6 +41,7 @@ A message is refused (intent `rejected` with `{ error }`, plus a `planner.failed
 - the project has no `repo_path`;
 - the sign-in card is declined or expires (`SignInRequiredError`, whose message names the command);
 - the wait for sign-in is stopped;
+- the budget holds the birth (`BudgetHeldError`; see [budget](../budget/README.md));
 - the agent cannot be born. If a turn fails, for example because the agent process died, the conversation ends and the next message starts a fresh one.
 
 Each message goes through the [pause](../pause/README.md) guard (`pause`) before its turn, and before the birth when it starts a conversation. While the Planner agent, the project or everything is paused the message is held as `planner.turn` and stays `pending`; the messages behind it wait, and it is answered on unpause. A `planner.new` drops a held message, which is then rejected as superseded like any other message queued before it; `close()` drops it and leaves it `pending` for the next start.

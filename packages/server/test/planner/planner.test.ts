@@ -431,6 +431,45 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     ]);
   });
 
+  it('refuses a message while the budget holds launches, without birthing a Planner', async () => {
+    await writeMachineRule(t.homeDir, 'lifecycle.json', {
+      budget: { window: { capTokens: 1000 } },
+    });
+    try {
+      const p = await open();
+      const { rows } = await p.store.db.query<{ id: string }>(
+        `insert into agents (project_id, name, role, status)
+         values ($1, 'spender', 'builder', 'ended') returning id`,
+        [p.store.projectId],
+      );
+      await p.store.db.query(
+        `insert into turns (agent_id, seq, prompt, input_tokens, ended_at)
+         values ($1, 1, 'go', 800, now())`,
+        [rows[0]?.id],
+      );
+      await p.start();
+      const intentId = await say(p, 'hello');
+
+      expect(await p.intent(intentId)).toMatchObject({
+        status: 'rejected',
+        result: { error: expect.stringContaining('Launches are held') },
+      });
+      expect(await p.agents()).toEqual([]);
+      expect(p.fake.launches).toEqual([]);
+      expect((await p.events()).map((event) => event.kind)).toEqual([
+        'planner.failed',
+      ]);
+      const held = await p.store.db.query(
+        `select count(*)::int as n from events
+         where project_id = $1 and kind = 'budget.held'`,
+        [p.store.projectId],
+      );
+      expect(held.rows).toEqual([{ n: 1 }]);
+    } finally {
+      await rm(join(t.homeDir, '.quarterdeck', 'rules.local.lifecycle.json'));
+    }
+  });
+
   it('runs on the runtime the models rule names for the Planner', async () => {
     await writeMachineRule(t.homeDir, 'models.json', {
       planner: { runtime: 'claude' },
