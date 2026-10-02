@@ -92,6 +92,7 @@ describe('bus host', () => {
 
       const { tools } = await client.listTools();
       expect(tools.map((tool) => tool.name).toSorted()).toEqual([
+        'ask',
         'read',
         'report',
         'status',
@@ -234,6 +235,38 @@ describe('bus host', () => {
       `the limit is ${SOCKET_PATH_MAX}`,
     );
   });
+
+  it.each([0, 1.5, 2 ** 31])(
+    'refuses an ask expiry of %s ms',
+    async (askExpiryMs) => {
+      await expect(
+        startBusHost({ store, home: dir, askExpiryMs }),
+      ).rejects.toThrow('askExpiryMs must be an integer');
+    },
+  );
+
+  it(
+    'expires ask cards after askExpiryMs',
+    async () => {
+      await host.close();
+      host = await startBusHost({ store, home: dir, askExpiryMs: 100 });
+      const client = await connectStdio(await host.launch(agentId));
+      clients.push(client);
+
+      const reply = await callTool(client, 'ask', {
+        question: 'Ship it?',
+        options: ['yes', 'no'],
+        checked: 'CI is green.',
+        recommendation: 'yes',
+      });
+
+      expect(JSON.parse(reply.text)).toMatchObject({
+        status: 'expired',
+        answer: null,
+      });
+    },
+    TIMEOUT,
+  );
 });
 
 describe('bus host for a long slug under a long home', () => {
