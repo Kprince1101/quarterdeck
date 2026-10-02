@@ -1,0 +1,110 @@
+.qd-shell {
+  display: grid;
+  grid-template-rows: var(--qd-header-height) minmax(0, 1fr);
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.qd-header {
+  display: flex;
+  align-items: center;
+  gap: var(--qd-space-3);
+  padding: 0 var(--qd-space-4);
+  border-bottom: 1px solid var(--qd-line);
+  background: var(--qd-surface);
+}
+
+.qd-brand {
+  margin: 0;
+  font-size: var(--qd-text-md);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.qd-header-end {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--qd-space-3);
+}
+
+.qd-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--qd-space-2);
+  color: var(--qd-muted);
+  font-size: var(--qd-text-sm);
+}
+
+.qd-status::before {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--qd-faint);
+}
+
+.qd-status[data-status='live']::before {
+  background: var(--qd-ok);
+}
+
+.qd-status[data-status='connecting']::before,
+.qd-status[data-status='reconnecting']::before {
+  background: var(--qd-warn);
+}
+
+.qd-status[data-status='closed']::before {
+  background: var(--qd-danger);
+}
+
+.qd-workspace {
+  min-height: 0;
+  overflow: hidden;
+  padding: var(--qd-space-3);
+}
+
+.qd-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--qd-line);
+  border-radius: var(--qd-radius);
+  background: var(--qd-surface);
+}
+
+.qd-panel-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--qd-space-2);
+  padding: var(--qd-space-2) var(--qd-space-3);
+  border-bottom: 1px solid var(--qd-line);
+  background: var(--qd-surface-raised);
+}
+
+.qd-panel-title {
+  margin: 0;
+  font-size: var(--qd-text-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--qd-muted);
+}
+
+.qd-panel-actions {
+  margin-left: auto;
+  display: flex;
+  gap: var(--qd-space-2);
+}
+
+.qd-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: var(--qd-space-3);
+}
