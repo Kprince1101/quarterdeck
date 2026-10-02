@@ -1,4 +1,4 @@
-import { Window } from 'happy-dom';
+import { Window, type HTMLElement as HappyElement } from 'happy-dom';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { WebSocket as WsSocket } from 'ws';
 import { TIMEOUT, startDeck, type Deck } from '../api/harness.js';
@@ -50,7 +50,16 @@ describe('dashboard on a live server', () => {
       await vi.waitFor(() => {
         expect(textOf(container, '[role="status"]')).toBe('Live');
       });
-      expect(count(all, container, 'notebook')).toBe('0');
+      const { showOnly } = await import('./show-only.js');
+      const { flushSync } = await import('react-dom');
+      showOnly(container, ['Events', 'Tables'], (element) => {
+        flushSync(() => {
+          (element as unknown as HappyElement).click();
+        });
+      });
+      await vi.waitFor(() => {
+        expect(count(all, container, 'notebook')).toBe('0');
+      });
 
       await deck.client.notebook.add({ project: deck.project, body: 'hi' });
 
