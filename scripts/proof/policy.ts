@@ -1,3 +1,5 @@
+import { posix } from 'node:path';
+
 export type PermissionAnswer = 'allow' | 'deny';
 
 export interface ScrubNames {
@@ -18,6 +20,13 @@ const REFUSED_COMMANDS: readonly RegExp[] = [
   /\breset\s+--hard\b/,
 ];
 
+const UNRESOLVED_PATHS: readonly RegExp[] = [
+  /(?:^|[^\w.])\.\.(?:$|[^\w.])/,
+  /(?:^|[\s'"=:(])~/,
+  /\$[{(\w]/,
+  /`/,
+];
+
 const ABSOLUTE_PATH = /(?<![\w:/.])\/[^\s,'"`)]+/g;
 const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
 const API_TOKEN = /#token=[\w-]+/g;
@@ -30,7 +39,10 @@ export const permissionAnswer = (
   allowedRoots: readonly string[],
 ): PermissionAnswer => {
   if (REFUSED_COMMANDS.some((pattern) => pattern.test(question))) return 'deny';
-  const paths = question.match(ABSOLUTE_PATH) ?? [];
+  if (UNRESOLVED_PATHS.some((pattern) => pattern.test(question))) return 'deny';
+  const paths = (question.match(ABSOLUTE_PATH) ?? []).map((path) =>
+    posix.normalize(path),
+  );
   const inside = paths.every((path) =>
     allowedRoots.some((root) => path === root || path.startsWith(`${root}/`)),
   );

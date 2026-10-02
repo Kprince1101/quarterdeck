@@ -28,6 +28,37 @@ describe('permissionAnswer', () => {
     ).toBe('deny');
   });
 
+  it('denies paths it cannot resolve from the card text', () => {
+    for (const command of [
+      'cat ../../.ssh/id_rsa',
+      'cd .. && ls',
+      'cat /work/repo/../outside/x',
+      'cat ~/.ssh/id_rsa',
+      'cat $HOME/.ssh/id_rsa',
+      'cat ${HOME}/x',
+      'echo $(whoami)',
+      'echo `whoami`',
+    ])
+      expect(permissionAnswer(`wren asks to run ${command}.`, ROOTS)).toBe(
+        'deny',
+      );
+  });
+
+  it('tells a parent path from a file name with dots', () => {
+    expect(
+      permissionAnswer(
+        'wren asks to run npx prettier --check ./README.md ../repo.md.',
+        ROOTS,
+      ),
+    ).toBe('deny');
+    expect(
+      permissionAnswer(
+        'wren asks to run npx prettier --check ./README.md .prettierrc...',
+        ROOTS,
+      ),
+    ).toBe('allow');
+  });
+
   it('denies merging, force-pushing and deleting whatever the paths', () => {
     for (const command of [
       'gh pr merge 3 --squash',

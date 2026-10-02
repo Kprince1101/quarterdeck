@@ -128,13 +128,11 @@ export const startPlanner = async (
     signIn.abort();
     signIn = new AbortController();
   };
-  const cardHumanFor =
-    (agent: Agent): CardHuman =>
-    (card) => {
-      if (options.permissionCards)
-        return options.permissionCards(agent, signIn.signal)(card);
-      return (options.cardHuman ?? refuseCards)(card);
-    };
+  const cardHumanFor = (agent: Agent): CardHuman => {
+    if (options.permissionCards)
+      return options.permissionCards(agent, signIn.signal);
+    return options.cardHuman ?? refuseCards;
+  };
   const ctx: PlannerContext = {
     store,
     bus: options.bus,
