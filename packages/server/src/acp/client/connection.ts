@@ -13,6 +13,7 @@ import type {
   AcpClient,
   AcpClientEvent,
   AcpClientOptions,
+  ExtensionParams,
   PromptInput,
   ResumeSetup,
   SessionSetup,
@@ -32,6 +33,14 @@ const toContentBlocks = (input: PromptInput): ContentBlock[] => {
 
 const noop = async () => {};
 
+const isRecord = (value: unknown): value is ExtensionParams =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const toExtensionParams = (params: unknown): ExtensionParams => {
+  if (isRecord(params)) return params;
+  return {};
+};
+
 export const createClientEvents = (
   options: AcpClientOptions,
 ): EventHub<AcpClientEvent> => {
@@ -48,7 +57,7 @@ export const connectAcpClient = async ({
 }: ConnectParams): Promise<AcpClient> => {
   const permissions = createPermissionGate(options.onPermissionRequest);
 
-  const connection = client({ name: options.clientName })
+  const app = client({ name: options.clientName })
     .onNotification(methods.client.session.update, ({ params }) => {
       events.emit({
         type: 'session_update',
@@ -65,8 +74,13 @@ export const connectAcpClient = async ({
         response,
       });
       return response;
-    })
-    .connect(stream);
+    });
+  (options.extensionNotifications ?? []).forEach((method) => {
+    app.onNotification(method, toExtensionParams, ({ params }) => {
+      events.emit({ type: 'extension', method, params });
+    });
+  });
+  const connection = app.connect(stream);
 
   const markClosed = () => {
     permissions.cancelAll();
