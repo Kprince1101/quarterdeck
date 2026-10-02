@@ -64,7 +64,17 @@ export const lifecycleSchema = z.strictObject({
   mergeGate: z.strictObject({
     requireReviewerApproval: z.boolean(),
     requireChecksPassing: z.boolean(),
+    requireCopilotReview: z.boolean(),
+    autoMerge: z.boolean(),
+    base: z.string().min(1).optional(),
   }),
+});
+
+export const repoMergeGateSchema = z.strictObject({
+  requireReviewerApproval: z.boolean().optional(),
+  requireChecksPassing: z.boolean().optional(),
+  requireCopilotReview: z.boolean().optional(),
+  autoMerge: z.boolean().optional(),
 });
 
 export const runtimeSchema = z.enum(['kiro', 'claude', 'gemini']);
@@ -103,6 +113,8 @@ export type TighteningRule = z.infer<typeof tighteningRuleSchema>;
 export type RepoPermissions = z.infer<typeof repoPermissionsSchema>;
 export type Naming = z.infer<typeof namingSchema>;
 export type Lifecycle = z.infer<typeof lifecycleSchema>;
+export type MergeGate = Lifecycle['mergeGate'];
+export type RepoMergeGate = z.infer<typeof repoMergeGateSchema>;
 export type Runtime = z.infer<typeof runtimeSchema>;
 export type RoleModel = z.infer<typeof roleModelSchema>;
 export type Models = z.infer<typeof modelsSchema>;
