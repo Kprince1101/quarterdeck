@@ -94,23 +94,17 @@ describe('redactSecrets', () => {
     );
   });
 
-  it('treats KEY as a secret name only as a whole word at either end', () => {
+  it('treats any env name containing KEY as secret, wherever KEY sits', () => {
     const env = {
       API_KEY: 'example-api-key-value',
       KEY_ID: 'example-key-id-value',
+      STRIPE_KEY_LIVE: 'example-stripe-live-value',
       SSH_KEY_PATH: '/home/builder-1/.ssh/id_ed25519',
-      KEYCHAIN_DIR: '/home/builder-1/keychains',
-      MONKEY_BUSINESS: 'example-monkey-value',
+      HOME: '/home/builder-1',
     };
     const text = Object.values(env).join(' | ');
     expect(redactSecrets(text, env)).toBe(
-      [
-        REDACTED,
-        REDACTED,
-        '/home/builder-1/.ssh/id_ed25519',
-        '/home/builder-1/keychains',
-        'example-monkey-value',
-      ].join(' | '),
+      [REDACTED, REDACTED, REDACTED, REDACTED, '/home/builder-1'].join(' | '),
     );
   });
 
