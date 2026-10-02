@@ -16,6 +16,7 @@ export {
   attachStream,
   createStream,
   serveStream,
+  type ServeStreamOptions,
   type ServedStream,
   type Stream,
   type StreamOptions,

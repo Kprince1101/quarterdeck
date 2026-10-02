@@ -9,6 +9,7 @@ import type { ApiContext } from './context.js';
 import { createProjectStores, type ProjectStores } from './project-stores.js';
 import { localGuard } from './request.js';
 import { handleRequest } from './routes.js';
+import { createApiToken, removeApiToken, writeApiToken } from './token.js';
 
 export const API_HOST = '127.0.0.1';
 export const DEFAULT_API_PORT = 4317;
@@ -28,6 +29,8 @@ export interface ApiServer {
   url: string;
   port: number;
   stores: ProjectStores;
+  token: string;
+  tokenPath: string;
   close: () => Promise<void>;
 }
 
@@ -35,14 +38,16 @@ export const startApiServer = async (
   options: ApiServerOptions = {},
 ): Promise<ApiServer> => {
   const homeDir = options.homeDir ?? homedir();
+  const home = quarterdeckHome(homeDir);
   const stores = createProjectStores(
-    quarterdeckHome(homeDir),
+    home,
     options.databaseUrl,
     options.onError,
     options.stopHosts,
   );
   const ctx: ApiContext = { stores, homeDir };
-  let guard = localGuard(0);
+  const token = createApiToken();
+  let guard = localGuard(0, token);
   const server = createServer((req, res) => {
     void handleRequest(ctx, guard, req, res, options.dashboardDir);
   });
@@ -54,7 +59,7 @@ export const startApiServer = async (
     throw err;
   }
   const { port } = server.address() as AddressInfo;
-  guard = localGuard(port, options.allowedOrigins);
+  guard = localGuard(port, token, options.allowedOrigins);
   const close = async () => {
     await closeAllAcpClients();
     server.closeAllConnections();
@@ -65,7 +70,15 @@ export const startApiServer = async (
       });
     });
     await stores.closeAll();
+    await removeApiToken(token, home);
   };
+  let tokenPath: string;
+  try {
+    tokenPath = await writeApiToken(token, home);
+  } catch (err) {
+    await close();
+    throw err;
+  }
   if (options.openProjects) {
     try {
       await stores.openAll();
@@ -74,5 +87,12 @@ export const startApiServer = async (
       throw err;
     }
   }
-  return { url: `http://${API_HOST}:${port}`, port, stores, close };
+  return {
+    url: `http://${API_HOST}:${port}`,
+    port,
+    stores,
+    token,
+    tokenPath,
+    close,
+  };
 };

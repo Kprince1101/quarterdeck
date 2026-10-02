@@ -1,19 +1,23 @@
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { quarterdeckHome } from '@quarterdeck/server';
+import { quarterdeckHome, readApiToken } from '@quarterdeck/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { USAGE, main } from '../src/index.js';
 import { entries, sandbox, testIo, type Sandbox } from './harness.js';
 
 const TIMEOUT = 30_000;
-const RUNNING = /^Quarterdeck is running at (http:\/\/127\.0\.0\.1:\d+)$/;
+const RUNNING =
+  /^Quarterdeck is running at (http:\/\/127\.0\.0\.1:\d+)\/#token=([\w-]{43})$/;
 
-const runningUrl = async (lines: string[]): Promise<string> => {
+const running = async (
+  lines: string[],
+): Promise<{ url: string; token: string }> => {
   await vi.waitFor(() => expect(lines[0]).toMatch(RUNNING), {
     timeout: TIMEOUT,
   });
-  return RUNNING.exec(lines[0] ?? '')?.[1] ?? '';
+  const [, url = '', token = ''] = RUNNING.exec(lines[0] ?? '') ?? [];
+  return { url, token };
 };
 
 describe('quarterdeck up', { timeout: TIMEOUT }, () => {
@@ -30,27 +34,33 @@ describe('quarterdeck up', { timeout: TIMEOUT }, () => {
   it('serves the dashboard and the API until it is stopped', async () => {
     const io = testIo(box.home);
     const exit = main(['up', '--port', '0'], io);
-    const url = await runningUrl(io.lines);
+    const { url, token } = await running(io.lines);
 
     expect(io.lines.slice(1)).toEqual([
       `Data: ${quarterdeckHome(box.home)}`,
       'Press Ctrl+C to stop.',
     ]);
     expect(await entries(box.home)).toEqual(['.quarterdeck']);
+    expect(await readApiToken(quarterdeckHome(box.home))).toBe(token);
     const page = await fetch(`${url}/`);
     expect(page.status).toBe(200);
     expect(page.headers.get('content-type')).toBe('text/html; charset=utf-8');
-    const created = await fetch(`${url}/api/intents/project.create`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ project: 'deck', repoPath: box.repo }),
-    });
+    expect(await page.text()).not.toContain(token);
+    const create = (headers: Record<string, string>) =>
+      fetch(`${url}/api/intents/project.create`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...headers },
+        body: JSON.stringify({ project: 'example', repoPath: box.repo }),
+      });
+    expect((await create({})).status).toBe(401);
+    const created = await create({ authorization: `Bearer ${token}` });
     expect(created.status).toBe(200);
 
     io.stop();
     expect(await exit).toBe(0);
     expect(io.lines.at(-1)).toBe('Stopped.');
     await expect(fetch(`${url}/`)).rejects.toThrow();
+    await expect(readApiToken(quarterdeckHome(box.home))).rejects.toThrow();
   });
 
   it('says so when the port is taken', async () => {

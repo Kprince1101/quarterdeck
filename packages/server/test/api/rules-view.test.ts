@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { DEFAULT_RULES_DIR, RULE_NAMES } from '@quarterdeck/rules';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rulesUrl, rulesViewSchema } from '../../src/intents/index.js';
-import { TIMEOUT, startTestApi, type TestApi } from './harness.js';
+import { TIMEOUT, bearer, startTestApi, type TestApi } from './harness.js';
 
 const LOCAL = '.quarterdeck';
 
@@ -12,8 +12,17 @@ describe('GET /api/rules', { timeout: TIMEOUT }, () => {
   let t: TestApi;
   let repoDir = '';
 
-  const read = async (project: string | null, init: RequestInit = {}) => {
-    const res = await fetch(`${t.api.url}${rulesUrl(project)}`, init);
+  const read = async (
+    project: string | null,
+    { headers, ...init }: RequestInit = {},
+  ) => {
+    const res = await fetch(`${t.api.url}${rulesUrl(project)}`, {
+      ...init,
+      headers: {
+        ...bearer(t.api.token),
+        ...(headers as Record<string, string> | undefined),
+      },
+    });
     return { status: res.status, body: (await res.json()) as unknown, res };
   };
 
@@ -113,7 +122,7 @@ describe('GET /api/rules', { timeout: TIMEOUT }, () => {
 
   it('keeps the Origin guard', async () => {
     const res = await fetch(`${t.api.url}/api/rules`, {
-      headers: { origin: 'http://evil.example' },
+      headers: { origin: 'http://evil.example', ...bearer(t.api.token) },
     });
     expect(res.status).toBe(403);
   });

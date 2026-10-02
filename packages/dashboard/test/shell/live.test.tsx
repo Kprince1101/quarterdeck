@@ -82,6 +82,7 @@ describe('dashboard on a live server', () => {
         <App
           stream={{
             url: served.url,
+            token: deck.api.token,
             WebSocket: WsSocket as unknown as typeof WebSocket,
           }}
           intents={deck.client}
@@ -155,6 +156,7 @@ describe('dashboard on a live server', () => {
         <App
           stream={{
             url: served.url,
+            token: deck.api.token,
             WebSocket: WsSocket as unknown as typeof WebSocket,
           }}
           intents={deck.client}
@@ -220,6 +222,7 @@ describe('dashboard on a live server', () => {
         <App
           stream={{
             url: served.url,
+            token: deck.api.token,
             WebSocket: WsSocket as unknown as typeof WebSocket,
           }}
           intents={deck.client}

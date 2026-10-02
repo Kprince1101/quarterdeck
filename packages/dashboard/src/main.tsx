@@ -1,3 +1,4 @@
-import { mountApp } from './mount.js';
+import { livePage } from './live.js';
+import { mountPage } from './mount.js';
 
-mountApp();
+mountPage(livePage());

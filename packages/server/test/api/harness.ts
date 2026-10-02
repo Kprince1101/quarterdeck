@@ -20,6 +20,21 @@ export interface TestApi {
   close: () => Promise<void>;
 }
 
+export const bearer = (token: string): Record<string, string> => ({
+  authorization: `Bearer ${token}`,
+});
+
+const parseBody = (text: string): Record<string, unknown> => {
+  if (text === '') return {};
+  return JSON.parse(text) as Record<string, unknown>;
+};
+
+export const readReply = async (res: Response): Promise<Reply> => ({
+  status: res.status,
+  body: parseBody(await res.text()),
+  headers: res.headers,
+});
+
 export const startTestApi = async (
   allowedOrigins: string[] = [],
   databaseUrl?: string,
@@ -31,19 +46,23 @@ export const startTestApi = async (
     allowedOrigins,
     databaseUrl,
   });
-  const send = async (name: string, body: unknown, init: RequestInit = {}) => {
-    const res = await fetch(`${api.url}/api/intents/${name}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-      ...init,
-    });
-    return {
-      status: res.status,
-      body: (await res.json()) as Record<string, unknown>,
-      headers: res.headers,
-    };
-  };
+  const send = async (
+    name: string,
+    body: unknown,
+    { headers, ...init }: RequestInit = {},
+  ) =>
+    readReply(
+      await fetch(`${api.url}/api/intents/${name}`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+        ...init,
+        headers: {
+          'content-type': 'application/json',
+          ...bearer(api.token),
+          ...(headers as Record<string, string> | undefined),
+        },
+      }),
+    );
   return {
     api,
     homeDir,

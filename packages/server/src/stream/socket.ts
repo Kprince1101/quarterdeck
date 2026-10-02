@@ -7,6 +7,7 @@ import {
 import type { AddressInfo } from 'node:net';
 import type { Duplex } from 'node:stream';
 import { WebSocket, WebSocketServer } from 'ws';
+import { createApiToken, verifyApiToken } from '../api/token.js';
 import { reporter } from '../store/events.js';
 import { quarterdeckHome } from '../store/index.js';
 import type { StoreEvent, Store, TableChange } from '../store/index.js';
@@ -14,6 +15,8 @@ import { MACHINE_EVENT_KINDS, readMachineState } from './machine.js';
 import {
   STREAM_AFTER_PARAM,
   STREAM_PATH,
+  STREAM_PROTOCOL,
+  STREAM_TOKEN_PREFIX,
   type MachineState,
 } from './schema.js';
 import { readSnapshot, tailCursor, type SnapshotRows } from './snapshot.js';
@@ -36,6 +39,7 @@ const MAX_INBOUND_BYTES = 1024;
 
 export interface StreamOptions {
   store: Store;
+  token: string;
   home?: string;
   tail?: number;
   turnsPerAgent?: number;
@@ -58,8 +62,14 @@ export interface ServedStream {
   stream: Stream;
   port: number;
   url: string;
+  token: string;
   close: () => Promise<void>;
 }
+
+export type ServeStreamOptions = Omit<StreamOptions, 'token'> & {
+  token?: string;
+  port?: number;
+};
 
 type Outgoing =
   | {
@@ -113,6 +123,16 @@ const refusal = (
   return undefined;
 };
 
+const protocolsOf = (request: IncomingMessage): string[] =>
+  (request.headers['sec-websocket-protocol'] ?? '')
+    .split(',')
+    .map((protocol) => protocol.trim());
+
+const presentedToken = (request: IncomingMessage): string | undefined =>
+  protocolsOf(request)
+    .find((protocol) => protocol.startsWith(STREAM_TOKEN_PREFIX))
+    ?.slice(STREAM_TOKEN_PREFIX.length);
+
 const parseAfter = (url: URL): number | undefined | null => {
   const after = url.searchParams.get(STREAM_AFTER_PARAM);
   if (after === null) return undefined;
@@ -132,6 +152,8 @@ export const createStream = (options: StreamOptions): Stream => {
   const wss = new WebSocketServer({
     noServer: true,
     maxPayload: MAX_INBOUND_BYTES,
+    handleProtocols: (protocols) =>
+      protocols.has(STREAM_PROTOCOL) && STREAM_PROTOCOL,
   });
   const connections = new Map<WebSocket, () => Promise<void>>();
 
@@ -235,6 +257,10 @@ export const createStream = (options: StreamOptions): Stream => {
       reject(socket, 403, refused);
       return true;
     }
+    if (!verifyApiToken(options.token, presentedToken(request))) {
+      reject(socket, 401, '');
+      return true;
+    }
     const after = parseAfter(url);
     if (after === null) {
       reject(socket, 400, `${STREAM_AFTER_PARAM} must be an event id`);
@@ -280,12 +306,13 @@ export const attachStream = (
 };
 
 export const serveStream = async (
-  options: StreamOptions & { port?: number },
+  options: ServeStreamOptions,
 ): Promise<ServedStream> => {
   const server = createServer((_, response) => {
     response.writeHead(404).end();
   });
-  const stream = attachStream(server, options);
+  const token = options.token ?? createApiToken();
+  const stream = attachStream(server, { ...options, token });
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
     server.listen(options.port ?? 0, STREAM_HOST, resolve);
@@ -302,6 +329,7 @@ export const serveStream = async (
     stream,
     port,
     url: `ws://${STREAM_HOST}:${port}${STREAM_PATH}`,
+    token,
     close,
   };
 };

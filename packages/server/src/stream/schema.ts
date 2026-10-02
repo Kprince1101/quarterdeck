@@ -4,6 +4,15 @@ export const STREAM_PATH = '/ws';
 
 export const STREAM_AFTER_PARAM = 'after';
 
+export const STREAM_PROTOCOL = 'quarterdeck';
+
+export const STREAM_TOKEN_PREFIX = 'quarterdeck.token.';
+
+export const streamProtocols = (token: string): string[] => [
+  STREAM_PROTOCOL,
+  `${STREAM_TOKEN_PREFIX}${token}`,
+];
+
 const idSchema = z.guid();
 
 const timestampSchema = z.iso.datetime();

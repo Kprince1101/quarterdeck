@@ -1,12 +1,13 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdir, mkdtemp, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnAcpClient } from '@quarterdeck/server';
 
 const STARTUP_TIMEOUT_MS = 60_000;
-const RUNNING = /Quarterdeck is running at (http:\/\/127\.0\.0\.1:\d+)/;
+const RUNNING =
+  /Quarterdeck is running at (http:\/\/127\.0\.0\.1:\d+)\/#token=([\w-]+)/;
 const PROJECT = 'deck';
 const GREETING = 'hello from a clean machine';
 const NPX = 'npx';
@@ -20,6 +21,7 @@ const TYPESCRIPT_FLAGS = [
 interface Running {
   group: number;
   url: string;
+  token: string;
   closed: Promise<unknown>;
   output: () => string;
 }
@@ -36,15 +38,15 @@ const exists = (path: string): Promise<boolean> =>
   );
 
 const waitForUrl = (child: ChildProcess, output: () => string) =>
-  new Promise<string>((resolve, reject) => {
+  new Promise<{ url: string; token: string }>((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error(`up did not start:\n${output()}`));
     }, STARTUP_TIMEOUT_MS);
     const look = () => {
-      const url = RUNNING.exec(output())?.[1];
-      if (url === undefined) return;
+      const [, url, token] = RUNNING.exec(output()) ?? [];
+      if (url === undefined || token === undefined) return;
       clearTimeout(timer);
-      resolve(url);
+      resolve({ url, token });
     };
     child.stdout?.on('data', look);
     child.once('exit', (code) => {
@@ -71,8 +73,8 @@ const startUp = async (env: NodeJS.ProcessEnv): Promise<Running> => {
     once(child.stderr, 'close'),
   ]);
   const output = () => text;
-  const url = await waitForUrl(child, output);
-  return { group: child.pid, url, closed, output };
+  const { url, token } = await waitForUrl(child, output);
+  return { group: child.pid, url, token, closed, output };
 };
 
 const answers = (url: string): Promise<boolean> =>
@@ -91,12 +93,25 @@ const checkDashboard = async (url: string): Promise<void> => {
   );
 };
 
-const checkCreate = async (url: string, repoPath: string): Promise<void> => {
-  const res = await fetch(`${url}/api/intents/project.create`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ project: PROJECT, repoPath }),
-  });
+const checkCreate = async (
+  { url, token }: Running,
+  home: string,
+  repoPath: string,
+): Promise<void> => {
+  const tokenFile = join(home, '.quarterdeck', 'api.token');
+  check(
+    (await readFile(tokenFile, 'utf8')) === token,
+    'up writes the printed token to ~/.quarterdeck/api.token',
+  );
+  const create = (headers: Record<string, string>) =>
+    fetch(`${url}/api/intents/project.create`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...headers },
+      body: JSON.stringify({ project: PROJECT, repoPath }),
+    });
+  const refused = await create({});
+  check(refused.status === 401, `no token answers 401 (${refused.status})`);
+  const res = await create({ authorization: `Bearer ${token}` });
   check(res.status === 200, `project.create answers 200 (${res.status})`);
 };
 
@@ -167,7 +182,7 @@ const main = async (): Promise<void> => {
       `npx quarterdeck up serves ${running.url}`,
     );
     await checkDashboard(running.url);
-    await checkCreate(running.url, repo);
+    await checkCreate(running, home, repo);
     await checkFakeAgent(repo);
   } finally {
     await stopUp(running);

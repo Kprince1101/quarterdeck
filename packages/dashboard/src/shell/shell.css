@@ -69,6 +69,16 @@
   background: var(--qd-danger);
 }
 
+.qd-token-missing {
+  display: grid;
+  place-content: center;
+  gap: var(--qd-space-3);
+  height: 100vh;
+  height: 100dvh;
+  color: var(--qd-muted);
+  text-align: center;
+}
+
 .qd-workspace {
   min-height: 0;
   overflow: hidden;

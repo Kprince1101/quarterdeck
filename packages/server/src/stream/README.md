@@ -12,6 +12,7 @@ import { attachStream, openStore } from '@quarterdeck/server';
 const store = await openStore({ project: 'commander' });
 const stream = attachStream(httpServer, {
   store,
+  token: api.token,
   allowedOrigins: ['http://localhost:5173'],
 });
 httpServer.listen(port, '127.0.0.1');
@@ -20,7 +21,7 @@ await stream.close();
 await store.close();
 ```
 
-`attachStream` answers every upgrade request; other paths get 404. A server with more than one upgrade path calls `createStream({ store }).handleUpgrade(req, socket, head)` itself: it returns `false` for paths that are not `/ws` and leaves the socket alone. `serveStream({ store, port? })` binds a bare server to `127.0.0.1` for tests and standalone use.
+`attachStream` answers every upgrade request; other paths get 404. A server with more than one upgrade path calls `createStream({ store }).handleUpgrade(req, socket, head)` itself: it returns `false` for paths that are not `/ws` and leaves the socket alone. `serveStream({ store, port?, token? })` binds a bare server to `127.0.0.1` for tests and standalone use; without `token` it makes one, and `served.token` gives it.
 
 Bind the host server to `127.0.0.1` only. The stream also refuses, with 403:
 
@@ -29,6 +30,16 @@ Bind the host server to `127.0.0.1` only. The stream also refuses, with 403:
 - an `Origin` other than `http://127.0.0.1:<port>`, `http://localhost:<port>` or one listed in `allowedOrigins`. This blocks any other web page, including another local app on a different port.
 
 These are the same rules as the HTTP API's guard.
+
+## Token
+
+`token` is the HTTP API's per-start token (see [api](../api/README.md#token)), and the upgrade must carry it before anything is sent. A browser cannot set headers on a WebSocket, and a query string ends up in logs, so the token rides in `Sec-WebSocket-Protocol`: the client offers `streamProtocols(token)`, which is `['quarterdeck', 'quarterdeck.token.<token>']`, and the server answers with `quarterdeck` alone, so the token is never echoed. An upgrade with no token protocol or the wrong token gets HTTP `401` with an empty body, after the Host and Origin checks; no socket is opened and no frame is sent. The check is `verifyApiToken`, the same one the HTTP API uses. `STREAM_PROTOCOL`, `STREAM_TOKEN_PREFIX` and `streamProtocols` are exported from `@quarterdeck/server/stream-schema` for the dashboard.
+
+```ts
+import { streamProtocols } from '@quarterdeck/server/stream-schema';
+
+const ws = new WebSocket('ws://127.0.0.1:4317/ws', streamProtocols(token));
+```
 
 ## Protocol
 

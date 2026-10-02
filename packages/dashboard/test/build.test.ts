@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { streamProtocols } from '@quarterdeck/server/stream-schema';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { FAKE_WEBSOCKET, FakeSocket } from './api/fake-socket.js';
 import { page, textOf } from './shell/page.js';
@@ -8,6 +9,7 @@ import { page, textOf } from './shell/page.js';
 const DASHBOARD = resolve(import.meta.dirname, '..');
 const DIST = resolve(DASHBOARD, 'dist');
 const INDEX = resolve(DIST, 'index.html');
+const TOKEN = 'build-test-token';
 
 const assets = (html: string): string[] =>
   [...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map(
@@ -35,6 +37,7 @@ describe('dashboard build', () => {
   it('boots the built bundle into #root and opens the stream at /ws', async () => {
     const script = assets(html).find((path) => path.endsWith('.js'));
     vi.stubGlobal('WebSocket', FAKE_WEBSOCKET);
+    history.replaceState(null, '', `/#token=${TOKEN}`);
     const { body } = page();
     body.innerHTML = '<div id="root"></div>';
 
@@ -45,10 +48,22 @@ describe('dashboard build', () => {
       expect(FakeSocket.opened).toHaveLength(1);
     });
     expect(body.querySelector('[data-widget-mount]')).not.toBeNull();
+    expect(location.hash).toBe('');
     await vi.waitFor(() => {
       expect(FakeSocket.opened.map(({ url }) => new URL(url).pathname)).toEqual(
         ['/ws'],
       );
+    });
+    expect(FakeSocket.opened[0]?.protocols).toEqual(streamProtocols(TOKEN));
+  });
+
+  it('never ships a token in the page', () => {
+    const files = [
+      INDEX,
+      ...assets(html).map((path) => resolve(DIST, `.${path}`)),
+    ];
+    files.forEach((file) => {
+      expect(readFileSync(file, 'utf8')).not.toMatch(/#token=[\w-]/);
     });
   });
 });
