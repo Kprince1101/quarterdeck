@@ -19,7 +19,11 @@ import {
   RoundEndedError,
   RoundNotFoundError,
 } from './errors.js';
-import { DRIVER_TURN_FORMAT, type DriverTurnResult } from './result.js';
+import {
+  DRIVER_TURN_FORMAT,
+  type DriverTurnResult,
+  type TurnFormat,
+} from './result.js';
 import {
   markStuckFlagsSurfaced,
   unsurfacedStuckFlags,
@@ -56,6 +60,7 @@ export interface DriverRound {
   notebook: readonly NotebookEntry[];
   birth: Promise<DriverTurnOutcome>;
   turn: (input: string) => Promise<DriverTurnOutcome>;
+  turnAs: <T>(input: string, format: TurnFormat<T>) => Promise<TurnOutcome<T>>;
 }
 
 const findRound = async (store: Store, roundId: string): Promise<Round> => {
@@ -151,6 +156,8 @@ export const openDriverRound = async (
     turnsDir: options.turnsDir,
   };
   const enqueue = serialize();
+  const turnAs = <T>(input: string, format: TurnFormat<T>) =>
+    enqueue(() => runTurn(target, input, format));
   const turn = (input: string) =>
     enqueue(async () => {
       const flags = await unsurfacedStuckFlags(store);
@@ -172,5 +179,5 @@ export const openDriverRound = async (
   });
   const birth = turn(birthInput);
   birth.catch(() => undefined);
-  return { agent, round, sessionId, notebook, birth, turn };
+  return { agent, round, sessionId, notebook, birth, turn, turnAs };
 };

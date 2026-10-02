@@ -25,13 +25,13 @@ const next = await round.turn('heron reported QD12: <report>');
 `openDriverRound` checks the round (`RoundNotFoundError` for one outside the project, `RoundEndedError` once it has ended) and the agent (`NotADriverError` unless it is a `driver` that is not `ended`, `killed` or `retired`). It then:
 
 1. Launches the bus for the Driver (`bus.launch(agentId)`) and opens one ACP session with `client.newSession({ cwd, mcpServers: [bus] })`. Every turn of the round goes to that session; nothing else opens one. If the runtime needs sign-in, a sign-in card waits for the person and the session opens after, with a fresh bus launch (see [../signin/README.md](../signin/README.md)).
-2. Reads the active notebook: every `notebook` row of the project, pinned entries first, then oldest first.
+2. Reads the active notebook: every `notebook` row of the project that is not retired (`retired_at` null), pinned entries first, then oldest first.
 3. Stores the session on the agent (`session_id`, `round_id`; a `starting` agent becomes `idle`) and records `driver.round_started` with `{ roundId, round, sessionId, notebook }`, where `notebook` lists the entry ids the Driver was born with.
 4. Queues the birth turn and returns. `round.birth` settles with its outcome; await it.
 
 The birth input (`buildBirthInput`) is the Driver's name and round number, the charter, the round's goal, the notebook entries and the turn result format. The next round gets a new session and a new birth input, carrying the notebook as it is then.
 
-`round.turn(input)` queues one more turn in the round's session. Turns run one at a time, in the order they were asked for, the birth turn first. A turn that rejects does not stop the ones queued after it.
+`round.turn(input)` queues one more turn in the round's session. Turns run one at a time, in the order they were asked for, the birth turn first. A turn that rejects does not stop the ones queued after it. `round.turnAs(input, format)` queues a turn in the same line that expects another `TurnFormat`; the [wrap-up](../round-end/README.md#wrap-up) uses it.
 
 ## Turn results
 
@@ -205,7 +205,7 @@ The ticket then becomes `assigned` to the builder, the builder `working`, and `t
 
 A builder is stuck when `STUCK_AFTER_CONTINUES` (3) continue turns in a row on the same ticket ran without moving its worktree's head: its last four continues, the one being sent included, all found the same head, so the three before it each ran in full and made no commit. `continueBuilder` checks after recording each continue (`flagIfStuck`) and records `builder.stuck` with `{ name, head, continues }`, once per builder, ticket and head. A new commit starts the count again; a later stall at the new head is flagged again. The flag changes nothing about the builder: it stays `idle` and can still be continued.
 
-The Driver sees each flag once. Every Driver turn, the birth included, appends a `# Stuck builders` section to its input listing the `builder.stuck` events it has not seen yet (`unsurfacedStuckFlags`), each with the builder's name and id, the ticket and the head. Once the turn has run, `driver.stuck_surfaced` records `{ flags }`, the event ids it carried; the next lookup leaves out every id an earlier `driver.stuck_surfaced` lists, so a flag whose event commits out of id order is never skipped. A turn that throws or ends `stopped` records nothing, so its flags go out again with the next one. The record is per project, so flags raised between rounds reach the next Driver's birth.
+The Driver sees each flag once. Every `round.turn`, the birth included (not `round.turnAs`, so the wrap-up leaves them for the next round), appends a `# Stuck builders` section to its input listing the `builder.stuck` events it has not seen yet (`unsurfacedStuckFlags`), each with the builder's name and id, the ticket and the head. Once the turn has run, `driver.stuck_surfaced` records `{ flags }`, the event ids it carried; the next lookup leaves out every id an earlier `driver.stuck_surfaced` lists, so a flag whose event commits out of id order is never skipped. A turn that throws or ends `stopped` records nothing, so its flags go out again with the next one. The record is per project, so flags raised between rounds reach the next Driver's birth.
 
 ### Re-assigning on retire
 
