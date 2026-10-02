@@ -55,7 +55,7 @@ try {
 }
 ```
 
-A caller holding a launch waits until `releaseAt` before trying again. It does not retry in a loop: every held check records a `budget.held` event.
+A caller holding a launch waits until `releaseAt` before trying again. It does not retry in a loop: every held check records a `budget.held` event. A held launch is refused, not queued, and nothing retries it on its own. Whatever applies the Driver's actions (`applyBuilderAction`) should tell the Driver that the action was held and give it `releaseAt`, so the Driver asks again after that. `budget.released` is recorded on the first launch checked after that time.
 
 `checkLaunchBudget(store, window, { agentId?, ticketId?, now? })` returns the decision instead of throwing. It takes a per-project transaction advisory lock (`pg_advisory_xact_lock(hashtext('quarterdeck_budget'), hashtext(project_id))`, not a row lock, so it cannot deadlock with the event lock), reads the meter and:
 
