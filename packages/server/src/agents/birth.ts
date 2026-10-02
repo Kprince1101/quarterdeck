@@ -9,7 +9,10 @@ export interface BirthRequest {
   role: AgentRole;
   runtime: Runtime;
   roundId?: string;
+  prepare?: (agent: Agent) => Promise<Agent>;
 }
+
+const unprepared = (agent: Agent): Promise<Agent> => Promise.resolve(agent);
 
 export const insertAgent = (
   request: BirthRequest,
@@ -72,9 +75,11 @@ export const openSession = async (
   store: Store,
   sessions: SessionHost,
   agent: Agent,
+  prepare: (agent: Agent) => Promise<Agent> = unprepared,
 ): Promise<Agent> => {
   try {
-    return await attachSession(store, agent, await sessions.open(agent));
+    const prepared = await prepare(agent);
+    return await attachSession(store, prepared, await sessions.open(prepared));
   } catch (err) {
     await retireUnborn(store, agent, err);
     throw err;

@@ -1,12 +1,20 @@
 import { execFile } from 'node:child_process';
-import { access } from 'node:fs/promises';
+import { access, mkdir } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { promisify } from 'node:util';
+
+export interface AddWorktreeOptions {
+  repoPath: string;
+  path: string;
+  base: string;
+}
 
 export interface RemoveWorktreeOptions {
   force?: boolean;
 }
 
 export interface WorktreeHost {
+  add: (options: AddWorktreeOptions) => Promise<void>;
   remove: (path: string, options?: RemoveWorktreeOptions) => Promise<void>;
 }
 
@@ -81,6 +89,10 @@ const removeArgs = (path: string, force: boolean): string[] => {
 };
 
 export const gitWorktrees: WorktreeHost = {
+  add: async ({ repoPath, path, base }) => {
+    await mkdir(dirname(path), { recursive: true });
+    await git(repoPath, 'worktree', 'add', '--quiet', '--detach', path, base);
+  },
   remove: async (path, options = {}) => {
     if (!(await exists(path))) return;
     const force = options.force ?? false;

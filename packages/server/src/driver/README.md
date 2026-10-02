@@ -87,6 +87,86 @@ While a prompt runs the agent is `working`; afterwards it is `idle` again. Only 
 
 `seq` is the `turns.seq` of the prompt the event is about; every event carries the agent's id.
 
+## Builders
+
+The Driver hands tickets to builders and keeps them going with three entry points. All take a `BuilderContext`:
+
+```ts
+import {
+  assignTicket,
+  continueBuilder,
+  createAgentLifecycle,
+  gitWorktrees,
+  projectTurnsDir,
+  projectWorktreesDir,
+  reassignTickets,
+  type BuilderContext,
+} from '@quarterdeck/server';
+
+const ctx: BuilderContext = {
+  store,
+  lifecycle: createAgentLifecycle({
+    naming,
+    sessions,
+    worktrees: gitWorktrees,
+    openStores,
+  }),
+  sessions, // a BuilderSessionHost: the lifecycle's SessionHost plus client(sessionId)
+  worktrees: gitWorktrees,
+  runtime: 'kiro',
+  repoPath,
+  base: 'origin/main',
+  worktreesDir: projectWorktreesDir('commander'),
+  turnsDir: projectTurnsDir('commander'),
+};
+const assignment = await assignTicket(ctx, { ticketId });
+await continueBuilder(ctx, { builderId, prompt: 'CI failed on lint; fix it.' });
+await reassignTickets(ctx, retiredBuilderId);
+```
+
+`sessions` must be the `SessionHost` the lifecycle was made with. Its `open(agent)` opens the session with `agent.worktreePath` as the `cwd` (and the bus as an MCP server, as for the Driver); `client(sessionId)` returns the ACP client a live session prompts through, or `undefined` once it is gone.
+
+### Assigning
+
+`assignTicket(ctx, { ticketId, builderId? })` takes an approved ticket: status `open`, no assignee, and every ticket in `depends_on` `done`. Anything else throws `TicketNotAssignableError` before a builder is touched.
+
+Every builder works a ticket in its own worktree, `builderWorktreePath(worktreesDir, name, ticketId)`: `<worktreesDir>/<name>-<first 8 of the ticket id>`, detached at `base`. The builder branches there itself.
+
+- Without `builderId`, a new builder is born (`role: 'builder'`, `runtime`, `roundId` if set). Its worktree is added before its session opens, so the session starts in it. If the worktree or the session fails, the builder is retired (`agent.birth_failed`) and a worktree already added is removed.
+- With `builderId`, the builder must be an `idle` builder holding no ticket (`BuilderNotAvailableError` otherwise). It is marked `working`, its old worktree is removed, the new one added, and its session closed and reopened in the new worktree. Each step is saved as it completes. A dirty old worktree throws `WorktreeDirtyError` (raise the discard card as for a retire); the builder goes back to `idle` with its work in place.
+
+The ticket then becomes `assigned` to the builder, the builder `working`, and `ticket.assigned` is recorded with `{ name, worktreePath, born, previousAssigneeId }`, all in one transaction that fails with `TicketNotAssignableError` if the ticket changed meanwhile. Finally the assignment prompt (`buildAssignmentPrompt`: the ticket, where to work, and to `report` when the pull request is open) goes to the builder's session as one turn filed under the ticket.
+
+`assignTicket` resolves once the prompt is sent. `assignment.turn` settles with the `TurnRecord` when the builder's reply ends, which can take as long as the ticket does; the builder is `idle` again after it.
+
+### Continuing
+
+`continueBuilder(ctx, { builderId, prompt })` sends an `idle` builder with a session one more prompt in that session, filed under the ticket it holds if any, and records `builder.continued` with `{ name, prompt }`. A builder that is not idle, not a builder or has no session throws `BuilderNotAvailableError`; a session the host no longer knows throws `BuilderSessionLostError` and leaves the builder `idle`. `continuation.turn` settles like `assignment.turn`.
+
+### Re-assigning on retire
+
+`reassignTickets(ctx, agentId)` hands every ticket a retired builder still holds (`assigned`, `in_progress`, `in_review`, `bounced`) to a new builder, one at a time, in a new worktree. `in_review` and `bounced` keep their status; the others become `assigned`. The prompt names an open pull request if the ticket has one, so the new builder carries it on. An agent that is not `retired` throws `AgentNotRetiredError`; retire it first, which removes its worktree or raises the discard card.
+
+### Actions
+
+The Driver asks for these through its turn result. `DRIVER_TURN_INSTRUCTIONS` includes `BUILDER_ACTION_INSTRUCTIONS`:
+
+| `kind`     | Fields                         | Runs                                  |
+| ---------- | ------------------------------ | ------------------------------------- |
+| `assign`   | `ticket`, `builder` (optional) | `assignTicket`                        |
+| `continue` | `builder`, `prompt`            | `continueBuilder` (prompt is trimmed) |
+
+`builderActionSchema` parses one of them; `applyBuilderAction(ctx, action)` runs it and resolves to `{ kind: 'assign', assignment }` or `{ kind: 'continue', continuation }`.
+
+### Builder events
+
+| `kind`              | Payload                                            |
+| ------------------- | -------------------------------------------------- |
+| `ticket.assigned`   | `{ name, worktreePath, born, previousAssigneeId }` |
+| `builder.continued` | `{ name, prompt }`                                 |
+
+Both carry the builder's id and, when there is one, the ticket's.
+
 ## Other agents
 
 `runTurn(target, input, format)` and `runPrompt(target, input)` are not tied to the Driver. Any agent with an open session can use them with its own `TurnFormat` (a zod schema plus the instructions that describe it), and `ticketId` on the target files the turn and its events under a ticket.
