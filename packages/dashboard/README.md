@@ -38,7 +38,7 @@ src/widgets/data/            Data: table counts, rows a page at a time, paths on
 src/widgets/driver/          the Driver widget: round picker, turns, turn detail, replay command
 src/widgets/planner/         Planner: the conversation, proposals to approve, edit or reject
 src/widgets/rules/           Rules: edit rules.local.* with validation, a diff and provenance
-src/widgets/project/         Project: round Start/End/Kill, pause, reviewer, retired count, Refresh agents, archive
+src/widgets/project/         Project: round Start/End/Kill, pause, Copilot and auto-merge (machine lifecycle layer), reviewer, retired count, Refresh agents, archive
 src/grid/                    the grid: layout JSON, actions, drag, resize, keyboard, tray
 src/theme/tokens.css         dark theme tokens (--qd-*) and the page base
 src/theme/tokens.ts          the same token names, typed: token('accent') is 'var(--qd-accent)'

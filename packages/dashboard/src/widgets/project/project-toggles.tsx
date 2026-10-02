@@ -1,23 +1,50 @@
 import { RequestError } from '../request-error.js';
-import { NOT_WIRED, type ProjectPanel } from './project-model.js';
+import type { ProjectPanel } from './project-model.js';
+import {
+  useMergeGateToggles,
+  type GateToggleView,
+} from './use-merge-gate-toggles.js';
 import { usePauseControls } from './use-pause-controls.js';
 
-interface UnwiredToggleProps {
-  label: string;
+interface GateToggleProps {
+  toggle: GateToggleView;
 }
 
-const UnwiredToggle = ({ label }: UnwiredToggleProps) => (
-  <label className="qd-project-toggle" title={NOT_WIRED}>
-    <input type="checkbox" disabled />
-    <span>{label}</span>
+const GateToggleBox = ({ toggle }: GateToggleProps) => (
+  <label
+    className="qd-project-toggle"
+    title={toggle.title}
+    data-gate={toggle.key}
+  >
+    <input
+      type="checkbox"
+      checked={toggle.checked}
+      disabled={toggle.isDisabled}
+      onChange={toggle.handleChange}
+    />
+    <span>{toggle.label}</span>
   </label>
 );
 
-export interface ProjectTogglesProps {
+interface PanelProps {
   panel: ProjectPanel;
 }
 
-export const ProjectToggles = ({ panel }: ProjectTogglesProps) => {
+const MergeGateToggles = ({ panel }: PanelProps) => {
+  const { toggles, error } = useMergeGateToggles(panel);
+  return (
+    <>
+      <div className="qd-project-actions">
+        {toggles.map((toggle) => (
+          <GateToggleBox key={toggle.key} toggle={toggle} />
+        ))}
+      </div>
+      <RequestError error={error} />
+    </>
+  );
+};
+
+export const ProjectToggles = ({ panel }: PanelProps) => {
   const { isPending, error, handlePause, handleResume } =
     usePauseControls(panel);
   return (
@@ -30,10 +57,9 @@ export const ProjectToggles = ({ panel }: ProjectTogglesProps) => {
         <button type="button" disabled={isPending} onClick={handleResume}>
           Resume
         </button>
-        <UnwiredToggle label="Copilot" />
-        <UnwiredToggle label="Auto-merge" />
       </div>
       <RequestError error={error} />
+      <MergeGateToggles panel={panel} />
     </section>
   );
 };

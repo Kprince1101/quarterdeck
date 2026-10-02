@@ -3,7 +3,11 @@ import type { SnapshotTables } from '@quarterdeck/server/stream-schema';
 import type { HTMLInputElement as HappyInput, Window } from 'happy-dom';
 import { act } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { createIntentClient, emptyTables } from '../../../src/api/index.js';
+import {
+  createIntentClient,
+  emptyTables,
+  type RulesView,
+} from '../../../src/api/index.js';
 import { DeckProvider } from '../../../src/deck/deck.js';
 import PROJECT_WIDGET, {
   ProjectWidget,
@@ -11,6 +15,7 @@ import PROJECT_WIDGET, {
 import { WIDGETS } from '../../../src/widgets/widgets.js';
 import { FAKE_WEBSOCKET, FakeSocket } from '../../api/fake-socket.js';
 import { choose, click } from '../../grid/events.js';
+import { HOME, REPO, rulesView } from '../../rules/fixtures.js';
 import { all, render, textOf, type PageElement } from '../../shell/page.js';
 import {
   DECK_ID,
@@ -32,22 +37,54 @@ const stream = { url: 'ws://127.0.0.1:4317/ws', WebSocket: FAKE_WEBSOCKET };
 
 const INTENTS_URL = 'http://deck.test/api/intents/';
 
-const mount = (tables: SnapshotTables, status = 202, reply: object = {}) => {
+interface Lifecycle {
+  machine?: string;
+  repo?: string;
+}
+
+const repoDirOf = ({ repo }: Lifecycle): string | null => {
+  if (repo === undefined) return null;
+  return REPO;
+};
+
+const fakeRules = (lifecycle: Lifecycle) => {
+  const layers = { ...lifecycle };
+  const asked: (string | null)[] = [];
+  const read = (project: string | null): Promise<RulesView> => {
+    asked.push(project);
+    const view = rulesView({ lifecycle: { ...layers } }, repoDirOf(layers));
+    return Promise.resolve(view);
+  };
+  const write = (body: unknown) => {
+    layers.machine = (body as { content: string }).content;
+  };
+  return { asked, read, write };
+};
+
+const mount = (
+  tables: SnapshotTables,
+  status = 202,
+  reply: object = {},
+  lifecycle: Lifecycle = {},
+) => {
   const sent: Sent[] = [];
+  const rules = fakeRules(lifecycle);
   const fetch = vi.fn<typeof globalThis.fetch>((url, init) => {
-    sent.push({ url: String(url), body: JSON.parse(String(init?.body)) });
+    const body: unknown = JSON.parse(String(init?.body));
+    sent.push({ url: String(url), body });
+    if (String(url).endsWith('rules.write') && status < 300) rules.write(body);
     return Promise.resolve(new Response(JSON.stringify(reply), { status }));
   });
   const intents = createIntentClient({ baseUrl: 'http://deck.test', fetch });
   const rendered = render(
-    <DeckProvider stream={stream} intents={intents}>
+    <DeckProvider stream={stream} intents={intents} rules={rules.read}>
       <ProjectWidget />
     </DeckProvider>,
   );
   act(() => {
     FakeSocket.opened[0]?.deliver({ type: 'snapshot', cursor: 0, tables });
   });
-  return { ...rendered, sent };
+  return { ...rendered, sent, asked: rules.asked };
 };
 
 const settle = async () => {
@@ -96,6 +133,21 @@ const pickProject = (scope: PageElement, id: string) => {
 
 const sentTo = (sent: Sent[]) =>
   sent.map(({ url, body }) => [url.slice(INTENTS_URL.length), body]);
+
+const gate = (scope: PageElement, key: string) =>
+  find(scope, `[data-gate="${key}"]`);
+
+const gates = (scope: PageElement) =>
+  all(scope, '[data-gate]').map((toggle) => {
+    const box = find(toggle, 'input') as unknown as HappyInput;
+    return [toggle.textContent, box.checked, box.disabled];
+  });
+
+const writtenContent = (sent: Sent[]): string => {
+  const write = sent.find(({ url }) => url.endsWith('rules.write'));
+  if (write === undefined) throw new Error('nothing was written');
+  return (write.body as { content: string }).content;
+};
 
 describe('Project widget', () => {
   beforeAll(() => {
@@ -181,7 +233,7 @@ describe('Project widget', () => {
     unmount();
   });
 
-  it('pauses and resumes, and leaves Copilot and auto-merge unwired', async () => {
+  it('pauses and resumes', async () => {
     const { container, sent, unmount } = mount(projectTables());
     const toggles = section(container, 'Toggles');
     click(button(toggles, 'Pause'));
@@ -192,16 +244,133 @@ describe('Project widget', () => {
       ['pause.set', { project: 'deck', paused: true }],
       ['pause.set', { project: 'deck', paused: false }],
     ]);
-    expect(
-      all(toggles, '.qd-project-toggle').map((toggle) => [
-        toggle.textContent,
-        toggle.getAttribute('title'),
-        isDisabled(find(toggle, 'input')),
-      ]),
-    ).toEqual([
-      ['Copilot', 'not wired yet', true],
-      ['Auto-merge', 'not wired yet', true],
+    unmount();
+  });
+
+  it('shows Copilot and Auto-merge from the loaded lifecycle rule, labelled machine-wide', async () => {
+    const { container, asked, unmount } = mount(projectTables());
+    await settle();
+    expect(asked).toEqual(['deck']);
+    expect(gates(container)).toEqual([
+      ['Copilot', false, false],
+      ['Auto-merge', false, false],
     ]);
+    const machinePath = `${HOME}/rules.local.lifecycle.json`;
+    expect(gate(container, 'requireCopilotReview').getAttribute('title')).toBe(
+      `Machine-wide: sets mergeGate.requireCopilotReview in ${machinePath}, which applies to every project.`,
+    );
+    expect(gate(container, 'autoMerge').getAttribute('title')).toBe(
+      `Machine-wide: sets mergeGate.autoMerge in ${machinePath}, which applies to every project.`,
+    );
+    unmount();
+  });
+
+  it('turns Copilot on in the machine layer and keeps its other keys', async () => {
+    const machine = JSON.stringify({
+      stuckAfterMinutes: 45,
+      mergeGate: { requireChecksPassing: false },
+    });
+    const { container, sent, unmount } = mount(
+      projectTables(),
+      200,
+      {},
+      {
+        machine,
+      },
+    );
+    await settle();
+    click(find(gate(container, 'requireCopilotReview'), 'input'));
+    await settle();
+    expect(sentTo(sent)).toEqual([
+      [
+        'rules.write',
+        { scope: 'machine', name: 'lifecycle', content: expect.any(String) },
+      ],
+    ]);
+    expect(JSON.parse(writtenContent(sent))).toEqual({
+      stuckAfterMinutes: 45,
+      mergeGate: { requireChecksPassing: false, requireCopilotReview: true },
+    });
+    expect(gates(container)).toEqual([
+      ['Copilot', true, false],
+      ['Auto-merge', false, false],
+    ]);
+    unmount();
+  });
+
+  it('turns Auto-merge off again in the machine layer', async () => {
+    const machine = JSON.stringify({
+      autoEndSettleSeconds: 300,
+      mergeGate: { autoMerge: true },
+    });
+    const { container, sent, unmount } = mount(
+      projectTables(),
+      200,
+      {},
+      {
+        machine,
+      },
+    );
+    await settle();
+    expect(gates(container)).toEqual([
+      ['Copilot', false, false],
+      ['Auto-merge', true, false],
+    ]);
+    click(find(gate(container, 'autoMerge'), 'input'));
+    await settle();
+    expect(JSON.parse(writtenContent(sent))).toEqual({
+      autoEndSettleSeconds: 300,
+      mergeGate: { autoMerge: false },
+    });
+    expect(gates(container)).toEqual([
+      ['Copilot', false, false],
+      ['Auto-merge', false, false],
+    ]);
+    unmount();
+  });
+
+  it('locks a toggle the repo layer pins and says why', async () => {
+    const { container, sent, unmount } = mount(
+      projectTables(),
+      200,
+      {},
+      {
+        machine: JSON.stringify({ mergeGate: { autoMerge: true } }),
+        repo: JSON.stringify({
+          mergeGate: { requireCopilotReview: true, autoMerge: false },
+        }),
+      },
+    );
+    await settle();
+    expect(gates(container)).toEqual([
+      ['Copilot', true, true],
+      ['Auto-merge', false, true],
+    ]);
+    expect(gate(container, 'autoMerge').getAttribute('title')).toContain(
+      `This project's repo layer (${REPO}/.quarterdeck/rules.local.lifecycle.json) pins it`,
+    );
+    click(find(gate(container, 'autoMerge'), 'input'));
+    await settle();
+    expect(sent).toEqual([]);
+    unmount();
+  });
+
+  it('refuses to toggle over a machine layer it cannot read', async () => {
+    const { container, sent, unmount } = mount(
+      projectTables(),
+      200,
+      {},
+      {
+        machine: '{',
+      },
+    );
+    await settle();
+    const toggles = section(container, 'Toggles');
+    expect(all(toggles, '[data-gate]')).toHaveLength(0);
+    expect(textOf(toggles, '[role="alert"]')).toContain(
+      `${HOME}/rules.local.lifecycle.json`,
+    );
+    expect(sent).toEqual([]);
     unmount();
   });
 
@@ -260,7 +429,7 @@ describe('Project widget', () => {
 
   it('keeps one project per copy on the grid', () => {
     const { container, unmount } = render(
-      <DeckProvider stream={stream}>
+      <DeckProvider stream={stream} rules={fakeRules({}).read}>
         <section data-copy="1">
           <ProjectWidget />
         </section>

@@ -7,8 +7,6 @@ import type {
 
 export const NO_REVIEWER = 'none';
 
-export const NOT_WIRED = 'not wired yet';
-
 const FINISHED_STATUSES: ReadonlySet<AgentRow['status']> = new Set([
   'ended',
   'killed',
