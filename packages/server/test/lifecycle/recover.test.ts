@@ -91,10 +91,10 @@ describe('recovering a project at startup', { timeout: TIMEOUT }, () => {
 
       const { reaped } = await recover();
 
-      expect(reaped).toEqual([
-        { agentId: leftId, name: 'wren', outcome: 'killed' },
-        { agentId: reusedId, name: 'lark', outcome: 'gone' },
+      expect(reaped.toSorted((a, b) => a.name.localeCompare(b.name))).toEqual([
         { agentId: goneId, name: 'kite', outcome: 'gone' },
+        { agentId: reusedId, name: 'lark', outcome: 'gone' },
+        { agentId: leftId, name: 'wren', outcome: 'killed' },
       ]);
       expect(await exitOf(left)).toEqual([null, 'SIGKILL']);
       expect(isRunning(reused.pid)).toBe(true);
