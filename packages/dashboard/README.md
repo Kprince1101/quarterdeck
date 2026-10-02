@@ -41,6 +41,7 @@ src/widgets/planner/         Planner: the conversation, proposals to approve, ed
 src/widgets/rules/           Rules: edit rules.local.* with validation, a diff and provenance
 src/widgets/project/         Project: round Start/End/Kill, pause, Copilot and auto-merge (machine lifecycle layer), reviewer, retired count, Refresh agents, archive
 src/widgets/usage/           Usage: this project's tokens in the budget window and the share of budget.window.capTokens
+src/widgets/agents/          Agents: state, since, tickets, held work; Pause/Poke/Kill/Retire/Reset
 src/grid/                    the grid: layout JSON, actions, drag, resize, keyboard, tray
 src/layouts/                 DeckLayout: the saved layout, the preset bar, writes to the server
 src/theme/tokens.css         dark theme tokens (--qd-*) and the page base
@@ -109,6 +110,16 @@ The Board shows whether things are alive across projects:
 - **Archived projects** (`archivedAt` set) stay out of the picker and the strip unless _Show archived_ is on.
 - **The liveness strip** gives the stream status, then each shown project with its live agents (not ended, killed or retired) by role then name, tagged paused or archived.
 - **Pause all / Resume all** send `pause.all`, report how many projects were reached and name any that were not (`failed`). The machine-wide pause is read from `stream.machine.pausedAt`: while it is set the Board says _Paused everywhere_ and offers only Resume all.
+
+## The Agents widget
+
+The Agents widget has a card for every agent that is not retired, in projects the stream knows, by role (Planner, Driver, reviewer, builder) then name. The project is named when the stream has more than one.
+
+- **State and since.** The agent's `status` and how long ago its row last changed (`updatedAt`).
+- **Working on and tickets.** The tickets assigned to it that are still open: in progress, bounced, blocked (a kill blocks what the agent had), assigned, then in review. The first one is what it is working on.
+- **Held work.** Each `pause.held` event with the agent's `agentId` (see [pause](../server/src/pause/README.md#events)) is shown as `held: <label> (<scopes>)`, oldest first, until a `pause.replayed` or `pause.dropped` names it as `heldEventId`. It reads the stream's events, so it sees held work among the newest 500 events.
+- **Actions.** A live agent gets Pause (Resume while paused), Poke, Kill, Retire and Reset; an ended or killed one gets Retire and Reset. They send `agent.pause`, `agent.resume`, `agent.message`, `agent.kill`, `agent.retire` and `agent.reset`. Poke sends `agent.message`, which is still Pending on the server (see [the API](../server/src/api/README.md)), so nothing delivers it yet.
+- **Killing.** After Kill the card says _killing…_ and its buttons are disabled until the stream acks the intent: `agent.killed` with the intent's `intentId`, or `agent.intent_failed`, whose `error` is shown. A refused request ends it at once and shows why.
 
 ## The Driver widget
 

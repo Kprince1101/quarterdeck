@@ -50,8 +50,19 @@
 
       <h2 id="agents">Agents</h2>
       <p>
-        The crew: the Planner, the Driver, the builders and the reviewer, with
-        each agent's runtime and latest status.
+        The crew: the Planner, the Driver, the reviewer and the builders. Each
+        agent shows its state and how long it has been in it, the ticket it is
+        working on and the other open tickets it has (a killed agent's tickets
+        show as blocked), and any work a pause is holding for it, such as
+        <code>held: continue: fix lint (agent)</code>, until that work is
+        replayed or dropped.
+      </p>
+      <p>
+        A live agent offers Pause (or Resume), Poke, Kill, Retire and Reset; an
+        ended or killed one offers Retire and Reset. After Kill the agent shows
+        <em>killing…</em> until the server confirms it was killed or says why it
+        could not be. Poke is sent as a message to the agent, which the server
+        does not deliver yet.
       </p>
 
       <h2 id="events">Events</h2>
