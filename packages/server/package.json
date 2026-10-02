@@ -7,5 +7,9 @@
   "author": "Kristopher Prince",
   "engines": {
     "node": ">=22"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "^1.6.0",
+    "zod": "^4.6.5"
   }
 }
