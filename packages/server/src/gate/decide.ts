@@ -1,6 +1,13 @@
 import type { MergeGate } from '@quarterdeck/rules';
 import type { MergeCardState, TicketFacts } from './facts.js';
-import type { PullRequest } from './github.js';
+import {
+  parsePullRequestUrl,
+  repositoryName,
+  sameRepository,
+  type PullRequest,
+  type PullRequestRef,
+  type RepositoryRef,
+} from './github.js';
 
 export interface Approval {
   eventId: number;
@@ -128,12 +135,54 @@ const readinessStep = (
   return undefined;
 };
 
+const notInRepository = (url: string, project: RepositoryRef): string =>
+  `the pull request ${url} is not in this project's repository ${repositoryName(project)}; open it there and report again`;
+
+export const foreignPullRequest = (
+  url: string,
+  project: RepositoryRef,
+): string | undefined => {
+  let ref: PullRequestRef;
+  try {
+    ref = parsePullRequestUrl(url);
+  } catch {
+    return `${url} is not a GitHub pull request URL; report the pull request's URL`;
+  }
+  if (!sameRepository(ref, project)) return notInRepository(url, project);
+  return undefined;
+};
+
+const targetStep = (
+  approval: Approval,
+  pr: PullRequest,
+  project: RepositoryRef,
+  rules: MergeGate,
+): MergeStep | undefined => {
+  if (!sameRepository(pr.repository, project))
+    return { kind: 'bounce', reason: notInRepository(approval.pr, project) };
+  const base = rules.base ?? pr.defaultBranch;
+  if (base === null)
+    return {
+      kind: 'bounce',
+      reason: `${repositoryName(project)} has no default branch to merge into; set mergeGate.base`,
+    };
+  if (pr.base !== base)
+    return {
+      kind: 'bounce',
+      reason: `the pull request merges into ${pr.base}, not ${base}; retarget it to ${base} and report again`,
+    };
+  return undefined;
+};
+
 export const mergeStep = (
   approval: Approval,
   pr: PullRequest,
   card: MergeCardState,
   rules: MergeGate,
+  project: RepositoryRef,
 ): MergeStep => {
+  const offTarget = targetStep(approval, pr, project, rules);
+  if (offTarget) return offTarget;
   if (pr.state === 'merged') return { kind: 'merged' };
   if (pr.state === 'closed')
     return {

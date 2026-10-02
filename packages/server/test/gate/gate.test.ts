@@ -1,3 +1,8 @@
+import { execFile } from 'node:child_process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { resolve } from 'node:path';
+import { promisify } from 'node:util';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { MergeGate } from '@quarterdeck/rules';
 import {
@@ -35,6 +40,9 @@ import {
   type TicketEvent,
 } from '../bus/fixtures.ts';
 
+const exec = promisify(execFile);
+
+const ORIGIN = 'git@github.com:legion/quarterdeck.git';
 const PR = 'https://github.com/legion/quarterdeck/pull/23';
 const HEAD = '0123456789abcdef0123456789abcdef01234567';
 const NEXT = 'fedcba9876543210fedcba9876543210fedcba98';
@@ -48,6 +56,9 @@ const RULES: MergeGate = {
 };
 
 const ready = (): PullRequest => ({
+  repository: { hostname: 'github.com', owner: 'legion', name: 'quarterdeck' },
+  base: 'main',
+  defaultBranch: 'main',
   state: 'open',
   head: HEAD,
   draft: false,
@@ -58,6 +69,7 @@ const ready = (): PullRequest => ({
 
 interface FakeGitHub extends GitHubHost {
   pr: PullRequest;
+  fetched: string[];
   merges: { url: string; head: string }[];
   mergeError: string | undefined;
 }
@@ -65,9 +77,13 @@ interface FakeGitHub extends GitHubHost {
 const fakeGitHub = (): FakeGitHub => {
   const github: FakeGitHub = {
     pr: ready(),
+    fetched: [],
     merges: [],
     mergeError: undefined,
-    pullRequest: async () => github.pr,
+    pullRequest: async (url) => {
+      github.fetched.push(url);
+      return github.pr;
+    },
     squashMerge: async (url, head) => {
       if (github.mergeError !== undefined) throw new Error(github.mergeError);
       github.merges.push({ url, head });
@@ -104,6 +120,7 @@ describe('review gate', () => {
   let reviewers: FakeReviewers;
   let gate: ReviewGate | undefined;
   let errors: unknown[];
+  let checkout = '';
 
   const start = async (rules: Partial<MergeGate> = {}): Promise<ReviewGate> => {
     gate = await startReviewGate({
@@ -124,10 +141,14 @@ describe('review gate', () => {
       assignee: builderId,
     });
 
-  const report = async (ticketId: string, head: string | null = HEAD) => {
+  const report = async (
+    ticketId: string,
+    head: string | null = HEAD,
+    pr = PR,
+  ) => {
     const args: Record<string, unknown> = {
       ticket: ticketId,
-      pr: PR,
+      pr,
       notes: 'Reviewer gate and merge, with tests.',
     };
     if (head !== null) args['head'] = head;
@@ -173,6 +194,9 @@ describe('review gate', () => {
 
   beforeAll(async () => {
     store = await openTestStore('gate');
+    checkout = await mkdtemp(resolve(tmpdir(), 'quarterdeck-gate-'));
+    await exec('git', ['init', '-q', checkout]);
+    await exec('git', ['-C', checkout, 'remote', 'add', 'origin', ORIGIN]);
     builderId = await insertAgent(store, store.projectId, 'okapi');
     reviewerId = await insertAgent(store, store.projectId, 'heron', 'reviewer');
     builder = await connectClient(store, builderId);
@@ -183,12 +207,17 @@ describe('review gate', () => {
     await builder.close();
     await reviewer.close();
     await store.close();
+    await rm(checkout, { recursive: true, force: true });
   });
 
   beforeEach(async () => {
     await store.db.exec(
       'delete from events; delete from cards; delete from tickets',
     );
+    await store.db.query('update projects set repo_path = $2 where id = $1', [
+      store.projectId,
+      checkout,
+    ]);
     await store.db.query(`update agents set status = 'working' where id = $1`, [
       reviewerId,
     ]);
@@ -563,6 +592,76 @@ describe('review gate', () => {
       `review gate failed on ticket ${ticketId}: gh api graphql failed: not signed in`,
     );
     expect(await status(ticketId)).toBe('in_review');
+    errors = [];
+  });
+
+  it('bounces a pull request in another repository without fetching or merging it', async () => {
+    const foreign = 'https://github.com/mallory/payroll/pull/9';
+    const ticketId = await assigned();
+    await report(ticketId, HEAD, foreign);
+    await verdict(ticketId);
+    const gate = await start({ autoMerge: true });
+
+    await gate.evaluate(ticketId);
+
+    expect(github.fetched).toEqual([]);
+    expect(github.merges).toEqual([]);
+    expect(await mergeCards()).toEqual([]);
+    expect(await status(ticketId)).toBe('bounced');
+    expect((await gateEvents(GATE_EVENTS.bounced))[0]?.payload).toEqual({
+      reason: `the pull request ${foreign} is not in this project's repository github.com/legion/quarterdeck; open it there and report again`,
+      pr: foreign,
+      head: HEAD,
+    });
+  });
+
+  it('bounces a pull request into a branch other than the default', async () => {
+    github.pr = { ...ready(), base: 'release/1.0' };
+    const ticketId = await approvedTicket();
+    const gate = await start();
+
+    await gate.evaluate(ticketId);
+
+    expect(github.merges).toEqual([]);
+    expect(await status(ticketId)).toBe('bounced');
+    expect((await gateEvents(GATE_EVENTS.bounced))[0]?.payload).toMatchObject({
+      reason:
+        'the pull request merges into release/1.0, not main; retarget it to main and report again',
+    });
+  });
+
+  it('merges into a configured base instead of the default branch', async () => {
+    github.pr = { ...ready(), base: 'trunk' };
+    const ticketId = await approvedTicket();
+    const gate = await start({ base: 'trunk' });
+
+    await gate.evaluate(ticketId);
+
+    expect(github.merges).toEqual([{ url: PR, head: HEAD }]);
+  });
+
+  it('touches GitHub for nothing while the project repository is unknown', async () => {
+    await store.db.query('update projects set repo_path = null where id = $1', [
+      store.projectId,
+    ]);
+    const ticketId = await approvedTicket();
+    const gate = await start();
+
+    expect(errors).toHaveLength(1);
+    await expect(gate.evaluate(ticketId)).rejects.toThrow(
+      'the project has no repo_path',
+    );
+    expect(github.fetched).toEqual([]);
+    expect(github.merges).toEqual([]);
+    expect(await status(ticketId)).toBe('in_review');
+
+    await store.db.query('update projects set repo_path = $2 where id = $1', [
+      store.projectId,
+      checkout,
+    ]);
+    await gate.evaluate(ticketId);
+
+    expect(github.merges).toEqual([{ url: PR, head: HEAD }]);
     errors = [];
   });
 });

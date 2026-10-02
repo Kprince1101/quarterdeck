@@ -2,12 +2,21 @@ import type { MergeGate } from '@quarterdeck/rules';
 import { describe, expect, it } from 'vitest';
 import {
   WAITING,
-  mergeStep,
+  foreignPullRequest,
+  mergeStep as decideMerge,
   reviewStep,
   type Approval,
+  type MergeCardState,
   type PullRequest,
+  type RepositoryRef,
 } from '../../src/gate/index.js';
 import type { TicketFacts } from '../../src/gate/facts.js';
+
+const PROJECT: RepositoryRef = {
+  hostname: 'github.com',
+  owner: 'legion',
+  name: 'quarterdeck',
+};
 
 const PR = 'https://github.com/legion/quarterdeck/pull/23';
 const HEAD = '0123456789abcdef0123456789abcdef01234567';
@@ -51,7 +60,17 @@ const APPROVAL: Approval = {
   cardId: undefined,
 };
 
+const mergeStep = (
+  approval: Approval,
+  pr: PullRequest,
+  card: MergeCardState,
+  rules: MergeGate,
+) => decideMerge(approval, pr, card, rules, PROJECT);
+
 const pull = (extra: Partial<PullRequest> = {}): PullRequest => ({
+  repository: PROJECT,
+  base: 'main',
+  defaultBranch: 'main',
   state: 'open',
   head: HEAD,
   draft: false,
@@ -247,5 +266,104 @@ describe('merge step', () => {
     expect(mergeStep(APPROVAL, threads, 'none', RULES)).toEqual({
       kind: 'merge',
     });
+  });
+
+  it('bounces a pull request GitHub places in another repository, even merged', () => {
+    const fork = pull({
+      state: 'merged',
+      repository: {
+        hostname: 'github.com',
+        owner: 'mallory',
+        name: 'quarterdeck',
+      },
+    });
+    expect(mergeStep(APPROVAL, fork, 'merge', RULES)).toEqual({
+      kind: 'bounce',
+      reason: `the pull request ${PR} is not in this project's repository github.com/legion/quarterdeck; open it there and report again`,
+    });
+  });
+
+  it('matches the repository without regard to case', () => {
+    const shouty = pull({
+      repository: {
+        hostname: 'GitHub.com',
+        owner: 'Legion',
+        name: 'QuarterDeck',
+      },
+    });
+    expect(mergeStep(APPROVAL, shouty, 'none', RULES)).toEqual({
+      kind: 'merge',
+    });
+  });
+
+  it('bounces a pull request into a branch other than the default', () => {
+    const release = pull({ base: 'release/1.0' });
+    expect(mergeStep(APPROVAL, release, 'merge', RULES)).toEqual({
+      kind: 'bounce',
+      reason:
+        'the pull request merges into release/1.0, not main; retarget it to main and report again',
+    });
+    expect(
+      mergeStep(
+        APPROVAL,
+        pull({ state: 'merged', base: 'dev' }),
+        'none',
+        RULES,
+      ),
+    ).toMatchObject({
+      kind: 'bounce',
+    });
+  });
+
+  it('takes a configured base over the default branch', () => {
+    const trunk = { ...RULES, base: 'trunk' };
+    expect(mergeStep(APPROVAL, pull({ base: 'trunk' }), 'none', trunk)).toEqual(
+      {
+        kind: 'merge',
+      },
+    );
+    expect(mergeStep(APPROVAL, pull(), 'none', trunk)).toMatchObject({
+      kind: 'bounce',
+      reason: expect.stringContaining('not trunk'),
+    });
+  });
+
+  it('bounces when the repository has no default branch and no base is set', () => {
+    expect(
+      mergeStep(APPROVAL, pull({ defaultBranch: null }), 'none', RULES),
+    ).toEqual({
+      kind: 'bounce',
+      reason:
+        'github.com/legion/quarterdeck has no default branch to merge into; set mergeGate.base',
+    });
+  });
+});
+
+describe('foreign pull request', () => {
+  it('accepts a pull request URL in the project repository', () => {
+    expect(foreignPullRequest(PR, PROJECT)).toBeUndefined();
+    expect(
+      foreignPullRequest(
+        'https://GITHUB.com/Legion/Quarterdeck/pull/7',
+        PROJECT,
+      ),
+    ).toBeUndefined();
+  });
+
+  it('names another owner, repository or host', () => {
+    for (const url of [
+      'https://github.com/mallory/quarterdeck/pull/23',
+      'https://github.com/legion/commander/pull/23',
+      'https://ghe.example.com/legion/quarterdeck/pull/23',
+    ])
+      expect(foreignPullRequest(url, PROJECT)).toBe(
+        `the pull request ${url} is not in this project's repository github.com/legion/quarterdeck; open it there and report again`,
+      );
+  });
+
+  it('names a URL that is not a pull request', () => {
+    expect(
+      foreignPullRequest('https://github.com/legion/quarterdeck', PROJECT),
+    ).toContain('is not a GitHub pull request URL');
   });
 });

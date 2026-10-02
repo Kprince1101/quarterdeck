@@ -1,27 +1,56 @@
+import { execFile } from 'node:child_process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { resolve } from 'node:path';
+import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import {
   PULL_REQUEST_QUERY,
   ghCli,
+  isCopilot,
+  originRepository,
   parsePullRequest,
   parsePullRequestUrl,
+  parseRemoteUrl,
+  sameRepository,
   type GhRunner,
+  type GitRunner,
 } from '../../src/gate/index.js';
+
+const exec = promisify(execFile);
 
 const PR = 'https://github.com/legion/quarterdeck/pull/23';
 const HEAD = '0123456789abcdef0123456789abcdef01234567';
+
+interface Who {
+  login: string;
+  __typename: string;
+}
 
 interface Shape {
   state?: string;
   isDraft?: boolean;
   mergeable?: string;
   rollup?: unknown;
-  reviews?: (string | null)[];
-  threads?: { isResolved: boolean; login: string | null }[];
+  reviews?: (Who | null)[];
+  threads?: { isResolved: boolean; author: Who | null }[];
+  base?: string;
+  nameWithOwner?: string;
+  repoUrl?: string;
+  defaultBranch?: string | null;
 }
 
-const login = (name: string | null) => {
-  if (name === null) return { author: null };
-  return { author: { login: name } };
+const COPILOT: Who = {
+  login: 'copilot-pull-request-reviewer',
+  __typename: 'Bot',
+};
+const user = (login: string): Who => ({ login, __typename: 'User' });
+
+const login = (author: Who | null) => ({ author });
+
+const defaultBranchOf = (shape: Shape) => {
+  if (shape.defaultBranch === null) return null;
+  return { name: shape.defaultBranch ?? 'main' };
 };
 
 const rollupOf = (shape: Shape): unknown => {
@@ -34,6 +63,12 @@ const reply = (shape: Shape = {}): string =>
     data: {
       repository: {
         pullRequest: {
+          repository: {
+            nameWithOwner: shape.nameWithOwner ?? 'legion/quarterdeck',
+            url: shape.repoUrl ?? 'https://github.com/legion/quarterdeck',
+            defaultBranchRef: defaultBranchOf(shape),
+          },
+          baseRefName: shape.base ?? 'main',
           state: shape.state ?? 'OPEN',
           isDraft: shape.isDraft ?? false,
           mergeable: shape.mergeable ?? 'MERGEABLE',
@@ -51,7 +86,7 @@ const reply = (shape: Shape = {}): string =>
           reviewThreads: {
             nodes: (shape.threads ?? []).map((thread) => ({
               isResolved: thread.isResolved,
-              comments: { nodes: [login(thread.login)] },
+              comments: { nodes: [login(thread.author)] },
             })),
           },
         },
@@ -85,6 +120,13 @@ describe('gh pull request host', () => {
 
   it('reads an open, mergeable pull request with passing checks', () => {
     expect(parsePullRequest(PR, reply())).toEqual({
+      repository: {
+        hostname: 'github.com',
+        owner: 'legion',
+        name: 'quarterdeck',
+      },
+      base: 'main',
+      defaultBranch: 'main',
       state: 'open',
       head: HEAD,
       draft: false,
@@ -147,21 +189,63 @@ describe('gh pull request host', () => {
     });
   });
 
+  it('reads the repository, base and default branch GitHub reports', () => {
+    const pr = parsePullRequest(
+      PR,
+      reply({
+        nameWithOwner: 'Legion/Quarterdeck',
+        repoUrl: 'https://GHE.example.com/Legion/Quarterdeck',
+        base: 'release/1.0',
+        defaultBranch: null,
+      }),
+    );
+
+    expect(pr.repository).toEqual({
+      hostname: 'ghe.example.com',
+      owner: 'Legion',
+      name: 'Quarterdeck',
+    });
+    expect(pr.base).toBe('release/1.0');
+    expect(pr.defaultBranch).toBeNull();
+  });
+
   it('counts Copilot reviews and its unresolved threads only', () => {
     const pr = parsePullRequest(
       PR,
       reply({
-        reviews: ['heron', null, 'copilot-pull-request-reviewer'],
+        reviews: [user('heron'), null, COPILOT],
         threads: [
-          { isResolved: false, login: 'copilot-pull-request-reviewer' },
-          { isResolved: true, login: 'copilot-pull-request-reviewer' },
-          { isResolved: false, login: 'heron' },
-          { isResolved: false, login: null },
+          { isResolved: false, author: COPILOT },
+          { isResolved: true, author: COPILOT },
+          { isResolved: false, author: user('heron') },
+          { isResolved: false, author: null },
         ],
       }),
     );
 
     expect(pr.copilot).toEqual({ reviewed: true, openThreads: 1 });
+  });
+
+  it('does not take a user whose login starts with copilot for Copilot', () => {
+    const pr = parsePullRequest(
+      PR,
+      reply({
+        reviews: [user('copilot-fan'), user('Copilot')],
+        threads: [{ isResolved: false, author: user('copilot-fan') }],
+      }),
+    );
+
+    expect(pr.copilot).toEqual({ reviewed: false, openThreads: 0 });
+  });
+
+  it('knows Copilot by its exact bot logins', () => {
+    expect(isCopilot(COPILOT)).toBe(true);
+    expect(isCopilot({ login: 'Copilot', __typename: 'Bot' })).toBe(true);
+    expect(isCopilot({ login: 'Copilot' })).toBe(true);
+    expect(isCopilot({ login: 'copilot-fan', __typename: 'Bot' })).toBe(false);
+    expect(isCopilot({ login: 'copilot', __typename: 'Bot' })).toBe(false);
+    expect(isCopilot(user('copilot-pull-request-reviewer'))).toBe(false);
+    expect(isCopilot(null)).toBe(false);
   });
 
   it('throws when GitHub has no such pull request', () => {
@@ -222,5 +306,87 @@ describe('gh pull request host', () => {
     await expect(
       ghCli(run).squashMerge('https://example.com/nope', HEAD),
     ).rejects.toThrow('is not a GitHub pull request URL');
+  });
+});
+
+describe('project repository', () => {
+  const QUARTERDECK = {
+    hostname: 'github.com',
+    owner: 'legion',
+    name: 'quarterdeck',
+  };
+
+  it('parses https, ssh and scp-style remotes', () => {
+    for (const remote of [
+      'https://github.com/legion/quarterdeck.git',
+      'https://github.com/legion/quarterdeck',
+      'https://token@github.com/legion/quarterdeck.git/\n',
+      'ssh://git@github.com/legion/quarterdeck.git',
+      'ssh://git@github.com:22/legion/quarterdeck',
+      'git@github.com:legion/quarterdeck.git',
+      'git@GitHub.com:legion/quarterdeck',
+    ])
+      expect(parseRemoteUrl(remote)).toEqual(QUARTERDECK);
+  });
+
+  it('refuses a remote it cannot place on a host', () => {
+    for (const remote of [
+      '/srv/git/quarterdeck.git',
+      'file:///srv/git/quarterdeck.git',
+      'https://github.com/quarterdeck',
+      '',
+    ])
+      expect(() => parseRemoteUrl(remote)).toThrow(
+        'is not a GitHub repository remote',
+      );
+  });
+
+  it('compares repositories without regard to case', () => {
+    expect(
+      sameRepository(QUARTERDECK, {
+        hostname: 'GitHub.com',
+        owner: 'Legion',
+        name: 'Quarterdeck',
+      }),
+    ).toBe(true);
+    expect(
+      sameRepository(QUARTERDECK, { ...QUARTERDECK, owner: 'mallory' }),
+    ).toBe(false);
+  });
+
+  it('asks git for the origin remote of the repo path', async () => {
+    const calls: string[][] = [];
+    const run: GitRunner = async (args) => {
+      calls.push(args);
+      return 'git@github.com:legion/quarterdeck.git\n';
+    };
+
+    expect(await originRepository('/repos/quarterdeck', run)).toEqual(
+      QUARTERDECK,
+    );
+    expect(calls).toEqual([
+      ['-C', '/repos/quarterdeck', 'remote', 'get-url', 'origin'],
+    ]);
+  });
+
+  it('reads the origin of a real checkout, and fails without one', async () => {
+    const root = await mkdtemp(resolve(tmpdir(), 'quarterdeck-origin-'));
+    try {
+      await exec('git', ['init', '-q', root]);
+      await expect(originRepository(root)).rejects.toThrow(
+        `git -C ${root} remote get-url origin failed`,
+      );
+      await exec('git', [
+        '-C',
+        root,
+        'remote',
+        'add',
+        'origin',
+        'https://github.com/legion/quarterdeck.git',
+      ]);
+      expect(await originRepository(root)).toEqual(QUARTERDECK);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

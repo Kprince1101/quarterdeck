@@ -18,6 +18,7 @@ import {
   type PullRequestAt,
 } from './apply.js';
 import {
+  foreignPullRequest,
   mergeStep,
   reviewStep,
   WAITING,
@@ -31,7 +32,12 @@ import {
   readFacts,
   type TicketFacts,
 } from './facts.js';
-import type { GitHubHost } from './github.js';
+import {
+  originRepository,
+  type GitHubHost,
+  type GitRunner,
+  type RepositoryRef,
+} from './github.js';
 import type { ReviewerHost } from './reviewers.js';
 
 export const GATE_POLL_MS = 60_000;
@@ -41,6 +47,7 @@ export interface ReviewGateOptions {
   rules: MergeGate;
   github: GitHubHost;
   reviewers: ReviewerHost;
+  repository?: () => Promise<RepositoryRef>;
   pollMs?: number;
   onError?: (err: unknown) => void;
 }
@@ -56,12 +63,40 @@ interface GateContext {
   rules: MergeGate;
   github: GitHubHost;
   reviewers: ReviewerHost;
+  repository: () => Promise<RepositoryRef>;
 }
 
 const TRIGGERS: readonly string[] = [GATE_EVENTS.reported, GATE_EVENTS.verdict];
 
 const reportGateError = (err: unknown): void => {
   console.error('quarterdeck review gate failed', err);
+};
+
+export const projectRepository = async (
+  store: GateStore,
+  run?: GitRunner,
+): Promise<RepositoryRef> => {
+  const { rows } = await store.db.query<{ repoPath: string | null }>(
+    'select repo_path as "repoPath" from projects where id = $1',
+    [store.projectId],
+  );
+  const repoPath = rows[0]?.repoPath;
+  if (!repoPath)
+    throw new Error(
+      'the project has no repo_path, so the merge gate cannot tell which repository its pull requests belong to',
+    );
+  return originRepository(repoPath, run);
+};
+
+const once = <T>(resolve: () => Promise<T>): (() => Promise<T>) => {
+  let resolved: Promise<T> | undefined;
+  return () => {
+    resolved ??= resolve().catch((err: unknown) => {
+      resolved = undefined;
+      throw err;
+    });
+    return resolved;
+  };
 };
 
 const findReviewer = async (
@@ -164,13 +199,19 @@ const runMergeGate = async (
 ): Promise<void> => {
   const guard = { ticketId: facts.ticket.id, reportId: approval.reportId };
   const at = { pr: approval.pr, head: approval.head };
+  const project = await ctx.repository();
+  const foreign = foreignPullRequest(approval.pr, project);
+  if (foreign !== undefined) {
+    await bounce(ctx.store, guard, foreign, at);
+    return;
+  }
   const card = await mergeCardState(
     ctx.store.db,
     ctx.store.projectId,
     approval.cardId,
   );
   const pr = await ctx.github.pullRequest(approval.pr);
-  const step = mergeStep(approval, pr, card, ctx.rules);
+  const step = mergeStep(approval, pr, card, ctx.rules, project);
   await applyMergeStep(ctx, facts, guard, step, at);
 };
 
@@ -216,7 +257,10 @@ export const startReviewGate = async (
 ): Promise<ReviewGate> => {
   const { store } = options;
   const report = options.onError ?? reportGateError;
-  const ctx: GateContext = options;
+  const ctx: GateContext = {
+    ...options,
+    repository: once(options.repository ?? (() => projectRepository(store))),
+  };
   const chains = new Map<string, Promise<void>>();
   let closed = false;
 
