@@ -34,7 +34,13 @@ describe('bus tool registry', () => {
   it('loads every tool in tools/, named after its file', async () => {
     const tools = await loadBusTools(BUS_TOOLS_DIR);
 
-    expect(tools.map((tool) => tool.name)).toEqual(['ask', 'read', 'status']);
+    expect(tools.map((tool) => tool.name)).toEqual([
+      'ask',
+      'read',
+      'report',
+      'status',
+      'verdict',
+    ]);
   });
 
   it(

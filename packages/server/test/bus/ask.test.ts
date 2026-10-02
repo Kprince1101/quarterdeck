@@ -25,6 +25,7 @@ import {
   connectClient,
   insertAgent,
   openTestStore,
+  readRows,
 } from './fixtures.ts';
 
 interface CardRow {
@@ -294,6 +295,49 @@ describe('bus ask', () => {
       expect((await cards())[0]?.status).toBe('open');
       expect(await events()).toHaveLength(1);
       await settle(card.id, 'answered', 'yes');
+    },
+    TIMEOUT,
+  );
+
+  it(
+    'tells the agent how to find its card after a failed call, and read finds it',
+    async () => {
+      const client = await connect();
+      const { tools } = await client.listTools();
+      const description =
+        tools.find((tool) => tool.name === 'ask')?.description ?? '';
+      expect(description).toContain('fails or times out');
+      expect(description).toContain('cards filtered by your own agent_id');
+      expect(description).toContain('card.asked');
+
+      const controller = new AbortController();
+      const reply = client.callTool(
+        { name: 'ask', arguments: ASK },
+        CallToolResultSchema,
+        { signal: controller.signal },
+      );
+      const card = await openCard();
+      controller.abort();
+      await expect(reply).rejects.toThrow();
+      await settle(card.id, 'answered', 'no');
+
+      expect(
+        await readRows(client, {
+          table: 'cards',
+          columns: ['id', 'status', 'answer'],
+          filters: [{ column: 'agent_id', value: agentId }],
+        }),
+      ).toEqual([{ id: card.id, status: 'answered', answer: 'no' }]);
+      expect(
+        await readRows(client, {
+          table: 'events',
+          columns: ['payload'],
+          filters: [
+            { column: 'kind', value: 'card.asked' },
+            { column: 'agent_id', value: agentId },
+          ],
+        }),
+      ).toEqual([{ payload: { cardId: card.id } }]);
     },
     TIMEOUT,
   );

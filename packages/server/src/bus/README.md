@@ -1,6 +1,6 @@
 # bus
 
-The bus MCP server handed to every agent session: the tools agents use to reach Quarterdeck. This package has `ask`, `status` and `read`; `report` and `verdict` follow.
+The bus MCP server handed to every agent session: the tools agents use to reach Quarterdeck: `status`, `read`, `ask`, `report` and `verdict`.
 
 ## How a session reaches it
 
@@ -24,6 +24,32 @@ The token is in the relay's environment, which any process of the same OS user c
 This binds a connection to an agent but does not make a tool call trustworthy beyond that. Tools that grant authority, such as `verdict`, must also check the calling agent's role server-side.
 
 ## Tools
+
+### `status(text)`
+
+Sets the caller's one-line progress note. Whitespace runs, newlines included, fold to one space; a blank note or one over 200 characters is an error. Records an `agent.status` event with `{ text }` for the caller; the latest one is the agent's note on the board. Returns `noted`.
+
+### `read(table, columns?, filters?, order?, limit?)`
+
+Reads rows of the caller's project. The caller never sends SQL: tables and columns come from the allowlist in `tables.ts`, values are bound as parameters, and every query is scoped to the project.
+
+- `table`: `projects` (this project's row only), `rounds`, `agents`, `tickets`, `cards`, `turns` (scoped through their agent), `events`, `notebook`, `charter_proposals`, `budget`. `layouts`, `intents`, `schema_migrations`, `project_id` and `agents.session_id` are not readable. Names are matched as own keys of the allowlist, so `constructor` or `__proto__` is just an unknown column.
+- `columns`: any subset of the table's readable columns; all of them by default.
+- `filters`: ANDed `{ column, op, value }`. `op` defaults to `eq`.
+
+  | Column kind                                | Ops                                                                            |
+  | ------------------------------------------ | ------------------------------------------------------------------------------ |
+  | `uuid`, `int`, `numeric`, `bool`, `time`   | `eq`, `neq` (null-safe), `lt`, `lte`, `gt`, `gte`, `in`, `is_null`, `not_null` |
+  | `text`                                     | the above plus `contains` (case-insensitive substring, `%` and `_` literal)    |
+  | `uuids` (`tickets.depends_on`)             | `contains` (has this id), `is_null`, `not_null`                                |
+  | `json` (`events.payload`, `cards.options`) | `is_null`, `not_null`                                                          |
+
+  `in` takes an array of 1 to 100 values; `is_null` and `not_null` take none.
+
+- `order`: up to 5 `{ column, direction }`, `asc` by default; not on `uuids` or `json` columns. The table's default order (newest first) breaks ties and applies when `order` is omitted.
+- `limit`: 1 to 200, default 50.
+
+Returns a JSON array of rows built by Postgres (`json_build_object`), so timestamps are ISO strings and `bigint` and `numeric` are numbers. A reply over `READ_REPLY_MAX_BYTES` (100 000 bytes) is an error asking the agent to narrow its columns, add filters or lower the limit. A bad table, column, op, value or limit is a tool error naming what was wrong.
 
 ### `ask(question, options?, checked, recommendation)`
 
@@ -51,31 +77,22 @@ Expiry never overwrites an answer that landed first: the update only touches an 
 
 While waiting, a caller that sent a `progressToken` gets a `notifications/progress` every `ASK_PROGRESS_MS` (30 s), so MCP clients that reset their request timeout on progress do not give up on a long wait.
 
-### `status(text)`
+A runtime's MCP client may still give up first. The tool description tells the agent what to do then: `read` `cards` filtered by its own `agent_id` (newest first), or the `card.asked` events with its `agent_id` for the `cardId`, and take the card's `status` and `answer` from there.
 
-Sets the caller's one-line progress note. Whitespace runs, newlines included, fold to one space; a blank note or one over 200 characters is an error. Records an `agent.status` event with `{ text }` for the caller; the latest one is the agent's note on the board. Returns `noted`.
+### `report(ticket, pr, notes, head?)`
 
-### `read(table, columns?, filters?, order?, limit?)`
+A builder hands its pull request to review. `ticket` is a ticket id of this project assigned to the caller, in status `assigned`, `in_progress`, `bounced` or `in_review` (a re-report after new commits); anything else, or a ticket assigned to another agent, is an error and changes nothing. `pr` is an `http(s)` URL of at most `PR_URL_MAX` (2000) characters, `notes` is trimmed and 1 to `REVIEW_NOTES_MAX` (8000) characters, and `head`, when given, is the 40-character lowercase head commit.
 
-Reads rows of the caller's project. The caller never sends SQL: tables and columns come from the allowlist in `tables.ts`, values are bound as parameters, and every query is scoped to the project.
+In one transaction the ticket becomes `in_review` with `pr_url` and `head_sha` set (`head_sha` is cleared when `head` is left out, so a stale commit never stands), and a `ticket.reported` event is recorded for the caller and the ticket with `{ pr, head, notes, reviewerId }`. That event is the reviewer handoff: `reviewerId` is the project's live reviewer (role `reviewer`, not `ended`, `killed` or `retired`; the oldest if there are several), or `null` when there is none yet. Returns `ticket <id> is in review; handed to <reviewer>`, or says it waits for a reviewer.
 
-- `table`: `projects` (this project's row only), `rounds`, `agents`, `tickets`, `cards`, `turns` (scoped through their agent), `events`, `notebook`, `charter_proposals`, `budget`. `layouts`, `intents`, `schema_migrations`, `project_id` and `agents.session_id` are not readable. Names are matched as own keys of the allowlist, so `constructor` or `__proto__` is just an unknown column.
-- `columns`: any subset of the table's readable columns; all of them by default.
-- `filters`: ANDed `{ column, op, value }`. `op` defaults to `eq`.
+### `verdict(ticket, decision, notes)`
 
-  | Column kind                                | Ops                                                                            |
-  | ------------------------------------------ | ------------------------------------------------------------------------------ |
-  | `uuid`, `int`, `numeric`, `bool`, `time`   | `eq`, `neq` (null-safe), `lt`, `lte`, `gt`, `gte`, `in`, `is_null`, `not_null` |
-  | `text`                                     | the above plus `contains` (case-insensitive substring, `%` and `_` literal)    |
-  | `uuids` (`tickets.depends_on`)             | `contains` (has this id), `is_null`, `not_null`                                |
-  | `json` (`events.payload`, `cards.options`) | `is_null`, `not_null`                                                          |
+The reviewer's verdict on a ticket in review. Only an agent with role `reviewer` that is not `ended`, `killed` or `retired` may call it; the role is checked against the `agents` row on every call, not taken from the session. The ticket must be in this project, `in_review`, and not assigned to the caller. `decision` is `approve` or `changes`; `notes` is as for `report`.
 
-  `in` takes an array of 1 to 100 values; `is_null` and `not_null` take none.
+- `approve` leaves the ticket `in_review` for the merge gate.
+- `changes` moves it to `bounced`, back to its builder, who fixes it and reports again.
 
-- `order`: up to 5 `{ column, direction }`, `asc` by default; not on `uuids` or `json` columns. The table's default order (newest first) breaks ties and applies when `order` is omitted.
-- `limit`: 1 to 200, default 50.
-
-Returns a JSON array of rows built by Postgres (`json_build_object`), so timestamps are ISO strings and `bigint` and `numeric` are numbers. A reply over `READ_REPLY_MAX_BYTES` (100 000 bytes) is an error asking the agent to narrow its columns, add filters or lower the limit. A bad table, column, op, value or limit is a tool error naming what was wrong.
+Either way a `ticket.verdict` event is recorded for the reviewer and the ticket with `{ decision, notes, pr, head }`, `pr` and `head` being what the ticket held when the verdict was given. The latest `ticket.verdict` for a ticket is its verdict, and a later `ticket.reported` withdraws it, so the merge gate should merge only when the newest of the two is an approval and the PR head still matches its `head`.
 
 ## Adding a tool
 
@@ -109,4 +126,5 @@ export default defineBusTool({
 | `defineBusTool(spec)`, `BusToolError`, `BusContext`, `BusCall`                                                                                         | Typed tool definition, and an error whose message is meant for the agent.                                                                                                                                    |
 | `buildReadQuery(projectId, request)`                                                                                                                   | The SQL and parameters `read` runs, for tests and for other readers that must stay inside the allowlist.                                                                                                     |
 | `READ_TABLES`, `READ_TABLE_NAMES`, `READ_REPLY_MAX_BYTES`                                                                                              | The allowlist: readable tables, their columns and kinds, scope and default order.                                                                                                                            |
+| `PR_URL_MAX`, `REVIEW_NOTES_MAX`                                                                                                                       | The longest `pr` URL and `notes` that `report` and `verdict` take.                                                                                                                                           |
 | `BUS_RELAY`, `BUS_SOCKET_ENV`, `BUS_TOKEN_ENV`                                                                                                         | The relay script path and the environment it reads.                                                                                                                                                          |

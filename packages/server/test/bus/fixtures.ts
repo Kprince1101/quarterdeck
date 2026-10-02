@@ -21,11 +21,12 @@ export const insertAgent = async (
   store: Pick<Store, 'db'>,
   projectId: string,
   name: string,
+  role = 'builder',
 ): Promise<string> => {
   const { rows } = await store.db.query<{ id: string }>(
-    `insert into agents (project_id, name, role) values ($1, $2, 'builder')
+    `insert into agents (project_id, name, role) values ($1, $2, $3)
      returning id`,
-    [projectId, name],
+    [projectId, name, role],
   );
   const [row] = rows;
   if (!row) throw new Error(`could not insert agent ${name}`);
@@ -43,6 +44,56 @@ export const insertProject = async (
   const [row] = rows;
   if (!row) throw new Error(`could not insert project ${slug}`);
   return row.id;
+};
+
+export interface TicketRow {
+  status: string;
+  assignee_id: string | null;
+  pr_url: string | null;
+  head_sha: string | null;
+}
+
+export const insertTicket = async (
+  store: Pick<Store, 'db'>,
+  projectId: string,
+  extra: { status?: string; assignee?: string } = {},
+): Promise<string> => {
+  const { rows } = await store.db.query<{ id: string }>(
+    `insert into tickets (project_id, title, status, assignee_id)
+     values ($1, 'QD4c report + verdict', $2, $3) returning id`,
+    [projectId, extra.status ?? 'open', extra.assignee ?? null],
+  );
+  const [row] = rows;
+  if (!row) throw new Error('could not insert ticket');
+  return row.id;
+};
+
+export const ticketRow = async (
+  store: Pick<Store, 'db'>,
+  ticketId: string,
+): Promise<TicketRow | undefined> => {
+  const { rows } = await store.db.query<TicketRow>(
+    'select status, assignee_id, pr_url, head_sha from tickets where id = $1',
+    [ticketId],
+  );
+  return rows[0];
+};
+
+export interface TicketEvent {
+  agent_id: string | null;
+  ticket_id: string | null;
+  kind: string;
+  payload: Record<string, unknown>;
+}
+
+export const ticketEvents = async (
+  store: Pick<Store, 'db'>,
+): Promise<TicketEvent[]> => {
+  const { rows } = await store.db.query<TicketEvent>(
+    `select agent_id, ticket_id, kind, payload from events
+     where kind like 'ticket.%' order by id`,
+  );
+  return rows;
 };
 
 export const connectClient = async (

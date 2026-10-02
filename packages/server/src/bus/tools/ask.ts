@@ -16,6 +16,9 @@ export default defineBusTool({
     'Give the question, the options to choose from (omit for a free-text answer), what you already checked, and your recommendation (one of the options when there are options).',
     'Returns JSON {cardId, status, answer}: status answered with their answer, or declined or expired with answer null.',
     'Declined or expired is an answer too: carry on without them, or stop and report.',
+    'If this call fails or times out, the card is still on the board: do not ask again. ' +
+      'Find it with read on cards filtered by your own agent_id (newest first), or on events where kind is card.asked and agent_id is yours (payload.cardId), ' +
+      'and take its status and answer; while status is open, nobody has answered yet.',
   ].join('\n'),
   input: {
     question: text(QUESTION_MAX),

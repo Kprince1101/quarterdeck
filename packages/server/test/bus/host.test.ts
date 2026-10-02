@@ -94,7 +94,9 @@ describe('bus host', () => {
       expect(tools.map((tool) => tool.name).toSorted()).toEqual([
         'ask',
         'read',
+        'report',
         'status',
+        'verdict',
       ]);
       expect(await callTool(client, 'status', { text: 'over stdio' })).toEqual({
         text: 'noted',
