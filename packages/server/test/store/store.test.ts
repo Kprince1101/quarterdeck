@@ -7,8 +7,8 @@ import {
   IN_MEMORY,
   STORE_TABLES,
   openStore,
-} from '../../store/index.js';
-import type { Store } from '../../store/index.js';
+} from '../../src/store/index.js';
+import type { Store } from '../../src/store/index.js';
 
 const TIMEOUT = 30_000;
 

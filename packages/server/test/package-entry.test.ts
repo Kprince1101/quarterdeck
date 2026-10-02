@@ -1,58 +1,82 @@
 import { spawnSync } from 'node:child_process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { FAKE_AGENT_NAME, fakeAgentLaunch } from './acp/fake-agent/index.ts';
+import { isAlive } from './acp/process-check.ts';
 
 interface EntryReport {
+  migrated: string[];
+  kind: string;
   agent: string;
   pid: number;
   events: string[];
 }
 
 const ROOT = resolve(import.meta.dirname, '../../..');
-const STUB_AGENT = resolve(import.meta.dirname, 'acp/stub-agent.ts');
+const TIMEOUT = 30_000;
 const ENTRY_SCRIPT = [
-  "const { spawnAcpClient } = await import('@quarterdeck/server');",
+  "const { openStore, spawnAcpClient } = await import('@quarterdeck/server');",
+  'const [home, launch] = process.argv.slice(1);',
+  "const store = await openStore({ project: 'deck', home });",
+  "const published = await store.publish({ kind: 'entry' });",
+  'await store.close();',
   'const events = [];',
-  'const client = await spawnAcpClient(',
-  "  { command: process.execPath, args: ['--experimental-strip-types', '--no-warnings', process.argv[1], 'resume', 'serve'] },",
-  '  {',
-  "    clientName: 'entry-check',",
-  "    clientVersion: '0.0.0',",
-  "    onPermissionRequest: async () => ({ outcome: { outcome: 'cancelled' } }),",
-  '    onEvent: (event) => events.push(event),',
-  '  },',
-  ');',
+  'const client = await spawnAcpClient(JSON.parse(launch), {',
+  "  clientName: 'entry-check',",
+  "  clientVersion: '0.0.0',",
+  "  onPermissionRequest: async () => ({ outcome: { outcome: 'cancelled' } }),",
+  '  onEvent: (event) => events.push(event),',
+  '});',
   'await client.close();',
   "const spawned = events.find((event) => event.type === 'spawned');",
   'process.stdout.write(JSON.stringify({',
+  '  migrated: store.migrated,',
+  '  kind: published.kind,',
   '  agent: client.agent.agentInfo.name,',
   '  pid: spawned.pid,',
   "  events: events.map((event) => event.type).filter((type) => type !== 'stderr'),",
   '}));',
 ].join('\n');
 
-const isAlive = (pid: number) => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
 describe('@quarterdeck/server package entry', () => {
-  it('drives an ACP agent from plain Node and stops it', () => {
-    const result = spawnSync(
-      process.execPath,
-      ['--input-type=module', '--eval', ENTRY_SCRIPT, STUB_AGENT],
-      { cwd: ROOT, encoding: 'utf8' },
-    );
+  let home = '';
 
-    expect(result.stderr).toBe('');
-    expect(result.status).toBe(0);
-    const report = JSON.parse(result.stdout) as EntryReport;
-    expect(report.agent).toBe('stub-agent');
-    expect(report.events).toEqual(['spawned', 'closed', 'exit']);
-    expect(isAlive(report.pid)).toBe(false);
+  beforeEach(async () => {
+    home = await mkdtemp(resolve(tmpdir(), 'quarterdeck-server-entry-'));
   });
+
+  afterEach(async () => {
+    await rm(home, { recursive: true, force: true });
+  });
+
+  it(
+    'opens a migrated store and drives an ACP agent from plain Node',
+    () => {
+      const result = spawnSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '--eval',
+          ENTRY_SCRIPT,
+          home,
+          JSON.stringify(fakeAgentLaunch()),
+        ],
+        { cwd: ROOT, encoding: 'utf8' },
+      );
+
+      expect(result.stderr).toBe('');
+      expect(result.status).toBe(0);
+      const report = JSON.parse(result.stdout) as EntryReport;
+      expect(report).toMatchObject({
+        migrated: ['0001_init'],
+        kind: 'entry',
+        agent: FAKE_AGENT_NAME,
+        events: ['spawned', 'closed', 'exit'],
+      });
+      expect(isAlive(report.pid)).toBe(false);
+    },
+    TIMEOUT,
+  );
 });
