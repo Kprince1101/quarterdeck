@@ -66,6 +66,7 @@ export const ticketRowSchema = z.object({
   title: z.string(),
   body: z.string(),
   status: z.enum([
+    'proposed',
     'open',
     'assigned',
     'in_progress',
@@ -73,6 +74,7 @@ export const ticketRowSchema = z.object({
     'bounced',
     'done',
     'cancelled',
+    'rejected',
   ]),
   dependsOn: z.array(idSchema),
   source: z.string(),

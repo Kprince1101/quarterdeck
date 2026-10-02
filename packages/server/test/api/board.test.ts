@@ -227,6 +227,134 @@ describe('board intents', { timeout: TIMEOUT }, () => {
       });
       expect(busy.status).toBe(409);
     });
+
+    const insertProposed = async (title: string, dependsOn: string[] = []) => {
+      const { rows } = await store.db.query<{ id: string }>(
+        `insert into tickets (project_id, title, depends_on, status)
+         values ($1, $2, $3::uuid[], 'proposed') returning id`,
+        [store.projectId, title, dependsOn],
+      );
+      const id = rows[0]?.id;
+      if (id === undefined) throw new Error('proposal not stored');
+      return id;
+    };
+
+    it('approves a proposal, with the edits the human made', async () => {
+      const ticketId = await insertProposed('draft');
+      const res = await t.send('ticket.approve', {
+        project,
+        ticketId,
+        title: 'QD5b Planner',
+      });
+      expect(res).toMatchObject({
+        status: 200,
+        body: { result: { ticketId, status: 'open' } },
+      });
+      expect(await ticketRow(ticketId)).toEqual({
+        title: 'QD5b Planner',
+        status: 'open',
+        depends_on: [],
+      });
+      expect(await intentRow(store, res.body.id)).toMatchObject({
+        kind: 'ticket.approve',
+        status: 'applied',
+      });
+      const again = await t.send('ticket.approve', { project, ticketId });
+      expect(again).toMatchObject({
+        status: 409,
+        body: { error: `ticket ${ticketId} is open, not proposed` },
+      });
+    });
+
+    it('edits a proposal in place and keeps it proposed', async () => {
+      const ticketId = await insertProposed('draft');
+      await t.send('ticket.update', { project, ticketId, body: 'tests first' });
+      const { rows } = await store.db.query(
+        'select body, status from tickets where id = $1',
+        [ticketId],
+      );
+      expect(rows).toEqual([{ body: 'tests first', status: 'proposed' }]);
+    });
+
+    it('holds approval until every dependency is approved', async () => {
+      const first = await insertProposed('store');
+      const second = await insertProposed('api', [first]);
+      const blocked = await t.send('ticket.approve', {
+        project,
+        ticketId: second,
+      });
+      expect(blocked).toMatchObject({
+        status: 409,
+        body: {
+          error: `ticket ${second} depends on tickets that are not approved: ${first} (proposed)`,
+        },
+      });
+      expect((await ticketRow(second))?.status).toBe('proposed');
+      await t.send('ticket.approve', { project, ticketId: first });
+      const approved = await t.send('ticket.approve', {
+        project,
+        ticketId: second,
+      });
+      expect(approved.status).toBe(200);
+    });
+
+    it('lets an approval drop a rejected dependency', async () => {
+      const first = await insertProposed('spike');
+      const second = await insertProposed('build', [first]);
+      await t.send('ticket.reject', { project, ticketId: first });
+      const blocked = await t.send('ticket.approve', {
+        project,
+        ticketId: second,
+      });
+      expect(blocked.body.error).toBe(
+        `ticket ${second} depends on tickets that are not approved: ${first} (rejected)`,
+      );
+      const approved = await t.send('ticket.approve', {
+        project,
+        ticketId: second,
+        dependsOn: [],
+      });
+      expect(approved.status).toBe(200);
+      expect(await ticketRow(second)).toMatchObject({
+        status: 'open',
+        depends_on: [],
+      });
+    });
+
+    it('rejects a proposal and then refuses to change it', async () => {
+      const ticketId = await insertProposed('not now');
+      const res = await t.send('ticket.reject', { project, ticketId });
+      expect(res).toMatchObject({
+        status: 200,
+        body: { result: { ticketId, status: 'rejected' } },
+      });
+      expect((await ticketRow(ticketId))?.status).toBe('rejected');
+      expect(
+        (await t.send('ticket.update', { project, ticketId, title: 'y' }))
+          .status,
+      ).toBe(409);
+      expect(
+        (await t.send('ticket.approve', { project, ticketId })).status,
+      ).toBe(409);
+      expect(
+        (await t.send('ticket.reject', { project, ticketId })).status,
+      ).toBe(409);
+    });
+
+    it('only approves or rejects proposals', async () => {
+      const created = await t.send('ticket.create', { project, title: 'open' });
+      const { ticketId } = created.body.result as { ticketId: string };
+      expect(
+        (await t.send('ticket.reject', { project, ticketId })).body,
+      ).toEqual({
+        error: `ticket ${ticketId} is open, not proposed`,
+      });
+      const missing = await t.send('ticket.approve', {
+        project,
+        ticketId: crypto.randomUUID(),
+      });
+      expect(missing.status).toBe(404);
+    });
   });
 
   describe('charter', () => {
