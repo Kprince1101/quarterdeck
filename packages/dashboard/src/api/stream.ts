@@ -109,21 +109,23 @@ export const openStream = (options: StreamOptions = {}): StreamConnection => {
   const connect = (): void => {
     timer = undefined;
     const ws = new Socket(resumeUrl(url, state.cursor));
-    socket = ws;
-    ws.addEventListener('message', (event) => {
-      if (socket === ws) receive(event.data);
-    });
-    ws.addEventListener('close', (event) => {
+    const drop = (reason: string): void => {
       if (socket !== ws) return;
       socket = undefined;
       const delay = Math.min(maxRetryDelay, retryDelay * 2 ** retries);
       retries += 1;
-      update({
-        ...state,
-        status: 'reconnecting',
-        error: `stream closed (${event.code})`,
-      });
+      update({ ...state, status: 'reconnecting', error: reason });
       timer = setTimeout(connect, delay);
+    };
+    socket = ws;
+    ws.addEventListener('message', (event) => {
+      if (socket === ws) receive(event.data);
+    });
+    ws.addEventListener('error', () => {
+      drop('stream failed');
+    });
+    ws.addEventListener('close', (event) => {
+      drop(`stream closed (${event.code})`);
     });
   };
 

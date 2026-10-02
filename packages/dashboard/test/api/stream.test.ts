@@ -1,19 +1,24 @@
+import type { StreamMessage } from '@quarterdeck/server/stream-schema';
 import {
   afterAll,
   afterEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   it,
   vi,
 } from 'vitest';
+import { WebSocket as WsSocket } from 'ws';
 import {
   defaultStreamUrl,
+  emptyTables,
   openStream,
   resumeUrl,
   type StreamConnection,
   type StreamState,
 } from '../../src/api/index.js';
+import { FAKE_WEBSOCKET, FakeSocket } from './fake-socket.js';
 import { TIMEOUT, startDeck, waitFor, type Deck } from './harness.js';
 
 const notes = (state: StreamState): string[] =>
@@ -51,17 +56,128 @@ describe('stream urls', () => {
   });
 });
 
+describe('stream retries', () => {
+  const STREAM_URL = 'ws://127.0.0.1:4317/ws';
+  const SNAPSHOT: StreamMessage = {
+    type: 'snapshot',
+    cursor: 9,
+    tables: emptyTables(),
+  };
+
+  const open = (onError?: (err: unknown) => void) =>
+    openStream({
+      url: STREAM_URL,
+      WebSocket: FAKE_WEBSOCKET,
+      retryDelayMs: 100,
+      maxRetryDelayMs: 300,
+      onError,
+    });
+
+  const latest = (): FakeSocket => {
+    const socket = FakeSocket.opened.at(-1);
+    if (!socket) throw new Error('no socket opened');
+    return socket;
+  };
+
+  const expectRetryAfter = (delay: number): void => {
+    const before = FakeSocket.opened.length;
+    vi.advanceTimersByTime(delay - 1);
+    expect(FakeSocket.opened).toHaveLength(before);
+    vi.advanceTimersByTime(1);
+    expect(FakeSocket.opened).toHaveLength(before + 1);
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    FakeSocket.opened = [];
+  });
+
+  it('retries a failed socket on a doubling, capped delay', () => {
+    const connection = open();
+    [100, 200, 300, 300].forEach((delay) => {
+      latest().fail();
+      expect(connection.state).toMatchObject({
+        status: 'reconnecting',
+        error: 'stream failed',
+      });
+      expectRetryAfter(delay);
+    });
+    connection.close();
+  });
+
+  it('resumes from its cursor and resets the delay after a snapshot', () => {
+    const connection = open();
+    latest().fail();
+    expectRetryAfter(100);
+    latest().deliver(SNAPSHOT);
+    latest().drop(1006);
+    expect(connection.state).toMatchObject({
+      status: 'reconnecting',
+      cursor: 9,
+      error: 'stream closed (1006)',
+    });
+    expectRetryAfter(100);
+    expect(latest().url).toBe(`${STREAM_URL}?after=9`);
+    connection.close();
+  });
+
+  it('ignores a socket it has moved on from', () => {
+    const connection = open();
+    const old = latest();
+    old.fail();
+    old.drop(1006);
+    expectRetryAfter(100);
+    old.deliver(SNAPSHOT);
+    old.drop(1006);
+    expect(connection.state).toMatchObject({
+      status: 'reconnecting',
+      cursor: null,
+    });
+    vi.advanceTimersByTime(1000);
+    expect(FakeSocket.opened).toHaveLength(2);
+    connection.close();
+  });
+
+  it('reports a message it cannot read and keeps going', () => {
+    const onError = vi.fn();
+    const connection = open(onError);
+    latest().deliverRaw('{"type":"snapshot"}');
+    expect(onError).toHaveBeenCalledOnce();
+    expect(connection.state).toMatchObject({
+      status: 'connecting',
+      cursor: null,
+    });
+    expect(connection.state.error).toContain('cursor');
+    latest().deliver(SNAPSHOT);
+    expect(connection.state).toMatchObject({ status: 'live', error: null });
+    connection.close();
+  });
+
+  it('stops retrying once closed', () => {
+    const connection = open();
+    latest().fail();
+    connection.close();
+    vi.advanceTimersByTime(1000);
+    expect(FakeSocket.opened).toHaveLength(1);
+    expect(connection.state.status).toBe('closed');
+  });
+});
+
 describe('stream connection', { timeout: TIMEOUT }, () => {
   let deck: Deck;
   const connections: StreamConnection[] = [];
 
   const connect = (
     url: string,
-    Socket: typeof WebSocket = WebSocket,
+    Socket: new (url: string) => WsSocket = WsSocket,
   ): StreamConnection => {
     const connection = openStream({
       url,
-      WebSocket: Socket,
+      WebSocket: Socket as unknown as typeof WebSocket,
       retryDelayMs: 10,
       maxRetryDelayMs: 50,
     });
@@ -98,19 +214,25 @@ describe('stream connection', { timeout: TIMEOUT }, () => {
     );
     expect(kinds(replayed)).toEqual(['project.create', 'notebook.add']);
 
-    await addNote('after');
+    const added = await addNote('after');
     const followed = await waitFor(
       connection,
-      (state) => notes(state).length === 2 && state.events.length > 0,
+      (state) =>
+        notes(state).length === 2 &&
+        state.events.some(({ payload }) => isIntent(payload, added.id)),
     );
     expect(notes(followed)).toEqual(['after', 'before']);
-    expect(kinds(followed).at(-1)).toBe('notebook.add');
+    expect(kinds(followed)).toEqual([
+      'project.create',
+      'notebook.add',
+      'notebook.add',
+    ]);
     expect(followed.cursor).toBe(followed.events.at(-1)?.id);
   });
 
   it('reconnects after the server drops and loses no event', async () => {
     const urls: string[] = [];
-    class RecordingSocket extends WebSocket {
+    class RecordingSocket extends WsSocket {
       constructor(url: string | URL) {
         urls.push(String(url));
         super(url);
@@ -120,11 +242,12 @@ describe('stream connection', { timeout: TIMEOUT }, () => {
     const connection = connect(first.url, RecordingSocket);
     await waitFor(connection, (state) => state.status === 'live');
 
-    await first.close();
-    const away = await waitFor(
+    const dropped = waitFor(
       connection,
       (state) => state.status === 'reconnecting',
     );
+    await first.close();
+    const away = await dropped;
     expect(away.error).toBe('stream closed (1001)');
     const missed = await addNote('while away');
 

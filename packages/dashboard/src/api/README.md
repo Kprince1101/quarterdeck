@@ -50,6 +50,6 @@ const Board = () => {
 
 Each snapshot replaces `tables`. A `change` upserts its row by `id`, or removes it when `row` is `null`; removing an agent also removes its turns, since the server sends no deletes for those. Turns are kept to each agent's latest `turnsPerAgent` (20), like the snapshot. Messages that do not match `streamMessageSchema` are skipped and reported through `error` and `onError`.
 
-When the socket drops, it reconnects after `retryDelayMs` (500), doubling up to `maxRetryDelayMs` (10 000), with `?after=<cursor>` so no event is lost or repeated. The hook closes the socket on unmount and starts over when `url` changes.
+When the socket closes or errors, it reconnects after `retryDelayMs` (500), doubling up to `maxRetryDelayMs` (10 000), with `?after=<cursor>` so no event is lost or repeated. The hook closes the socket on unmount and starts over when `url` changes.
 
 `openStream(options)` is the same connection without React: `state`, `subscribe(listener)` and `close()`. `applyStreamMessage(state, message)` is the reducer both use.

@@ -10,6 +10,7 @@ import {
   type StreamOptions,
   type StreamState,
 } from '../../src/api/index.js';
+import { FAKE_WEBSOCKET, FakeSocket } from './fake-socket.js';
 
 const happyDomPage = globalThis as unknown as {
   document: {
@@ -19,29 +20,6 @@ const happyDomPage = globalThis as unknown as {
 
 const URL_A = 'ws://127.0.0.1:4317/ws';
 const URL_B = 'ws://127.0.0.1:4318/ws';
-
-class FakeSocket extends EventTarget {
-  static opened: FakeSocket[] = [];
-
-  readonly url: string;
-  closedWith: number | undefined;
-
-  constructor(url: string) {
-    super();
-    this.url = url;
-    FakeSocket.opened.push(this);
-  }
-
-  close(code?: number): void {
-    this.closedWith = code;
-  }
-
-  deliver(message: StreamMessage): void {
-    this.dispatchEvent(
-      new MessageEvent('message', { data: JSON.stringify(message) }),
-    );
-  }
-}
 
 const SNAPSHOT: StreamMessage = {
   type: 'snapshot',
@@ -84,7 +62,7 @@ const renderUseStream = (initial: StreamOptions): Rendered => {
 
 const options = (url: string): StreamOptions => ({
   url,
-  WebSocket: FakeSocket as unknown as typeof WebSocket,
+  WebSocket: FAKE_WEBSOCKET,
 });
 
 describe('useStream', () => {
