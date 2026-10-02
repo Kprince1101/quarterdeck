@@ -1,15 +1,26 @@
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { getErrorMessage, hasErrorCode } from '../../lib/errors.js';
+import { getErrorMessage, hasErrorCode } from '../../../lib/errors.js';
 
 export const CLAUDE_PERMISSION_SETTINGS = 'claude_permission_settings';
 
 const DEFAULT_MODES = new Set(['default', 'manual']);
 
+export type ClaudeSettingsTier = 'user' | 'project' | 'local';
+
+export type ClaudeSettingsKind = 'allow' | 'default_mode' | 'unreadable';
+
 export interface ClaudeSettingsOverride {
   path: string;
+  tier: ClaudeSettingsTier;
+  kind: ClaudeSettingsKind;
   reason: string;
+}
+
+export interface ClaudeSettingsFile {
+  path: string;
+  tier: ClaudeSettingsTier;
 }
 
 export class ClaudePermissionSettingsError extends Error {
@@ -21,27 +32,32 @@ export class ClaudePermissionSettingsError extends Error {
       .map(({ path, reason }) => `${path}: ${reason}`)
       .join('; ');
     super(
-      `Claude settings would answer permission requests before the project's rules, and this agent command cannot be told to ignore them. ${listed}`,
+      `Claude settings would answer permission requests before the project's rules. ${listed}`,
     );
     this.name = 'ClaudePermissionSettingsError';
     this.overrides = overrides;
   }
 }
 
-export const claudeSettingsPaths = (
+export const claudeSettingsFiles = (
   cwd: string,
   env: NodeJS.ProcessEnv,
-): string[] => {
+): ClaudeSettingsFile[] => {
   const configDir = env['CLAUDE_CONFIG_DIR'] ?? join(homedir(), '.claude');
   return [
-    join(configDir, 'settings.json'),
-    join(cwd, '.claude', 'settings.json'),
-    join(cwd, '.claude', 'settings.local.json'),
+    { path: join(configDir, 'settings.json'), tier: 'user' },
+    { path: join(cwd, '.claude', 'settings.json'), tier: 'project' },
+    { path: join(cwd, '.claude', 'settings.local.json'), tier: 'local' },
   ];
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
+
+interface Finding {
+  kind: ClaudeSettingsKind;
+  reason: string;
+}
 
 const readText = async (path: string): Promise<string | undefined> => {
   try {
@@ -52,27 +68,40 @@ const readText = async (path: string): Promise<string | undefined> => {
   }
 };
 
-const permissionReasons = (settings: unknown): string[] => {
-  if (!isRecord(settings)) return ['not a JSON object'];
+const permissionFindings = (settings: unknown): Finding[] => {
+  if (!isRecord(settings)) {
+    return [{ kind: 'unreadable', reason: 'not a JSON object' }];
+  }
   const permissions = settings['permissions'];
   if (!isRecord(permissions)) return [];
-  const reasons: string[] = [];
+  const findings: Finding[] = [];
   const allow = permissions['allow'];
   if (Array.isArray(allow) && allow.length > 0) {
-    reasons.push(`permissions.allow has ${allow.length} rule(s)`);
+    findings.push({
+      kind: 'allow',
+      reason: `permissions.allow has ${allow.length} rule(s)`,
+    });
   }
   const mode = permissions['defaultMode'];
   if (mode !== undefined && !DEFAULT_MODES.has(String(mode).toLowerCase())) {
-    reasons.push(`permissions.defaultMode is ${JSON.stringify(mode)}`);
+    findings.push({
+      kind: 'default_mode',
+      reason: `permissions.defaultMode is ${JSON.stringify(mode)}`,
+    });
   }
-  return reasons;
+  return findings;
 };
 
-const settingsReasons = (text: string): string[] => {
+const settingsFindings = (text: string): Finding[] => {
   try {
-    return permissionReasons(JSON.parse(text));
+    return permissionFindings(JSON.parse(text));
   } catch (err) {
-    return [`not valid JSON (${getErrorMessage(err)})`];
+    return [
+      {
+        kind: 'unreadable',
+        reason: `not valid JSON (${getErrorMessage(err)})`,
+      },
+    ];
   }
 };
 
@@ -81,14 +110,21 @@ export const findClaudeSettingsOverrides = async (
   env: NodeJS.ProcessEnv,
 ): Promise<ClaudeSettingsOverride[]> => {
   const found = await Promise.all(
-    claudeSettingsPaths(cwd, env).map(async (path) => {
+    claudeSettingsFiles(cwd, env).map(async ({ path, tier }) => {
       const text = await readText(path);
       if (text === undefined) return [];
-      return settingsReasons(text).map((reason) => ({
+      return settingsFindings(text).map((finding) => ({
         path,
-        reason,
+        tier,
+        ...finding,
       }));
     }),
   );
   return found.flat();
 };
+
+export const isRepoAllowOverride = ({
+  tier,
+  kind,
+}: ClaudeSettingsOverride): boolean =>
+  tier !== 'user' && kind !== 'default_mode';

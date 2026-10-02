@@ -43,6 +43,7 @@ What Quarterdeck does control is permission: every `session/request_permission` 
 | `spawned`        | The agent process started (carries `pid`)             |
 | `session_update` | Every `session/update` notification                   |
 | `permission`     | A permission request was answered (request and reply) |
+| `extension`      | A notification named in `extensionNotifications`      |
 | `turn_end`       | `session/prompt` returned a stop reason               |
 | `stderr`         | One line of agent stderr                              |
 | `process_error`  | The child process or its stdin raised an error        |
@@ -50,3 +51,7 @@ What Quarterdeck does control is permission: every `session/request_permission` 
 | `closed`         | The ACP connection closed                             |
 
 `agent_version` and `spawn_retry` come from `launchAcpClient`, which adapters use to start agents; see [`../launch/README.md`](../launch/README.md).
+
+## Extension notifications
+
+Runtimes send their own notifications outside the ACP schema, such as Kiro's `_kiro.dev/*` methods. The client listens only for the method names listed in `options.extensionNotifications`. Each one arrives as an `extension` event carrying the method and its params as a plain object. Params that are not an object arrive as `{}`. Extension requests from the agent are not served: the agent gets method-not-found.

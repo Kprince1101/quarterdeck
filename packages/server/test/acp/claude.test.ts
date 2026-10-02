@@ -9,18 +9,24 @@ import {
   CLAUDE_DEFAULT_MODE_ID,
   CLAUDE_INITIALIZE_TIMEOUT_MS,
   CLAUDE_PERMISSION_SETTINGS,
+  CLAUDE_VERSION_COMMAND,
   ClaudePermissionSettingsError,
   DEFAULT_INITIALIZE_TIMEOUT_MS,
   NPM_PUBLIC_REGISTRY,
   claudeAgentCommand,
   claudeRuntimeDir,
-  claudeSettingsPaths,
+  claudeSettingsFiles,
+  createClaudeAdapter,
   findClaudeSettingsOverrides,
+  isRepoAllowOverride,
 } from '@quarterdeck/server';
 import type {
   AcpClient,
   AcpClientEvent,
   AgentCommand,
+  ClaudeAdapterOptions,
+  ClaudeSettingsOverride,
+  RuntimeAdapter,
   RuntimeLaunch,
   SessionMeta,
 } from '@quarterdeck/server';
@@ -33,9 +39,9 @@ import {
   it,
   vi,
 } from 'vitest';
-import { FAKE_DEFAULT_MODE_ID, fakeAgentLaunch } from '../fake-agent/index.ts';
-import { expectAllExited } from '../process-check.ts';
-import { describeRuntimeConformance } from '../runtime-conformance.ts';
+import { FAKE_DEFAULT_MODE_ID, fakeAgentLaunch } from './fake-agent/index.ts';
+import { expectAllExited } from './process-check.ts';
+import { describeRuntimeConformance } from './runtime-conformance.ts';
 
 const PINNED = `${CLAUDE_AGENT_ACP_PACKAGE}@${CLAUDE_AGENT_ACP_VERSION}`;
 const LOCKED_META = {
@@ -46,6 +52,7 @@ const LOCKED_META = {
 const ALLOW_ALL = { permissions: { allow: ['Bash(*)'] } };
 const ACCEPT_EDITS = { permissions: { defaultMode: 'acceptEdits' } };
 const IS_WINDOWS = process.platform === 'win32';
+const FAKE_CLAUDE_VERSION = '9.9.9 (Claude Code)';
 
 const SILENT_AGENT: AgentCommand = {
   command: process.execPath,
@@ -67,9 +74,23 @@ const writeJson = async (path: string, value: unknown) => {
   await writeFile(path, JSON.stringify(value));
 };
 
-const connectClaude = async (launch: RuntimeLaunch) => {
+const writeScript = async (path: string, lines: string[]) => {
+  await writeFile(path, ['#!/bin/sh', ...lines, ''].join('\n'), {
+    mode: 0o755,
+  });
+};
+
+interface SettingsDirs {
+  cwd: string;
+  config: string;
+}
+
+const connectClaude = async (
+  launch: RuntimeLaunch,
+  adapter: RuntimeAdapter = CLAUDE_ADAPTER,
+) => {
   const events: AcpClientEvent[] = [];
-  const client = await CLAUDE_ADAPTER.connect(launch, {
+  const client = await adapter.connect(launch, {
     clientName: 'quarterdeck-test',
     clientVersion: '0.0.0',
     onPermissionRequest: async () => CANCELLED_PERMISSION,
@@ -267,12 +288,29 @@ describe('claude adapter permission lock', () => {
 describe('claude settings that would skip the project rules', () => {
   it('reads the user, project and local settings files', async () => {
     expect(
-      claudeSettingsPaths('/work/deck', { CLAUDE_CONFIG_DIR: '/c' }),
+      claudeSettingsFiles('/work/deck', { CLAUDE_CONFIG_DIR: '/c' }),
     ).toEqual([
-      join('/c', 'settings.json'),
-      join('/work/deck', '.claude', 'settings.json'),
-      join('/work/deck', '.claude', 'settings.local.json'),
+      { path: join('/c', 'settings.json'), tier: 'user' },
+      { path: join('/work/deck', '.claude', 'settings.json'), tier: 'project' },
+      {
+        path: join('/work/deck', '.claude', 'settings.local.json'),
+        tier: 'local',
+      },
     ]);
+  });
+
+  it('treats repo allow rules and unreadable repo files as unlockable', () => {
+    const override = (
+      tier: ClaudeSettingsOverride['tier'],
+      kind: ClaudeSettingsOverride['kind'],
+    ): ClaudeSettingsOverride => ({ path: '/p', tier, kind, reason: 'r' });
+
+    expect(isRepoAllowOverride(override('local', 'allow'))).toBe(true);
+    expect(isRepoAllowOverride(override('project', 'unreadable'))).toBe(true);
+    expect(isRepoAllowOverride(override('project', 'default_mode'))).toBe(
+      false,
+    );
+    expect(isRepoAllowOverride(override('user', 'allow'))).toBe(false);
   });
 
   it('finds allow rules, a non-default mode and unreadable JSON', async () => {
@@ -289,14 +327,20 @@ describe('claude settings that would skip the project rules', () => {
     expect(overrides).toEqual([
       {
         path: join(config, 'settings.json'),
+        tier: 'user',
+        kind: 'allow',
         reason: 'permissions.allow has 1 rule(s)',
       },
       {
         path: join(cwd, '.claude', 'settings.json'),
+        tier: 'project',
+        kind: 'unreadable',
         reason: expect.stringMatching(/^not valid JSON/),
       },
       {
         path: join(cwd, '.claude', 'settings.local.json'),
+        tier: 'local',
+        kind: 'default_mode',
         reason: 'permissions.defaultMode is "acceptEdits"',
       },
     ]);
@@ -358,45 +402,111 @@ describe('claude settings that would skip the project rules', () => {
       connectClaude({ cwd, command: fakeAgentLaunch() }),
     ).rejects.toMatchObject({ code: CLAUDE_PERMISSION_SETTINGS });
   });
+});
 
-  it.skipIf(IS_WINDOWS)(
-    'neutralises the settings when it runs the pinned claude-agent-acp',
-    async () => {
-      const home = await tempDir('qd-claude-home-');
-      const bin = await tempDir('qd-claude-bin-');
-      const cwd = await tempDir('qd-claude-session-');
-      await writeJson(join(cwd, '.claude', 'settings.local.json'), ALLOW_ALL);
-      const fakeNpx = join(bin, 'npx');
-      const agent = fakeAgentLaunch();
-      await writeFile(
-        fakeNpx,
-        [
-          '#!/bin/sh',
-          'echo "npx cwd=$(pwd -P) registry=$npm_config_registry args=$*" >&2',
-          `exec '${agent.command}' ${agent.args.map((arg) => `'${arg}'`).join(' ')}`,
-          '',
-        ].join('\n'),
-        { mode: 0o755 },
-      );
-      vi.stubEnv('HOME', home);
+describe.skipIf(IS_WINDOWS)('claude adapter default npx path', () => {
+  const pinnedPath = async (adapterOptions: ClaudeAdapterOptions = {}) => {
+    const bin = await tempDir('qd-claude-bin-');
+    const processDir = await tempDir('qd-claude-runtime-');
+    const cwd = await tempDir('qd-claude-session-');
+    const config = await tempDir('qd-claude-config-');
+    const agent = fakeAgentLaunch();
+    await writeScript(join(bin, 'npx'), [
+      'echo "npx cwd=$(pwd -P) registry=$npm_config_registry args=$*" >&2',
+      `exec '${agent.command}' ${agent.args.map((arg) => `'${arg}'`).join(' ')}`,
+    ]);
+    await writeScript(join(bin, 'claude'), [`echo '${FAKE_CLAUDE_VERSION}'`]);
+    const launch: RuntimeLaunch = {
+      cwd,
+      env: {
+        ...process.env,
+        CLAUDE_CONFIG_DIR: config,
+        PATH: `${bin}${delimiter}${process.env['PATH']}`,
+      },
+    };
+    const adapter = createClaudeAdapter({ processDir, ...adapterOptions });
+    return { adapter, launch, cwd, config, processDir };
+  };
 
-      const { client, events } = await connectClaude({
-        cwd,
-        env: {
-          ...process.env,
-          PATH: `${bin}${delimiter}${process.env['PATH']}`,
+  it('runs npx in its own folder with the npmjs registry and logs claude --version', async () => {
+    const { adapter, launch, processDir } = await pinnedPath();
+
+    const { events } = await connectClaude(launch, adapter);
+
+    expect(events).toContainEqual({
+      type: 'stderr',
+      line: `npx cwd=${processDir} registry=${NPM_PUBLIC_REGISTRY} args=--yes ${PINNED}`,
+    });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'agent_version',
+        command: CLAUDE_VERSION_COMMAND,
+        version: FAKE_CLAUDE_VERSION,
+      }),
+    );
+  });
+
+  it('refuses before launch when the worktree settings allow tools', async () => {
+    const { adapter, launch, cwd } = await pinnedPath();
+    await writeJson(join(cwd, '.claude', 'settings.local.json'), ALLOW_ALL);
+    const events: AcpClientEvent[] = [];
+
+    await expect(
+      adapter.connect(launch, {
+        clientName: 'quarterdeck-test',
+        clientVersion: '0.0.0',
+        onPermissionRequest: async () => CANCELLED_PERMISSION,
+        onEvent: (event) => events.push(event),
+      }),
+    ).rejects.toMatchObject({
+      code: CLAUDE_PERMISSION_SETTINGS,
+      overrides: [
+        {
+          path: join(cwd, '.claude', 'settings.local.json'),
+          tier: 'local',
+          kind: 'allow',
         },
-      });
-      const { sessionId } = await client.newSession({ cwd, mcpServers: [] });
+      ],
+    });
+    expect(events).toEqual([]);
+  });
 
-      expect(events).toContainEqual({
-        type: 'stderr',
-        line: `npx cwd=${claudeRuntimeDir(join(home, '.quarterdeck'))} registry=${NPM_PUBLIC_REGISTRY} args=--yes ${PINNED}`,
-      });
-      expect(await describeMode(client, events, sessionId)).toEqual({
-        modeId: CLAUDE_DEFAULT_MODE_ID,
-        meta: LOCKED_META,
-      });
-    },
-  );
+  it.each([
+    [
+      'a worktree default mode',
+      (dirs: SettingsDirs) => join(dirs.cwd, '.claude', 'settings.json'),
+      ACCEPT_EDITS,
+    ],
+    [
+      'user allow rules',
+      (dirs: SettingsDirs) => join(dirs.config, 'settings.json'),
+      ALLOW_ALL,
+    ],
+  ])('locks the session despite %s', async (_name, settingsPath, settings) => {
+    const { adapter, launch, cwd, config } = await pinnedPath();
+    await writeJson(settingsPath({ cwd, config }), settings);
+
+    const { client, events } = await connectClaude(launch, adapter);
+    const { sessionId } = await client.newSession({ cwd, mcpServers: [] });
+
+    expect(await describeMode(client, events, sessionId)).toEqual({
+      modeId: CLAUDE_DEFAULT_MODE_ID,
+      meta: LOCKED_META,
+    });
+  });
+
+  it('relies on the _meta lock alone when repo refusal is off', async () => {
+    const { adapter, launch, cwd } = await pinnedPath({
+      refuseRepoAllowRules: false,
+    });
+    await writeJson(join(cwd, '.claude', 'settings.local.json'), ALLOW_ALL);
+
+    const { client, events } = await connectClaude(launch, adapter);
+    const { sessionId } = await client.newSession({ cwd, mcpServers: [] });
+
+    expect(await describeMode(client, events, sessionId)).toEqual({
+      modeId: CLAUDE_DEFAULT_MODE_ID,
+      meta: LOCKED_META,
+    });
+  });
 });

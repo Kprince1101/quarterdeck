@@ -1,3 +1,4 @@
+import type { McpServer } from '@agentclientprotocol/sdk';
 import type { Runtime } from '@quarterdeck/rules';
 import { spawnAcpClient } from '../client/spawn.js';
 import type {
@@ -9,7 +10,9 @@ import type {
 export interface RuntimeLaunch {
   cwd: string;
   env?: NodeJS.ProcessEnv;
+  project?: string;
   agentName?: string;
+  mcpServers?: McpServer[];
   command?: AgentCommand;
 }
 

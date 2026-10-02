@@ -1,5 +1,5 @@
 import { tmpdir } from 'node:os';
-import type { RuntimeAdapter } from '@quarterdeck/server';
+import type { RuntimeAdapter, RuntimeLaunch } from '@quarterdeck/server';
 import { afterEach, describe, expect } from 'vitest';
 import { createClientAdapter } from './client-adapter.ts';
 import type { ClientAdapter } from './client-adapter.ts';
@@ -21,10 +21,13 @@ export const describeClientConformance = ({
   });
 };
 
-export const describeRuntimeConformance = (runtime: RuntimeAdapter): void => {
+export const describeRuntimeConformance = (
+  runtime: RuntimeAdapter,
+  base: Partial<RuntimeLaunch> = {},
+): void => {
   describeClientConformance(
     createClientAdapter(`${runtime.displayName} adapter`, (launch, options) =>
-      runtime.connect({ cwd: tmpdir(), command: launch }, options),
+      runtime.connect({ cwd: tmpdir(), ...base, command: launch }, options),
     ),
   );
 };

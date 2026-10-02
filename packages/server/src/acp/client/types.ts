@@ -57,6 +57,7 @@ export interface AcpClientOptions {
   onPermissionRequest: PermissionHandler;
   onEvent?: AcpClientListener;
   onListenerError?: ListenerErrorHandler;
+  extensionNotifications?: readonly string[];
   initializeTimeoutMs?: number;
   killGraceMs?: number;
   signal?: AbortSignal;
@@ -78,6 +79,14 @@ export interface PermissionEvent {
   sessionId: SessionId;
   request: RequestPermissionRequest;
   response: RequestPermissionResponse;
+}
+
+export type ExtensionParams = Record<string, unknown>;
+
+export interface ExtensionEvent {
+  type: 'extension';
+  method: string;
+  params: ExtensionParams;
 }
 
 export interface TurnEndEvent {
@@ -130,6 +139,7 @@ export type AcpClientEvent =
   | SpawnedEvent
   | SessionUpdateEvent
   | PermissionEvent
+  | ExtensionEvent
   | TurnEndEvent
   | StderrEvent
   | ExitEvent
