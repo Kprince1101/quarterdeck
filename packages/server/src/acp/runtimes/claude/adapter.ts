@@ -34,13 +34,7 @@ export const CLAUDE_LOCKED_OPTIONS = {
 
 const PINNED_PACKAGE = `${CLAUDE_AGENT_ACP_PACKAGE}@${CLAUDE_AGENT_ACP_VERSION}`;
 const NPX_ARGS = ['--yes', PINNED_PACKAGE];
-const VERSION_NPX_ARGS = [
-  '--yes',
-  '--offline',
-  PINNED_PACKAGE,
-  '--cli',
-  '--version',
-];
+const OFFLINE_CLI_NPX_ARGS = ['--yes', '--offline', PINNED_PACKAGE, '--cli'];
 
 export const claudeRuntimeDir = (home: string = quarterdeckHome()): string =>
   join(home, 'runtimes', 'claude');
@@ -60,9 +54,14 @@ export const claudeAgentCommand = (
   platform: NodeJS.Platform = process.platform,
 ): AgentCommand => npxCommand(NPX_ARGS, platform);
 
+export const claudeCliCommand = (
+  cliArgs: string[],
+  platform: NodeJS.Platform = process.platform,
+): AgentCommand => npxCommand([...OFFLINE_CLI_NPX_ARGS, ...cliArgs], platform);
+
 export const claudeVersionCommand = (
   platform: NodeJS.Platform = process.platform,
-): AgentCommand => npxCommand(VERSION_NPX_ARGS, platform);
+): AgentCommand => claudeCliCommand(['--version'], platform);
 
 const recordAt = (
   record: Record<string, unknown>,
