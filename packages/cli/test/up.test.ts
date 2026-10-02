@@ -93,7 +93,7 @@ describe('quarterdeck', () => {
     expect(io.errors[0]).toContain('Unknown command launch');
   });
 
-  it.each(['up', 'init'])('prints %s --help', async (command) => {
+  it.each(['up', 'init', 'doctor'])('prints %s --help', async (command) => {
     const io = testIo('/nowhere');
     expect(await main([command, '--help'], io)).toBe(0);
     expect(io.lines[0]).toContain(`Usage: quarterdeck ${command}`);
