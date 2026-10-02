@@ -64,7 +64,7 @@ describe('bus from the built package', () => {
       const report = JSON.parse(result.stdout) as EntryReport;
       expect(report).toEqual({
         relay: resolve(ROOT, 'packages/server/dist/bus/relay.js'),
-        tools: ['read', 'status'],
+        tools: ['ask', 'read', 'status'],
         status: 'noted',
       });
     },

@@ -7,6 +7,20 @@ export {
   type BusHostOptions,
 } from './host.js';
 export {
+  ASK_CARD,
+  ASK_EXPIRY_MAX_MS,
+  ASK_EXPIRY_MS,
+  ASK_PROGRESS_MS,
+  awaitCard,
+  expireCard,
+  raiseAskCard,
+  type AskCard,
+  type AwaitCardOptions,
+  type CardOutcome,
+  type CardOutcomeStatus,
+  type RaisedCard,
+} from './cards.js';
+export {
   SOCKET_PATH_MAX,
   busSocketPath,
   type SocketPathOptions,
@@ -38,6 +52,7 @@ export {
 export {
   BusToolError,
   defineBusTool,
+  type BusCall,
   type BusContext,
   type BusStore,
   type BusTool,

@@ -91,10 +91,13 @@ export const cardRowSchema = z.object({
   kind: z.string(),
   question: z.string(),
   options: z.json(),
+  checked: z.string().nullable(),
+  recommendation: z.string().nullable(),
   status: z.enum(['open', 'answered', 'declined', 'expired']),
   answer: z.string().nullable(),
   createdAt: timestampSchema,
   answeredAt: timestampSchema.nullable(),
+  expiresAt: timestampSchema.nullable(),
 });
 
 export const turnRowSchema = z.object({
