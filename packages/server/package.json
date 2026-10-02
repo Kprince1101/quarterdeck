@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^1.6.0",
+    "@electric-sql/pglite": "^0.5.8",
     "zod": "^4.6.5"
   }
 }
