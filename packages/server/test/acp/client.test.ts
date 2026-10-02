@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { PROTOCOL_VERSION } from '@agentclientprotocol/sdk';
 import type { SessionId } from '@agentclientprotocol/sdk';
@@ -49,6 +50,7 @@ const BUS_SERVER = {
   env: [],
 };
 const LIFECYCLE_TYPES = new Set<AcpClientEvent['type']>(['spawned', 'stderr']);
+const IS_WINDOWS = process.platform === 'win32';
 
 const stubCommand = (
   capabilities: Capabilities,
@@ -63,6 +65,15 @@ const stubCommand = (
     behavior,
   ],
 });
+
+const commandLine = ({ command, args }: AgentCommand) => [command, ...args];
+
+const shellQuote = (part: string) => `'${part.replaceAll("'", "'\\''")}'`;
+
+const markedProcesses = (marker: string) =>
+  spawnSync('ps', ['-A', '-o', 'pid=,args='], { encoding: 'utf8' })
+    .stdout.split('\n')
+    .filter((line) => line.includes(marker));
 
 const rejectAll: PermissionHandler = async ({ options }) => {
   const reject = options.find((option) => option.kind === 'reject_once');
@@ -444,6 +455,31 @@ describe('shutdown escalation', () => {
     });
     await expectChildExited(events);
   });
+
+  it.skipIf(IS_WINDOWS)(
+    'kills a SIGTERM-ignoring grandchild behind a shell wrapper',
+    async () => {
+      const marker = `qd-acp-grandchild-${process.pid}-${Date.now()}`;
+      const agentLine = [
+        ...commandLine(stubCommand('resume', 'ignore-sigterm')),
+        marker,
+      ]
+        .map(shellQuote)
+        .join(' ');
+      const { options, events } = createRun({ killGraceMs: 200 });
+      const client = await spawnAcpClient(
+        { command: '/bin/sh', args: ['-c', `${agentLine}; echo wrapper-done`] },
+        options,
+      );
+      openClients.push(client);
+
+      expect(markedProcesses(marker).length).toBeGreaterThanOrEqual(2);
+      await client.close();
+
+      expect(markedProcesses(marker)).toEqual([]);
+      await expectChildExited(events);
+    },
+  );
 });
 
 describe('listener isolation', () => {

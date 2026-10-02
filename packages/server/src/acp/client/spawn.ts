@@ -8,6 +8,7 @@ import { getErrorMessage } from '../../lib/errors.js';
 import { connectAcpClient, createClientEvents } from './connection.js';
 import { AcpClientError } from './errors.js';
 import type { EventHub } from './event-hub.js';
+import { SPAWN_DETACHED, signalTree, waitForTreeExit } from './process-tree.js';
 import type {
   AcpClient,
   AcpClientEvent,
@@ -15,21 +16,24 @@ import type {
   AgentCommand,
 } from './types.js';
 
+const spawnFailed = (command: string, reason: string) =>
+  new AcpClientError(`Failed to start ${command}: ${reason}`, 'spawn_failed');
+
 const startProcess = async ({ command, args, cwd, env }: AgentCommand) => {
   const child = spawn(command, args, {
     cwd: cwd ?? process.cwd(),
     env: env ?? process.env,
     stdio: ['pipe', 'pipe', 'pipe'],
+    detached: SPAWN_DETACHED,
+    windowsHide: true,
   });
   try {
     await once(child, 'spawn');
   } catch (err) {
-    throw new AcpClientError(
-      `Failed to start ${command}: ${getErrorMessage(err)}`,
-      'spawn_failed',
-    );
+    throw spawnFailed(command, getErrorMessage(err));
   }
-  return child;
+  if (child.pid === undefined) throw spawnFailed(command, 'no pid');
+  return { child, pid: child.pid };
 };
 
 const watchProcess = (
@@ -54,28 +58,18 @@ const watchProcess = (
 };
 
 export const DEFAULT_KILL_GRACE_MS = 5_000;
-
-const isRunning = (child: ChildProcessWithoutNullStreams) =>
-  child.exitCode === null && child.signalCode === null;
+const KILL_SETTLE_MS = 2_000;
 
 const terminate = async (
-  child: ChildProcessWithoutNullStreams,
+  pid: number,
   exited: Promise<void>,
   graceMs: number,
 ) => {
-  if (!isRunning(child)) {
-    await exited;
-    return;
-  }
-  child.kill('SIGTERM');
-  const escalation = setTimeout(() => {
-    if (isRunning(child)) child.kill('SIGKILL');
-  }, graceMs);
-  try {
-    await exited;
-  } finally {
-    clearTimeout(escalation);
-  }
+  signalTree(pid, 'SIGTERM');
+  const stopped = await waitForTreeExit(pid, graceMs);
+  if (!stopped) signalTree(pid, 'SIGKILL');
+  await exited;
+  await waitForTreeExit(pid, KILL_SETTLE_MS);
 };
 
 export const spawnAcpClient = async (
@@ -83,12 +77,12 @@ export const spawnAcpClient = async (
   options: AcpClientOptions,
 ): Promise<AcpClient> => {
   const events = createClientEvents(options);
-  const child = await startProcess(command);
+  const { child, pid } = await startProcess(command);
   const exited = watchProcess(child, events);
-  if (child.pid !== undefined) events.emit({ type: 'spawned', pid: child.pid });
+  events.emit({ type: 'spawned', pid });
 
   const dispose = () =>
-    terminate(child, exited, options.killGraceMs ?? DEFAULT_KILL_GRACE_MS);
+    terminate(pid, exited, options.killGraceMs ?? DEFAULT_KILL_GRACE_MS);
 
   return connectAcpClient({
     stream: ndJsonStream(
