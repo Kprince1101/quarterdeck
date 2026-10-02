@@ -44,6 +44,8 @@ A rule is `{ kind, pattern?, decision }`. The tool call's `kind` picks the rules
 
 In a path glob `*` and `?` stay inside one path segment, `**` matches across segments, and `**/` matches zero or more leading directories. On macOS and Windows path globs ignore case, as those filesystems do. Shell patterns are always case-sensitive.
 
+A shell pattern is a prefix match wherever it ends in `*`: `git *` allows `git -c alias.x='!sh' x`. Any `execute` allow can amount to arbitrary code; see [Shell permissions](../../../../../rules/README.md#shell-permissions) for subcommand rules and a hardened example layer.
+
 A tool call that carries a `command` in its raw input is decided twice, once as its declared kind and once as `execute`, and the stricter answer wins. A tool labelled `read` cannot run a shell command under a read allow.
 
 ## Canonical paths

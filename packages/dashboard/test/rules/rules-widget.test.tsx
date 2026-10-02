@@ -272,6 +272,31 @@ describe('rules widget', () => {
     unmount();
   });
 
+  it('warns about git * and bash * but not git status *', async () => {
+    const { container, unmount } = await mount();
+    pickRule(container, 'permissions');
+    expect(container.querySelector('[aria-label="Shell warnings"]')).toBeNull();
+
+    const rules = ['git status *', 'git *', 'bash *'].map((pattern) => ({
+      kind: 'execute',
+      pattern,
+      decision: 'allow',
+    }));
+    type(find(container, 'textarea'), JSON.stringify({ rules }));
+    expect(
+      all(container, '[aria-label="Shell warnings"] li').map(
+        ({ textContent }) => textContent,
+      ),
+    ).toEqual([
+      'execute allow "git *" permits git with any arguments, which can run any code.',
+      'execute allow "bash *" permits bash, which can run any code.',
+    ]);
+
+    type(find(container, 'textarea'), JSON.stringify({ rules: [rules[0]] }));
+    expect(container.querySelector('[aria-label="Shell warnings"]')).toBeNull();
+    unmount();
+  });
+
   it('says plainly that repo permissions are decided on their own', async () => {
     const { container, unmount } = await mount({
       permissions: { repo: '{ "default": "deny" }' },

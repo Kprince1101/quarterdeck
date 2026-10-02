@@ -16,6 +16,17 @@ const CheckStatus = ({ error }: { error: string | null }) => {
   );
 };
 
+const ShellWarnings = ({ warnings }: { warnings: string[] }) => {
+  if (warnings.length === 0) return null;
+  return (
+    <ul className="qd-rules-warnings" aria-label="Shell warnings">
+      {warnings.map((warning) => (
+        <li key={warning}>{warning}</li>
+      ))}
+    </ul>
+  );
+};
+
 export const MachineLayer = ({ view, rule }: MachineLayerProps) => (
   <section className="qd-rules-layer" aria-label="Machine layer">
     <LayerHeading title="Machine layer" path={rule.machine.path} />
@@ -31,6 +42,7 @@ export const MachineLayer = ({ view, rule }: MachineLayerProps) => (
       onChange={view.handleDraftChange}
     />
     <CheckStatus error={view.checkError} />
+    <ShellWarnings warnings={view.shellWarnings} />
     <div className="qd-rules-actions">
       <button
         type="button"

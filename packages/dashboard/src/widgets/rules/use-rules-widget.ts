@@ -10,8 +10,8 @@ import {
   REVIEW_TITLES,
   type ReviewKind,
 } from './constants.js';
-import type { ValueSource } from './rule-layers.js';
-import { useRuleDrafts } from './use-rule-drafts.js';
+import { shellWarnings, type ValueSource } from './rule-layers.js';
+import { useRuleDrafts, type RuleEditor } from './use-rule-drafts.js';
 import { useRuleReview } from './use-rule-review.js';
 import { useRulesSource } from './use-rules-source.js';
 
@@ -32,6 +32,7 @@ export interface RulesWidgetView {
   draft: string;
   editorLabel: string;
   checkError: string | null;
+  shellWarnings: string[];
   sources: ValueSource[];
   showNoFileNote: boolean;
   canWrite: boolean;
@@ -73,6 +74,11 @@ const useProjectChoices = (): ProjectChoice[] => {
   );
 };
 
+const editorShellWarnings = (editor: RuleEditor | null): string[] => {
+  if (editor === null) return [];
+  return shellWarnings(editor.rule, editor.check);
+};
+
 const projectFromValue = (value: string): string | null => {
   if (value === MACHINE_ONLY) return null;
   return value;
@@ -103,6 +109,7 @@ export const useRulesWidget = (): RulesWidgetView => {
     draft: editor?.draft ?? '',
     editorLabel: `Edit rules.local.${fileName}`,
     checkError: editor?.check.error ?? null,
+    shellWarnings: editorShellWarnings(editor),
     sources: editor?.sources ?? [],
     showNoFileNote: rule?.machine.content === null,
     canWrite: review.canWrite,

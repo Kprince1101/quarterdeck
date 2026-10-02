@@ -64,4 +64,21 @@ describe('@quarterdeck/rules package entry', () => {
     expect(result.stderr).toBe('');
     expect(JSON.parse(result.stdout)).toEqual({ a: 1, b: { c: 3 } });
   });
+
+  it('exposes the shell warnings alone from plain Node', () => {
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '--eval',
+        "const { shellAllowWarnings } = await import('@quarterdeck/rules/shell-warnings');\nprocess.stdout.write(JSON.stringify(shellAllowWarnings({ default: 'ask', rules: [{ kind: 'execute', pattern: '*', decision: 'allow' }] })));",
+      ],
+      { cwd: ROOT, encoding: 'utf8' },
+    );
+
+    expect(result.stderr).toBe('');
+    expect(JSON.parse(result.stdout)).toEqual([
+      'execute allow "*" permits any command.',
+    ]);
+  });
 });
