@@ -1,6 +1,6 @@
 import { useDeck } from '../../deck/deck.js';
+import { useIntentRequest } from '../use-intent-request.js';
 import type { EntryView } from './notebook-model.js';
-import { useIntentRequest } from './use-intent-request.js';
 
 export interface EntryRowView {
   isPending: boolean;
