@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { TOKENS, token, tokenVar } from '../../src/theme/tokens.js';
@@ -7,11 +7,9 @@ const SRC = resolve(import.meta.dirname, '../../src');
 const read = (path: string): string => readFileSync(resolve(SRC, path), 'utf8');
 
 const TOKENS_CSS = read('theme/tokens.css');
-const STYLESHEETS = [
-  'theme/tokens.css',
-  'shell/shell.css',
-  'widgets/widgets.css',
-];
+const STYLESHEETS = readdirSync(SRC, { recursive: true, encoding: 'utf8' })
+  .filter((path) => path.endsWith('.css'))
+  .toSorted();
 
 const defined = [...TOKENS_CSS.matchAll(/(--qd-[\w-]+)\s*:/g)].map(
   ([, name]) => name,
