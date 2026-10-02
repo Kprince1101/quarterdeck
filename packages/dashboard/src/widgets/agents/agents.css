@@ -65,7 +65,7 @@
   overflow-wrap: anywhere;
 }
 
-.qd-agent-held {
+.qd-agent-tickets {
   display: flex;
   flex-wrap: wrap;
   gap: var(--qd-space-1);
@@ -74,7 +74,7 @@
   list-style: none;
 }
 
-.qd-agent-held li {
+.qd-agent-tickets li {
   display: flex;
   gap: var(--qd-space-1);
   padding: 0 var(--qd-space-2);
@@ -83,9 +83,21 @@
   font-size: var(--qd-text-sm);
 }
 
-.qd-agent-held-status {
+.qd-agent-ticket-status {
   color: var(--qd-faint);
   font-family: var(--qd-mono);
+}
+
+.qd-agent-held {
+  display: grid;
+  gap: var(--qd-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--qd-warn);
+  font-family: var(--qd-mono);
+  font-size: var(--qd-text-sm);
+  overflow-wrap: anywhere;
 }
 
 .qd-agent-actions {

@@ -90,6 +90,40 @@ export const killedEvent = (id: number, intentId: string): StreamEvent => ({
   createdAt: ago(0),
 });
 
+export const heldEvent = (
+  id: number,
+  agentId: string | null,
+  label: string,
+  scopes: string[] = ['agent'],
+): StreamEvent => ({
+  id,
+  projectId: PROJECT_ID,
+  agentId,
+  ticketId: null,
+  kind: 'pause.held',
+  payload: { operation: 'continue', label, scopes },
+  createdAt: ago(0),
+});
+
+export const replayedEvent = (id: number, held: StreamEvent): StreamEvent => ({
+  ...held,
+  id,
+  kind: 'pause.replayed',
+  payload: { operation: 'continue', label: 'replayed', heldEventId: held.id },
+});
+
+export const droppedEvent = (id: number, held: StreamEvent): StreamEvent => ({
+  ...held,
+  id,
+  kind: 'pause.dropped',
+  payload: {
+    operation: 'continue',
+    label: 'dropped',
+    heldEventId: held.id,
+    reason: 'aborted',
+  },
+});
+
 export const agentsTables = (): SnapshotTables => ({
   ...emptyTables(),
   projects: [project(PROJECT_ID, 'deck')],

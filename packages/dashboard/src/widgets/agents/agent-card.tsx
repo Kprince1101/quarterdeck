@@ -1,17 +1,32 @@
 import { RequestError } from '../request-error.js';
-import type { AgentView, HeldTicketView } from './agents-model.js';
+import type { AgentTicketView, AgentView } from './agents-model.js';
+import type { HeldWorkView } from './held-work.js';
 import { useAgentCard, type AgentActionView } from './use-agent-card.js';
 
-interface HeldTicketsProps {
-  held: HeldTicketView[];
+interface AgentTicketsProps {
+  tickets: AgentTicketView[];
 }
 
-const HeldTickets = ({ held }: HeldTicketsProps) => (
-  <ul className="qd-agent-held" aria-label="Held tickets">
-    {held.map((ticket) => (
+const AgentTickets = ({ tickets }: AgentTicketsProps) => (
+  <ul className="qd-agent-tickets" aria-label="Tickets">
+    {tickets.map((ticket) => (
       <li key={ticket.id} data-ticket-id={ticket.id}>
-        <span className="qd-agent-held-title">{ticket.title}</span>
-        <span className="qd-agent-held-status">{ticket.statusLabel}</span>
+        <span className="qd-agent-ticket-title">{ticket.title}</span>
+        <span className="qd-agent-ticket-status">{ticket.statusLabel}</span>
+      </li>
+    ))}
+  </ul>
+);
+
+interface HeldWorkProps {
+  held: HeldWorkView[];
+}
+
+const HeldWork = ({ held }: HeldWorkProps) => (
+  <ul className="qd-agent-held" aria-label="Held work">
+    {held.map((work) => (
+      <li key={work.eventId} data-held-event-id={work.eventId}>
+        {work.text}
       </li>
     ))}
   </ul>
@@ -74,7 +89,8 @@ export const AgentCard = ({ agent, showProject }: AgentCardProps) => {
           <span className="qd-agent-working-on">{agent.workingOn}</span>
         </p>
       )}
-      {agent.hasWork && <HeldTickets held={agent.held} />}
+      {agent.hasWork && <AgentTickets tickets={agent.tickets} />}
+      {agent.hasHeld && <HeldWork held={agent.held} />}
       <RequestError error={card.error} />
       <AgentActions actions={card.actions} isBusy={card.isBusy} />
     </li>

@@ -59,7 +59,7 @@ export const availableActions = (agent: AgentView): AgentActionKind[] => {
   return [pauseOrResume(agent), 'poke', 'kill', 'retire', 'reset'];
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
+export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 export interface KillAck {

@@ -8,8 +8,11 @@ export interface AgentsWidgetView extends AgentsModel {
 }
 
 export const useAgentsWidget = (): AgentsWidgetView => {
-  const { tables } = useDeck().stream;
+  const { tables, events } = useDeck().stream;
   const now = useNow();
-  const model = useMemo(() => buildAgents(tables, now), [tables, now]);
+  const model = useMemo(
+    () => buildAgents(tables, events, now),
+    [tables, events, now],
+  );
   return { ...model, isEmpty: model.agents.length === 0 };
 };

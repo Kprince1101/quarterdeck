@@ -35,8 +35,11 @@ import {
   agent,
   agentsTables,
   ago,
+  droppedEvent,
   failedEvent,
+  heldEvent,
   killedEvent,
+  replayedEvent,
 } from './fixtures.js';
 
 interface Sent {
@@ -128,8 +131,11 @@ const enabled = (scope: PageElement): boolean[] =>
     (element) => element.getAttribute('disabled') === null,
   );
 
+const tickets = (scope: PageElement): string[] =>
+  all(scope, '.qd-agent-tickets li').map((chip) => chip.textContent ?? '');
+
 const held = (scope: PageElement): string[] =>
-  all(scope, '.qd-agent-held li').map((chip) => chip.textContent ?? '');
+  all(scope, '.qd-agent-held li').map((item) => item.textContent ?? '');
 
 describe('Agents widget', () => {
   beforeAll(() => {
@@ -157,7 +163,7 @@ describe('Agents widget', () => {
     unmount();
   });
 
-  it('shows state, since, what it works on and the tickets it holds', () => {
+  it('shows state, since, what it works on and the tickets it has', () => {
     const { container, unmount } = mount(agentsTables());
     expect(
       all(container, '.qd-agent').map((row) => row.getAttribute('aria-label')),
@@ -168,10 +174,11 @@ describe('Agents widget', () => {
     expect(textOf(builder, '.qd-agent-state')).toBe('working');
     expect(textOf(builder, '.qd-agent-since')).toBe('5m ago');
     expect(textOf(builder, '.qd-agent-working-on')).toBe('QD8c Agents widget');
-    expect(held(builder)).toEqual([
+    expect(tickets(builder)).toEqual([
       'QD8c Agents widgetin progress',
       'QD8a Board widgetin review',
     ]);
+    expect(builder.querySelector('.qd-agent-held')).toBeNull();
     expect(
       builder.querySelector(`[data-ticket-id="${TICKET_ID}"]`),
     ).not.toBeNull();
@@ -196,8 +203,43 @@ describe('Agents widget', () => {
     ]);
 
     const killed = card(container, KILLED_ID);
-    expect(held(killed)).toEqual(['QD5i kill / retire / resetblocked']);
+    expect(tickets(killed)).toEqual(['QD5i kill / retire / resetblocked']);
     expect(names(killed)).toEqual(['Retire', 'Reset']);
+    unmount();
+  });
+
+  it('shows held work on its agent until it is replayed or dropped', () => {
+    const { container, unmount } = mount(agentsTables());
+    const waiting = heldEvent(1, PAUSED_ID, 'continue: fix lint');
+    const turn = heldEvent(2, DRIVER_ID, 'turn: plan round 2', [
+      'project',
+      'agent',
+    ]);
+    const launch = heldEvent(3, PAUSED_ID, 'assign: QD8c Agents widget');
+    deliver(
+      { type: 'event', event: waiting },
+      { type: 'event', event: turn },
+      { type: 'event', event: launch },
+    );
+    const paused = () => card(container, PAUSED_ID);
+    const driver = () => card(container, DRIVER_ID);
+    expect(held(paused())).toEqual([
+      'held: continue: fix lint (agent)',
+      'held: assign: QD8c Agents widget (agent)',
+    ]);
+    expect(held(driver())).toEqual([
+      'held: turn: plan round 2 (project, agent)',
+    ]);
+    expect(held(card(container, BUILDER_ID))).toEqual([]);
+
+    deliver({ type: 'event', event: replayedEvent(4, waiting) });
+    expect(held(paused())).toEqual([
+      'held: assign: QD8c Agents widget (agent)',
+    ]);
+
+    deliver({ type: 'event', event: droppedEvent(5, turn) });
+    expect(held(driver())).toEqual([]);
+    expect(driver().querySelector('.qd-agent-held')).toBeNull();
     unmount();
   });
 

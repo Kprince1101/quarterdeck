@@ -1,3 +1,4 @@
+import type { StreamEvent } from '@quarterdeck/server/stream-schema';
 import { describe, expect, it } from 'vitest';
 import { emptyTables } from '../../../src/api/index.js';
 import {
@@ -6,6 +7,7 @@ import {
   UNEXPLAINED_FAILURE,
 } from '../../../src/widgets/agents/agent-actions.js';
 import { buildAgents } from '../../../src/widgets/agents/agents-model.js';
+import { heldWorkBy } from '../../../src/widgets/agents/held-work.js';
 import {
   BLOCKED_TICKET_ID,
   BUILDER_ID,
@@ -19,22 +21,46 @@ import {
   TICKET_ID,
   agent,
   agentsTables,
+  droppedEvent,
   failedEvent,
+  heldEvent,
   killedEvent,
   project,
+  replayedEvent,
 } from './fixtures.js';
 
-const viewOf = (id: string) => {
-  const found = buildAgents(agentsTables(), NOW).agents.find(
+const viewOf = (id: string, events: readonly StreamEvent[] = []) => {
+  const found = buildAgents(agentsTables(), events, NOW).agents.find(
     (view) => view.id === id,
   );
   if (found === undefined) throw new Error(`no agent ${id}`);
   return found;
 };
 
+const waiting = heldEvent(1, PAUSED_ID, 'continue: fix lint');
+const replayed = heldEvent(2, PAUSED_ID, 'turn: replayed');
+const dropped = heldEvent(3, PAUSED_ID, 'assign: dropped');
+const elsewhere = heldEvent(4, DRIVER_ID, 'turn: plan round 2');
+const later = heldEvent(5, PAUSED_ID, 'continue: rebase', [
+  'global',
+  'project',
+]);
+const unowned = heldEvent(6, null, 'reassign: QD8c');
+
+const PAUSE_EVENTS: StreamEvent[] = [
+  waiting,
+  replayed,
+  dropped,
+  elsewhere,
+  later,
+  unowned,
+  replayedEvent(7, replayed),
+  droppedEvent(8, dropped),
+];
+
 describe('agents model', () => {
   it('lists unretired agents by role, then name', () => {
-    const { agents, showProject } = buildAgents(agentsTables(), NOW);
+    const { agents, showProject } = buildAgents(agentsTables(), [], NOW);
     expect(agents.map(({ name }) => name)).toEqual([
       'gull',
       'finch',
@@ -51,21 +77,21 @@ describe('agents model', () => {
         projectId: OTHER_PROJECT_ID,
       }),
     );
-    expect(buildAgents(tables, NOW).agents).toHaveLength(4);
+    expect(buildAgents(tables, [], NOW).agents).toHaveLength(4);
     tables.projects.push(project(OTHER_PROJECT_ID, 'site'));
-    const known = buildAgents(tables, NOW);
+    const known = buildAgents(tables, [], NOW);
     expect(known.agents).toHaveLength(5);
     expect(known.showProject).toBe(true);
   });
 
-  it('shows state, since, the ticket worked on and every held ticket', () => {
+  it('shows state, since, the ticket worked on and every ticket it has', () => {
     expect(viewOf(BUILDER_ID)).toMatchObject({
       project: 'deck',
       stateLabel: 'working',
       since: '5m ago',
       workingOn: 'QD8c Agents widget',
       hasWork: true,
-      held: [
+      tickets: [
         {
           id: TICKET_ID,
           title: 'QD8c Agents widget',
@@ -77,6 +103,7 @@ describe('agents model', () => {
           statusLabel: 'in review',
         },
       ],
+      held: [],
       isLive: true,
       isPaused: false,
     });
@@ -85,16 +112,16 @@ describe('agents model', () => {
       since: '2h ago',
       workingOn: '',
       hasWork: false,
-      held: [],
+      tickets: [],
       isPaused: true,
     });
     expect(viewOf(KILLED_ID).isLive).toBe(false);
   });
 
-  it('shows the tickets a kill blocked as held by the killed agent', () => {
+  it('shows the tickets a kill blocked on the killed agent', () => {
     expect(viewOf(KILLED_ID)).toMatchObject({
       workingOn: 'QD5i kill / retire / reset',
-      held: [
+      tickets: [
         {
           id: BLOCKED_TICKET_ID,
           title: 'QD5i kill / retire / reset',
@@ -104,11 +131,62 @@ describe('agents model', () => {
     });
   });
 
+  it('shows the work the pause gate holds for each agent, oldest first', () => {
+    expect(viewOf(PAUSED_ID, PAUSE_EVENTS).held).toEqual([
+      {
+        eventId: 1,
+        label: 'continue: fix lint',
+        scopes: ['agent'],
+        text: 'held: continue: fix lint (agent)',
+      },
+      {
+        eventId: 5,
+        label: 'continue: rebase',
+        scopes: ['global', 'project'],
+        text: 'held: continue: rebase (global, project)',
+      },
+    ]);
+    expect(viewOf(DRIVER_ID, PAUSE_EVENTS).held).toEqual([
+      {
+        eventId: 4,
+        label: 'turn: plan round 2',
+        scopes: ['agent'],
+        text: 'held: turn: plan round 2 (agent)',
+      },
+    ]);
+    expect(viewOf(BUILDER_ID, PAUSE_EVENTS).held).toEqual([]);
+  });
+
   it('is empty without agents', () => {
-    expect(buildAgents(emptyTables(), NOW)).toEqual({
+    expect(buildAgents(emptyTables(), PAUSE_EVENTS, NOW)).toEqual({
       agents: [],
       showProject: false,
     });
+  });
+});
+
+describe('held work', () => {
+  it('drops a held item once it is replayed or dropped', () => {
+    expect(heldWorkBy([waiting]).get(PAUSED_ID)).toHaveLength(1);
+    expect(
+      heldWorkBy([waiting, replayedEvent(9, waiting)]).has(PAUSED_ID),
+    ).toBe(false);
+    expect(heldWorkBy([waiting, droppedEvent(9, waiting)]).has(PAUSED_ID)).toBe(
+      false,
+    );
+  });
+
+  it('skips held events without an agent or a label', () => {
+    const unlabelled = { ...heldEvent(9, PAUSED_ID, ''), payload: {} };
+    expect([...heldWorkBy([unowned, unlabelled]).keys()]).toEqual([]);
+  });
+
+  it('labels work held with no scopes without them', () => {
+    expect(
+      heldWorkBy([heldEvent(9, PAUSED_ID, 'launch', [])]).get(PAUSED_ID),
+    ).toEqual([
+      { eventId: 9, label: 'launch', scopes: [], text: 'held: launch' },
+    ]);
   });
 });
 
