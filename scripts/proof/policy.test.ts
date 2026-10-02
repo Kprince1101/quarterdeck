@@ -103,6 +103,13 @@ describe('permissionAnswer', () => {
       'ls /tmp/qdp-1/wt/README.m?',
       'ls /tmp/qdp-1/wt/[a-z]*',
       'echo {a,b}',
+      '(git push origin HEAD:main)',
+      'x && (git push origin main)',
+      'cat <(git push origin main)',
+      'tee >(git push origin main)',
+      '{ git push origin main; }',
+      'echo ok\ngit push origin main',
+      'echo ok\r\ngit push origin main',
     ])
       expect(asked(command)).toBe('deny');
   });

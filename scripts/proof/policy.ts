@@ -32,7 +32,7 @@ const SAFE_PUSH_OPTIONS = new Set([
 ]);
 const SAFE_PUSH_FLAGS = /^-[uqvn]+$/;
 const SHELL_QUOTING = /['"\\$`]/;
-const SHELL_QUOTING_OR_GLOB = /['"\\$`*?[\]{}]/;
+const SHELL_QUOTING_OR_GLOB = /['"\\$`*?[\]{}()\n\r]/;
 const GIT_SUBCOMMAND = /^[a-z][a-z-]*$/;
 const BRANCH_MOVERS = new Set(['switch', 'checkout', 'branch', 'update-ref']);
 const GIT_OPTIONS_WITH_VALUE = new Set(['-C', '-c']);
