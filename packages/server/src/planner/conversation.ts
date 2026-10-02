@@ -59,10 +59,11 @@ export const startConversation = async (
   site: ConversationSite,
 ): Promise<Conversation> => {
   const rules = { homeDir: ctx.homeDir, repoDir: site.repoPath };
-  const [naming, models, charter] = await Promise.all([
+  const [naming, models, charter, lifecycleRule] = await Promise.all([
     loadRule('naming', rules),
     loadRule('models', rules),
     loadRule('charter', rules),
+    loadRule('lifecycle', rules),
   ]);
   const host = createPlannerSessionHost({
     ...site,
@@ -77,7 +78,7 @@ export const startConversation = async (
     sessions: host,
     worktrees: gitWorktrees,
     openStores: ctx.openStores,
-    budget: async () => (await loadRule('lifecycle', rules)).budget.window,
+    budget: () => Promise.resolve(lifecycleRule.budget.window),
   });
   const agent = await lifecycle.birth({
     store: ctx.store,
