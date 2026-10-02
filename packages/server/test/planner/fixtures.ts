@@ -15,7 +15,7 @@ import {
   type Planner,
   type PlannerAdapters,
 } from '../../src/planner/index.js';
-import type { Store } from '../../src/store/index.js';
+import { STORE_TABLES, type Store } from '../../src/store/index.js';
 import {
   fakeAgentLaunch,
   type FakeAgentOptions,
@@ -96,7 +96,25 @@ export interface PlannerProjectOptions {
   fake?: FakeAgentOptions;
 }
 
-let projects = 0;
+const PLANNER_PROJECT = 'plan';
+
+const RESET_TABLES = STORE_TABLES.filter((table) => table !== 'projects');
+
+export const createPlannerProject = async (t: TestApi): Promise<void> => {
+  await t.send('project.create', { project: PLANNER_PROJECT });
+};
+
+const resetPlannerProject = async (
+  store: Store,
+  repoPath: string | null,
+): Promise<void> => {
+  await store.db.query(`truncate ${RESET_TABLES.join(', ')}`);
+  await store.db.query(
+    `update projects set repo_path = $2, archived_at = null, paused_at = null
+     where id = $1`,
+    [store.projectId, repoPath],
+  );
+};
 
 export const writeMachineRule = async (
   homeDir: string,
@@ -112,13 +130,12 @@ export const openPlannerProject = async (
   t: TestApi,
   options: PlannerProjectOptions = {},
 ): Promise<PlannerProject> => {
-  projects += 1;
-  const project = `plan${projects}`;
+  const project = PLANNER_PROJECT;
   const repoDir = await realpath(await mkdtemp(join(tmpdir(), 'qd-plan-')));
-  const created: Record<string, unknown> = { project };
-  if (options.repo !== false) created['repoPath'] = repoDir;
-  await t.send('project.create', created);
+  let repoPath: string | null = repoDir;
+  if (options.repo === false) repoPath = null;
   const store = await t.store(project);
+  await resetPlannerProject(store, repoPath);
   const bus = await startBusHost({ store, home: t.homeDir });
   const pause = await startPauseGate({ store, home: t.api.stores.dataHome });
   const fake = fakeRuntime(options.fake);
