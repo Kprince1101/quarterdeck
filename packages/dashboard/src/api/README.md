@@ -27,6 +27,18 @@ The input is checked against the same schema before it is sent. A refusal, local
 
 A network failure rejects with `fetch`'s own error.
 
+## Rules
+
+```ts
+import { createRulesReader, readRules } from './api';
+
+const machine = await readRules(null);
+const deck = await readRules('deck');
+deck.rules[0]; // { name, file, defaults, machine, repo }
+```
+
+`readRules(project)` reads `GET /api/rules` (with `?project=<slug>` when given) and parses the reply with `rulesViewSchema` from `@quarterdeck/server/intents`. Each rule carries its shipped `defaults` (`{ path, content }`), its `machine` layer and, for a project with a repo, its `repo` layer (`content` is `null` when the file does not exist). A refusal or a malformed reply throws `RulesReadError` with the HTTP `status` and the server's message. `createRulesReader({ baseUrl, fetch })` makes one for another origin or a fake `fetch`.
+
 ## Stream
 
 ```tsx

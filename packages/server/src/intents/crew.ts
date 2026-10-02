@@ -6,6 +6,7 @@ const agentTarget = inProject({ agentId: idSchema });
 export const CREW_INTENTS = {
   'round.start': inProject({ goal: textSchema }),
   'round.end': inProject({ roundId: idSchema }),
+  'round.kill': inProject({ roundId: idSchema }),
   'pause.set': inProject({ paused: z.boolean() }),
   'agent.pause': agentTarget,
   'agent.resume': agentTarget,

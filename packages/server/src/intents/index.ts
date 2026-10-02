@@ -29,6 +29,16 @@ export {
   type IntentStatus,
 } from './registry.js';
 export {
+  RULES_PATH,
+  RULES_PROJECT_PARAM,
+  ruleViewSchema,
+  rulesUrl,
+  rulesViewSchema,
+  type RuleLayer,
+  type RuleView,
+  type RulesView,
+} from './rules-view.js';
+export {
   WIPE_ALL_CONFIRMATION,
   WORKSPACE_INTENTS,
   type WorkspaceIntentName,
