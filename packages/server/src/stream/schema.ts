@@ -4,6 +4,8 @@ export const STREAM_PATH = '/ws';
 
 export const STREAM_AFTER_PARAM = 'after';
 
+export const STREAM_PROJECT_PARAM = 'project';
+
 export const STREAM_PROTOCOL = 'quarterdeck';
 
 export const STREAM_TOKEN_PREFIX = 'quarterdeck.token.';

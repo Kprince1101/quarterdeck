@@ -12,6 +12,8 @@ Starts the server on `127.0.0.1` (port 4317 by default, `0` picks a free one), c
 
 `DATABASE_URL` switches the store to an external Postgres, as it does for the server.
 
+The port also serves the WebSocket stream at `/ws` (`?project=<slug>` picks the project when more than one is open), and each open project gets its bus host, the socket its agents' MCP relay connects to (see [bus](../server/src/bus/README.md)). A socket file left by a crash is removed at start. On stop, each project's stream and bus host close first, removing the socket file, then everything above. All of it is [`startQuarterdeck`](../server/src/quarterdeck/README.md).
+
 ## init
 
 ```sh

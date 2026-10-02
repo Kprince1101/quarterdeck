@@ -3,8 +3,8 @@ import { parseArgs } from 'node:util';
 import {
   DEFAULT_API_PORT,
   quarterdeckHome,
-  startApiServer,
-  type ApiServer,
+  startQuarterdeck,
+  type Quarterdeck,
 } from '@quarterdeck/server';
 import { resolveDashboardDir } from './dashboard.js';
 import { CliError, type CliIo, type Command } from './io.js';
@@ -31,13 +31,12 @@ const parsePort = (value: string | undefined): number => {
 const isPortTaken = (err: unknown): boolean =>
   err instanceof Error && 'code' in err && err.code === 'EADDRINUSE';
 
-const listen = async (port: number, io: CliIo): Promise<ApiServer> => {
+const listen = async (port: number, io: CliIo): Promise<Quarterdeck> => {
   try {
-    return await startApiServer({
+    return await startQuarterdeck({
       port,
       homeDir: io.homeDir,
       dashboardDir: resolveDashboardDir(),
-      openProjects: true,
     });
   } catch (err) {
     if (!isPortTaken(err)) throw err;
@@ -63,7 +62,7 @@ export const runUp: Command = async (args, io) => {
   await mkdir(quarterdeckHome(io.homeDir), { recursive: true });
   const api = await listen(port, io);
   io.out(`Quarterdeck is running at ${api.url}/#token=${api.token}`);
-  io.out(`Data: ${api.stores.location}`);
+  io.out(`Data: ${api.location}`);
   io.out('Press Ctrl+C to stop.');
   await io.untilStopped();
   await api.close();

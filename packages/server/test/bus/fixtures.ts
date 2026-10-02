@@ -1,4 +1,6 @@
+import type { McpServerStdio } from '@agentclientprotocol/sdk';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
 import {
@@ -110,6 +112,21 @@ export const connectClient = async (
   await server.connect(serverSide);
   const client = new Client({ name: 'bus-test', version: '0.0.0' });
   await client.connect(clientSide);
+  return client;
+};
+
+export const envOf = (launch: McpServerStdio): Record<string, string> =>
+  Object.fromEntries(launch.env.map(({ name, value }) => [name, value]));
+
+export const connectStdio = async (launch: McpServerStdio): Promise<Client> => {
+  const transport = new StdioClientTransport({
+    command: launch.command,
+    args: launch.args,
+    env: envOf(launch),
+    stderr: 'pipe',
+  });
+  const client = new Client({ name: 'bus-host-test', version: '0.0.0' });
+  await client.connect(transport);
   return client;
 };
 

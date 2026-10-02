@@ -21,6 +21,8 @@ await stream.close();
 await store.close();
 ```
 
+`quarterdeck up` mounts one stream per open project on the API's port with `routeStreams({ token, streams, allowedOrigins })`, which picks the project's stream from `?project=<slug>` (`STREAM_PROJECT_PARAM`), or the only open project when there is one; see [quarterdeck](../quarterdeck/README.md#the-stream).
+
 `attachStream` answers every upgrade request; other paths get 404. A server with more than one upgrade path calls `createStream({ store }).handleUpgrade(req, socket, head)` itself: it returns `false` for paths that are not `/ws` and leaves the socket alone. `serveStream({ store, port?, token? })` binds a bare server to `127.0.0.1` for tests and standalone use; without `token` it makes one, and `served.token` gives it.
 
 Bind the host server to `127.0.0.1` only. The stream also refuses, with 403:

@@ -15,6 +15,7 @@ import { MACHINE_EVENT_KINDS, readMachineState } from './machine.js';
 import {
   STREAM_AFTER_PARAM,
   STREAM_PATH,
+  STREAM_PROJECT_PARAM,
   STREAM_PROTOCOL,
   STREAM_TOKEN_PREFIX,
   type MachineState,
@@ -44,8 +45,8 @@ export interface StreamOptions {
   tail?: number;
   turnsPerAgent?: number;
   maxBufferedBytes?: number;
-  allowedOrigins?: readonly string[];
-  onError?: (err: unknown) => void;
+  allowedOrigins?: readonly string[] | undefined;
+  onError?: ((err: unknown) => void) | undefined;
 }
 
 export interface Stream {
@@ -132,6 +133,19 @@ const presentedToken = (request: IncomingMessage): string | undefined =>
   protocolsOf(request)
     .find((protocol) => protocol.startsWith(STREAM_TOKEN_PREFIX))
     ?.slice(STREAM_TOKEN_PREFIX.length);
+
+type Refusal = [status: number, reason: string];
+
+const admission = (
+  request: IncomingMessage,
+  token: string,
+  allowedOrigins: ReadonlySet<string>,
+): Refusal | undefined => {
+  const refused = refusal(request, allowedOrigins);
+  if (refused) return [403, refused];
+  if (!verifyApiToken(token, presentedToken(request))) return [401, ''];
+  return undefined;
+};
 
 const parseAfter = (url: URL): number | undefined | null => {
   const after = url.searchParams.get(STREAM_AFTER_PARAM);
@@ -252,13 +266,9 @@ export const createStream = (options: StreamOptions): Stream => {
   ): boolean => {
     const url = new URL(request.url ?? '/', 'http://localhost');
     if (url.pathname !== STREAM_PATH) return false;
-    const refused = refusal(request, allowedOrigins);
+    const refused = admission(request, options.token, allowedOrigins);
     if (refused) {
-      reject(socket, 403, refused);
-      return true;
-    }
-    if (!verifyApiToken(options.token, presentedToken(request))) {
-      reject(socket, 401, '');
+      reject(socket, ...refused);
       return true;
     }
     const after = parseAfter(url);
@@ -303,6 +313,56 @@ export const attachStream = (
     }
   });
   return stream;
+};
+
+export type UpgradeHandler = (
+  request: IncomingMessage,
+  socket: Duplex,
+  head: Buffer,
+) => void;
+
+export interface StreamRouterOptions {
+  token: string;
+  streams: () => ReadonlyMap<string, Stream>;
+  allowedOrigins?: readonly string[] | undefined;
+}
+
+const pickStream = (
+  streams: ReadonlyMap<string, Stream>,
+  project: string | null,
+): Stream | Refusal => {
+  if (project !== null)
+    return streams.get(project) ?? [404, `no open project ${project}`];
+  const [only, ...others] = streams.values();
+  if (only === undefined) return [404, 'no project is open'];
+  if (others.length > 0)
+    return [400, `name a project with ?${STREAM_PROJECT_PARAM}=<slug>`];
+  return only;
+};
+
+export const routeStreams = (options: StreamRouterOptions): UpgradeHandler => {
+  const allowedOrigins = new Set(options.allowedOrigins);
+  return (request, socket, head) => {
+    const url = new URL(request.url ?? '/', 'http://localhost');
+    if (url.pathname !== STREAM_PATH) {
+      reject(socket, 404, 'no such stream');
+      return;
+    }
+    const refused = admission(request, options.token, allowedOrigins);
+    if (refused) {
+      reject(socket, ...refused);
+      return;
+    }
+    const picked = pickStream(
+      options.streams(),
+      url.searchParams.get(STREAM_PROJECT_PARAM),
+    );
+    if (Array.isArray(picked)) {
+      reject(socket, ...picked);
+      return;
+    }
+    picked.handleUpgrade(request, socket, head);
+  };
 };
 
 export const serveStream = async (

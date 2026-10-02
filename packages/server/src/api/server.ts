@@ -5,8 +5,13 @@ import { homedir } from 'node:os';
 import { closeAllAcpClients } from '../acp/client/index.js';
 import type { StopHosts } from '../lifecycle/stop.js';
 import { quarterdeckHome } from '../store/index.js';
+import type { UpgradeHandler } from '../stream/socket.js';
 import type { ApiContext } from './context.js';
-import { createProjectStores, type ProjectStores } from './project-stores.js';
+import {
+  createProjectStores,
+  type ProjectHooks,
+  type ProjectStores,
+} from './project-stores.js';
 import { localGuard } from './request.js';
 import { handleRequest } from './routes.js';
 import { createApiToken, removeApiToken, writeApiToken } from './token.js';
@@ -23,6 +28,9 @@ export interface ApiServerOptions {
   openProjects?: boolean;
   onError?: (err: unknown) => void;
   stopHosts?: StopHosts;
+  token?: string;
+  projectHooks?: ProjectHooks;
+  upgrade?: UpgradeHandler;
 }
 
 export interface ApiServer {
@@ -44,13 +52,15 @@ export const startApiServer = async (
     options.databaseUrl,
     options.onError,
     options.stopHosts,
+    options.projectHooks,
   );
   const ctx: ApiContext = { stores, homeDir };
-  const token = createApiToken();
+  const token = options.token ?? createApiToken();
   let guard = localGuard(0, token);
   const server = createServer((req, res) => {
     void handleRequest(ctx, guard, req, res, options.dashboardDir);
   });
+  if (options.upgrade) server.on('upgrade', options.upgrade);
   server.listen(options.port ?? DEFAULT_API_PORT, API_HOST);
   try {
     await once(server, 'listening');
