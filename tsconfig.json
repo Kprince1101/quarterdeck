@@ -2,6 +2,7 @@
   "extends": "legion-toolkit/tsconfig/node.json",
   "compilerOptions": {
     "noEmit": true,
+    "customConditions": ["@quarterdeck/source"],
     "jsx": "react-jsx"
   },
   "include": ["**/*.ts", "**/*.tsx"],

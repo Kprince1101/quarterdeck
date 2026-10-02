@@ -6,7 +6,23 @@
   "license": "MIT",
   "author": "Kristopher Prince",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "@quarterdeck/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "charter.md",
+    "reviewer.md",
+    "permissions.json",
+    "naming.json",
+    "lifecycle.json",
+    "models.json"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json"
   },
   "engines": {
     "node": ">=22"

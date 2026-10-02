@@ -10,7 +10,7 @@ import {
   loadRule,
   loadRules,
   ruleLayerPaths,
-} from '../src/index.js';
+} from '@quarterdeck/rules';
 
 interface Sandbox {
   homeDir: string;
