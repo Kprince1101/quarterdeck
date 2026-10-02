@@ -23,3 +23,4 @@ export {
   type ReplayCliOptions,
 } from './replay.js';
 export { UP_USAGE, runUp } from './up.js';
+export { WIPE_USAGE, runWipe } from './wipe.js';
