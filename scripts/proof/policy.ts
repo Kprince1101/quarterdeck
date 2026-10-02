@@ -100,10 +100,23 @@ const refusesPush = (question: string): boolean =>
     .map(pushArguments)
     .some((args) => args !== undefined && isRefusedPush(args));
 
+const RECOMMENDED_CWD = /should do this in (\/.*)\.$/;
+
+export const cardCwd = (recommendation: unknown): string | undefined => {
+  if (typeof recommendation !== 'string') return undefined;
+  return RECOMMENDED_CWD.exec(recommendation)?.[1];
+};
+
+const isInside = (path: string, roots: readonly string[]): boolean =>
+  roots.some((root) => path === root || path.startsWith(`${root}/`));
+
 export const permissionAnswer = (
   question: string,
+  cwd: string | undefined,
   allowedRoots: readonly string[],
 ): PermissionAnswer => {
+  if (cwd === undefined || !isInside(posix.normalize(cwd), allowedRoots))
+    return 'deny';
   const spaced = question.replaceAll(/\s+/g, ' ');
   if (REFUSED_COMMANDS.some((pattern) => pattern.test(spaced))) return 'deny';
   if (refusesPush(question)) return 'deny';
@@ -111,10 +124,7 @@ export const permissionAnswer = (
   const paths = (question.match(ABSOLUTE_PATH) ?? []).map((path) =>
     posix.normalize(path),
   );
-  const inside = paths.every((path) =>
-    allowedRoots.some((root) => path === root || path.startsWith(`${root}/`)),
-  );
-  if (inside) return 'allow';
+  if (paths.every((path) => isInside(path, allowedRoots))) return 'allow';
   return 'deny';
 };
 

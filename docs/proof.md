@@ -36,6 +36,8 @@ Before `init`, the script writes two machine-layer rules into the temp home:
 
 Anything the rules leave at `ask` becomes an `agent.permission` card. The script answers those cards from the card's text, the way the operator would. It denies:
 
+- a request whose working directory is outside the repository or the temp home. The policy's canonical `cwd` comes from the card's recommendation, and a card without one is denied;
+
 - `gh pr merge` however it is spaced or flagged, and `gh api` calls to a pull request's `merge` endpoint;
 - any `git push` that has no refspec, whose refspec names `main`, `master` or `HEAD` (bare, as `<src>:<dst>`, or as `refs/heads/…`), or that starts with `+` or `:`;
 - any `git push` that uses `--force*`, `-f`, `-d`, `--mirror`, `--all`, `--delete`, `--tags`, `--follow-tags`, `--receive-pack`, `--exec` or `--prune`;

@@ -15,7 +15,7 @@ import {
   redactValue,
 } from '@quarterdeck/server';
 import { main, type CliIo } from 'quarterdeck';
-import { createScrubber, permissionAnswer } from './policy.ts';
+import { cardCwd, createScrubber, permissionAnswer } from './policy.ts';
 
 type Row = Record<string, unknown>;
 
@@ -71,7 +71,13 @@ const home = await mkdtemp('/tmp/qdp-');
 const machine = join(home, '.quarterdeck');
 const out = join(home, 'proof');
 const answersDir = join(out, 'answers');
-const allowedRoots = [repo, home, await realpath(home), '/dev/null'];
+const allowedRoots = [
+  repo,
+  await realpath(repo),
+  home,
+  await realpath(home),
+  '/dev/null',
+];
 const started = Date.now();
 const lines: string[] = [];
 const handled = new Set<string>();
@@ -278,7 +284,11 @@ const handleCard = async (card: Row): Promise<void> => {
     handled.add(id);
     await answerCard(
       card,
-      permissionAnswer(String(card['question']), allowedRoots),
+      permissionAnswer(
+        String(card['question']),
+        cardCwd(card['recommendation']),
+        allowedRoots,
+      ),
     );
     return;
   }

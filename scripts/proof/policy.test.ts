@@ -1,31 +1,51 @@
 import { describe, expect, it } from 'vitest';
-import { createScrubber, permissionAnswer } from './policy.ts';
+import {
+  cardCwd,
+  createScrubber,
+  permissionAnswer,
+  type PermissionAnswer,
+} from './policy.ts';
 
 const ROOTS = ['/work/repo', '/tmp/qdp-1'];
+const WORKTREE = '/tmp/qdp-1/wt';
+
+const answer = (question: string, cwd: string = WORKTREE): PermissionAnswer =>
+  permissionAnswer(question, cwd, ROOTS);
+
+const asked = (command: string): PermissionAnswer =>
+  answer(`heron asks to run ${command}: ${command}.`);
+
+describe('cardCwd', () => {
+  it('reads the cwd from a permission card’s recommendation', () => {
+    expect(
+      cardCwd('Allow it only if heron should do this in /tmp/qdp-1/wt.'),
+    ).toBe('/tmp/qdp-1/wt');
+  });
+
+  it('gives nothing for a missing or unexpected recommendation', () => {
+    expect(cardCwd(null)).toBeUndefined();
+    expect(cardCwd('Allow it.')).toBeUndefined();
+  });
+});
 
 describe('permissionAnswer', () => {
   it('allows a command whose paths stay inside the allowed roots', () => {
-    expect(
-      permissionAnswer(
-        'wren asks to run git -C /tmp/qdp-1/wt status: git status.',
-        ROOTS,
-      ),
-    ).toBe('allow');
-    expect(
-      permissionAnswer(
-        'heron asks to run gh pr diff https://github.com/o/r/pull/1.',
-        ROOTS,
-      ),
-    ).toBe('allow');
+    expect(asked('git -C /tmp/qdp-1/wt status')).toBe('allow');
+    expect(asked('gh pr diff https://github.com/o/r/pull/1')).toBe('allow');
+  });
+
+  it('denies a command run from a cwd outside the roots, or with no cwd', () => {
+    expect(answer('wren asks to run cat passwd.', '/etc')).toBe('deny');
+    expect(answer('wren asks to run ls.', '/work/repository')).toBe('deny');
+    expect(answer('wren asks to run ls.', '/work/repo/../x')).toBe('deny');
+    expect(permissionAnswer('wren asks to run ls.', undefined, ROOTS)).toBe(
+      'deny',
+    );
   });
 
   it('denies a command with a path outside the roots', () => {
-    expect(permissionAnswer('wren asks to run Read: /etc/passwd.', ROOTS)).toBe(
-      'deny',
-    );
-    expect(
-      permissionAnswer('wren asks to run cat /work/repository/x.', ROOTS),
-    ).toBe('deny');
+    expect(answer('wren asks to run Read: /etc/passwd.')).toBe('deny');
+    expect(answer('wren asks to run cat /work/repository/x.')).toBe('deny');
   });
 
   it('denies paths it cannot resolve from the card text', () => {
@@ -39,30 +59,18 @@ describe('permissionAnswer', () => {
       'echo $(whoami)',
       'echo `whoami`',
     ])
-      expect(permissionAnswer(`wren asks to run ${command}.`, ROOTS)).toBe(
-        'deny',
-      );
+      expect(asked(command)).toBe('deny');
   });
 
   it('allows removing a single file', () => {
-    expect(
-      permissionAnswer('wren asks to run rm -f /tmp/qdp-1/wt/a.txt.', ROOTS),
-    ).toBe('allow');
+    expect(asked('rm -f /tmp/qdp-1/wt/a.txt')).toBe('allow');
   });
 
   it('tells a parent path from a file name with dots', () => {
-    expect(
-      permissionAnswer(
-        'wren asks to run npx prettier --check ./README.md ../repo.md.',
-        ROOTS,
-      ),
-    ).toBe('deny');
-    expect(
-      permissionAnswer(
-        'wren asks to run npx prettier --check ./README.md .prettierrc...',
-        ROOTS,
-      ),
-    ).toBe('allow');
+    expect(asked('npx prettier --check ./README.md ../repo.md')).toBe('deny');
+    expect(asked('npx prettier --check ./README.md .prettierrc..')).toBe(
+      'allow',
+    );
   });
 
   it('allows a push of a feature branch', () => {
@@ -72,9 +80,7 @@ describe('permissionAnswer', () => {
       'git -C /tmp/qdp-1/wt push origin HEAD:docs/fix-typo',
       'cd /tmp/qdp-1/wt && git commit -qam "docs: fix push" && git push origin fix',
     ])
-      expect(
-        permissionAnswer(`heron asks to run ${command}: ${command}.`, ROOTS),
-      ).toBe('allow');
+      expect(asked(command)).toBe('allow');
   });
 
   it('denies a push to the default branch, a forced or deleting refspec, or a bulk push', () => {
@@ -101,9 +107,7 @@ describe('permissionAnswer', () => {
       'git -C /tmp/qdp-1/wt push origin main',
       'cd /tmp/qdp-1/wt && git push origin feature && git push origin main',
     ])
-      expect(
-        permissionAnswer(`heron asks to run ${command}: ${command}.`, ROOTS),
-      ).toBe('deny');
+      expect(asked(command)).toBe('deny');
   });
 
   it('denies merging however the command is spaced', () => {
@@ -113,9 +117,7 @@ describe('permissionAnswer', () => {
       'gh\tpr merge 72',
       'gh api -X PUT repos/o/r/pulls/72/merge',
     ])
-      expect(permissionAnswer(`ferret asks to run ${command}.`, ROOTS)).toBe(
-        'deny',
-      );
+      expect(asked(command)).toBe('deny');
   });
 
   it('denies merging, force-pushing and deleting whatever the paths', () => {
@@ -134,9 +136,7 @@ describe('permissionAnswer', () => {
       'git reset --hard HEAD~1',
       'curl https://example.com',
     ])
-      expect(permissionAnswer(`wren asks to run ${command}.`, ROOTS)).toBe(
-        'deny',
-      );
+      expect(asked(command)).toBe('deny');
   });
 });
 
