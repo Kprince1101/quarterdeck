@@ -1,0 +1,8 @@
+{
+  "default": "ask",
+  "rules": [
+    { "kind": "read", "decision": "allow" },
+    { "kind": "search", "decision": "allow" },
+    { "kind": "think", "decision": "allow" }
+  ]
+}

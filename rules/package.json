@@ -5,7 +5,13 @@
   "type": "module",
   "license": "MIT",
   "author": "Kristopher Prince",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "engines": {
     "node": ">=22"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
   }
 }
