@@ -87,7 +87,7 @@ describe('usage.read', { timeout: TIMEOUT }, () => {
     await insertTurns(elsewhere, await insertAgent(elsewhere, 'kite'), [
       { tokens: 900, endedHoursAgo: 1 },
     ]);
-  });
+  }, TIMEOUT);
 
   afterEach(async () => {
     await rm(join(t.homeDir, '.quarterdeck', 'rules.local.lifecycle.json'), {
