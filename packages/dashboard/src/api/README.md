@@ -52,13 +52,14 @@ const Board = () => {
 
 `useStream(options?)` opens the WebSocket at `ws(s)://<page host>/ws` (or `options.url`) and returns a `StreamState`:
 
-| Field    | Meaning                                                                                                          |
-| -------- | ---------------------------------------------------------------------------------------------------------------- |
-| `status` | `connecting` until the first snapshot, `live` after each snapshot, `reconnecting` while dropped, `closed` after. |
-| `tables` | Every `STREAM_TABLES` table as an array of rows, empty until the first snapshot.                                 |
-| `events` | The newest `eventLimit` (500) events, in id order.                                                               |
-| `cursor` | The last event id handled, or the snapshot's cursor, `null` before the first snapshot.                           |
-| `error`  | Why the stream last dropped or which message it could not read; cleared by the next snapshot.                    |
+| Field     | Meaning                                                                                                           |
+| --------- | ----------------------------------------------------------------------------------------------------------------- |
+| `status`  | `connecting` until the first snapshot, `live` after each snapshot, `reconnecting` while dropped, `closed` after.  |
+| `tables`  | Every `STREAM_TABLES` table as an array of rows, empty until the first snapshot.                                  |
+| `machine` | `{ pausedAt }`, the machine-wide pause, from each snapshot and each `machine` message. `UNPAUSED_MACHINE` before. |
+| `events`  | The newest `eventLimit` (500) events, in id order.                                                                |
+| `cursor`  | The last event id handled, or the snapshot's cursor, `null` before the first snapshot.                            |
+| `error`   | Why the stream last dropped or which message it could not read; cleared by the next snapshot.                     |
 
 Each snapshot replaces `tables`. A `change` upserts its row by `id`, or removes it when `row` is `null`; removing an agent also removes its turns, since the server sends no deletes for those. Turns are kept to each agent's latest `turnsPerAgent` (20), like the snapshot. Messages that do not match `streamMessageSchema` are skipped and reported through `error` and `onError`.
 

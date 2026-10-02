@@ -45,7 +45,12 @@ const mount = (tables: SnapshotTables, status = 200, reply: object = {}) => {
     </DeckProvider>,
   );
   act(() => {
-    FakeSocket.opened[0]?.deliver({ type: 'snapshot', cursor: 0, tables });
+    FakeSocket.opened[0]?.deliver({
+      type: 'snapshot',
+      cursor: 0,
+      tables,
+      machine: { pausedAt: null },
+    });
   });
   return { ...rendered, sent };
 };

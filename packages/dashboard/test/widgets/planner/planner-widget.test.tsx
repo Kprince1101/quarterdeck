@@ -93,6 +93,7 @@ const snapshot = (tickets: TicketRow[] = []): StreamMessage => ({
   type: 'snapshot',
   cursor: 0,
   tables: { ...emptyTables(), projects: PROJECTS, tickets },
+  machine: { pausedAt: null },
 });
 
 const arrive = (...events: StreamEvent[]): StreamMessage[] =>

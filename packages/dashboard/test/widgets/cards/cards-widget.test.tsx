@@ -94,6 +94,7 @@ const snapshot = (cards: CardRow[]): StreamMessage => ({
     tickets: [ticket(TICKET, 'Cards widget')],
     cards,
   },
+  machine: { pausedAt: null },
 });
 
 const changed = (row: CardRow): StreamMessage => ({

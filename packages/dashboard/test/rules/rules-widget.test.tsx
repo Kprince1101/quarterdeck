@@ -255,6 +255,7 @@ describe('rules widget', () => {
         type: 'snapshot',
         cursor: 0,
         tables: { ...emptyTables(), projects: [PROJECT] },
+        machine: { pausedAt: null },
       });
     });
     choose(all(container, 'select')[1] ?? container, 'deck');
@@ -280,6 +281,7 @@ describe('rules widget', () => {
         type: 'snapshot',
         cursor: 0,
         tables: { ...emptyTables(), projects: [PROJECT] },
+        machine: { pausedAt: null },
       });
     });
     choose(all(container, 'select')[1] ?? container, 'deck');

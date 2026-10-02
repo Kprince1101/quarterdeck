@@ -32,6 +32,7 @@ export {
   DEFAULT_STREAM_LIMITS,
   STREAM_EVENT_LIMIT,
   STREAM_TURNS_PER_AGENT,
+  UNPAUSED_MACHINE,
   applyStreamMessage,
   emptyTables,
   initialStreamState,

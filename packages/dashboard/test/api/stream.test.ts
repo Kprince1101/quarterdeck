@@ -62,6 +62,7 @@ describe('stream retries', () => {
     type: 'snapshot',
     cursor: 9,
     tables: emptyTables(),
+    machine: { pausedAt: null },
   };
 
   const open = (onError?: (err: unknown) => void) =>

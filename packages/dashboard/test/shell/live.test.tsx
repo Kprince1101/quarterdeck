@@ -1,3 +1,4 @@
+import { isGloballyPaused } from '@quarterdeck/server';
 import { LAYOUT_PRESETS, parseGridLayout } from '@quarterdeck/server/layouts';
 import {
   Window,
@@ -12,6 +13,14 @@ import { STARTER_LAYOUT } from '../layouts/stream-rows.js';
 import type { PageElement } from './page.js';
 
 const WAIT = { timeout: 5000 };
+
+const pressNamed = (container: PageElement, name: string): void => {
+  const button = Array.from(container.querySelectorAll('button')).find(
+    ({ textContent }) => textContent === name,
+  );
+  if (button === undefined) throw new Error(`no ${name} button`);
+  (button as unknown as HappyElement).click();
+};
 
 const count = (
   all: typeof import('./page.js').all,
@@ -190,6 +199,58 @@ describe('dashboard on a live server', () => {
           'hi',
         );
       });
+      unmount();
+    },
+    TIMEOUT,
+  );
+
+  it(
+    'shows the project on the Board and pauses everything through pause.all',
+    async () => {
+      const { render, textOf } = await import('./page.js');
+      const { App } = await import('../../src/app.js');
+      const served = await deck.serve();
+      const { container, unmount } = render(
+        <App
+          stream={{
+            url: served.url,
+            WebSocket: WsSocket as unknown as typeof WebSocket,
+          }}
+          intents={deck.client}
+        />,
+      );
+      await vi.waitFor(() => {
+        expect(textOf(container, '[role="status"]')).toBe('Live');
+      });
+      await deck.client.layout.save({
+        project: deck.project,
+        name: DASHBOARD_LAYOUT,
+        spec: LAYOUT_PRESETS.minimal,
+      });
+      await vi.waitFor(() => {
+        expect(textOf(container, '.qd-board-stream')).toBe('Stream live');
+        expect(textOf(container, '.qd-board-project h3')).toBe(deck.project);
+      }, WAIT);
+
+      expect(container.querySelector('.qd-board-paused')).toBeNull();
+
+      pressNamed(container, 'Pause all');
+      await vi.waitFor(() => {
+        expect(textOf(container, '.qd-board-outcome')).toBe(
+          'Paused 1 project.',
+        );
+        expect(textOf(container, '.qd-board-paused')).toBe('Paused everywhere');
+      }, WAIT);
+      expect(await isGloballyPaused(deck.api.stores.dataHome)).toBe(true);
+
+      pressNamed(container, 'Resume all');
+      await vi.waitFor(() => {
+        expect(textOf(container, '.qd-board-outcome')).toBe(
+          'Resumed 1 project.',
+        );
+        expect(container.querySelector('.qd-board-paused')).toBeNull();
+      }, WAIT);
+      expect(await isGloballyPaused(deck.api.stores.dataHome)).toBe(false);
       unmount();
     },
     TIMEOUT,

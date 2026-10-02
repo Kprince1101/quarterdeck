@@ -33,6 +33,7 @@ src/widgets/registry.ts      defineWidget, WidgetDefinition, createRegistry
 src/widgets/widgets.ts       WIDGETS: every src/widgets/**/*.widget.tsx, found at build time
 src/widgets/widget-mount.tsx WidgetMount: the grid over WIDGETS
 src/widgets/starter/         the Tables starter widget
+src/widgets/board/           Board: liveness strip, Pause all / Resume all, capped project picker, archived toggle
 src/widgets/events/          Events: the feed, filtered by project and kind
 src/widgets/data/            Data: table counts, rows a page at a time, paths on disk
 src/widgets/driver/          the Driver widget: round picker, turns, turn detail, replay command
@@ -99,6 +100,15 @@ The grid draws the `Panel` (title, move, duplicate, hide, resize), so the compon
 - **A diff before every write.** _Review changes_ shows the line diff against the file on disk; only _Save_ in that panel sends `rules.write`. _Remove file_ shows what goes and sends `rules.reset`. Both use `scope: "machine"`; the widget never writes the shipped defaults or a repo layer.
 - **Where each value comes from.** The _In effect after saving_ table lists every key with its value and its layer: `defaults`, `machine` or `repo`. Arrays are one value, since a layer replaces them; a Markdown rule is one value from its highest layer.
 - **The repo layer, read-only.** Pick a project and its `<repo>/.quarterdeck/rules.local.<file>` is shown, read-only, and applied on top. The widget says plainly that the repo layer can only tighten permissions (decided on their own, `deny` or `ask` only), `mergeGate` (a flag can only turn a gate on) and `autoEndSettleSeconds` (only lengthened); those keys carry a `tighten-only` tag, and a repo value that tightened nothing is not credited to the repo.
+
+## The Board widget
+
+The Board shows whether things are alive across projects:
+
+- **Projects** are sorted by name. The first `BOARD_PROJECT_CAP` (4) are shown until the user picks; after that only picked projects are shown, and unpicked boxes are disabled while the cap is full. Picks hidden by the archived toggle are kept, but a pick made at the cap drops them rather than save more than 4.
+- **Archived projects** (`archivedAt` set) stay out of the picker and the strip unless _Show archived_ is on.
+- **The liveness strip** gives the stream status, then each shown project with its live agents (not ended, killed or retired) by role then name, tagged paused or archived.
+- **Pause all / Resume all** send `pause.all`, report how many projects were reached and name any that were not (`failed`). The machine-wide pause is read from `stream.machine.pausedAt`: while it is set the Board says _Paused everywhere_ and offers only Resume all.
 
 ## The Driver widget
 
