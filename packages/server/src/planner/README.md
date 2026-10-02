@@ -42,7 +42,10 @@ A message is refused (intent `rejected` with `{ error }`, plus a `planner.failed
 - the sign-in card is declined or expires (`SignInRequiredError`, whose message names the command);
 - the wait for sign-in is stopped;
 - the budget holds the birth (`BudgetHeldError`; see [budget](../budget/README.md));
+- the project is archived (`PROJECT_ARCHIVED`);
 - the agent cannot be born. If a turn fails, for example because the agent process died, the conversation ends and the next message starts a fresh one.
+
+Archiving the project ends the conversation: on `project.archive` the Planner stops any sign-in wait, cancels a running turn and retires its agent, closing the session and its process, with `planner.cleared { reason: 'archived' }`. Messages are refused while the project is archived, and the first message after it is unarchived births a new Planner, with no restart. If the conversation's agent is retired some other way, the next message ends it with `reason: 'retired'` and starts afresh.
 
 Each message goes through the [pause](../pause/README.md) guard (`pause`) before its turn, and before the birth when it starts a conversation. While the Planner agent, the project or everything is paused the message is held as `planner.turn` and stays `pending`; the messages behind it wait, and it is answered on unpause. A `planner.new` drops a held message, which is then rejected as superseded like any other message queued before it; `close()` drops it and leaves it `pending` for the next start.
 
@@ -50,13 +53,13 @@ When the Planner starts it retires any Planner agent still live from an earlier 
 
 ## Events
 
-| `kind`            | `agentId`        | `payload`                                                        |
-| ----------------- | ---------------- | ---------------------------------------------------------------- |
-| `planner.human`   | the Planner      | `{ intentId, seq, text }`: the message entered the turn          |
-| `planner.reply`   | the Planner      | `{ seq, text, stopReason }`: the agent's reply text              |
-| `planner.failed`  | the Planner/null | `{ intentId, error, seq? }`: a refused message or a failed turn  |
-| `planner.cleared` | the old Planner  | `{ reason, intentId }`: `new`, `failed`, `restart` or `shutdown` |
-| `ticket.proposed` | the Planner      | `{ title }`, with `ticketId`: from the `propose` tool            |
+| `kind`            | `agentId`        | `payload`                                                                               |
+| ----------------- | ---------------- | --------------------------------------------------------------------------------------- |
+| `planner.human`   | the Planner      | `{ intentId, seq, text }`: the message entered the turn                                 |
+| `planner.reply`   | the Planner      | `{ seq, text, stopReason }`: the agent's reply text                                     |
+| `planner.failed`  | the Planner/null | `{ intentId, error, seq? }`: a refused message or a failed turn                         |
+| `planner.cleared` | the old Planner  | `{ reason, intentId }`: `new`, `failed`, `restart`, `shutdown`, `archived` or `retired` |
+| `ticket.proposed` | the Planner      | `{ title }`, with `ticketId`: from the `propose` tool                                   |
 
 `planner.message` and `planner.new` intents are settled `applied` once handled; a message's result is `{ agentId, seq }`.
 

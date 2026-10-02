@@ -5,7 +5,7 @@ import {
   type StoreEvent,
 } from '../store/index.js';
 import { PauseDroppedError, type DropReason } from './errors.js';
-import { pausedScopes } from './state.js';
+import { isProjectArchived, pausedScopes } from './state.js';
 
 export const PAUSE_EVENTS = {
   held: 'pause.held',
@@ -18,6 +18,8 @@ export const UNPAUSE_KINDS: readonly string[] = [
   'pause.all',
   'agent.resume',
 ];
+
+export const ARCHIVE_KIND = 'project.archive';
 
 export const MAX_LABEL_LENGTH = 80;
 
@@ -127,7 +129,20 @@ export const startPauseGate = async (
     return publishAbout(entry, PAUSE_EVENTS.dropped, { reason });
   };
 
+  const archived = () => isProjectArchived(store.db, store.projectId);
+
+  const dropAll = async (reason: DropReason): Promise<void> => {
+    for (const entry of queue.splice(0)) {
+      entry.detach();
+      await dropped(entry, reason);
+    }
+  };
+
   const sweep = async (): Promise<void> => {
+    if (queue.length > 0 && (await archived())) {
+      await dropAll('archived');
+      return;
+    }
     for (const entry of queue.slice()) {
       if (!queue.includes(entry)) continue;
       const scopes = await scopesOf(entry.subject);
@@ -163,6 +178,7 @@ export const startPauseGate = async (
     holdOptions: HoldOptions = {},
   ): Promise<T> => {
     const { signal } = holdOptions;
+    if (await archived()) throw new PauseDroppedError(subject, 'archived');
     const scopes = await scopesOf(subject);
     if (scopes.length === 0 && (closed || !replaying())) return run();
     if (closed) throw new PauseDroppedError(subject, 'closed');
@@ -199,7 +215,8 @@ export const startPauseGate = async (
   };
 
   const onEvent = (event: StoreEvent): void => {
-    if (UNPAUSE_KINDS.includes(event.kind)) replay().catch(report);
+    if (UNPAUSE_KINDS.includes(event.kind) || event.kind === ARCHIVE_KIND)
+      replay().catch(report);
   };
   const subscription = await store.subscribe(onEvent, { onError: report });
 
@@ -207,10 +224,7 @@ export const startPauseGate = async (
     closed = true;
     await subscription.close();
     await running?.catch(() => undefined);
-    for (const entry of queue.splice(0)) {
-      entry.detach();
-      await dropped(entry, 'closed');
-    }
+    await dropAll('closed');
   };
   let closing: Promise<void> | undefined;
   const close = (): Promise<void> => {

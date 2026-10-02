@@ -29,6 +29,17 @@ export const setGlobalPause = async (
   await writeFile(path, `${JSON.stringify({ pausedAt })}\n`);
 };
 
+export const isProjectArchived = async (
+  db: Queryable,
+  projectId: string,
+): Promise<boolean> => {
+  const { rows } = await db.query<{ archived: boolean }>(
+    'select archived_at is not null as archived from projects where id = $1',
+    [projectId],
+  );
+  return rows[0]?.archived ?? false;
+};
+
 interface PauseRow {
   project: boolean;
   agent: boolean;
