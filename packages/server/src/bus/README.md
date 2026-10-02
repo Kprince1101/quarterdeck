@@ -1,6 +1,6 @@
 # bus
 
-The bus MCP server handed to every agent session: the tools agents use to reach Quarterdeck. This package has `status` and `read`; `ask`, `report` and `verdict` follow.
+The bus MCP server handed to every agent session: the tools agents use to reach Quarterdeck. This package has `status`, `read`, `report` and `verdict`; `ask` follows.
 
 ## How a session reaches it
 
@@ -51,6 +51,21 @@ Reads rows of the caller's project. The caller never sends SQL: tables and colum
 
 Returns a JSON array of rows built by Postgres (`json_build_object`), so timestamps are ISO strings and `bigint` and `numeric` are numbers. A reply over `READ_REPLY_MAX_BYTES` (100 000 bytes) is an error asking the agent to narrow its columns, add filters or lower the limit. A bad table, column, op, value or limit is a tool error naming what was wrong.
 
+### `report(ticket, pr, notes, head?)`
+
+A builder hands its pull request to review. `ticket` is a ticket id of this project assigned to the caller, in status `assigned`, `in_progress`, `bounced` or `in_review` (a re-report after new commits); anything else, or a ticket assigned to another agent, is an error and changes nothing. `pr` is an `http(s)` URL of at most `PR_URL_MAX` (2000) characters, `notes` is trimmed and 1 to `REVIEW_NOTES_MAX` (8000) characters, and `head`, when given, is the 40-character lowercase head commit.
+
+In one transaction the ticket becomes `in_review` with `pr_url` and `head_sha` set (`head_sha` is cleared when `head` is left out, so a stale commit never stands), and a `ticket.reported` event is recorded for the caller and the ticket with `{ pr, head, notes, reviewerId }`. That event is the reviewer handoff: `reviewerId` is the project's live reviewer (role `reviewer`, not `ended`, `killed` or `retired`; the oldest if there are several), or `null` when there is none yet. Returns `ticket <id> is in review; handed to <reviewer>`, or says it waits for a reviewer.
+
+### `verdict(ticket, decision, notes)`
+
+The reviewer's verdict on a ticket in review. Only an agent with role `reviewer` that is not `ended`, `killed` or `retired` may call it; the role is checked against the `agents` row on every call, not taken from the session. The ticket must be in this project, `in_review`, and not assigned to the caller. `decision` is `approve` or `changes`; `notes` is as for `report`.
+
+- `approve` leaves the ticket `in_review` for the merge gate.
+- `changes` moves it to `bounced`, back to its builder, who fixes it and reports again.
+
+Either way a `ticket.verdict` event is recorded for the reviewer and the ticket with `{ decision, notes, pr, head }`, `pr` and `head` being what the ticket held when the verdict was given. The latest `ticket.verdict` for a ticket is its verdict, and a later `ticket.reported` withdraws it, so the merge gate should merge only when the newest of the two is an approval and the PR head still matches its `head`.
+
 ## Adding a tool
 
 A tool is one file in `tools/`, named after the tool: `tools/ask.ts` serves `ask`. `loadBusTools()` imports every `tools/*.ts` (or `*.js` when built) and needs no other change.
@@ -81,4 +96,5 @@ export default defineBusTool({
 | `defineBusTool(spec)`, `BusToolError`                          | Typed tool definition, and an error whose message is meant for the agent.                                                     |
 | `buildReadQuery(projectId, request)`                           | The SQL and parameters `read` runs, for tests and for other readers that must stay inside the allowlist.                      |
 | `READ_TABLES`, `READ_TABLE_NAMES`, `READ_REPLY_MAX_BYTES`      | The allowlist: readable tables, their columns and kinds, scope and default order.                                             |
+| `PR_URL_MAX`, `REVIEW_NOTES_MAX`                               | The longest `pr` URL and `notes` that `report` and `verdict` take.                                                            |
 | `BUS_RELAY`, `BUS_SOCKET_ENV`, `BUS_TOKEN_ENV`                 | The relay script path and the environment it reads.                                                                           |
