@@ -15,9 +15,12 @@ export {
   STREAM_TAIL,
   attachStream,
   createStream,
+  routeStreams,
   serveStream,
   type ServeStreamOptions,
   type ServedStream,
   type Stream,
   type StreamOptions,
+  type StreamRouterOptions,
+  type UpgradeHandler,
 } from './socket.js';

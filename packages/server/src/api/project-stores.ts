@@ -40,6 +40,16 @@ export interface ProjectStores {
   closeAll: () => Promise<void>;
 }
 
+export interface ProjectHooks {
+  opened: (project: string, store: Store) => Promise<void>;
+  closing: (project: string) => Promise<void>;
+}
+
+const NO_HOOKS: ProjectHooks = {
+  opened: () => Promise.resolve(),
+  closing: () => Promise.resolve(),
+};
+
 interface ProjectCatalog {
   location: string;
   exists: (project: string) => Promise<boolean>;
@@ -109,6 +119,7 @@ export const createProjectStores = (
   databaseUrl?: string,
   onError: (err: unknown) => void = reportError,
   stopHosts: StopHosts = DEFAULT_STOP_HOSTS,
+  hooks: ProjectHooks = NO_HOOKS,
 ): ProjectStores => {
   const url = configuredDatabaseUrl(databaseUrl);
   const catalog = chooseCatalog(dataHome, url);
@@ -124,6 +135,12 @@ export const createProjectStores = (
       databaseUrl: url,
     });
     await recoverProject(store).catch(onError);
+    try {
+      await hooks.opened(project, store);
+    } catch (err) {
+      await store.close();
+      throw err;
+    }
     return store;
   };
 
@@ -154,7 +171,9 @@ export const createProjectStores = (
     if (!cached) return;
     open.delete(project);
     const store = await cached.catch(() => undefined);
-    await store?.close();
+    if (!store) return;
+    await hooks.closing(project).catch(onError);
+    await store.close();
   };
 
   const stopAgents = async (project: string): Promise<StoppedAgent[]> => {

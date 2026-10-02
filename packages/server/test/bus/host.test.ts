@@ -3,9 +3,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import type { McpServerStdio } from '@agentclientprotocol/sdk';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AgentNotFoundError } from '../../src/agents/index.js';
 import {
@@ -21,25 +19,12 @@ import { openStore, type Store } from '../../src/store/index.js';
 import {
   TIMEOUT,
   callTool,
+  connectStdio,
+  envOf,
   insertAgent,
   insertProject,
   openTestStore,
 } from './fixtures.ts';
-
-const envOf = (launch: McpServerStdio): Record<string, string> =>
-  Object.fromEntries(launch.env.map(({ name, value }) => [name, value]));
-
-const connectStdio = async (launch: McpServerStdio): Promise<Client> => {
-  const transport = new StdioClientTransport({
-    command: launch.command,
-    args: launch.args,
-    env: envOf(launch),
-    stderr: 'pipe',
-  });
-  const client = new Client({ name: 'bus-host-test', version: '0.0.0' });
-  await client.connect(transport);
-  return client;
-};
 
 interface RelayExit {
   status: number | null;
