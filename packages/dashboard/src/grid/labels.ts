@@ -1,5 +1,6 @@
 import type { WidgetRegistry } from '../widgets/registry.js';
 import type { GridLayout } from './layout.js';
+import { slotTitle } from './panes.js';
 
 export const titleOf = (registry: WidgetRegistry, widget: string): string =>
   registry.get(widget)?.title ?? widget;
@@ -13,7 +14,7 @@ export const itemLabels = (
     layout.items.map((item) => {
       const count = (seen.get(item.widget) ?? 0) + 1;
       seen.set(item.widget, count);
-      const title = titleOf(registry, item.widget);
+      const title = slotTitle(item, registry);
       if (count === 1) return [item.id, title];
       return [item.id, `${title} ${count}`];
     }),

@@ -1,0 +1,21 @@
+.qd-layout {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--qd-space-2);
+  height: 100%;
+  min-height: 0;
+}
+
+.qd-layout-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--qd-space-2);
+  font-size: var(--qd-text-sm);
+  color: var(--qd-muted);
+}
+
+.qd-layout-error {
+  margin: 0;
+  color: var(--qd-danger);
+}

@@ -140,6 +140,17 @@ describe('hide, show, duplicate, remove, add', () => {
     ]);
   });
 
+  it('duplicates a tabbed slot with its own copy of the tabs', () => {
+    const tabbed = {
+      ...item('alpha-1', { x: 0, y: 0, w: 4, h: 4 }),
+      tabs: ['beta'],
+    };
+    const next = apply(board(tabbed), { type: 'duplicate', id: 'alpha-1' });
+    const copy = placed(next, 'alpha-2');
+    expect(copy).toEqual({ ...tabbed, id: 'alpha-2', x: 4 });
+    expect(copy?.tabs).not.toBe(tabbed.tabs);
+  });
+
   it('removes an item', () => {
     const layout = board(item('alpha-1', { x: 0, y: 0, w: 4, h: 4 }));
     expect(apply(layout, { type: 'remove', id: 'alpha-1' })?.items).toEqual([]);

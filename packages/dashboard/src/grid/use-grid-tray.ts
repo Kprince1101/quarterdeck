@@ -4,6 +4,7 @@ import type { GridAction } from './actions.js';
 import { valueOf } from './dom.js';
 import { itemLabels } from './labels.js';
 import type { GridLayout } from './layout.js';
+import { hasPanes } from './panes.js';
 
 export interface WidgetOption {
   type: string;
@@ -50,7 +51,7 @@ const hiddenWidgets = (
     focusTray();
   };
   return layout.items
-    .filter((item) => item.hidden && registry.has(item.widget))
+    .filter((item) => item.hidden && hasPanes(item, registry))
     .map(({ id }) => {
       const label = labels.get(id) ?? id;
       return {

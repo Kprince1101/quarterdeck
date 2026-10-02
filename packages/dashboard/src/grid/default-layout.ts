@@ -28,7 +28,7 @@ const placeVisible = (
   definition: WidgetDefinition,
 ): GridLayout | null => {
   if (definition.startHidden === true) return null;
-  return placeNew(layout, definition.type, definition.size);
+  return placeNew(layout, { widget: definition.type }, definition.size);
 };
 
 export const defaultLayout = (
