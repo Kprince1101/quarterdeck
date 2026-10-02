@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { RuleView } from '../../api/index.js';
 import { defineWidget } from '../registry.js';
 import { TIGHTEN_ONLY_NOTICE } from './constants.js';
@@ -32,7 +33,7 @@ const RulesBody = ({ view }: RulesBodyProps) => {
   return <RuleLayers view={view} rule={view.rule} />;
 };
 
-export const RulesWidget = () => {
+export const RulesWidget = (): JSX.Element => {
   const view = useRulesWidget();
   return (
     <div className="qd-rules">

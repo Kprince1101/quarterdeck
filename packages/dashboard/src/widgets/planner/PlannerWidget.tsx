@@ -1,4 +1,4 @@
-import type { ChangeEvent } from 'react';
+import type { ChangeEvent, JSX } from 'react';
 import { ChatInput } from '../../primitives/index.js';
 import { defineWidget } from '../registry.js';
 import type {
@@ -82,7 +82,7 @@ const ConversationBody = ({
   return <ConversationLog entries={entries} project={project} />;
 };
 
-export const PlannerWidget = () => {
+export const PlannerWidget = (): JSX.Element => {
   const view = usePlannerWidget();
   return (
     <div className="qd-planner">

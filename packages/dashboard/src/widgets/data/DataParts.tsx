@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { PageView, PathView } from './data-view.js';
 import type { TableView } from './use-data-widget.js';
 
@@ -5,7 +6,7 @@ interface TableListProps {
   tables: TableView[];
 }
 
-export const TableList = ({ tables }: TableListProps) => (
+export const TableList = ({ tables }: TableListProps): JSX.Element => (
   <ul className="qd-data-tables" aria-label="Tables">
     {tables.map(({ table, rows, isSelected, onSelect }) => (
       <li key={table}>
@@ -22,7 +23,7 @@ interface PathListProps {
   paths: PathView[];
 }
 
-export const PathList = ({ paths }: PathListProps) => (
+export const PathList = ({ paths }: PathListProps): JSX.Element => (
   <ul className="qd-data-paths" aria-label="On disk">
     {paths.map(({ key, label, path, scope, presence, exists }) => (
       <li key={key} data-exists={exists}>
@@ -39,7 +40,7 @@ interface RowsTableProps {
   page: PageView;
 }
 
-export const RowsTable = ({ page }: RowsTableProps) => (
+export const RowsTable = ({ page }: RowsTableProps): JSX.Element => (
   <div className="qd-data-scroll">
     <table className="qd-data-rows" aria-label={page.label}>
       <thead>
@@ -72,7 +73,11 @@ interface PagerProps {
   onNext: () => void;
 }
 
-export const Pager = ({ page, onPrevious, onNext }: PagerProps) => (
+export const Pager = ({
+  page,
+  onPrevious,
+  onNext,
+}: PagerProps): JSX.Element => (
   <div className="qd-data-pager">
     <span className="qd-data-range">{page.range}</span>
     <button

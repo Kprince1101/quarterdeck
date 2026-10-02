@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { RequestError } from '../RequestError.js';
 import type { ProjectPanel } from './project-model.js';
 import {
@@ -72,7 +73,7 @@ const MergeGateToggles = ({ panel }: PanelProps) => {
   );
 };
 
-export const ProjectToggles = ({ panel }: PanelProps) => {
+export const ProjectToggles = ({ panel }: PanelProps): JSX.Element => {
   const { isPending, error, handlePause, handleResume } =
     usePauseControls(panel);
   return (

@@ -52,7 +52,9 @@ export const geminiPaths = (dir: string): GeminiPaths => ({
   adminPolicy: join(dir, 'admin-policy.toml'),
 });
 
-export const geminiSystemConfigDir = (os: NodeJS.Platform = platform()) => {
+export const geminiSystemConfigDir = (
+  os: NodeJS.Platform = platform(),
+): string => {
   if (os === 'darwin') return '/Library/Application Support/GeminiCli';
   if (os === 'win32') return 'C:\\ProgramData\\gemini-cli';
   return '/etc/gemini-cli';
@@ -111,7 +113,9 @@ export const assertNoAdminPolicy = async (
   }
 };
 
-export const writeGeminiLockdown = async (paths: GeminiPaths) => {
+export const writeGeminiLockdown = async (
+  paths: GeminiPaths,
+): Promise<void> => {
   await ensurePrivateDir(paths.dir);
   await writePrivateFile(
     paths.systemSettings,

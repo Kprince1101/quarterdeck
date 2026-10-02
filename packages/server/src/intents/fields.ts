@@ -27,8 +27,12 @@ export const ruleNameSchema = z.enum(
   Object.keys(RULE_SCHEMAS) as [RuleName, ...RuleName[]],
 );
 
-export const inProject = <Shape extends z.ZodRawShape>(shape: Shape) =>
-  z.strictObject({ project: projectSlugSchema, ...shape });
+export const inProject = <Shape extends z.ZodRawShape>(
+  shape: Shape,
+): z.ZodObject<
+  z.core.util.Writeable<{ project: typeof projectSlugSchema } & Shape>,
+  z.core.$strict
+> => z.strictObject({ project: projectSlugSchema, ...shape });
 
 export const hasUniqueValues = (values: readonly string[]): boolean =>
   new Set(values).size === values.length;

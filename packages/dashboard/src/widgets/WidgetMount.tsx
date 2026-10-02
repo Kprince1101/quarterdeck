@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { WidgetGrid } from '../grid/WidgetGrid.js';
 import type { GridLayout } from '../grid/layout.js';
 import type { LayoutListener } from '../grid/use-grid-sync.js';
@@ -16,7 +17,7 @@ export const WidgetMount = ({
   initialLayout,
   syncedLayout,
   onLayoutChange,
-}: WidgetMountProps) => (
+}: WidgetMountProps): JSX.Element => (
   <WidgetGrid
     registry={registry}
     initialLayout={initialLayout}

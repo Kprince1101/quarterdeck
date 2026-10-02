@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { RequestError } from '../RequestError.js';
 import type { ProjectPanel } from './project-model.js';
 import { useRefreshAgents } from './use-refresh-agents.js';
@@ -6,7 +7,7 @@ export interface CrewSummaryProps {
   panel: ProjectPanel;
 }
 
-export const CrewSummary = ({ panel }: CrewSummaryProps) => {
+export const CrewSummary = ({ panel }: CrewSummaryProps): JSX.Element => {
   const { refreshLabel, canRefresh, error, handleRefresh } =
     useRefreshAgents(panel);
   return (

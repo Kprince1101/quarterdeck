@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { TabBar, TabPanel } from '../primitives/index.js';
 import type { PaneView } from './panes.js';
 import { usePaneTabs } from './use-pane-tabs.js';
@@ -29,7 +30,11 @@ const PaneTabs = ({ label, panes }: Omit<WidgetSlotProps, 'stacked'>) => {
   );
 };
 
-export const WidgetSlot = ({ label, panes, stacked }: WidgetSlotProps) => {
+export const WidgetSlot = ({
+  label,
+  panes,
+  stacked,
+}: WidgetSlotProps): JSX.Element => {
   if (stacked) return <PaneTabs label={label} panes={panes} />;
   return <Panes panes={panes} />;
 };

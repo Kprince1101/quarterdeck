@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { ChatInput } from '../../primitives/index.js';
 import { LOOKUP_LABEL, type CardView } from './card-deck.js';
 import { useCardReply, type ChoiceView } from './use-card-reply.js';
@@ -31,7 +32,7 @@ interface CardReplyProps {
   card: CardView;
 }
 
-export const CardReply = ({ card }: CardReplyProps) => {
+export const CardReply = ({ card }: CardReplyProps): JSX.Element => {
   const view = useCardReply(card);
   return (
     <div className="qd-card-reply">

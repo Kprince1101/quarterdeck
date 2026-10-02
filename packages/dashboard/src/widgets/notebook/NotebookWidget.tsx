@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, JSX } from 'react';
 import { defineWidget } from '../registry.js';
 import { EntryRow } from './EntryRow.js';
 import { ProposalCard } from './ProposalCard.js';
@@ -25,7 +25,7 @@ const NotebookSection = ({
   </section>
 );
 
-export const NotebookWidget = () => {
+export const NotebookWidget = (): JSX.Element => {
   const { proposals, entries, showProject, noProposals, noEntries } =
     useNotebookWidget();
   return (

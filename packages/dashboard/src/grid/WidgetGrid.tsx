@@ -1,8 +1,9 @@
+import type { JSX } from 'react';
 import { GridTray } from './GridTray.js';
 import { useWidgetGrid, type WidgetGridProps } from './use-widget-grid.js';
 import { WidgetCell } from './WidgetCell.js';
 
-export const WidgetGrid = (props: WidgetGridProps) => {
+export const WidgetGrid = (props: WidgetGridProps): JSX.Element => {
   const { gridRef, gridStyle, cells, controls, tray, announcement } =
     useWidgetGrid(props);
   return (

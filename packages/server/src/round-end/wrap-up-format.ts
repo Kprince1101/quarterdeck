@@ -49,7 +49,20 @@ const touchesEachEntryOnce = (
   return new Set(entries).size === entries.length;
 };
 
-export const wrapUpResultSchema = (active: ReadonlySet<string>) =>
+export const wrapUpResultSchema = (
+  active: ReadonlySet<string>,
+): z.ZodObject<{
+  summary: z.ZodString;
+  notebook: z.ZodArray<ReturnType<typeof notebookProposalSchema>>;
+  charter: z.ZodDefault<
+    z.ZodNullable<
+      z.ZodObject<{
+        body: typeof bodySchema;
+        rationale: typeof rationaleSchema;
+      }>
+    >
+  >;
+}> =>
   z.object({
     summary: z.string().trim().min(1),
     notebook: z

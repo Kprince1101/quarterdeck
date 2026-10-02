@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { defineWidget } from '../registry.js';
 import type { AgentLiveness, ProjectLiveness } from './board-model.js';
 import { useBoardWidget, type StreamLiveness } from './use-board-widget.js';
@@ -117,7 +118,7 @@ const StreamLine = ({ stream }: { stream: StreamLiveness }) => (
   </p>
 );
 
-export const BoardWidget = () => {
+export const BoardWidget = (): JSX.Element => {
   const view = useBoardWidget();
   return (
     <div className="qd-board">

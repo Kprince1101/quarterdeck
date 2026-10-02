@@ -14,8 +14,11 @@ export type TurnFile = keyof typeof TURN_FILES;
 
 const SEQ_WIDTH = 4;
 
-export const turnDir = (turnsDir: string, agentId: string, seq: number) =>
-  join(turnsDir, agentId, String(seq).padStart(SEQ_WIDTH, '0'));
+export const turnDir = (
+  turnsDir: string,
+  agentId: string,
+  seq: number,
+): string => join(turnsDir, agentId, String(seq).padStart(SEQ_WIDTH, '0'));
 
 export const turnFile = (dir: string, file: TurnFile): string =>
   join(dir, TURN_FILES[file]);

@@ -1,10 +1,11 @@
+import type { JSX } from 'react';
 import type { DeckLayoutView } from './use-deck-layout.js';
 
 interface LayoutBarProps {
   view: DeckLayoutView;
 }
 
-export const LayoutBar = ({ view }: LayoutBarProps) => (
+export const LayoutBar = ({ view }: LayoutBarProps): JSX.Element => (
   <section className="qd-layout-bar" aria-label="Layout">
     <select
       className="qd-grid-button"

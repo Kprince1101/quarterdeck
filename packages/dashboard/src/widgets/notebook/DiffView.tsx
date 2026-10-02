@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { DiffKind, DiffLine } from '../line-diff.js';
 
 const DIFF_SIGNS: Record<DiffKind, string> = {
@@ -10,7 +11,7 @@ export interface DiffViewProps {
   lines: DiffLine[];
 }
 
-export const DiffView = ({ lines }: DiffViewProps) => (
+export const DiffView = ({ lines }: DiffViewProps): JSX.Element => (
   <ol
     className="qd-notebook-diff"
     aria-label="Changes against the current entry"

@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { Dependency, Proposal } from './planner-model.js';
 import { useProposalCard, type ProposalCardView } from './use-proposal-card.js';
 
@@ -84,7 +85,10 @@ export interface ProposalCardProps {
   project: string;
 }
 
-export const ProposalCard = ({ proposal, project }: ProposalCardProps) => {
+export const ProposalCard = ({
+  proposal,
+  project,
+}: ProposalCardProps): JSX.Element => {
   const view = useProposalCard(proposal, project);
   return (
     <article

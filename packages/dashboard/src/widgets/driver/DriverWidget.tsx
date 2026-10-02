@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { RoundRow } from '@quarterdeck/server/stream-schema';
 import { valueOf } from '../../grid/dom.js';
 import { defineWidget } from '../registry.js';
@@ -90,7 +91,7 @@ const RoundTurns = ({
   );
 };
 
-export const DriverWidget = () => {
+export const DriverWidget = (): JSX.Element => {
   const view = useDriverWidget();
   if (view.round === null) return <p className="qd-empty">No rounds yet.</p>;
   return (

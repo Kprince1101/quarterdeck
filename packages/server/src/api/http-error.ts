@@ -28,12 +28,16 @@ export class HttpError extends Error {
   }
 }
 
-export const badRequest = (message: string, issues?: IntentIssue[]) =>
-  new HttpError(400, message, { issues });
+export const badRequest = (
+  message: string,
+  issues?: IntentIssue[],
+): HttpError => new HttpError(400, message, { issues });
 
-export const notFound = (message: string) => new HttpError(404, message);
+export const notFound = (message: string): HttpError =>
+  new HttpError(404, message);
 
-export const conflict = (message: string) => new HttpError(409, message);
+export const conflict = (message: string): HttpError =>
+  new HttpError(409, message);
 
 export const asLockConflict = (err: unknown): unknown => {
   if (err instanceof ProjectOpenError) return conflict(err.message);

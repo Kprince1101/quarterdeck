@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { useChatInput, type ChatInputOptions } from './use-chat-input.js';
 import './chat-input.css';
 
@@ -5,7 +6,10 @@ export interface ChatInputProps extends ChatInputOptions {
   label: string;
 }
 
-export const ChatInput = ({ label, ...options }: ChatInputProps) => {
+export const ChatInput = ({
+  label,
+  ...options
+}: ChatInputProps): JSX.Element => {
   const view = useChatInput(options);
   return (
     <form

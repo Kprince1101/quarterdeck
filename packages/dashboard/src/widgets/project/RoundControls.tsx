@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { RequestError } from '../RequestError.js';
 import type { ProjectPanel } from './project-model.js';
 import {
@@ -82,7 +83,7 @@ export interface RoundControlsProps {
   panel: ProjectPanel;
 }
 
-export const RoundControls = ({ panel }: RoundControlsProps) => {
+export const RoundControls = ({ panel }: RoundControlsProps): JSX.Element => {
   const controls = useRoundControls(panel);
   return (
     <section className="qd-project-section" aria-label="Round">

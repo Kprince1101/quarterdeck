@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, JSX } from 'react';
 import { RequestError } from '../RequestError.js';
 import { useWipeAll, useWipeProject, type WipeView } from './use-wipe.js';
 
@@ -53,7 +53,10 @@ interface WipeSectionProps {
   onWiped: () => void;
 }
 
-export const WipeSection = ({ project, onWiped }: WipeSectionProps) => {
+export const WipeSection = ({
+  project,
+  onWiped,
+}: WipeSectionProps): JSX.Element => {
   const wipeProject = useWipeProject(project, onWiped);
   const wipeAll = useWipeAll(onWiped);
   return (

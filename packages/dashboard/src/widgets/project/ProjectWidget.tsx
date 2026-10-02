@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { defineWidget } from '../registry.js';
 import { ArchiveControl } from './ArchiveControl.js';
 import { CrewSummary } from './CrewSummary.js';
@@ -29,7 +30,7 @@ const ProjectPicker = ({ value, options, onChange }: ProjectPickerProps) => (
   </label>
 );
 
-export const ProjectWidget = () => {
+export const ProjectWidget = (): JSX.Element => {
   const { options, chosenId, panel, handleProjectChange } = useProjectWidget();
   if (panel === null) return <p className="qd-empty">No projects yet.</p>;
   return (

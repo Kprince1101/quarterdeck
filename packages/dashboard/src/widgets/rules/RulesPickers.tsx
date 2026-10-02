@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { MACHINE_ONLY } from './constants.js';
 import type { RulesWidgetView } from './use-rules-widget.js';
 
@@ -5,7 +6,7 @@ interface RulesPickersProps {
   view: RulesWidgetView;
 }
 
-export const RulesPickers = ({ view }: RulesPickersProps) => (
+export const RulesPickers = ({ view }: RulesPickersProps): JSX.Element => (
   <div className="qd-rules-bar">
     <label>
       Rule

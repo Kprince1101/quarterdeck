@@ -1,4 +1,6 @@
-export const TokenMissing = () => (
+import type { JSX } from 'react';
+
+export const TokenMissing = (): JSX.Element => (
   <div className="qd-token-missing" role="alert">
     <h1 className="qd-brand">Quarterdeck</h1>
     <p>

@@ -36,7 +36,10 @@ const STRIDE = 37;
 const PERCENT = 100;
 const LOW = 0.8;
 
-export const turnTokens = (role: AgentRow['role'], seed: number) => {
+export const turnTokens = (
+  role: AgentRow['role'],
+  seed: number,
+): TurnTokens => {
   const factor = LOW + ((seed * STRIDE) % SPREAD) / PERCENT;
   return {
     input: Math.round(TOKENS[role].input * factor),
