@@ -63,3 +63,39 @@ Quarterdeck runs claude through npx, so a standalone `claude` is not needed and 
 ```sh
 QUARTERDECK_LIVE=1 npx vitest run packages/cli/test/doctor-live.test.ts
 ```
+
+## replay
+
+```sh
+quarterdeck replay <round> [n] [--project <slug>] [--runtime kiro|claude|gemini]
+```
+
+Sends a round's saved Driver prompts again, turns 1 to `n` of the round (1 is the birth; all of them by default), in one new session, and prints each reply as it arrives. This is the command the Driver widget prints (`replayCommand`). It is for seeing how the Driver reads a turn now, for example after changing the charter or the runtime.
+
+```
+Replaying round 3 of commander: Driver newt (7d0f3a4e-2b1c-4c5d-9e8f-0a1b2c3d4e5f), turns 1 to 2 of 5, on kiro.
+Nothing is saved. The agent has no Quarterdeck tools and every permission is refused.
+
+--- Turn 1 of 2 ---
+<the reply>
+(end_turn; turn result parsed; differs from the saved reply)
+
+--- Turn 2 of 2 ---
+…
+Replayed 2 turns.
+```
+
+The round is found from the turn files under `~/.quarterdeck/<project>/turns/`, never the store, so replay runs while `quarterdeck up` has the project open and writes no row. Without `--project`, the round must be in exactly one project; otherwise replay names the projects and asks for `--project`. If the round's Driver session was opened more than once, the latest is replayed. An `n` past the round's last turn is an error that says how many turns the round has. The runtime is `--runtime`, or else the Driver's runtime in `~/.quarterdeck/rules.local.models.json` (a project's `.quarterdeck/` folder is not read, since replay doesn't know the repository).
+
+Replay writes nothing: it uses `replayDriverChain` (see [the driver README](../server/src/driver/README.md#replay)), so the agent runs in a throwaway folder that is removed afterwards, gets no MCP servers, and every permission request is refused. Kiro's adapter writes its launch config for an agent named `replay-<seq>` while the replay runs and removes it after.
+
+If the runtime needs sign-in, replay exits 1 and prints the command to run:
+
+```
+Claude is not signed in; run `…` to sign in, then replay again
+Sign in: …
+```
+
+A missing `input.md` in the chain is an error naming the file, before anything starts. Ctrl+C closes the agent and exits 130.
+
+`test/replay.test.ts` runs the command against a stub runtime adapter; `packages/server/test/driver/replay.test.ts` covers `replayDriverChain` against real ACP agents.
