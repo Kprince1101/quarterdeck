@@ -8,7 +8,7 @@ import {
 import { createEventHub } from './event-hub.js';
 import type { EventHub } from './event-hub.js';
 import { createPermissionGate } from './permission-gate.js';
-import { resumeSession } from './resume.js';
+import { resumeSession, sessionParams } from './resume.js';
 import type {
   AcpClient,
   AcpClientEvent,
@@ -129,11 +129,18 @@ export const connectAcpClient = async ({
     await connection.agent.request(methods.agent.authenticate, { methodId });
   };
 
-  const newSession = ({ cwd, mcpServers }: SessionSetup) =>
-    connection.agent.request(methods.agent.session.new, { cwd, mcpServers });
+  const newSession = (setup: SessionSetup) =>
+    connection.agent.request(methods.agent.session.new, sessionParams(setup));
 
   const resume = (setup: ResumeSetup) =>
     resumeSession(connection.agent, agent, setup);
+
+  const setSessionMode = async (sessionId: SessionId, modeId: string) => {
+    await connection.agent.request(methods.agent.session.setMode, {
+      sessionId,
+      modeId,
+    });
+  };
 
   const prompt = async (sessionId: SessionId, input: PromptInput) => {
     permissions.beginTurn(sessionId);
@@ -159,6 +166,7 @@ export const connectAcpClient = async ({
     authenticate,
     newSession,
     resumeSession: resume,
+    setSessionMode,
     prompt,
     cancel,
     subscribe: events.subscribe,

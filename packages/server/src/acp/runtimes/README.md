@@ -1,6 +1,6 @@
 # Runtime adapters
 
-One adapter per runtime turns a `RuntimeLaunch` into the command that starts that runtime's ACP agent, and connects to it. `defineRuntimeAdapter` connects with `spawnAcpClient` (see [../client/README.md](../client/README.md)). The kiro and gemini adapters connect with `launchAcpClient` (see [../launch/README.md](../launch/README.md)), so every launch records the CLI's `--version` and retries a spawn that fails to exec. Their `connect` takes `LaunchOptions`. Neither runs its CLI in the agent's worktree: the worktree is only the `cwd` the caller passes to `session/new`.
+One adapter per runtime turns a `RuntimeLaunch` into the command that starts that runtime's ACP agent, and connects to it. `defineRuntimeAdapter` connects with `spawnAcpClient` (see [../client/README.md](../client/README.md)). The kiro, gemini and claude adapters connect with `launchAcpClient` (see [../launch/README.md](../launch/README.md)), so every launch records the runtime's version and retries a spawn that fails to exec. Their `connect` takes `LaunchOptions`. None of them runs its CLI in the agent's worktree: the worktree is only the `cwd` the caller passes to `session/new`.
 
 ```ts
 const client = await KIRO_ADAPTER.connect(
@@ -144,4 +144,60 @@ It is skipped unless `QUARTERDECK_LIVE=1` (or `QUARTERDECK_GEMINI_LIVE=1`). It i
 
 ```sh
 QUARTERDECK_LIVE=1 npx vitest run packages/server/test/acp/gemini.test.ts
+```
+
+## claude
+
+`npx --yes @agentclientprotocol/claude-agent-acp@0.85.0` (`CLAUDE_AGENT_ACP_VERSION`), started through `launchAcpClient`. The version is pinned so that an upgrade is a deliberate change. On Windows the command goes through `cmd.exe /d /s /c`, because `npx` there is a `.cmd` shim and Node only starts those through a shell.
+
+The version probe is `npx --yes --offline @agentclientprotocol/claude-agent-acp@0.85.0 --cli --version` (`claudeVersionCommand()`). It runs from the same folder and env as the agent. `--cli` makes claude-agent-acp pass `--version` to the Claude Code binary it bundles, so the `agent_version` event reports the CLI the agent really runs, not a standalone `claude` on `PATH`. `--offline` keeps the probe from starting the download itself. On the very first launch the `before_spawn` probe therefore reports `version: null`, and the `after_spawn` probe, which runs once npx has fetched the package, reports the version. claude-agent-acp's own version is `client.agent.agentInfo.version`.
+
+### The worktree is never the process directory
+
+npx runs in `~/.quarterdeck/runtimes/claude` (`claudeRuntimeDir()`; `createClaudeAdapter({ processDir })` changes it). An agent can write to its own worktree, so a `.npmrc` it planted there could otherwise choose where the package is downloaded from. The child env also sets `npm_config_registry=https://registry.npmjs.org/`. The worktree is only the `cwd` the caller passes to `session/new`.
+
+The first launch has npx fetch claude-agent-acp and Claude Code's native binary (about 240 MB). That can take longer than the client's default 30s initialize deadline, so `connect` defaults `initializeTimeoutMs` to `CLAUDE_INITIALIZE_TIMEOUT_MS` (5 minutes). Callers can still pass their own. The longer wait can never hide a sign-in prompt, because claude-agent-acp answers `initialize` before it checks sign-in.
+
+Follow-up, deferred: `npx` pins claude-agent-acp itself but not its dependencies, which resolve from version ranges on first fetch. Two machines can therefore run different transitive code. The planned fix is a lockfile-backed install under `~/.quarterdeck/runtimes/claude/`: `npm ci` from a committed lock, then start the installed binary instead of going through npx.
+
+### Permissions
+
+Every tool call has to reach the project's rules as a `session/request_permission`. Claude settings could settle some calls first:
+
+- `permissions.allow` rules
+- a `permissions.defaultMode` such as `acceptEdits` or `bypassPermissions`
+
+They can come from three files:
+
+| Tier      | File                                                              |
+| --------- | ----------------------------------------------------------------- |
+| `user`    | `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json`) |
+| `project` | `<cwd>/.claude/settings.json`                                     |
+| `local`   | `<cwd>/.claude/settings.local.json`                               |
+
+The project and local files sit in the agent's own worktree, so an agent could grant itself permissions there. The adapter has four defences:
+
+1. **Settings off.** Every `session/new`, `session/resume` and `session/load` carries `_meta.claudeCode.options` set to `{ settingSources: [], allowDangerouslySkipPermissions: false }` (`CLAUDE_LOCKED_OPTIONS`). Any other `meta` the caller passes is kept. In 0.85.0, claude-agent-acp builds the SDK options as `{ settingSources: ["user", "project", "local"], ...userProvidedOptions, … }` (`dist/acp-agent.js`, `createSession`), so the caller's `settingSources` replaces the default. The Agent SDK then loads only the listed sources (`settingSources ?? ["user","project","local"]`). The cost is that user settings such as hooks, `env` and CLAUDE.md loading do not apply inside Quarterdeck. Sign-in is not a setting and still works.
+2. **Default mode.** Right after each of those calls, the adapter sends `session/set_mode` with `default` (`CLAUDE_DEFAULT_MODE_ID`). claude-agent-acp picks a session's first mode from `permissions.defaultMode` whatever the caller passes, so this resets it before any prompt can run.
+3. **Repo allow rules refused.** Until the live check below has passed against the pinned version, defence 1 is not taken on trust for the tier an agent can write. Before it launches anything, `connect` reads the three files. If the project or local file has a non-empty `permissions.allow`, or JSON it cannot read, `connect` rejects with `ClaudePermissionSettingsError` and starts nothing. A `defaultMode` there is allowed, because defence 2 covers it. User-tier allow rules are the person's own choice and are only neutralised by defence 1. `createClaudeAdapter({ refuseRepoAllowRules: false })` turns this check off; the live test uses that to prove defence 1.
+4. **Custom commands checked fully.** A `launch.command` override may not honour defence 1, so for an override any finding in any tier (allow rules, a non-default mode, unreadable JSON) is refused.
+
+`ClaudePermissionSettingsError` has `code: 'claude_permission_settings'` (`CLAUDE_PERMISSION_SETTINGS`) and lists each override as `{ path, tier, kind, reason }`, so the server can raise it as a card.
+
+### Sign-in
+
+Sign-in stays with Claude Code. When it is not signed in, `session/new` fails with auth required, and so does `session/prompt` if the login lapses mid-session. `isAuthRequiredError` recognises both. Quarterdeck surfaces that to the dashboard and never calls `authenticate` on its own.
+
+### Live smoke
+
+`test/acp/claude-live.test.ts` drives the real claude-agent-acp. It checks:
+
+- a turn ends with the expected reply;
+- `CLAUDE_ADAPTER` refuses a worktree whose `.claude/settings.local.json` allows `Bash(*)`;
+- with that refusal turned off, a `touch` through the Bash tool still arrives as `session/request_permission`, and the rejection is honoured (no file is created). This proves defence 1 against the pinned version.
+
+It needs a signed-in Claude Code and `claude` on `PATH`, and is skipped unless `QUARTERDECK_LIVE=1`. It skips itself when claude-agent-acp reports that Claude Code is not signed in.
+
+```sh
+QUARTERDECK_LIVE=1 npx vitest run packages/server/test/acp/claude-live.test.ts
 ```

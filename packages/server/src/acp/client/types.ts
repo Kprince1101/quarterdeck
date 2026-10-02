@@ -20,9 +20,12 @@ export interface AgentCommand {
   env?: NodeJS.ProcessEnv;
 }
 
+export type SessionMeta = Record<string, unknown>;
+
 export interface SessionSetup {
   cwd: string;
   mcpServers: McpServer[];
+  meta?: SessionMeta;
 }
 
 export interface ResumeSetup extends SessionSetup {
@@ -150,6 +153,7 @@ export interface AcpClient {
   authenticate: (methodId: string) => Promise<void>;
   newSession: (setup: SessionSetup) => Promise<NewSessionResponse>;
   resumeSession: (setup: ResumeSetup) => Promise<ResumedSession>;
+  setSessionMode: (sessionId: SessionId, modeId: string) => Promise<void>;
   prompt: (sessionId: SessionId, input: PromptInput) => Promise<PromptResponse>;
   cancel: (sessionId: SessionId) => Promise<void>;
   subscribe: (listener: AcpClientListener) => () => void;

@@ -9,11 +9,12 @@ Quarterdeck's Agent Client Protocol client. It drives one agent process over std
 
 The returned client offers:
 
-- `newSession({ cwd, mcpServers })`. When the agent needs sign-in, this rejects with an error that `isAuthRequiredError(err)` recognises. Its auth methods are in `client.agent.authMethods`.
+- `newSession({ cwd, mcpServers, meta? })`. `meta` is sent as the request's `_meta`, the ACP extension point that runtime adapters use for agent-specific options. When the agent needs sign-in, this rejects with an error that `isAuthRequiredError(err)` recognises. Its auth methods are in `client.agent.authMethods`.
 - `authenticate(methodId)`, which is only called once a person has chosen to sign in. The client never signs in on its own.
 - `prompt(sessionId, input)`
 - `cancel(sessionId)`
-- `resumeSession({ sessionId, cwd, mcpServers })`, which uses `session/resume` when the agent supports it and `session/load` otherwise
+- `resumeSession({ sessionId, cwd, mcpServers, meta? })`, which uses `session/resume` when the agent supports it and `session/load` otherwise
+- `setSessionMode(sessionId, modeId)`, which sends `session/set_mode`. Runtime adapters use it to pin a session to the mode in which every tool call asks for permission.
 - `subscribe(listener)`
 - `close()`
 

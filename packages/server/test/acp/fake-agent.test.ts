@@ -11,7 +11,10 @@ import {
   FAKE_AGENT_FLAGS,
   FAKE_AGENT_NAME,
   FAKE_AUTH_METHOD_ID,
+  FAKE_DEFAULT_MODE_ID,
   FAKE_HISTORY_TEXT,
+  FAKE_INITIAL_MODE_ID,
+  FAKE_MODES,
   expectedLargeOutput,
   fakeAgentLaunch,
   LARGE_OUTPUT_MIN_BYTES,
@@ -111,6 +114,7 @@ describe('fake agent scenarios', () => {
     ['large_output', 'large_output'],
     ['wait_for_cancel', 'wait_for_cancel'],
     ['describe_session', 'describe_session'],
+    ['describe_mode', 'describe_mode'],
     ['crash', 'crash'],
     ['anything else', 'echo'],
   ])('resolves %j to %s', (text, scenario) => {
@@ -270,6 +274,41 @@ describe('fake agent protocol', () => {
         },
       },
     ]);
+  });
+
+  it('starts sessions outside the default mode and switches on set_mode', async () => {
+    const { agent, updates } = connect();
+    await initialize(agent);
+    const { sessionId, modes } = await agent.request('session/new', {
+      cwd: '/fake/project',
+      mcpServers: [],
+    });
+    expect(modes).toEqual({
+      currentModeId: FAKE_INITIAL_MODE_ID,
+      availableModes: FAKE_MODES,
+    });
+
+    await agent.request('session/set_mode', {
+      sessionId,
+      modeId: FAKE_DEFAULT_MODE_ID,
+    });
+    await agent.request('session/prompt', {
+      sessionId,
+      prompt: [{ type: 'text', text: 'describe_mode' }],
+    });
+
+    expect(updates).toEqual([
+      {
+        sessionUpdate: 'agent_message_chunk',
+        content: {
+          type: 'text',
+          text: JSON.stringify({ modeId: FAKE_DEFAULT_MODE_ID, meta: null }),
+        },
+      },
+    ]);
+    await expect(
+      agent.request('session/set_mode', { sessionId, modeId: 'yolo' }),
+    ).rejects.toMatchObject({ code: INVALID_PARAMS });
   });
 
   it('refuses to crash when running in process', async () => {

@@ -1,4 +1,4 @@
-import type { PermissionOption } from '@agentclientprotocol/sdk';
+import type { PermissionOption, SessionMode } from '@agentclientprotocol/sdk';
 import type { FakeScenario } from './types.ts';
 
 export const FAKE_AGENT_NAME = 'quarterdeck-fake-agent';
@@ -28,7 +28,15 @@ export const FAKE_SCENARIOS: readonly FakeScenario[] = [
   'large_output',
   'wait_for_cancel',
   'describe_session',
+  'describe_mode',
   'crash',
+];
+
+export const FAKE_DEFAULT_MODE_ID = 'default';
+export const FAKE_INITIAL_MODE_ID = 'accept_edits';
+export const FAKE_MODES: SessionMode[] = [
+  { id: FAKE_DEFAULT_MODE_ID, name: 'Default' },
+  { id: FAKE_INITIAL_MODE_ID, name: 'Accept edits' },
 ];
 
 export const FAKE_PERMISSION_OPTIONS: PermissionOption[] = [

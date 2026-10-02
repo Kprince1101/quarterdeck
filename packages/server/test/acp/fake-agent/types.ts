@@ -12,6 +12,7 @@ export type FakeScenario =
   | 'large_output'
   | 'wait_for_cancel'
   | 'describe_session'
+  | 'describe_mode'
   | 'crash';
 
 export type FakeAgentFlag =
@@ -36,6 +37,8 @@ export interface FakeAgentHooks {
 export interface FakeSessionSetup {
   cwd: string;
   mcpServers: McpServer[];
+  meta: unknown;
+  modeId: string;
 }
 
 export interface FakeTurn {

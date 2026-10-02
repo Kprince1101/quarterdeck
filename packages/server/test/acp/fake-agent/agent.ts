@@ -9,12 +9,16 @@ import type {
   AgentContext,
   AuthMethod,
   ContentBlock,
+  McpServer,
+  SessionModeState,
 } from '@agentclientprotocol/sdk';
 import {
   FAKE_AGENT_NAME,
   FAKE_AGENT_VERSION,
   FAKE_AUTH_METHOD_ID,
   FAKE_HISTORY_TEXT,
+  FAKE_INITIAL_MODE_ID,
+  FAKE_MODES,
 } from './constants.ts';
 import { runScenario } from './scenarios.ts';
 import type {
@@ -22,6 +26,12 @@ import type {
   FakeAgentOptions,
   FakeSessionSetup,
 } from './types.ts';
+
+interface SessionParams {
+  cwd: string;
+  mcpServers?: McpServer[] | undefined;
+  _meta?: Record<string, unknown> | null | undefined;
+}
 
 interface FakeSession {
   setup: FakeSessionSetup;
@@ -91,11 +101,20 @@ export const createFakeAgent = (
     return session;
   };
 
-  const restoreSession = (sessionId: string, setup: FakeSessionSetup) => {
+  const restoreSession = (
+    sessionId: string,
+    { cwd, mcpServers = [], _meta }: SessionParams,
+  ): SessionModeState => {
     sessions.set(sessionId, {
-      setup: { cwd: setup.cwd, mcpServers: setup.mcpServers },
+      setup: {
+        cwd,
+        mcpServers,
+        meta: _meta ?? null,
+        modeId: FAKE_INITIAL_MODE_ID,
+      },
       turn: undefined,
     });
+    return { currentModeId: FAKE_INITIAL_MODE_ID, availableModes: FAKE_MODES };
   };
 
   return agent({ name: FAKE_AGENT_NAME })
@@ -121,21 +140,27 @@ export const createFakeAgent = (
       }
       state.sessionCount += 1;
       const sessionId = `fake-session-${state.sessionCount}`;
-      restoreSession(sessionId, params);
-      return { sessionId };
+      return { sessionId, modes: restoreSession(sessionId, params) };
     })
     .onRequest('session/resume', ({ params }) => {
       requireSupport(options.supportsResume, 'session/resume');
-      restoreSession(params.sessionId, {
-        cwd: params.cwd,
-        mcpServers: params.mcpServers ?? [],
-      });
-      return {};
+      return { modes: restoreSession(params.sessionId, params) };
     })
     .onRequest('session/load', async ({ params, client }) => {
       requireSupport(options.supportsLoad, 'session/load');
-      restoreSession(params.sessionId, params);
+      const modes = restoreSession(params.sessionId, params);
       await replayHistory(client, params.sessionId);
+      return { modes };
+    })
+    .onRequest('session/set_mode', ({ params }) => {
+      const session = findSession(params.sessionId);
+      if (!FAKE_MODES.some((mode) => mode.id === params.modeId)) {
+        throw RequestError.invalidParams(
+          { modeId: params.modeId },
+          'unknown mode',
+        );
+      }
+      session.setup.modeId = params.modeId;
       return {};
     })
     .onRequest('session/prompt', async ({ params, client, signal }) => {
