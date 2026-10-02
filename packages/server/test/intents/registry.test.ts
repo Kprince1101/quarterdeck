@@ -37,6 +37,7 @@ describe('intent registry', () => {
         'round',
         'rules',
         'ticket',
+        'turn',
         'wipe',
       ].toSorted(),
     );
