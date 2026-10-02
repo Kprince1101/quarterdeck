@@ -2,6 +2,7 @@ import type { SessionUpdate, StopReason } from '@agentclientprotocol/sdk';
 import type { AcpClient } from '../acp/client/index.js';
 import type { Agent } from '../agents/index.js';
 import { getErrorMessage } from '../lib/errors.js';
+import { redactSecrets, redactValue } from '../lib/redact.js';
 import { withSignIn, type SignInGate } from '../signin/index.js';
 import type { PublishInput, Store } from '../store/index.js';
 import {
@@ -67,7 +68,7 @@ const startTurn = (target: TurnTarget, input: string): Promise<StartedTurn> =>
        select $1::uuid, $2::uuid, coalesce(max(seq), 0) + 1, $3
        from turns where agent_id = $1::uuid
        returning id, seq`,
-      [target.agent.id, target.ticketId ?? null, input],
+      [target.agent.id, target.ticketId ?? null, redactSecrets(input)],
     );
     const [row] = rows;
     if (!row) throw new Error(`no turn row for agent ${target.agent.id}`);
@@ -137,7 +138,11 @@ const record = (
   kind: string,
   payload: Record<string, unknown>,
 ) => {
-  const event: PublishInput = { kind, agentId: target.agent.id, payload };
+  const event: PublishInput = {
+    kind,
+    agentId: target.agent.id,
+    payload: redactValue(payload),
+  };
   if (target.ticketId) event.ticketId = target.ticketId;
   return target.store.publish(event);
 };

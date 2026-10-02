@@ -80,6 +80,8 @@ Each ACP prompt, birth and re-prompt included, is one `turns` row (`seq` counts 
 
 A prompt that throws still gets `output.md` and `updates.jsonl` with what arrived before it failed, and its row gets `ended_at` with a null `stop_reason`.
 
+Secrets are redacted before anything of a turn is stored: the files, the row's `prompt` and the `turn.*` event payloads (and the Planner's `planner.*` reply events). `redactSecrets` replaces with `[redacted]` GitHub tokens (`ghp_`, `gho_`, `ghs_`, `ghu_`, `ghr_`, `github_pat_`), Anthropic and OpenAI keys (`sk-ant-`, `sk-`), AWS access key ids (`AKIA`, `ASIA`), the token after `Bearer`, the password in `scheme://user:pass@` URLs, PEM private key blocks, and the literal value of every server env var whose name contains `TOKEN`, `SECRET`, `KEY`, `PASSWORD` or `DATABASE_URL` (values of 8 characters or more). The agent itself still gets the unredacted prompt; only the stored copy changes, so a replay sends the redacted input. Turn folders are `0700` and their files `0600`.
+
 While a prompt runs the agent is `working`; afterwards it is `idle` again. Only an `idle` or `working` agent is moved, so a pause or kill set meanwhile stands. A pause does not cancel a running prompt; it holds the next one.
 
 ## Replay

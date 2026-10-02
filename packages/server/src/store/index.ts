@@ -65,3 +65,9 @@ export {
   type PostgresPool,
 } from './postgres.js';
 export { MIN_SERVER_VERSION_NUM, assertServerVersion } from './version.js';
+export {
+  PRIVATE_DIR_MODE,
+  PRIVATE_FILE_MODE,
+  ensurePrivateDir,
+  writePrivateFile,
+} from '../lib/private-fs.js';

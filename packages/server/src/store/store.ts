@@ -1,5 +1,5 @@
-import { mkdir } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
+import { ensurePrivateDir } from '../lib/private-fs.js';
 import type { Db, LiveFeed } from './db.js';
 import {
   watchChanges,
@@ -18,7 +18,13 @@ import {
 } from './events.js';
 import { NO_LOCK, lockDataDir, type DataDirLock } from './lock.js';
 import { migrate } from './migrate.js';
-import { assertProjectSlug, dataDirLockPath, projectDataDir } from './paths.js';
+import {
+  assertProjectSlug,
+  dataDirLockPath,
+  projectDataDir,
+  projectDir,
+  quarterdeckHome,
+} from './paths.js';
 import { openPostgres, redactUrl, type LostHandler } from './postgres.js';
 import { assertServerVersion } from './version.js';
 
@@ -96,7 +102,7 @@ const prepareDataDir = async (
   project: string,
 ): Promise<DataDirLock> => {
   if (dataDir.startsWith(IN_MEMORY)) return NO_LOCK;
-  await mkdir(dataDir, { recursive: true });
+  await ensurePrivateDir(dataDir);
   return lockDataDir(dataDirLockPath(dataDir), project);
 };
 
@@ -118,6 +124,15 @@ const openPglite = async (
     await lock.release();
     throw err;
   }
+};
+
+const openHomePglite = async (
+  home: string,
+  project: string,
+): Promise<Connection> => {
+  await ensurePrivateDir(home);
+  await ensurePrivateDir(projectDir(project, home));
+  return openPglite(projectDataDir(project, home), project);
 };
 
 const openExternal = async (
@@ -146,8 +161,9 @@ const connect = (
   if (options.dataDir === undefined && url !== undefined) {
     return openExternal(url, project);
   }
-  const dataDir = options.dataDir ?? projectDataDir(project, options.home);
-  return openPglite(dataDir, project);
+  if (options.dataDir !== undefined)
+    return openPglite(options.dataDir, project);
+  return openHomePglite(options.home ?? quarterdeckHome(), project);
 };
 
 const disconnect = async ({ db, release }: Connection): Promise<void> => {

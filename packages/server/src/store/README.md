@@ -16,6 +16,8 @@ External Postgres must be 15 or newer (`0001_init` uses `unique nulls not distin
 
 `~/.quarterdeck/<project>/pg` is the PGlite data dir for one project. Deleting that folder deletes the project's state; the next `openStore` recreates it empty.
 
+`~/.quarterdeck` is private to the user. `openStore` creates it, the project dir and the data dir as `0700` and tightens any of them it finds looser; `quarterdeck init` does the same for the home. Every directory Quarterdeck creates under it (builder worktrees aside) is `0700` (`ensurePrivateDir`) and every file it writes there is `0600` (`writePrivateFile`, which also tightens a file it overwrites). Windows has no such modes; there the calls create and write without checking them.
+
 `~/.quarterdeck/<project>/turns/<agent-id>/<seq>/` holds one agent turn as plain files: `input.md` (the prompt), `output.md` (the agent's reply text), `updates.jsonl` (every ACP session update of the turn) and, once it parsed, `result.json` (`projectTurnsDir`; see [driver](../driver/README.md#turn-files)). The `turns` row's `transcript_path` names the folder. These files are written on both backends, and wiping the project deletes them.
 
 `~/.quarterdeck/<project>/worktrees/<builder>-<ticket>/` is the git worktree a builder works a ticket in (`projectWorktreesDir`; see [driver](../driver/README.md#builders)), `<ticket>` being the first 8 characters of the ticket id. Each is registered with the project's repository. Retiring the builder removes it; wiping the project deletes the folder, unsaved work included, and `git worktree prune` in the repository then drops the stale registration.

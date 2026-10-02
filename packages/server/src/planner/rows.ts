@@ -1,4 +1,5 @@
 import { PROPOSED_EVENT } from '../bus/tools/propose.js';
+import { redactSecrets } from '../lib/redact.js';
 import type { Queryable } from '../store/index.js';
 import type { ProposalDecision } from './brief.js';
 
@@ -123,7 +124,7 @@ export const startTurn = async (
   const { rows } = await db.query<{ id: number }>(
     `insert into turns (agent_id, seq, prompt) values ($1, $2, $3)
      returning id`,
-    [agentId, seq, prompt],
+    [agentId, seq, redactSecrets(prompt)],
   );
   const [turn] = rows;
   if (!turn) throw new Error(`turn ${seq} was not recorded`);

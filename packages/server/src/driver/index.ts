@@ -78,6 +78,7 @@ export {
   type StuckFlag,
 } from './stuck.js';
 export { TURN_FILES, turnDir, turnFile, type TurnFile } from './files.js';
+export { REDACTED, redactSecrets, redactValue } from '../lib/redact.js';
 export {
   DRIVER_TURN_FORMAT,
   DRIVER_TURN_INSTRUCTIONS,
