@@ -44,6 +44,12 @@ describe('permissionAnswer', () => {
       );
   });
 
+  it('allows removing a single file', () => {
+    expect(
+      permissionAnswer('wren asks to run rm -f /tmp/qdp-1/wt/a.txt.', ROOTS),
+    ).toBe('allow');
+  });
+
   it('tells a parent path from a file name with dots', () => {
     expect(
       permissionAnswer(
@@ -65,6 +71,10 @@ describe('permissionAnswer', () => {
       'git push --force origin x',
       'git push -f origin x',
       'rm -rf /tmp/qdp-1/wt',
+      'rm -R /tmp/qdp-1/wt',
+      'rm --recursive /tmp/qdp-1/wt',
+      'rm -f -r /tmp/qdp-1/wt',
+      'cd /tmp/qdp-1 && rm -fR wt',
       'git reset --hard HEAD~1',
       'curl https://example.com',
     ])

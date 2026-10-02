@@ -29,7 +29,7 @@ Before `init`, the script writes two machine-layer rules into the temp home:
 
 Anything the rules leave at `ask` becomes an `agent.permission` card. The script answers those cards the way the operator would: it denies merging, force-pushing, recursive deletes, `sudo`, `curl`/`wget` and `reset --hard`, and any absolute path outside the repository or the temp home. It also denies anything it cannot resolve from the card's text: a `..` segment, `~`, a `$` variable or substitution, or a backtick. It allows everything else, and logs every answer. The run below used the first version of this policy, which had only the absolute-path check. Under the stricter one, the builder's commit, push and `gh pr create` card would have been denied, because its PR body quoted code in backticks. Any other kind of card waits for a person. None came up.
 
-Everything quoted below went through the server's secret redaction (`redactValue`). The proof script then replaced the temp home with `$QD_HOME`, the repository path with `$REPO`, the remote's owner with `<owner>`, email addresses with `<email>` and the API token with `[redacted]`.
+The event excerpts below went through the server's secret redaction (`redactValue`). In the recorded run, the script's own log lines (the `[+Ns]` lines) did not, and were checked by hand for secrets; the script now passes them through `redactSecrets` as well. The proof script then replaced the temp home with `$QD_HOME`, the repository path with `$REPO`, the remote's owner with `<owner>`, email addresses with `<email>` and the API token with `[redacted]`.
 
 ## What broke first, and the fix in this PR
 

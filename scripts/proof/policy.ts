@@ -13,7 +13,7 @@ const REFUSED_COMMANDS: readonly RegExp[] = [
   /\bgh pr merge\b/,
   /--force\b/,
   /\bpush\s+-f\b/,
-  /\brm\s+-[a-z]*r/,
+  /\brm\b[^;&|\n]*\s(?:-[a-z]*r|--recursive\b)/i,
   /\bsudo\b/,
   /\bcurl\b/,
   /\bwget\b/,

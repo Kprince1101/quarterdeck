@@ -8,7 +8,11 @@ import {
 } from 'node:fs/promises';
 import { userInfo } from 'node:os';
 import { join, resolve } from 'node:path';
-import { originRepository, redactValue } from '@quarterdeck/server';
+import {
+  originRepository,
+  redactSecrets,
+  redactValue,
+} from '@quarterdeck/server';
 import { main, type CliIo } from 'quarterdeck';
 import { createScrubber, permissionAnswer } from './policy.ts';
 
@@ -79,7 +83,7 @@ const publish = (value: unknown): unknown =>
 
 const log = (line: string): void => {
   const seconds = Math.round((Date.now() - started) / 1000);
-  const entry = `[+${seconds}s] ${scrub(line)}`;
+  const entry = `[+${seconds}s] ${scrub(redactSecrets(line))}`;
   lines.push(entry);
   process.stdout.write(`${entry}\n`);
 };
