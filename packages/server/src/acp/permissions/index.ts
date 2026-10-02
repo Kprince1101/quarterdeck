@@ -3,6 +3,8 @@ export {
   decidePermission,
   isPinnedToRepo,
   requestSubjects,
+  shellPathGuard,
+  targetPaths,
   stricter,
   strictest,
 } from './decide.js';

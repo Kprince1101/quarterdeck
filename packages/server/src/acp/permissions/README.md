@@ -54,6 +54,10 @@ For each subject, the strictest matching pattern rule wins. With no matching pat
 
 If the policy cannot see any subject and a non-allow pattern rule exists for the kind, the answer is at least `ask`.
 
+A `search` that names no path (Claude's Grep or Glob without `path`, for example) searches its working directory, so it is decided with the canonical `cwd` as its one path. A `read` that names no path still has no subject.
+
+Path rules also guard shell commands. When an `execute` is decided, each argument's real path is checked against the `deny` and `ask` pattern rules for `read`, `edit`, `delete` and `move`, in both layers, and the stricter answer wins. With `cat *` allowed and `.env` denied for `read`, `cat .env` is denied, and so is `cat innocent.txt` when it is a link to `.env`.
+
 ## Layers
 
 `machine` is `rules/permissions.json` merged with `~/.quarterdeck/rules.local.permissions.json`. The repo layer `<repo>/.quarterdeck/rules.local.permissions.json` is decided separately and the stricter answer wins, so it can only tighten. Its schema accepts only `deny` and `ask`; an `allow` in it is a rules error naming the file.
@@ -63,5 +67,5 @@ If the policy cannot see any subject and a non-allow pattern rule exists for the
 An `allow` from the rules becomes `ask` when the request is not pinned to the repo:
 
 - `execute` is pinned only when the command is known, its working directory (`cwd`, `working_dir`, `workdir` or `directory` in the raw input, otherwise the repo) is inside the repo, it has none of `; & | < > $` backticks or newlines, no argument starting with `~` or containing `/` or `..` resolves outside the repo, and no argument's real path is outside the repo.
-- `read` and `search` are pinned only when they show at least one path and every path is inside the repo or is named by an `allow` rule of the same kind whose pattern is absolute, such as `{ "kind": "read", "pattern": "/usr/share/**", "decision": "allow" }`. A relative pattern such as `**` can deny or card an outside path but never allow one.
+- `read` and `search` are pinned only when they show at least one path (for a path-less `search`, its working directory) and every path is inside the repo or is named by an `allow` rule of the same kind whose pattern is absolute, such as `{ "kind": "read", "pattern": "/usr/share/**", "decision": "allow" }`. A relative pattern such as `**` can deny or card an outside path but never allow one.
 - `edit`, `delete` and `move` are pinned only when they show at least one path and every path is inside the repo. No rule can allow a write outside it.

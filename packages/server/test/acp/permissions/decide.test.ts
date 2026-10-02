@@ -39,6 +39,18 @@ const edit = (...paths: string[]): ToolRequest => ({
   paths,
 });
 
+const withoutAbsolutePatterns = (
+  layers: PermissionLayers,
+): PermissionLayers => ({
+  ...layers,
+  machine: {
+    ...layers.machine,
+    rules: layers.machine.rules.filter(
+      (rule) => rule.pattern === undefined || !isAbsolute(rule.pattern),
+    ),
+  },
+});
+
 const writeKindArb = fc.constantFrom('edit' as const, 'delete', 'move');
 const readKindArb = fc.constantFrom('read' as const, 'search');
 
@@ -198,16 +210,7 @@ describe('permission matcher', () => {
         fc.constantFrom(...OUTSIDE_PATHS),
         fc.subarray(INSIDE_PATHS),
         (layers, kind, outside, inside) => {
-          const unnamed = {
-            ...layers,
-            machine: {
-              ...layers.machine,
-              rules: layers.machine.rules.filter(
-                (rule) =>
-                  rule.pattern === undefined || !isAbsolute(rule.pattern),
-              ),
-            },
-          };
+          const unnamed = withoutAbsolutePatterns(layers);
           const request = { kind, cwd: REPO_DIR, paths: [...inside, outside] };
           expect(decide(unnamed, request)).not.toBe('allow');
         },
@@ -215,13 +218,73 @@ describe('permission matcher', () => {
     );
   });
 
-  it('never allows a read or search with no visible path', () => {
+  it('never allows a read with no visible path', () => {
     fc.assert(
-      fc.property(layersArb, readKindArb, (layers, kind) => {
-        expect(decide(layers, { kind, cwd: REPO_DIR, paths: [] })).not.toBe(
-          'allow',
-        );
+      fc.property(layersArb, (layers) => {
+        expect(
+          decide(layers, { kind: 'read', cwd: REPO_DIR, paths: [] }),
+        ).not.toBe('allow');
       }),
+    );
+  });
+
+  it('decides a search with no path as a search of its working directory', () => {
+    const search = (cwd: string): ToolRequest => ({
+      kind: 'search',
+      cwd,
+      paths: [],
+    });
+    const guarded: PermissionLayers = {
+      machine: {
+        default: 'allow',
+        rules: [{ kind: 'search', pattern: 'secrets/**', decision: 'deny' }],
+      },
+    };
+
+    expect(decide({ machine: ALLOW_ALL }, search(REPO_DIR))).toBe('allow');
+    expect(decide(guarded, search(resolve(REPO_DIR, 'secrets/x')))).toBe(
+      'deny',
+    );
+    fc.assert(
+      fc.property(
+        layersArb,
+        fc.constantFrom(...OUTSIDE_CWDS),
+        (layers, cwd) => {
+          const unnamed = withoutAbsolutePatterns(layers);
+          expect(decide(unnamed, search(cwd))).not.toBe('allow');
+        },
+      ),
+    );
+  });
+
+  it('applies path deny and ask rules to the paths a shell command touches', () => {
+    fc.assert(
+      fc.property(
+        layersArb,
+        fc.constantFrom('read' as const, 'edit', 'delete', 'move'),
+        fc.constantFrom('deny' as const, 'ask'),
+        fc.constantFrom(...INSIDE_PATHS),
+        fc.constantFrom(...PINNED_COMMANDS),
+        (layers, kind, decision, target, command) => {
+          const guarded: PermissionLayers = {
+            ...layers,
+            machine: {
+              ...layers.machine,
+              rules: [
+                ...layers.machine.rules,
+                { kind, pattern: pathSubject(REPO_DIR, target), decision },
+              ],
+            },
+          };
+          const request: ToolRequest = {
+            ...execute(command),
+            argPaths: [resolve(REPO_DIR, 'npm'), target],
+          };
+          expect(RANK[decide(guarded, request)]).toBeGreaterThanOrEqual(
+            RANK[decision],
+          );
+        },
+      ),
     );
   });
 

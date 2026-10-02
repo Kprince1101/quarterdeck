@@ -160,6 +160,25 @@ describe('symlinks and canonical paths', () => {
     expect(await decisionOf(box.repo, shell('ls', 'leakdir'))).toBe('ask');
   });
 
+  it('denies a shell command that reads a denied file, even through a symlink', async () => {
+    expect(await decisionOf(box.repo, shell('cat .env'))).toBe('deny');
+    expect(await decisionOf(box.repo, shell('cat innocent.txt'))).toBe('deny');
+    expect(await decisionOf(box.repo, shell('cat key', 'secrets'))).toBe(
+      'deny',
+    );
+  });
+
+  it('searches the working directory when a search names no path', async () => {
+    const search = (cwd: string): ToolCallUpdate => ({
+      toolCallId: 'grep',
+      kind: 'search',
+      rawInput: { pattern: 'TOKEN', cwd },
+    });
+
+    expect(await decisionOf(box.repo, search('.'))).toBe('allow');
+    expect(await decisionOf(box.repo, search('leakdir'))).toBe('ask');
+  });
+
   it('fails closed on a symlink loop', async () => {
     expect(await decisionOf(box.repo, read(join(box.repo, 'loop-a')))).toBe(
       'deny',

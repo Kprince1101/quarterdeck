@@ -39,6 +39,15 @@ const OUTSIDE_BY_PATTERN_KINDS: ReadonlySet<ToolKind> = new Set([
   'search',
 ]);
 
+const CWD_TARGET_KINDS: ReadonlySet<ToolKind> = new Set(['search']);
+
+const SHELL_GUARD_KINDS: ReadonlySet<ToolKind> = new Set([
+  'read',
+  'edit',
+  'delete',
+  'move',
+]);
+
 export const stricter = (left: Decision, right: Decision): Decision => {
   if (DECISION_RANK[right] > DECISION_RANK[left]) return right;
   return left;
@@ -57,6 +66,12 @@ const decisionsOf = (rules: readonly PermissionRule[]): Decision[] =>
 
 const hasPattern = (rule: PermissionRule): rule is PatternRule =>
   rule.pattern !== undefined;
+
+export const targetPaths = (request: ToolRequest): string[] => {
+  if (request.paths.length > 0) return request.paths;
+  if (CWD_TARGET_KINDS.has(request.kind)) return [request.cwd];
+  return [];
+};
 
 const optionalValues = (value: string | undefined): string[] => {
   if (value === undefined) return [];
@@ -78,8 +93,41 @@ export const requestSubjects = (
   }
   return {
     mode: 'path',
-    values: request.paths.map((path) => pathSubject(repoDir, path)),
+    values: targetPaths(request).map((path) => pathSubject(repoDir, path)),
   };
+};
+
+const shellGuardDecisions = (
+  layer: PolicyLayer,
+  subjects: readonly string[],
+): Decision[] =>
+  decisionsOf(
+    (layer.rules ?? [])
+      .filter(hasPattern)
+      .filter(
+        (rule) =>
+          SHELL_GUARD_KINDS.has(rule.kind) &&
+          rule.decision !== 'allow' &&
+          subjects.some((subject) =>
+            matchesGlob(rule.pattern, subject, 'path'),
+          ),
+      ),
+  );
+
+export const shellPathGuard = (
+  layers: PermissionLayers,
+  request: ToolRequest,
+  repoDir: string,
+): Decision => {
+  const subjects = (request.argPaths ?? []).map((path) =>
+    pathSubject(repoDir, path),
+  );
+  return (
+    strictest([
+      ...shellGuardDecisions(layers.machine, subjects),
+      ...shellGuardDecisions(layers.repo ?? {}, subjects),
+    ]) ?? 'allow'
+  );
 };
 
 export const decideLayer = (
@@ -138,12 +186,22 @@ export const isPinnedToRepo = (
     });
   }
   if (!REPO_PINNED_KINDS.has(request.kind)) return true;
-  if (request.paths.length === 0) return false;
-  return request.paths.every(
+  const paths = targetPaths(request);
+  if (paths.length === 0) return false;
+  return paths.every(
     (path) =>
       isInsideRepo(repoDir, path) ||
       isNamedOutsideRepo(machine, request.kind, pathSubject(repoDir, path)),
   );
+};
+
+const shellGuardFor = (
+  layers: PermissionLayers,
+  request: ToolRequest,
+  repoDir: string,
+): Decision => {
+  if (request.kind !== 'execute') return 'allow';
+  return shellPathGuard(layers, request, repoDir);
 };
 
 const decideAs = (
@@ -159,7 +217,10 @@ const decideAs = (
     layers.machine.default,
   );
   const repo = decideLayer(layers.repo ?? {}, request.kind, subjects, 'allow');
-  const layered = stricter(machine, repo);
+  const layered = stricter(
+    stricter(machine, repo),
+    shellGuardFor(layers, request, repoDir),
+  );
   if (layered !== 'allow') return layered;
   if (isPinnedToRepo(request, repoDir, layers.machine)) return 'allow';
   return 'ask';
