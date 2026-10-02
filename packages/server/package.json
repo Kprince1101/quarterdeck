@@ -1,0 +1,11 @@
+{
+  "name": "@quarterdeck/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "author": "Kristopher Prince",
+  "engines": {
+    "node": ">=22"
+  }
+}
