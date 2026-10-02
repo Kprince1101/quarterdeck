@@ -17,8 +17,8 @@ import {
   vi,
 } from 'vitest';
 import { createIntentClient, emptyTables } from '../../src/api/index.js';
-import { DeckProvider } from '../../src/deck/deck.js';
-import { DriverWidget } from '../../src/widgets/driver/driver.widget.js';
+import { DeckProvider } from '../../src/deck/DeckProvider.js';
+import { DriverWidget } from '../../src/widgets/driver/DriverWidget.js';
 import { FAKE_WEBSOCKET, FakeSocket } from '../api/fake-socket.js';
 import { choose, click } from '../grid/events.js';
 import { typeInto, type DomElement } from '../primitives/dom.js';

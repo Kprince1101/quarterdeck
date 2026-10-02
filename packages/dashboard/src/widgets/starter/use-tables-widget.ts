@@ -2,7 +2,7 @@ import {
   STREAM_TABLES,
   type StreamTable,
 } from '@quarterdeck/server/stream-schema';
-import { useDeck } from '../../deck/deck.js';
+import { useDeck } from '../../deck/DeckProvider.js';
 
 export interface TableCount {
   table: StreamTable;

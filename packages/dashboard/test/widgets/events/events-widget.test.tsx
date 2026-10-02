@@ -14,12 +14,12 @@ import {
   vi,
 } from 'vitest';
 import { emptyTables } from '../../../src/api/index.js';
-import { DeckProvider } from '../../../src/deck/deck.js';
+import { DeckProvider } from '../../../src/deck/DeckProvider.js';
 import { NOW_TICK_MS } from '../../../src/lib/use-now.js';
 import { ALL } from '../../../src/widgets/events/event-feed.js';
 import EVENTS_WIDGET, {
   EventsWidget,
-} from '../../../src/widgets/events/events.widget.js';
+} from '../../../src/widgets/events/EventsWidget.js';
 import { WIDGETS } from '../../../src/widgets/widgets.js';
 import { FAKE_WEBSOCKET, FakeSocket } from '../../api/fake-socket.js';
 import { choose } from '../../grid/events.js';

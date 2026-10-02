@@ -7,10 +7,10 @@ import type {
 import { act } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createIntentClient, emptyTables } from '../../../src/api/index.js';
-import { DeckProvider } from '../../../src/deck/deck.js';
+import { DeckProvider } from '../../../src/deck/DeckProvider.js';
 import PLANNER_WIDGET, {
   PlannerWidget,
-} from '../../../src/widgets/planner/planner.widget.js';
+} from '../../../src/widgets/planner/PlannerWidget.js';
 import { WIDGETS } from '../../../src/widgets/widgets.js';
 import { FAKE_WEBSOCKET, FakeSocket } from '../../api/fake-socket.js';
 import { choose } from '../../grid/events.js';

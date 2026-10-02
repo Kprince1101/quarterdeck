@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useDeck } from '../../deck/deck.js';
+import { useDeck } from '../../deck/DeckProvider.js';
 import { useNow } from '../../lib/use-now.js';
 import { eventFeed, type EventFeed } from './event-feed.js';
 import { useEventFilters, type EventFilterState } from './use-event-filters.js';

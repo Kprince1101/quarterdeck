@@ -76,7 +76,7 @@ describe('dashboard on a live server', () => {
     'goes live, loads the saved layout and follows intents sent through the typed client',
     async () => {
       const { all, render, textOf } = await import('./page.js');
-      const { App } = await import('../../src/app.js');
+      const { App } = await import('../../src/App.js');
       const served = await deck.serve();
       const { container, unmount } = render(
         <App
@@ -144,7 +144,7 @@ describe('dashboard on a live server', () => {
     'reads counts, rows and paths from the server in the Data widget',
     async () => {
       const { all, render, textOf } = await import('./page.js');
-      const { App } = await import('../../src/app.js');
+      const { App } = await import('../../src/App.js');
       const { flushSync } = await import('react-dom');
       const press = (element: PageElement) => {
         flushSync(() => {
@@ -215,7 +215,7 @@ describe('dashboard on a live server', () => {
     'shows the project on the Board and pauses everything through pause.all',
     async () => {
       const { all, render, textOf } = await import('./page.js');
-      const { App } = await import('../../src/app.js');
+      const { App } = await import('../../src/App.js');
       const { WIDGETS } = await import('../../src/widgets/widgets.js');
       const served = await deck.serve();
       const { container, unmount } = render(

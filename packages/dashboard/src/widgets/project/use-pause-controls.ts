@@ -1,4 +1,4 @@
-import { useDeck } from '../../deck/deck.js';
+import { useDeck } from '../../deck/DeckProvider.js';
 import { useIntentRequest } from '../use-intent-request.js';
 import type { ProjectPanel } from './project-model.js';
 

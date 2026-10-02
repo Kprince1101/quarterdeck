@@ -1,9 +1,9 @@
 import { defineWidget } from '../registry.js';
-import { ArchiveControl } from './archive-control.js';
-import { CrewSummary } from './crew-summary.js';
+import { ArchiveControl } from './ArchiveControl.js';
+import { CrewSummary } from './CrewSummary.js';
 import type { ProjectOption } from './project-model.js';
-import { ProjectToggles } from './project-toggles.js';
-import { RoundControls } from './round-controls.js';
+import { ProjectToggles } from './ProjectToggles.js';
+import { RoundControls } from './RoundControls.js';
 import {
   useProjectWidget,
   type ProjectChangeHandler,

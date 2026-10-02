@@ -1,5 +1,5 @@
 import { useState, type ChangeEvent } from 'react';
-import { useDeck } from '../../deck/deck.js';
+import { useDeck } from '../../deck/DeckProvider.js';
 import { getErrorMessage } from '../../lib/errors.js';
 import { withLookupNote, type CardView } from './card-deck.js';
 

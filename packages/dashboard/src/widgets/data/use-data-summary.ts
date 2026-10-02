@@ -3,7 +3,7 @@ import {
   dataSummarySchema,
   type DataSummary,
 } from '@quarterdeck/server/intents';
-import { useDeck } from '../../deck/deck.js';
+import { useDeck } from '../../deck/DeckProvider.js';
 import { useIntentQuery, type QueryState } from './use-intent-query.js';
 
 export const useDataSummary = (

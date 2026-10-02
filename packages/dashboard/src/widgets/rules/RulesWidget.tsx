@@ -1,13 +1,13 @@
 import type { RuleView } from '../../api/index.js';
 import { defineWidget } from '../registry.js';
 import { TIGHTEN_ONLY_NOTICE } from './constants.js';
-import { MachineLayer } from './machine-layer.js';
-import { RepoLayer } from './repo-layer.js';
-import { ReviewPanel } from './review-panel.js';
-import { RulesPickers } from './rules-pickers.js';
-import { DefaultsLayer, RulesAlert, RulesStatus } from './rules-parts.js';
+import { MachineLayer } from './MachineLayer.js';
+import { RepoLayer } from './RepoLayer.js';
+import { ReviewPanel } from './ReviewPanel.js';
+import { RulesPickers } from './RulesPickers.js';
+import { DefaultsLayer, RulesAlert, RulesStatus } from './RulesParts.js';
 import { useRulesWidget, type RulesWidgetView } from './use-rules-widget.js';
-import { ValueSources } from './value-sources.js';
+import { ValueSources } from './ValueSources.js';
 import './rules.css';
 
 interface RulesBodyProps {

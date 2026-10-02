@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { dataPageSchema, type DataPage } from '@quarterdeck/server/intents';
-import { useDeck } from '../../deck/deck.js';
+import { useDeck } from '../../deck/DeckProvider.js';
 import { useIntentQuery, type QueryState } from './use-intent-query.js';
 
 export interface PageRequest {

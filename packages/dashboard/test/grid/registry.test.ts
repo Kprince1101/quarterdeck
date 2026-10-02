@@ -8,18 +8,21 @@ import { WIDGETS } from '../../src/widgets/widgets.js';
 import { ALPHA, BETA } from './fixtures.js';
 
 describe('widget registry', () => {
-  it('discovers every *.widget.tsx file', () => {
-    expect([...WIDGETS.keys()]).toEqual(
-      expect.arrayContaining([
-        'board',
-        'data',
-        'driver',
-        'events',
-        'notebook',
-        'rules',
-        'tables',
-      ]),
-    );
+  it('discovers every *Widget.tsx file', () => {
+    expect([...WIDGETS.keys()].toSorted()).toEqual([
+      'agents',
+      'board',
+      'cards',
+      'data',
+      'driver',
+      'events',
+      'notebook',
+      'planner',
+      'project',
+      'rules',
+      'tables',
+      'usage',
+    ]);
     expect(WIDGETS.get('events')?.title).toBe('Events');
     expect(WIDGETS.get('data')?.title).toBe('Data');
   });
@@ -51,12 +54,12 @@ describe('widget registry', () => {
   it('reads modules in path order and names a file that exports nothing', () => {
     expect(
       definitionsFrom({
-        './b.widget.tsx': { default: BETA },
-        './a.widget.tsx': { default: ALPHA },
+        './b/BWidget.tsx': { default: BETA },
+        './a/AWidget.tsx': { default: ALPHA },
       }),
     ).toEqual([ALPHA, BETA]);
-    expect(() => definitionsFrom({ './c.widget.tsx': {} })).toThrow(
-      './c.widget.tsx must export default defineWidget({...})',
+    expect(() => definitionsFrom({ './c/CWidget.tsx': {} })).toThrow(
+      './c/CWidget.tsx must export default defineWidget({...})',
     );
   });
 });

@@ -1,5 +1,5 @@
 import { useMemo, useState, type ChangeEvent } from 'react';
-import { useDeck } from '../../deck/deck.js';
+import { useDeck } from '../../deck/DeckProvider.js';
 import { valueOf } from '../../grid/dom.js';
 import { buildProject, type ProjectModel } from './project-model.js';
 

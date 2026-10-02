@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { StreamState, StreamStatus } from '../api/index.js';
-import { useDeck } from '../deck/deck.js';
+import { useDeck } from '../deck/DeckProvider.js';
 
 export const STATUS_LABELS: Record<StreamStatus, string> = {
   connecting: 'Connecting',

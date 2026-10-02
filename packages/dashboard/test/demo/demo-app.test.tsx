@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { App } from '../../src/app.js';
+import { App } from '../../src/App.js';
 import { DEMO_ROUND_PLANS } from '../../src/demo/demo-plans.js';
 import { createDemoServer } from '../../src/demo/demo-server.js';
 import { PLANNER_ASK } from '../../src/demo/demo-seed.js';

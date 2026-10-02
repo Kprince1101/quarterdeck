@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { RuleView } from '../../api/index.js';
-import { useDeck } from '../../deck/deck.js';
+import { useDeck } from '../../deck/DeckProvider.js';
 import { getErrorMessage } from '../../lib/errors.js';
 import { lifecycleRule } from './merge-gate.js';
 

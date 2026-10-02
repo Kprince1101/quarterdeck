@@ -1,7 +1,7 @@
 import type { RuleView } from '../../api/index.js';
 import type { DiffLine } from '../line-diff.js';
 import { DIFF_MARKS } from './constants.js';
-import { LayerHeading, RulesAlert } from './rules-parts.js';
+import { LayerHeading, RulesAlert } from './RulesParts.js';
 import type { RulesWidgetView } from './use-rules-widget.js';
 
 interface ReviewPanelProps {

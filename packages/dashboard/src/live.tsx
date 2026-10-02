@@ -6,9 +6,9 @@ import {
   type StreamOptions,
   type TokenPage,
 } from './api/index.js';
-import { App } from './app.js';
-import type { DeckSources } from './deck/deck.js';
-import { TokenMissing } from './shell/token-missing.js';
+import { App } from './App.js';
+import type { DeckSources } from './deck/DeckProvider.js';
+import { TokenMissing } from './shell/TokenMissing.js';
 
 export interface LiveOptions {
   baseUrl?: string | undefined;

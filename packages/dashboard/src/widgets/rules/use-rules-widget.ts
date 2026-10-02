@@ -1,7 +1,7 @@
 import type { RuleName } from '@quarterdeck/rules/schemas';
 import { useMemo, type ChangeEvent } from 'react';
 import type { ProjectRow, RuleView } from '../../api/index.js';
-import { useDeck } from '../../deck/deck.js';
+import { useDeck } from '../../deck/DeckProvider.js';
 import { valueOf } from '../../grid/dom.js';
 import type { DiffLine } from '../line-diff.js';
 import {

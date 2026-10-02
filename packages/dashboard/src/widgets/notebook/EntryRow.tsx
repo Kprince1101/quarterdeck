@@ -1,6 +1,6 @@
-import { RequestError } from '../request-error.js';
+import { RequestError } from '../RequestError.js';
 import type { EntryView } from './notebook-model.js';
-import { ProjectTag } from './project-tag.js';
+import { ProjectTag } from './ProjectTag.js';
 import { useEntryRow } from './use-entry-row.js';
 
 export interface EntryRowProps {

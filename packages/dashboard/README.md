@@ -28,13 +28,13 @@ The page talks only to its own origin: intents go to `POST /api/intents/<name>`,
 src/main.tsx                 mounts livePage() into #root
 src/live.tsx                 livePage(): the API token from #token= and <App /> with it, or "open the link printed by quarterdeck up"
 src/mount.tsx                mountPage(node) / mountApp(props): the stylesheets and the page in #root
-src/app.tsx                  DeckProvider > Shell > DeckLayout; `mode` labels the header
+src/App.tsx                  DeckProvider > Shell > DeckLayout; `mode` labels the header
 src/demo/                    demo mode: a fake server in the page, built by site/
-src/deck/deck.tsx            DeckProvider and useDeck(): one stream per tab, plus the intent client
-src/shell/shell.tsx          Shell (header + workspace), Panel, StreamStatusBadge
+src/deck/DeckProvider.tsx    DeckProvider and useDeck(): one stream per tab, plus the intent client
+src/shell/Shell.tsx          Shell (header + workspace), Panel, StreamStatusBadge
 src/widgets/registry.ts      defineWidget, WidgetDefinition, createRegistry
-src/widgets/widgets.ts       WIDGETS: every src/widgets/**/*.widget.tsx, found at build time
-src/widgets/widget-mount.tsx WidgetMount: the grid over WIDGETS
+src/widgets/widgets.ts       WIDGETS: every src/widgets/**/*Widget.tsx, found at build time
+src/widgets/WidgetMount.tsx  WidgetMount: the grid over WIDGETS
 src/widgets/starter/         the Tables starter widget
 src/widgets/board/           Board: liveness strip, Pause all / Resume all, capped project picker, archived toggle
 src/widgets/events/          Events: the feed, filtered by project and kind
@@ -55,7 +55,7 @@ The page is exactly the viewport's height and never scrolls. The header takes `-
 
 ## Registering a widget
 
-A widget is one file. Name it `src/widgets/<widget>/<widget>.widget.tsx` and default-export a `defineWidget` call:
+A widget is one file. Name it `src/widgets/<widget>/<Widget>Widget.tsx` after its component (`NotebookWidget.tsx`) and default-export a `defineWidget` call:
 
 ```tsx
 import { defineWidget, type WidgetProps } from '../registry.js';
@@ -81,7 +81,7 @@ export default defineWidget({
 });
 ```
 
-That is the whole registration. `src/widgets/widgets.ts` picks up every `*.widget.tsx` with `import.meta.glob`, so no shared list is edited and widget tickets never conflict with each other. `defineWidget` types the definition:
+That is the whole registration. `src/widgets/widgets.ts` picks up every `*Widget.tsx` with `import.meta.glob`, so no shared list is edited and widget tickets never conflict with each other. `defineWidget` types the definition:
 
 | Field         | Meaning                                                                     |
 | ------------- | --------------------------------------------------------------------------- |
@@ -92,7 +92,7 @@ That is the whole registration. `src/widgets/widgets.ts` picks up every `*.widge
 | `minSize`     | Smallest size a resize may reach. Defaults to 1 by 1.                       |
 | `startHidden` | `true` puts it in the tray, not on the grid, in the default layout.         |
 
-The grid draws the `Panel` (title, move, duplicate, hide, resize), so the component renders only its body. `createRegistry` throws at load on a repeated `type`, a type that is not kebab-case, or a `size` under `minSize`; a `*.widget.tsx` without a `defineWidget` default export fails the same way.
+The grid draws the `Panel` (title, move, duplicate, hide, resize), so the component renders only its body. `createRegistry` throws at load on a repeated `type`, a type that is not kebab-case, or a `size` under `minSize`; a `*Widget.tsx` without a `defineWidget` default export fails the same way.
 
 `useDeck()` gives every widget the same `StreamState` (see [`src/api`](src/api/README.md)), the same `IntentClient` and the same `RulesReader`, so a dashboard with ten widgets still opens one socket. `DeckProvider` takes `stream` options, an `intents` client and a `rules` reader, which is how tests and the site's demo mode feed it fake data.
 

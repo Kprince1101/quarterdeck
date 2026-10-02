@@ -1,4 +1,4 @@
-import { RequestError } from '../request-error.js';
+import { RequestError } from '../RequestError.js';
 import type { ProjectPanel } from './project-model.js';
 import {
   useRoundControls,

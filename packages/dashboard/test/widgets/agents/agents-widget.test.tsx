@@ -14,11 +14,11 @@ import {
   vi,
 } from 'vitest';
 import { createIntentClient, emptyTables } from '../../../src/api/index.js';
-import { DeckProvider } from '../../../src/deck/deck.js';
+import { DeckProvider } from '../../../src/deck/DeckProvider.js';
 import { POKE_TEXT } from '../../../src/widgets/agents/agent-actions.js';
 import AGENTS_WIDGET, {
   AgentsWidget,
-} from '../../../src/widgets/agents/agents.widget.js';
+} from '../../../src/widgets/agents/AgentsWidget.js';
 import { KILLING_LABEL } from '../../../src/widgets/agents/use-agent-card.js';
 import { WIDGETS } from '../../../src/widgets/widgets.js';
 import { FAKE_WEBSOCKET, FakeSocket } from '../../api/fake-socket.js';

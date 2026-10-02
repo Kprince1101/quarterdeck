@@ -2,7 +2,7 @@ import type { RoundRow } from '@quarterdeck/server/stream-schema';
 import { valueOf } from '../../grid/dom.js';
 import { defineWidget } from '../registry.js';
 import type { DriverTurn } from './driver-turns.js';
-import { TurnDetailView } from './turn-detail.js';
+import { TurnDetailView } from './TurnDetailView.js';
 import { useDriverWidget, type DriverWidgetView } from './use-driver-widget.js';
 
 interface RoundPickerProps {

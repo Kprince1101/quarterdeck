@@ -1,6 +1,6 @@
 import type { WidgetRegistry } from '../widgets/registry.js';
-import { WidgetMount } from '../widgets/widget-mount.js';
-import { LayoutBar } from './layout-bar.js';
+import { WidgetMount } from '../widgets/WidgetMount.js';
+import { LayoutBar } from './LayoutBar.js';
 import { useDeckLayout } from './use-deck-layout.js';
 
 export interface DeckLayoutProps {

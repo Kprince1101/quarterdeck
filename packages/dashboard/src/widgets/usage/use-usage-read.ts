@@ -3,7 +3,7 @@ import {
   usageReadResultSchema,
   type UsageReadResult,
 } from '@quarterdeck/server/intents';
-import { useDeck } from '../../deck/deck.js';
+import { useDeck } from '../../deck/DeckProvider.js';
 import { getErrorMessage } from '../../lib/errors.js';
 import { useNow } from '../../lib/use-now.js';
 import { lastTurnEnd } from './usage-model.js';

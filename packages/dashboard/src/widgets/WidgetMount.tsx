@@ -1,4 +1,4 @@
-import { WidgetGrid } from '../grid/widget-grid.js';
+import { WidgetGrid } from '../grid/WidgetGrid.js';
 import type { GridLayout } from '../grid/layout.js';
 import type { LayoutListener } from '../grid/use-grid-sync.js';
 import type { WidgetRegistry } from './registry.js';

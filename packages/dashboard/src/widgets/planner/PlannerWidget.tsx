@@ -7,7 +7,7 @@ import type {
   ProjectChoice,
 } from './planner-model.js';
 import './planner.css';
-import { ProposalCard } from './proposal-card.js';
+import { ProposalCard } from './ProposalCard.js';
 import { usePlannerWidget } from './use-planner-widget.js';
 
 interface ProjectPickerProps {

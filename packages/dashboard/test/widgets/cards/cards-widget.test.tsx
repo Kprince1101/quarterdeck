@@ -11,14 +11,14 @@ import {
   vi,
 } from 'vitest';
 import { createIntentClient, emptyTables } from '../../../src/api/index.js';
-import { DeckProvider } from '../../../src/deck/deck.js';
+import { DeckProvider } from '../../../src/deck/DeckProvider.js';
 import {
   LOOKUP_LABEL,
   LOOKUP_NOTE,
 } from '../../../src/widgets/cards/card-deck.js';
 import CARDS_WIDGET, {
   CardsWidget,
-} from '../../../src/widgets/cards/cards.widget.js';
+} from '../../../src/widgets/cards/CardsWidget.js';
 import {
   NO_PROJECT_ERROR,
   REPLY_LABEL,
