@@ -107,6 +107,15 @@ describe('dashboard shell', () => {
     unmount();
   });
 
+  it('registers the Driver widget', () => {
+    const { container, unmount } = render(<App stream={stream} />);
+    showOnly(container, ['Driver'], click);
+    expect(textOf(container, '[aria-label="Driver"]')).toContain(
+      'No rounds yet.',
+    );
+    unmount();
+  });
+
   it('wires the starter panels to the stream', () => {
     const { container, unmount } = render(<App stream={stream} />);
     expect(textOf(container, '[aria-label="Events"]')).toContain(

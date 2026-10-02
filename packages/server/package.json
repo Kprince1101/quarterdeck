@@ -25,6 +25,11 @@
       "@quarterdeck/source": "./src/stream/schema.ts",
       "types": "./dist/stream/schema.d.ts",
       "default": "./dist/stream/schema.js"
+    },
+    "./replay-command": {
+      "@quarterdeck/source": "./src/driver/replay-command.ts",
+      "types": "./dist/driver/replay-command.d.ts",
+      "default": "./dist/driver/replay-command.js"
     }
   },
   "files": [

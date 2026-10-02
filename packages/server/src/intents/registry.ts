@@ -1,12 +1,14 @@
 import type { z } from 'zod';
 import { BOARD_INTENTS } from './board.js';
 import { CREW_INTENTS } from './crew.js';
+import { READ_INTENTS } from './read.js';
 import { WORKSPACE_INTENTS } from './workspace.js';
 
 export const INTENTS = {
   ...CREW_INTENTS,
   ...BOARD_INTENTS,
   ...WORKSPACE_INTENTS,
+  ...READ_INTENTS,
 };
 
 export type IntentName = keyof typeof INTENTS;

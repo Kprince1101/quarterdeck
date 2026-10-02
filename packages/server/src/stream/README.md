@@ -34,7 +34,7 @@ These are the same rules as the HTTP API's guard.
 
 Every message is one JSON object. `@quarterdeck/server/stream-schema` exports the zod schemas and types (`streamMessageSchema`, `StreamMessage`, the row schemas) and depends on nothing but zod, so the dashboard can import it; `z.toJSONSchema(streamMessageSchema)` gives the JSON Schema.
 
-1. `{ type: 'snapshot', cursor, tables }` comes first on every connection. `tables` holds this project's rows in each table of `STREAM_TABLES` (all tables but the `events` and `intents` logs; intents show up as their events), keyed by table name, with camelCase columns, ISO timestamps and money as decimal strings. It is kept small. `turns` holds only each agent's latest `SNAPSHOT_TURNS_PER_AGENT` (20) turns, and turn rows never carry `prompt` (token counts, stop reason and `transcriptPath` are there). Older turns and prompts are read on demand.
+1. `{ type: 'snapshot', cursor, tables }` comes first on every connection. `tables` holds this project's rows in each table of `STREAM_TABLES` (all tables but the `events` and `intents` logs; intents show up as their events), keyed by table name, with camelCase columns, ISO timestamps and money as decimal strings. It is kept small. `turns` holds only each agent's latest `SNAPSHOT_TURNS_PER_AGENT` (20) turns, and turn rows never carry `prompt` (token counts, stop reason and `transcriptPath` are there). A turn's prompt, output and result are read on demand with the `turn.read` intent.
 2. `{ type: 'event', event }` for each event after `cursor`, in id order, then live.
 3. `{ type: 'change', table, op, id, row }` for each insert, update or delete, live. `row` is the row as it is now, or `null` once it is gone: upsert it by `id`, or remove `id`.
 
