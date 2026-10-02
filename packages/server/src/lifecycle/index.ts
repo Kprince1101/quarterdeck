@@ -16,6 +16,14 @@ export {
   type Recovery,
 } from './recover.js';
 export {
+  DEFAULT_STOP_HOSTS,
+  WIPE_REASON,
+  noSessions,
+  stopProjectAgents,
+  type StopHosts,
+  type StoppedAgents,
+} from './stop.js';
+export {
   AGENT_KILL,
   AGENT_RESET,
   AGENT_RETIRE,

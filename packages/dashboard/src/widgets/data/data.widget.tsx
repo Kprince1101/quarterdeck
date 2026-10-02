@@ -1,7 +1,8 @@
 import { defineWidget } from '../registry.js';
 import { Pager, PathList, RowsTable, TableList } from './data-parts.js';
 import type { PageView } from './data-view.js';
-import { useDataWidget } from './use-data-widget.js';
+import { useDataWidget, type DataWidgetView } from './use-data-widget.js';
+import { WipeSection } from './wipe-parts.js';
 
 interface RowsSectionProps {
   page: PageView | null;
@@ -24,13 +25,31 @@ const RowsSection = ({ page, error, onPrevious, onNext }: RowsSectionProps) => {
   );
 };
 
-export const DataWidget = () => {
-  const view = useDataWidget();
-  if (view.isWaiting) {
-    return <p className="qd-empty">Waiting for the project.</p>;
-  }
+const StoredData = ({ view }: { view: DataWidgetView }) => {
   if (view.summaryError !== null) {
     return <p className="qd-data-error">{view.summaryError}</p>;
+  }
+  return (
+    <>
+      <TableList tables={view.tables} />
+      <RowsSection
+        page={view.page}
+        error={view.pageError}
+        onPrevious={view.handlePrevious}
+        onNext={view.handleNext}
+      />
+      <section className="qd-data-section" aria-label="On disk">
+        <h3>On disk</h3>
+        <PathList paths={view.paths} />
+      </section>
+    </>
+  );
+};
+
+export const DataWidget = () => {
+  const view = useDataWidget();
+  if (view.project === null) {
+    return <p className="qd-empty">Waiting for the project.</p>;
   }
   return (
     <div className="qd-data" aria-busy={view.isLoading}>
@@ -43,17 +62,8 @@ export const DataWidget = () => {
           Refresh
         </button>
       </div>
-      <TableList tables={view.tables} />
-      <RowsSection
-        page={view.page}
-        error={view.pageError}
-        onPrevious={view.handlePrevious}
-        onNext={view.handleNext}
-      />
-      <section className="qd-data-section" aria-label="On disk">
-        <h3>On disk</h3>
-        <PathList paths={view.paths} />
-      </section>
+      <StoredData view={view} />
+      <WipeSection project={view.project} onWiped={view.handleRefresh} />
     </div>
   );
 };

@@ -12,6 +12,13 @@ import {
 
 export const WIPE_ALL_CONFIRMATION = 'wipe everything';
 
+export const wipeResultSchema = z.object({
+  wiped: z.array(z.string()),
+  stopped: z.array(z.object({ project: z.string(), agent: z.string() })),
+});
+
+export type WipeResult = z.infer<typeof wipeResultSchema>;
+
 const ruleContentSchema = z.string().max(MAX_TEXT_LENGTH);
 
 const machineRule = { scope: z.literal('machine'), name: ruleNameSchema };

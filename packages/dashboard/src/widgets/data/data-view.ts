@@ -2,6 +2,7 @@ import type {
   DataPage,
   DataPathEntry,
   DataPathScope,
+  WipeResult,
 } from '@quarterdeck/server/intents';
 import type { ProjectRow } from '@quarterdeck/server/stream-schema';
 
@@ -83,6 +84,18 @@ export const pageView = (page: DataPage): PageView => ({
   canPrevious: page.offset > 0,
   canNext: page.offset + page.limit < page.total,
 });
+
+const listOf = (items: readonly string[]): string => {
+  if (items.length === 0) return 'nothing';
+  return items.join(', ');
+};
+
+export const wipeSummary = ({ wiped, stopped }: WipeResult): string => {
+  const summary = `Wiped ${listOf(wiped)}.`;
+  if (stopped.length === 0) return summary;
+  const agents = stopped.map(({ project, agent }) => `${agent} (${project})`);
+  return `${summary} Stopped ${listOf(agents)} first.`;
+};
 
 export const previousOffset = (offset: number, limit: number): number =>
   Math.max(0, offset - limit);

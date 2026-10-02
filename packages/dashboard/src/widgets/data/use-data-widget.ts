@@ -20,7 +20,7 @@ export interface TableView {
 }
 
 export interface DataWidgetView {
-  isWaiting: boolean;
+  project: string | null;
   isLoading: boolean;
   summaryError: string | null;
   tables: TableView[];
@@ -74,7 +74,7 @@ export const useDataWidget = (): DataWidgetView => {
     [],
   );
   return {
-    isWaiting: project === null,
+    project,
     isLoading: summary.isLoading || rows.isLoading,
     summaryError: summary.error,
     tables,

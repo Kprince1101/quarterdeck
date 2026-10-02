@@ -43,6 +43,17 @@ It resolves to `{ reaped: [{ agentId, name, outcome }], expiredCards, droppedPau
 
 The server runs it each time it opens a project store (`ProjectStores.get` and `create`), which the project lock makes the only process with that project open. A failure goes to `onError` and the store is still served. `startApiServer({ openProjects: true })`, which `quarterdeck up` uses, opens every project at startup so this happens before any request; a project that will not open (another process holds it) is reported and skipped.
 
+## Stopping before a wipe
+
+`stopProjectAgents(store, { sessions, worktrees, killGraceMs? }, onError?)` stops everything a project is running so `wipe.project` and `wipe.all` delete nothing out from under a live process. It writes no new process handling; it runs the paths above, in this order:
+
+1. **Archive.** `archived_at` is set (kept if already set) and a `project.archive` event `{ archived: true, reason: 'wipe' }` is published, so the [pause](../pause/README.md) gate refuses new launches and turns, a birth in flight is cancelled and the Planner lets go, exactly as for an [archive](../archive/README.md).
+2. **Kill.** Every agent that is not `ended`, `killed` or `retired` goes through [`killAgent`](../agents/README.md#killing-and-resetting): marked `killed`, its tickets blocked, its session closed and its process group swept.
+3. **Sweep.** Every other agent still holding a `pid` is swept with `sweepAgentProcess(…, 'wipe')`.
+4. **Remove worktrees.** Each agent's worktree is removed with `force`, since typing the project's name is the human's approval to discard it. A removal that fails goes to `onError`; the folder is deleted with the project anyway.
+
+It resolves to `{ killed, running }`: the names it killed, and the names whose `pid` is still recorded because the sweep came back `unverified`. The wipe refuses (409) while `running` is not empty and keeps the project, archived and with its agents killed, so the next start's [recovery](#recovery) tries again; unarchive it to use it again. `noSessions` is the session host the API server uses by default: it holds no sessions, so `close` resolves and the sweep does the stopping.
+
 ## Shutdown
 
 `ApiServer.close()` closes every ACP client first (`closeAllAcpClients`), so each agent's group gets SIGTERM, then SIGKILL after its grace period, before the stores close. `quarterdeck up` calls it on SIGINT and SIGTERM.
@@ -57,3 +68,4 @@ The server runs it each time it opens a project store (`ProjectStores.get` and `
 | `recoverProject(store, options)`                                       | See [Recovery](#recovery).                                                   |
 | `reapAgentProcesses`, `expireOverdueCards` (bus), `dropOrphanedPauses` | The three recovery steps on their own.                                       |
 | `RESTART_REASON`                                                       | `restart`. The pause events are [`PAUSE_EVENTS`](../pause/README.md#events). |
+| `stopProjectAgents`, `noSessions`, `DEFAULT_STOP_HOSTS`, `WIPE_REASON` | See [Stopping before a wipe](#stopping-before-a-wipe).                       |

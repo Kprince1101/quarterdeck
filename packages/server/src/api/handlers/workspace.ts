@@ -99,10 +99,8 @@ export const WORKSPACE_HANDLERS: IntentHandlers<WorkspaceIntentName> = {
       );
       return { name: input.name };
     }),
-  'wipe.project': async (ctx, input, name) => {
-    await ctx.stores.wipe(input.project);
-    return unrecorded(name, { wiped: [input.project] });
-  },
+  'wipe.project': async (ctx, input, name) =>
+    unrecorded(name, await ctx.stores.wipe(input.project)),
   'wipe.all': async (ctx, _input, name) =>
-    unrecorded(name, { wiped: await ctx.stores.wipeAll() }),
+    unrecorded(name, await ctx.stores.wipeAll()),
 };

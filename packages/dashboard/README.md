@@ -35,7 +35,7 @@ src/widgets/widget-mount.tsx WidgetMount: the grid over WIDGETS
 src/widgets/starter/         the Tables starter widget
 src/widgets/board/           Board: liveness strip, Pause all / Resume all, capped project picker, archived toggle
 src/widgets/events/          Events: the feed, filtered by project and kind
-src/widgets/data/            Data: table counts, rows a page at a time, paths on disk
+src/widgets/data/            Data: table counts, rows a page at a time, paths on disk, Wipe project / Wipe everything typed to confirm
 src/widgets/driver/          the Driver widget: round picker, turns, turn detail, replay command
 src/widgets/planner/         Planner: the conversation, proposals to approve, edit or reject
 src/widgets/rules/           Rules: edit rules.local.* with validation, a diff and provenance
