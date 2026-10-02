@@ -1,9 +1,9 @@
 import { useMemo, useState, type ChangeEvent } from 'react';
 import { useDeck } from '../../deck/deck.js';
 import { valueOf } from '../../grid/dom.js';
+import { useIntentRequest } from '../use-intent-request.js';
 import { lineDiff, type DiffLine } from './line-diff.js';
 import type { ProposalView } from './notebook-model.js';
-import { useIntentRequest } from './use-intent-request.js';
 
 export interface ProposalCardView {
   label: string;
