@@ -32,6 +32,10 @@ import {
 } from '../../src/signin/index.js';
 import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
 import {
+  CLAUDE_LOGIN,
+  CLAUDE_TERMINAL_COMMAND,
+} from '../signin/auth-methods.js';
+import {
   resultText,
   say,
   signInNeeded,
@@ -492,6 +496,8 @@ describe('Driver turn loop', () => {
   it(
     'raises a sign-in card when the session needs sign-in and opens it once answered',
     async () => {
+      await scripted.client.close();
+      scripted = await startScriptedAgent({ authMethods: [CLAUDE_LOGIN] });
       scripted.requireSignIn(1);
       scripted.reply(say(resultText(RESULT)));
       const agentId = await insertAgent();
@@ -505,14 +511,14 @@ describe('Driver turn loop', () => {
       expect(card).toMatchObject({
         agentId,
         options: [SIGNED_IN],
-        recommendation: 'claude /login',
+        recommendation: CLAUDE_TERMINAL_COMMAND,
       });
-      expect(card.question).toContain('`claude /login`');
+      expect(card.question).toContain(`\`${CLAUDE_TERMINAL_COMMAND}\``);
       expect(await events(SIGN_IN_EVENTS.required)).toEqual([
         {
           cardId: card.id,
           runtime: 'claude',
-          command: 'claude /login',
+          command: CLAUDE_TERMINAL_COMMAND,
           operation: 'session/new',
           error: expect.stringContaining('Authentication required'),
         },

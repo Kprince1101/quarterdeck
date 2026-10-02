@@ -30,7 +30,10 @@ export const FAKE_SCENARIOS: readonly FakeScenario[] = [
   'describe_session',
   'describe_mode',
   'crash',
+  'sign_in_lapsed',
 ];
+
+export const SIGNED_IN_AGAIN_TEXT = 'signed in again';
 
 export const FAKE_DEFAULT_MODE_ID = 'default';
 export const FAKE_INITIAL_MODE_ID = 'accept_edits';

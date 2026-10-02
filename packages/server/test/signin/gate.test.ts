@@ -3,13 +3,13 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   SIGNED_IN,
   SIGN_IN_CARD,
-  SIGN_IN_COMMANDS,
   SIGN_IN_EVENTS,
   SignInRequiredError,
   withSignIn,
   type SignInGate,
 } from '../../src/signin/index.js';
 import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
+import { CLAUDE_LOGIN, CLAUDE_TERMINAL_COMMAND } from './auth-methods.js';
 
 const TIMEOUT = 30_000;
 
@@ -30,11 +30,14 @@ describe('withSignIn', () => {
     );
   });
 
+  let agents = 0;
+
   const insertAgent = async (runtime: string): Promise<string> => {
+    agents += 1;
     const { rows } = await store.db.query<{ id: string }>(
       `insert into agents (project_id, name, role, runtime, status)
-       values ($1, 'wren', 'builder', $2, 'working') returning id`,
-      [store.projectId, runtime],
+       values ($1, $2, 'builder', $3, 'working') returning id`,
+      [store.projectId, `wren-${agents}`, runtime],
     );
     return rows[0]?.id ?? '';
   };
@@ -55,10 +58,12 @@ describe('withSignIn', () => {
       kind: string;
       ticketId: string | null;
       status: string;
+      question: string;
       recommendation: string;
       checked: string;
     }>(
-      `select id, kind, ticket_id as "ticketId", status, recommendation, checked
+      `select id, kind, ticket_id as "ticketId", status, question,
+              recommendation, checked
        from cards order by created_at`,
     );
     return rows;
@@ -76,6 +81,12 @@ describe('withSignIn', () => {
     return rows;
   };
 
+  const answer = (cardId: string) =>
+    store.db.query(
+      `update cards set status = 'answered', answer = $2 where id = $1`,
+      [cardId, SIGNED_IN],
+    );
+
   const nextOpenCard = async () => {
     await expect
       .poll(async () => (await cards()).filter((c) => c.status === 'open'))
@@ -85,11 +96,77 @@ describe('withSignIn', () => {
     return card;
   };
 
-  it('names the exact command for every runtime', () => {
-    expect(SIGN_IN_COMMANDS.kiro.command).toBe('kiro-cli login');
-    expect(SIGN_IN_COMMANDS.claude.command).toBe('claude /login');
-    expect(SIGN_IN_COMMANDS.gemini.command).toBe('gemini');
-  });
+  const signedOut = async (): Promise<never> => {
+    throw RequestError.authRequired();
+  };
+
+  it(
+    'puts the command the agent advertises for terminal sign-in on the card',
+    async () => {
+      const gate = await gateFor('claude', {
+        authMethods: () => [CLAUDE_LOGIN],
+      });
+      let calls = 0;
+
+      const running = withSignIn(gate, 'session/new', async () => {
+        calls += 1;
+        if (calls === 1) return signedOut();
+        return 'opened';
+      });
+      const card = await nextOpenCard();
+
+      expect(card.recommendation).toBe(CLAUDE_TERMINAL_COMMAND);
+      expect(card.question).toContain(`\`${CLAUDE_TERMINAL_COMMAND}\``);
+      expect(
+        (await eventsOf(SIGN_IN_EVENTS.required))[0]?.payload,
+      ).toMatchObject({ command: CLAUDE_TERMINAL_COMMAND });
+      await answer(card.id);
+      expect(await running).toBe('opened');
+    },
+    TIMEOUT,
+  );
+
+  it(
+    'has every waiting agent of one runtime wait on the one open card',
+    async () => {
+      const first = await gateFor('kiro');
+      const second = await gateFor('kiro');
+      const other = await gateFor('gemini');
+      const attempts = new Map<string, number>();
+      const run = (gate: SignInGate) =>
+        withSignIn(gate, 'session/prompt', async () => {
+          const seen = (attempts.get(gate.agentId) ?? 0) + 1;
+          attempts.set(gate.agentId, seen);
+          if (seen === 1) return signedOut();
+          return gate.agentId;
+        });
+
+      const waiting = run(first);
+      const card = await nextOpenCard();
+      const joining = run(second);
+      const separate = run(other);
+      await expect
+        .poll(async () => (await eventsOf(SIGN_IN_EVENTS.required)).length)
+        .toBe(3);
+
+      const open = (await cards()).filter((row) => row.status === 'open');
+      expect(open).toHaveLength(2);
+      expect(
+        (await eventsOf(SIGN_IN_EVENTS.required)).map(
+          (event) => event.payload['cardId'],
+        ),
+      ).toEqual([card.id, card.id, expect.not.stringMatching(card.id)]);
+      expect(await eventsOf('card.asked')).toHaveLength(2);
+
+      await answer(card.id);
+      expect(await waiting).toBe(first.agentId);
+      expect(await joining).toBe(second.agentId);
+      const gemini = open.find((row) => row.id !== card.id);
+      await answer(gemini?.id ?? '');
+      expect(await separate).toBe(other.agentId);
+    },
+    TIMEOUT,
+  );
 
   it('runs once and raises nothing when the agent is signed in', async () => {
     const gate = await gateFor('kiro');
@@ -179,10 +256,10 @@ describe('withSignIn', () => {
       expect(failure).toBeInstanceOf(SignInRequiredError);
       expect(failure).toMatchObject({
         runtime: 'claude',
-        command: 'claude /login',
+        command: 'claude auth login',
         status: 'expired',
       });
-      expect((failure as Error).message).toContain('`claude /login`');
+      expect((failure as Error).message).toContain('`claude auth login`');
       expect((await cards()).map((card) => card.status)).toEqual(['expired']);
       expect(await eventsOf(SIGN_IN_EVENTS.resumed)).toEqual([]);
     },

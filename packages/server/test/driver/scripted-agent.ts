@@ -5,6 +5,7 @@ import {
 } from '@agentclientprotocol/sdk';
 import type {
   AnyMessage,
+  AuthMethod,
   ContentBlock,
   McpServer,
   StopReason,
@@ -72,7 +73,13 @@ const withTotal = (usage: ScriptedReply['usage']): Usage | undefined => {
   return { ...usage, totalTokens: usage.inputTokens + usage.outputTokens };
 };
 
-export const startScriptedAgent = async (): Promise<ScriptedAgent> => {
+export interface ScriptedAgentOptions {
+  authMethods?: AuthMethod[];
+}
+
+export const startScriptedAgent = async (
+  options: ScriptedAgentOptions = {},
+): Promise<ScriptedAgent> => {
   const sessions: ScriptedSession[] = [];
   const prompts: ScriptedPrompt[] = [];
   const queue: ScriptedReply[] = [];
@@ -82,7 +89,7 @@ export const startScriptedAgent = async (): Promise<ScriptedAgent> => {
     .onRequest('initialize', () => ({
       protocolVersion: PROTOCOL_VERSION,
       agentCapabilities: { loadSession: false },
-      authMethods: [],
+      authMethods: options.authMethods ?? [],
     }))
     .onRequest('session/new', ({ params }) => {
       counts.attempts += 1;

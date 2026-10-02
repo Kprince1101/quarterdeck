@@ -28,7 +28,7 @@ const ENDED: ReadonlySet<AgentStatus> = new Set(['ended', 'killed', 'retired']);
 
 export type DriverClient = Pick<
   AcpClient,
-  'newSession' | 'prompt' | 'subscribe'
+  'agent' | 'newSession' | 'prompt' | 'subscribe'
 >;
 
 export interface DriverRoundOptions {
@@ -118,7 +118,12 @@ export const openDriverRound = async (
   const { store, client } = options;
   const round = await findRound(store, options.roundId);
   const driver = await findDriver(store, options.agentId);
-  const gate = { store, agentId: driver.id, runtime: driver.runtime };
+  const gate = {
+    store,
+    agentId: driver.id,
+    runtime: driver.runtime,
+    authMethods: () => client.agent.authMethods,
+  };
   const { sessionId } = await withSignIn(gate, 'session/new', async () =>
     client.newSession({
       cwd: options.cwd,

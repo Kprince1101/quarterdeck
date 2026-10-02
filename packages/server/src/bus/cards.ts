@@ -2,6 +2,7 @@ import {
   CHANGES_CHANNEL,
   publishEvent,
   type PublishInput,
+  type Queryable,
 } from '../store/index.js';
 import { BusToolError, type BusStore } from './tool.js';
 
@@ -57,7 +58,7 @@ export const assertAskExpiry = (ms: number): number => {
   return ms;
 };
 
-interface CardLinks {
+export interface CardLinks {
   agent_id: string | null;
   ticket_id: string | null;
 }
@@ -74,6 +75,73 @@ const cardEvent = (
   return input;
 };
 
+export const activeTicketId = async (
+  tx: Queryable,
+  projectId: string,
+  agentId: string,
+): Promise<string | null> => {
+  const { rows } = await tx.query<{ id: string }>(
+    `select id from tickets
+     where project_id = $1 and assignee_id = $2 and status = any($3::text[])
+     order by updated_at desc limit 1`,
+    [projectId, agentId, ACTIVE_TICKET],
+  );
+  return rows[0]?.id ?? null;
+};
+
+export const publishCardNotices = async (
+  tx: Queryable,
+  projectId: string,
+  cardId: string,
+  links: CardLinks,
+  notices: readonly CardNotice[],
+): Promise<void> => {
+  for (const notice of notices) {
+    await publishEvent(
+      tx,
+      projectId,
+      cardEvent(notice.kind, cardId, links, notice.payload),
+    );
+  }
+};
+
+export const insertCard = async (
+  tx: Queryable,
+  projectId: string,
+  agentId: string,
+  card: CardInput,
+  expiryMs: number,
+  notices: readonly CardNotice[] = [],
+): Promise<RaisedCard> => {
+  const ticketId = await activeTicketId(tx, projectId, agentId);
+  const { rows } = await tx.query<{ id: string; expires_at: Date }>(
+    `insert into cards (project_id, agent_id, ticket_id, kind, question,
+       options, checked, recommendation, expires_at)
+     values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8,
+       now() + make_interval(secs => $9::float8 / 1000))
+     returning id, expires_at`,
+    [
+      projectId,
+      agentId,
+      ticketId,
+      card.kind,
+      card.question,
+      JSON.stringify(card.options),
+      card.checked,
+      card.recommendation,
+      expiryMs,
+    ],
+  );
+  const [row] = rows;
+  if (!row) throw new Error(`Could not raise the ${card.kind} card`);
+  const links = { agent_id: agentId, ticket_id: ticketId };
+  await publishCardNotices(tx, projectId, row.id, links, [
+    { kind: 'card.asked', payload: {} },
+    ...notices,
+  ]);
+  return { cardId: row.id, ticketId, expiresAt: row.expires_at };
+};
+
 export const raiseCard = (
   store: BusStore,
   agentId: string,
@@ -81,54 +149,9 @@ export const raiseCard = (
   expiryMs: number,
   notices: readonly CardNotice[] = [],
 ): Promise<RaisedCard> =>
-  store.db.transaction(async (tx) => {
-    const { rows } = await tx.query<{
-      id: string;
-      ticket_id: string | null;
-      expires_at: Date;
-    }>(
-      `insert into cards (project_id, agent_id, ticket_id, kind, question,
-         options, checked, recommendation, expires_at)
-       select $1, $2,
-         (select id from tickets
-          where project_id = $1 and assignee_id = $2 and status = any($3::text[])
-          order by updated_at desc limit 1),
-         $4, $5, $6::jsonb, $7, $8,
-         now() + make_interval(secs => $9::float8 / 1000)
-       returning id, ticket_id, expires_at`,
-      [
-        store.projectId,
-        agentId,
-        ACTIVE_TICKET,
-        card.kind,
-        card.question,
-        JSON.stringify(card.options),
-        card.checked,
-        card.recommendation,
-        expiryMs,
-      ],
-    );
-    const [row] = rows;
-    if (!row) throw new Error(`Could not raise the ${card.kind} card`);
-    const links = { agent_id: agentId, ticket_id: row.ticket_id };
-    await publishEvent(
-      tx,
-      store.projectId,
-      cardEvent('card.asked', row.id, links),
-    );
-    for (const notice of notices) {
-      await publishEvent(
-        tx,
-        store.projectId,
-        cardEvent(notice.kind, row.id, links, notice.payload),
-      );
-    }
-    return {
-      cardId: row.id,
-      ticketId: row.ticket_id,
-      expiresAt: row.expires_at,
-    };
-  });
+  store.db.transaction((tx) =>
+    insertCard(tx, store.projectId, agentId, card, expiryMs, notices),
+  );
 
 export const raiseAskCard = (
   store: BusStore,

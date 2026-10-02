@@ -94,17 +94,17 @@ Changes have no cursor: a notification sent while nobody is watching is gone. Re
 
 ## Tables
 
-| Table               | Holds                                                                                                                                           |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `projects`          | One row per project: `slug`, `name`, `repo_path`, `archived_at` (set once archived; its agents no longer hold their names).                     |
-| `rounds`            | Numbered rounds per project: `status` planning / active / ended, `goal`.                                                                        |
-| `agents`            | Planner, Driver, builders, reviewer: `name` (unique per project among agents not `retired`), `role`, `runtime`, `status`.                       |
-| `tickets`           | Local tickets: `status`, `assignee_id`, `depends_on`, `source` + `external_id` for ticket-source plugins, `pr_url`, `head_sha`.                 |
-| `cards`             | Human gates: `kind`, `question`, `options`, `checked`, `recommendation`, `status` open / answered / declined / expired, `answer`, `expires_at`. |
-| `turns`             | One ACP prompt turn per row: `agent_id`, `seq`, `prompt`, `stop_reason`, token counts, `transcript_path`.                                       |
-| `events`            | Append-only event log with `kind` and `payload`; inserts notify `EVENTS_CHANNEL`.                                                               |
-| `notebook`          | Entries the next Driver is born with: `body`, `pinned`, `author_id`, `round_id`.                                                                |
-| `charter_proposals` | Proposed charter changes: `body`, `rationale`, `status` open / accepted / rejected.                                                             |
-| `budget`            | Token and USD limits and spend, one row per (project, round, agent) scope; null round/agent is wider.                                           |
-| `layouts`           | This project's saved dashboard layouts as JSON `spec`, unique by `name`. Shipped presets live in code or `rules/`, not here.                    |
-| `intents`           | Every intent the HTTP API accepted: `kind`, `input`, `status` pending / applied / rejected, `result`, `settled_at`.                             |
+| Table               | Holds                                                                                                                                                                                                                                  |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `projects`          | One row per project: `slug`, `name`, `repo_path`, `archived_at` (set once archived; its agents no longer hold their names).                                                                                                            |
+| `rounds`            | Numbered rounds per project: `status` planning / active / ended, `goal`.                                                                                                                                                               |
+| `agents`            | Planner, Driver, builders, reviewer: `name` (unique per project among agents not `retired`), `role`, `runtime`, `status`.                                                                                                              |
+| `tickets`           | Local tickets: `status`, `assignee_id`, `depends_on`, `source` + `external_id` for ticket-source plugins, `pr_url`, `head_sha`. The Planner's proposals are `proposed` until the human approves (`open`) or rejects (`rejected`) them. |
+| `cards`             | Human gates: `kind`, `question`, `options`, `checked`, `recommendation`, `status` open / answered / declined / expired, `answer`, `expires_at`.                                                                                        |
+| `turns`             | One ACP prompt turn per row: `agent_id`, `seq`, `prompt`, `stop_reason`, token counts, `transcript_path`.                                                                                                                              |
+| `events`            | Append-only event log with `kind` and `payload`; inserts notify `EVENTS_CHANNEL`.                                                                                                                                                      |
+| `notebook`          | Entries the next Driver is born with: `body`, `pinned`, `author_id`, `round_id`.                                                                                                                                                       |
+| `charter_proposals` | Proposed charter changes: `body`, `rationale`, `status` open / accepted / rejected.                                                                                                                                                    |
+| `budget`            | Token and USD limits and spend, one row per (project, round, agent) scope; null round/agent is wider.                                                                                                                                  |
+| `layouts`           | This project's saved dashboard layouts as JSON `spec`, unique by `name`. Shipped presets live in code or `rules/`, not here.                                                                                                           |
+| `intents`           | Every intent the HTTP API accepted: `kind`, `input`, `status` pending / applied / rejected, `result`, `settled_at`.                                                                                                                    |

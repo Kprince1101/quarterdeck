@@ -23,7 +23,7 @@ export const TURN_EVENTS = {
 
 const STOPPING: ReadonlySet<StopReason> = new Set(['cancelled', 'refusal']);
 
-export type TurnClient = Pick<AcpClient, 'prompt' | 'subscribe'>;
+export type TurnClient = Pick<AcpClient, 'agent' | 'prompt' | 'subscribe'>;
 
 export interface TurnTarget {
   store: Store;
@@ -38,6 +38,7 @@ const signInGate = (target: TurnTarget): SignInGate => ({
   store: target.store,
   agentId: target.agent.id,
   runtime: target.agent.runtime,
+  authMethods: () => target.client.agent.authMethods,
 });
 
 export interface TurnRecord {

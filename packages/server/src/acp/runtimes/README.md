@@ -186,7 +186,7 @@ The project and local files sit in the agent's own worktree, so an agent could g
 
 ### Sign-in
 
-Sign-in stays with Claude Code. When it is not signed in, `session/new` fails with auth required, and so does `session/prompt` if the login lapses mid-session. `isAuthRequiredError` recognises both. Quarterdeck raises a sign-in card naming `claude /login`, resumes the session once the person answers (re-sending the prompt in the same session), and never calls `authenticate` on its own (see [../../signin/README.md](../../signin/README.md)).
+Sign-in stays with Claude Code. When it is not signed in, `session/new` fails with auth required, and so does `session/prompt` if the login lapses mid-session. `isAuthRequiredError` recognises both. Quarterdeck raises a sign-in card with the command claude-agent-acp advertises as a terminal auth method (`npx --yes @agentclientprotocol/claude-agent-acp@0.85.0 --cli auth login --claudeai`, or `claude auth login` when none is advertised), resumes the session once the person answers (re-sending the prompt in the same session), and never calls `authenticate` on its own (see [../../signin/README.md](../../signin/README.md)).
 
 ### Live smoke
 

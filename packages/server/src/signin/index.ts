@@ -1,7 +1,8 @@
 export {
-  SIGN_IN_COMMANDS,
+  SIGN_IN_RUNTIMES,
   signInCommand,
   type SignInCommand,
+  type SignInRuntime,
 } from './commands.js';
 export {
   SIGNED_IN,
