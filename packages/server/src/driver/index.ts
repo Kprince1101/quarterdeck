@@ -59,6 +59,18 @@ export {
   RoundNotFoundError,
   TicketNotAssignableError,
 } from './errors.js';
+export {
+  BUILDER_STUCK_EVENT,
+  STUCK_AFTER_CONTINUES,
+  STUCK_SURFACED_EVENT,
+  flagIfStuck,
+  markStuckFlagsSurfaced,
+  stuckSection,
+  unsurfacedStuckFlags,
+  withStuckFlags,
+  worktreeHead,
+  type StuckFlag,
+} from './stuck.js';
 export { TURN_FILES, turnDir, turnFile, type TurnFile } from './files.js';
 export {
   DRIVER_TURN_FORMAT,

@@ -141,7 +141,13 @@ The ticket then becomes `assigned` to the builder, the builder `working`, and `t
 
 ### Continuing
 
-`continueBuilder(ctx, { builderId, prompt })` sends an `idle` builder with a session one more prompt in that session, filed under the ticket it holds if any, and records `builder.continued` with `{ name, prompt }`. A builder that is not idle, not a builder or has no session throws `BuilderNotAvailableError`; a session the host no longer knows throws `BuilderSessionLostError` and leaves the builder `idle`. `continuation.turn` settles like `assignment.turn`.
+`continueBuilder(ctx, { builderId, prompt })` sends an `idle` builder with a session one more prompt in that session, filed under the ticket it holds if any, and records `builder.continued` with `{ name, prompt, head }`, where `head` is the commit its worktree is at (`worktreeHead`; `null` without a worktree). A builder that is not idle, not a builder or has no session throws `BuilderNotAvailableError`; a session the host no longer knows throws `BuilderSessionLostError` and leaves the builder `idle`. `continuation.turn` settles like `assignment.turn`.
+
+### Stuck
+
+A builder is stuck when its last `STUCK_AFTER_CONTINUES` (3) continues on the same ticket all found its worktree at the same head: it was told to keep going three times and made no commit. `continueBuilder` checks after recording each continue (`flagIfStuck`) and records `builder.stuck` with `{ name, head, continues }`, once per builder, ticket and head. A new commit starts the count again; a later stall at the new head is flagged again. The flag changes nothing about the builder: it stays `idle` and can still be continued.
+
+The Driver sees each flag once. Every Driver turn, the birth included, appends a `# Stuck builders` section to its input listing the `builder.stuck` events it has not seen yet (`unsurfacedStuckFlags`), each with the builder's name and id, the ticket and the head. Once the turn has run, `driver.stuck_surfaced` records `{ through, flags }`: the event ids it carried and the last of them, which is where the next turn's lookup starts. A turn that throws records nothing, so its flags go out again with the next one. The cursor is per project, so flags raised between rounds reach the next Driver's birth.
 
 ### Re-assigning on retire
 
@@ -163,9 +169,10 @@ The Driver asks for these through its turn result. `DRIVER_TURN_INSTRUCTIONS` in
 | `kind`              | Payload                                            |
 | ------------------- | -------------------------------------------------- |
 | `ticket.assigned`   | `{ name, worktreePath, born, previousAssigneeId }` |
-| `builder.continued` | `{ name, prompt }`                                 |
+| `builder.continued` | `{ name, prompt, head }`                           |
+| `builder.stuck`     | `{ name, head, continues }`                        |
 
-Both carry the builder's id and, when there is one, the ticket's.
+All carry the builder's id and, when there is one, the ticket's. `driver.stuck_surfaced` (`{ through, flags }`) carries the Driver's id.
 
 ## Other agents
 

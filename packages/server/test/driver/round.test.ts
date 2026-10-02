@@ -17,8 +17,12 @@ import {
   ROUND_STARTED_EVENT,
   RoundEndedError,
   RoundNotFoundError,
+  STUCK_AFTER_CONTINUES,
+  STUCK_SURFACED_EVENT,
   TURN_EVENTS,
+  flagIfStuck,
   openDriverRound,
+  unsurfacedStuckFlags,
   turnDir,
   turnFile,
   type DriverRound,
@@ -77,7 +81,7 @@ describe('Driver turn loop', () => {
     await rm(turnsDir, { recursive: true, force: true });
     await store.db.exec(
       `delete from events; delete from turns; delete from notebook;
-       delete from agents; delete from rounds;`,
+       delete from tickets; delete from agents; delete from rounds;`,
     );
   });
 
@@ -445,6 +449,77 @@ describe('Driver turn loop', () => {
     scripted.reply(say(resultText(RESULT)));
     expect((await round.turn('try again')).status).toBe('result');
   });
+
+  const stall = async (builderId: string, ticketId: string, head: string) => {
+    const builder = { id: builderId, name: 'builder-idle' };
+    for (let i = 0; i < STUCK_AFTER_CONTINUES; i += 1) {
+      await store.publish({
+        kind: 'builder.continued',
+        agentId: builderId,
+        ticketId,
+        payload: { name: builder.name, prompt: 'Keep going.', head },
+      });
+    }
+    return flagIfStuck(store, builder, ticketId, head);
+  };
+
+  it(
+    'surfaces each stuck flag in the next Driver turn input, once',
+    async () => {
+      const builderId = await insertAgent('builder');
+      const { rows } = await store.db.query<{ id: string }>(
+        `insert into tickets (project_id, title) values ($1, 'QD9 widget')
+         returning id`,
+        [store.projectId],
+      );
+      const ticketId = rows[0]?.id ?? '';
+      expect(await stall(builderId, ticketId, 'a'.repeat(40))).toBe(true);
+      expect(
+        await flagIfStuck(
+          store,
+          { id: builderId, name: 'b' },
+          ticketId,
+          'a'.repeat(40),
+        ),
+      ).toBe(false);
+      scripted.reply(
+        say(resultText(RESULT)),
+        say(resultText(RESULT)),
+        say('Partial thought', { fail: 'agent crashed' }),
+        say(resultText(RESULT)),
+      );
+
+      const round = await open();
+      await round.birth;
+      const birth = scripted.prompts[0]?.text ?? '';
+      expect(birth).toContain('# Stuck builders');
+      expect(birth).toContain(
+        `- builder-idle (${builderId}) on ticket ${ticketId} "QD9 widget", at ${'a'.repeat(40)}.`,
+      );
+
+      await round.turn('heron reported QD1.');
+      expect(scripted.prompts[1]?.text).toBe('heron reported QD1.');
+
+      expect(await stall(builderId, ticketId, 'b'.repeat(40))).toBe(true);
+      await expect(round.turn('thimble approved QD1.')).rejects.toThrow(
+        'agent crashed',
+      );
+      await round.turn('try again');
+      const [failed, retried] = scripted.prompts
+        .slice(2)
+        .map((prompt) => prompt.text);
+      for (const text of [failed, retried]) {
+        expect(text).toContain('# Stuck builders');
+        expect(text).toContain(`at ${'b'.repeat(40)}.`);
+        expect(text).not.toContain('a'.repeat(40));
+      }
+      expect(await unsurfacedStuckFlags(store)).toEqual([]);
+      expect(
+        (await events(STUCK_SURFACED_EVENT)).map((payload) => payload['flags']),
+      ).toEqual([[expect.any(Number)], [expect.any(Number)]]);
+    },
+    TIMEOUT,
+  );
 
   it('refuses a round that has ended or does not exist', async () => {
     const agentId = await insertAgent();

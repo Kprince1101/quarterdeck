@@ -19,6 +19,11 @@ import {
   RoundNotFoundError,
 } from './errors.js';
 import { DRIVER_TURN_FORMAT, type DriverTurnResult } from './result.js';
+import {
+  markStuckFlagsSurfaced,
+  unsurfacedStuckFlags,
+  withStuckFlags,
+} from './stuck.js';
 import { runTurn, type TurnOutcome, type TurnTarget } from './turns.js';
 
 export const ROUND_STARTED_EVENT = 'driver.round_started';
@@ -139,7 +144,16 @@ export const openDriverRound = async (
   };
   const enqueue = serialize();
   const turn = (input: string) =>
-    enqueue(() => runTurn(target, input, DRIVER_TURN_FORMAT));
+    enqueue(async () => {
+      const flags = await unsurfacedStuckFlags(store);
+      const outcome = await runTurn(
+        target,
+        withStuckFlags(input, flags),
+        DRIVER_TURN_FORMAT,
+      );
+      await markStuckFlagsSurfaced(store, agent, flags);
+      return outcome;
+    });
   const birthInput = buildBirthInput({
     agent,
     round,
