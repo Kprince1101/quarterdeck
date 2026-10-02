@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { McpServerStdio } from '@agentclientprotocol/sdk';
+import type { BudgetWindow } from '@quarterdeck/rules';
 import {
   afterAll,
   afterEach,
@@ -24,6 +25,7 @@ import {
   type DriverRound,
   type DriverRoundOptions,
 } from '../../src/driver/index.js';
+import { BudgetHeldError } from '../../src/budget/index.js';
 import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
 import {
   resultText,
@@ -35,6 +37,7 @@ import {
 const TIMEOUT = 30_000;
 const CHARTER = '# Driver charter\n\nTurn tickets into merged pull requests.';
 const RESULT = { summary: 'Nothing to assign yet.', actions: [] };
+const NO_CAP: BudgetWindow = { hours: 5, capTokens: null, holdAtFraction: 0.8 };
 const BUS: McpServerStdio = {
   name: 'quarterdeck',
   command: 'node',
@@ -129,6 +132,7 @@ describe('Driver turn loop', () => {
     cwd: '/work/deck',
     charter: CHARTER,
     turnsDir,
+    budget: NO_CAP,
   });
 
   const open = async (): Promise<DriverRound> => {
@@ -471,5 +475,30 @@ describe('Driver turn loop', () => {
     ).rejects.toBeInstanceOf(NotADriverError);
     expect(scripted.sessions).toEqual([]);
     expect(launched).toEqual([]);
+  });
+
+  it('holds a round at the budget line before launching the bus or a session', async () => {
+    const agentId = await insertAgent();
+    const roundId = await insertRound(1);
+    await store.db.query(
+      `insert into turns (agent_id, seq, prompt, input_tokens, output_tokens,
+                          ended_at)
+       values ($1, 1, 'go', 600, 200, now())`,
+      [agentId],
+    );
+    const capped: DriverRoundOptions = {
+      ...options(agentId, roundId),
+      budget: { hours: 5, capTokens: 1000, holdAtFraction: 0.8 },
+    };
+
+    await expect(openDriverRound(capped)).rejects.toBeInstanceOf(
+      BudgetHeldError,
+    );
+    expect(scripted.sessions).toEqual([]);
+    expect(launched).toEqual([]);
+    expect(await events('budget.held')).toEqual([
+      expect.objectContaining({ usedTokens: 800, holdAtTokens: 800 }),
+    ]);
+    expect(await events(ROUND_STARTED_EVENT)).toEqual([]);
   });
 });

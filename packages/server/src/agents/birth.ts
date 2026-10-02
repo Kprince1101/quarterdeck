@@ -9,6 +9,7 @@ export interface BirthRequest {
   role: AgentRole;
   runtime: Runtime;
   roundId?: string;
+  ticketId?: string;
 }
 
 export const insertAgent = (

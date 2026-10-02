@@ -125,6 +125,55 @@ describe('rules loader', () => {
     });
   });
 
+  it('lets the repo layer only tighten the budget window', async () => {
+    await writeLocalJson(sandbox.homeDir, 'lifecycle.json', {
+      budget: { window: { capTokens: 1000, holdAtFraction: 0.7 } },
+    });
+    await writeLocalJson(sandbox.repoDir, 'lifecycle.json', {
+      stuckAfterMinutes: 45,
+      budget: {
+        maxTokensPerTicket: 500,
+        window: { hours: 1, capTokens: null, holdAtFraction: 0.9 },
+      },
+    });
+
+    const lifecycle = await loadRule('lifecycle', sandbox);
+
+    expect(lifecycle.stuckAfterMinutes).toBe(45);
+    expect(lifecycle.budget).toEqual({
+      maxTokensPerTicket: 500,
+      warnAtFraction: 0.8,
+      window: { hours: 5, capTokens: 1000, holdAtFraction: 0.7 },
+    });
+  });
+
+  it('lets the repo layer set a smaller cap and a lower hold line', async () => {
+    await writeLocalJson(sandbox.homeDir, 'lifecycle.json', {
+      budget: { window: { capTokens: 1000 } },
+    });
+    await writeLocalJson(sandbox.repoDir, 'lifecycle.json', {
+      budget: { window: { hours: 8, capTokens: 400, holdAtFraction: 0.5 } },
+    });
+
+    const lifecycle = await loadRule('lifecycle', sandbox);
+
+    expect(lifecycle.budget.window).toEqual({
+      hours: 8,
+      capTokens: 400,
+      holdAtFraction: 0.5,
+    });
+  });
+
+  it('lets the repo layer set a cap when the machine has none', async () => {
+    await writeLocalJson(sandbox.repoDir, 'lifecycle.json', {
+      budget: { window: { capTokens: 400 } },
+    });
+
+    const lifecycle = await loadRule('lifecycle', sandbox);
+
+    expect(lifecycle.budget.window.capTokens).toBe(400);
+  });
+
   it('rejects a window cap that is not a positive integer', async () => {
     const path = await writeLocalJson(sandbox.repoDir, 'lifecycle.json', {
       budget: { window: { capTokens: 0 } },

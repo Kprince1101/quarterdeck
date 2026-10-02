@@ -6,6 +6,7 @@ import {
   type Store,
   type StoreEvent,
 } from '../store/index.js';
+import { BudgetHeldError } from './errors.js';
 import { readBudgetMeter, type BudgetMeter } from './meter.js';
 
 export const BUDGET_EVENTS = {
@@ -14,9 +15,9 @@ export const BUDGET_EVENTS = {
 } as const;
 
 export interface LaunchCheck {
-  agentId?: string;
-  ticketId?: string;
-  now?: Date;
+  agentId?: string | undefined;
+  ticketId?: string | undefined;
+  now?: Date | undefined;
 }
 
 export type LaunchDecision =
@@ -31,8 +32,11 @@ const meterPayload = (meter: BudgetMeter) => ({
   releaseAt: meter.releaseAt?.toISOString() ?? null,
 });
 
-const lockProject = (tx: Queryable, projectId: string) =>
-  tx.query('select id from projects where id = $1 for update', [projectId]);
+const lockBudget = (tx: Queryable, projectId: string) =>
+  tx.query(
+    `select pg_advisory_xact_lock(hashtext('quarterdeck_budget'), hashtext($1))`,
+    [projectId],
+  );
 
 const holding = async (tx: Queryable, projectId: string): Promise<boolean> => {
   const { rows } = await tx.query<{ kind: string }>(
@@ -61,7 +65,7 @@ export const checkLaunchBudget = (
   launch: LaunchCheck = {},
 ): Promise<LaunchDecision> =>
   store.db.transaction(async (tx) => {
-    await lockProject(tx, store.projectId);
+    await lockBudget(tx, store.projectId);
     const meter = await readBudgetMeter(
       tx,
       store.projectId,
@@ -85,3 +89,13 @@ export const checkLaunchBudget = (
     });
     return { status: 'clear', meter, released };
   });
+
+export const assertLaunchBudget = async (
+  store: Pick<Store, 'db' | 'projectId'>,
+  window: BudgetWindow,
+  launch: LaunchCheck = {},
+): Promise<BudgetMeter> => {
+  const decision = await checkLaunchBudget(store, window, launch);
+  if (decision.status === 'held') throw new BudgetHeldError(decision.meter);
+  return decision.meter;
+};

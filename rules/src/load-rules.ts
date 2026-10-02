@@ -3,8 +3,14 @@ import { homedir } from 'node:os';
 import { extname, resolve } from 'node:path';
 import { z } from 'zod';
 import { getErrorMessage, isMissingFile, RulesError } from './errors.js';
+import { tightenRepoLifecycle } from './budget-layers.js';
 import { mergeLayer } from './merge-layer.js';
-import { RULE_SCHEMAS, type RuleName, type Rules } from './schemas.js';
+import {
+  RULE_SCHEMAS,
+  type Lifecycle,
+  type RuleName,
+  type Rules,
+} from './schemas.js';
 
 export const DEFAULT_RULES_DIR = resolve(import.meta.dirname, '..');
 export const LOCAL_RULES_DIR = '.quarterdeck';
@@ -97,17 +103,24 @@ export const loadRule = async <K extends RuleName>(
   name: K,
   options: LoadRulesOptions = {},
 ): Promise<Rules[K]> => {
-  const layers = ruleLayerPaths(name, mergedLayerOptions(name, options));
+  const layerOptions = mergedLayerOptions(name, options);
+  const layers = ruleLayerPaths(name, layerOptions);
+  const hasRepoLayer = Boolean(layerOptions.repoDir);
   const defaults = parseLayer(
     layers.defaults,
     await readDefaults(layers.defaults),
   );
   let merged = validateLayer(name, layers.defaults, defaults);
-  for (const path of layers.local) {
+  let machine: typeof merged | undefined;
+  for (const [index, path] of layers.local.entries()) {
     const text = await readLocal(path);
     if (text === undefined) continue;
     const layer = parseLayer(path, text);
+    if (hasRepoLayer && index === layers.local.length - 1) machine = merged;
     merged = validateLayer(name, path, mergeLayer(merged, layer));
+  }
+  if (name === 'lifecycle' && machine !== undefined) {
+    merged = tightenRepoLifecycle(machine as Lifecycle, merged as Lifecycle);
   }
   return merged as Rules[K];
 };

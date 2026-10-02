@@ -17,6 +17,7 @@ const round = await openDriverRound({
   cwd: repoPath,
   charter: await loadRule('charter', { repoDir: repoPath }),
   turnsDir: projectTurnsDir('commander'),
+  budget: (await loadRule('lifecycle', { repoDir: repoPath })).budget.window,
 });
 const birth = await round.birth;
 const next = await round.turn('heron reported QD12: <report>');
@@ -24,10 +25,11 @@ const next = await round.turn('heron reported QD12: <report>');
 
 `openDriverRound` checks the round (`RoundNotFoundError` for one outside the project, `RoundEndedError` once it has ended) and the agent (`NotADriverError` unless it is a `driver` that is not `ended`, `killed` or `retired`). It then:
 
-1. Launches the bus for the Driver (`bus.launch(agentId)`) and opens one ACP session with `client.newSession({ cwd, mcpServers: [bus] })`. Every turn of the round goes to that session; nothing else opens one.
-2. Reads the active notebook: every `notebook` row of the project, pinned entries first, then oldest first.
-3. Stores the session on the agent (`session_id`, `round_id`; a `starting` agent becomes `idle`) and records `driver.round_started` with `{ roundId, round, sessionId, notebook }`, where `notebook` lists the entry ids the Driver was born with.
-4. Queues the birth turn and returns. `round.birth` settles with its outcome; await it.
+1. Checks the budget (`assertLaunchBudget` with the Driver's id; see [budget](../budget/README.md)). A held launch throws `BudgetHeldError` before the bus or a session starts.
+2. Launches the bus for the Driver (`bus.launch(agentId)`) and opens one ACP session with `client.newSession({ cwd, mcpServers: [bus] })`. Every turn of the round goes to that session; nothing else opens one.
+3. Reads the active notebook: every `notebook` row of the project, pinned entries first, then oldest first.
+4. Stores the session on the agent (`session_id`, `round_id`; a `starting` agent becomes `idle`) and records `driver.round_started` with `{ roundId, round, sessionId, notebook }`, where `notebook` lists the entry ids the Driver was born with.
+5. Queues the birth turn and returns. `round.birth` settles with its outcome; await it.
 
 The birth input (`buildBirthInput`) is the Driver's name and round number, the charter, the round's goal, the notebook entries and the turn result format. The next round gets a new session and a new birth input, carrying the notebook as it is then.
 

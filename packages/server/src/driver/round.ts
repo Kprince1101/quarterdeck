@@ -1,3 +1,4 @@
+import type { BudgetWindow } from '@quarterdeck/rules';
 import type { AcpClient } from '../acp/client/index.js';
 import {
   AGENT_COLUMNS,
@@ -5,6 +6,7 @@ import {
   type AgentStatus,
 } from '../agents/index.js';
 import { findAgent, firstRow, recordEvent } from '../agents/rows.js';
+import { assertLaunchBudget } from '../budget/index.js';
 import type { BusHost } from '../bus/index.js';
 import type { Store } from '../store/index.js';
 import {
@@ -39,6 +41,7 @@ export interface DriverRoundOptions {
   cwd: string;
   charter: string;
   turnsDir: string;
+  budget: BudgetWindow;
 }
 
 export type DriverTurnOutcome = TurnOutcome<DriverTurnResult>;
@@ -117,6 +120,7 @@ export const openDriverRound = async (
   const { store, client } = options;
   const round = await findRound(store, options.roundId);
   const driver = await findDriver(store, options.agentId);
+  await assertLaunchBudget(store, options.budget, { agentId: driver.id });
   const bus = await options.bus.launch(driver.id);
   const { sessionId } = await client.newSession({
     cwd: options.cwd,

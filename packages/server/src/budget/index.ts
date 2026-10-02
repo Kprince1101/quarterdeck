@@ -1,5 +1,7 @@
+export { BudgetHeldError } from './errors.js';
 export {
   BUDGET_EVENTS,
+  assertLaunchBudget,
   checkLaunchBudget,
   type LaunchCheck,
   type LaunchDecision,
