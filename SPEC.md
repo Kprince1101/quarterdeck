@@ -11,6 +11,7 @@ Quarterdeck is the open version of Legion's harness v3, rebuilt from scratch in 
 5. The dashboard is widgets. A grid of registered widgets the user drags, resizes, hides, duplicates. Layouts are JSON the server owns. Presets ship; the first preset is Board | tabbed Planner/Driver/Notebook, then Events.
 6. Quarterdeck is the only writer of state. The dashboard sends intents over HTTP; the server applies them and streams events over WebSocket. Postgres NOTIFY is the internal event bus.
 7. Human gates: destructive or product-shaped decisions become cards. A declined or unanswered card is a result the agent sees, not a crash.
+8. Quarterdeck owns every process it starts. Each session runs in its own process group; on exit, kill, retire or shutdown the whole group is signalled, survivors are swept and logged. The human is never asked to kill a process.
 
 ## Architecture
 
