@@ -3,11 +3,13 @@ import type { z } from 'zod';
 import {
   INTENTS,
   INTENT_PATH_PREFIX,
+  RULES_PATH,
   isIntentName,
   type IntentErrorReply,
   type IntentIssue,
   type IntentReply,
   type IntentStatus,
+  type RulesView,
 } from '../intents/index.js';
 import type { ApiContext } from './context.js';
 import { serveDashboard } from './dashboard.js';
@@ -18,6 +20,7 @@ import {
   readJsonBody,
   type RequestGuard,
 } from './request.js';
+import { routeRulesView } from './rules-view.js';
 
 const API_PATH = '/api';
 
@@ -29,8 +32,11 @@ const STATUS_CODES: Record<IntentStatus, number> = {
 const toIssues = (error: z.ZodError): IntentIssue[] =>
   error.issues.map(({ path, message }) => ({ path, message }));
 
+const pathnameOf = (req: IncomingMessage): string =>
+  new URL(req.url ?? '/', 'http://localhost').pathname;
+
 const intentNameOf = (req: IncomingMessage): string => {
-  const { pathname } = new URL(req.url ?? '/', 'http://localhost');
+  const pathname = pathnameOf(req);
   if (!pathname.startsWith(INTENT_PATH_PREFIX)) {
     throw notFound(`No route for ${pathname}`);
   }
@@ -38,7 +44,7 @@ const intentNameOf = (req: IncomingMessage): string => {
 };
 
 const isApiPath = (req: IncomingMessage): boolean => {
-  const { pathname } = new URL(req.url ?? '/', 'http://localhost');
+  const pathname = pathnameOf(req);
   return pathname === API_PATH || pathname.startsWith(`${API_PATH}/`);
 };
 
@@ -63,7 +69,7 @@ const routeIntent = async (
 const sendJson = (
   res: ServerResponse,
   status: number,
-  body: IntentReply | IntentErrorReply,
+  body: IntentReply | IntentErrorReply | RulesView,
   headers: Record<string, string> = {},
 ) => {
   res.writeHead(status, {
@@ -94,6 +100,10 @@ export const handleRequest = async (
     assertLocalRequest(req, guard);
     if (!isApiPath(req)) {
       await serveDashboard(dashboardDir, req, res);
+      return;
+    }
+    if (pathnameOf(req) === RULES_PATH) {
+      sendJson(res, 200, await routeRulesView(ctx, req));
       return;
     }
     const reply = await routeIntent(ctx, req);
