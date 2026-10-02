@@ -89,7 +89,10 @@ describe('dashboard shell', () => {
 
   it('gives every panel its own scrolling body', () => {
     const { container, unmount } = render(<App stream={stream} />);
-    const panels = all(container, '[data-widget-mount] > .qd-panel');
+    const panels = all(
+      container,
+      '[data-widget-mount] .qd-grid-cell > .qd-panel',
+    );
     expect(panels.length).toBeGreaterThan(1);
     panels.forEach((panel) => {
       expect(all(panel, ':scope > .qd-panel-body')).toHaveLength(1);
