@@ -67,7 +67,9 @@ export const togglePick = (
 ): string[] => {
   if (picked.includes(id)) return picked.filter((other) => other !== id);
   if (shown.length >= cap) return [...picked];
-  return [...picked, id];
+  if (picked.length < cap) return [...picked, id];
+  const kept = picked.filter((other) => shown.includes(other));
+  return [...kept, id];
 };
 
 const byRoleThenName = (a: AgentRow, b: AgentRow): number =>

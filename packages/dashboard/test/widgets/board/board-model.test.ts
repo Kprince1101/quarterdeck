@@ -78,6 +78,32 @@ describe('board projects', () => {
       projectId(1),
     ]);
   });
+
+  it('drops hidden picks rather than save more than the cap', () => {
+    const projects = [
+      project(1, 'A', { archivedAt: ARCHIVED }),
+      project(2, 'B'),
+      project(3, 'C'),
+      project(4, 'D'),
+      project(5, 'E'),
+    ];
+    const full = [projectId(1), projectId(2), projectId(3), projectId(4)];
+    expect(shownProjectIds(listedProjects(projects, true), full)).toEqual(full);
+
+    const hidden = shownProjectIds(listedProjects(projects, false), full);
+    expect(hidden).toEqual([projectId(2), projectId(3), projectId(4)]);
+    const picked = togglePick(full, hidden, projectId(5));
+    expect(picked).toEqual([
+      projectId(2),
+      projectId(3),
+      projectId(4),
+      projectId(5),
+    ]);
+
+    expect(shownProjectIds(listedProjects(projects, true), picked)).toEqual(
+      picked,
+    );
+  });
 });
 
 describe('board liveness', () => {
