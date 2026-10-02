@@ -1,8 +1,9 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import type { IncomingHttpHeaders } from 'node:http';
 import { join } from 'node:path';
 import { readTextIfExists } from '../lib/fs.js';
+import { ensurePrivateDir } from '../lib/private-fs.js';
 import { quarterdeckHome } from '../store/index.js';
 
 export const API_TOKEN_FILE = 'api.token';
@@ -22,7 +23,7 @@ export const writeApiToken = async (
   home: string = quarterdeckHome(),
 ): Promise<string> => {
   const path = apiTokenPath(home);
-  await mkdir(home, { recursive: true });
+  await ensurePrivateDir(home);
   await rm(path, { force: true });
   await writeFile(path, token, { mode: 0o600, flag: 'wx' });
   return path;

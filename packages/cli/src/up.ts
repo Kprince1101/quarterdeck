@@ -1,7 +1,7 @@
-import { mkdir } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 import {
   DEFAULT_API_PORT,
+  ensurePrivateDir,
   quarterdeckHome,
   startQuarterdeck,
   type Quarterdeck,
@@ -59,7 +59,7 @@ export const runUp: Command = async (args, io) => {
     return 0;
   }
   const port = parsePort(values.port);
-  await mkdir(quarterdeckHome(io.homeDir), { recursive: true });
+  await ensurePrivateDir(quarterdeckHome(io.homeDir));
   const api = await listen(port, io);
   io.out(`Quarterdeck is running at ${api.url}/#token=${api.token}`);
   io.out(`Data: ${api.location}`);
