@@ -20,6 +20,7 @@ const PAGE_ORDER: Record<StoreTable, string> = {
   turns: 'id desc',
   events: 'id desc',
   notebook: 'created_at desc',
+  notebook_proposals: 'created_at desc',
   charter_proposals: 'created_at desc',
   budget: 'updated_at desc',
   layouts: 'name',
