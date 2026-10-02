@@ -12,6 +12,8 @@ export interface ScrubNames {
 const REFUSED_COMMANDS: readonly RegExp[] = [
   /\bgh\s[^;&|]*\bpr\s+merge\b/,
   /\bgh\s[^;&|]*\bapi\b[^;&|]*\/merge\b/,
+  /\bgit\s(?:[^;&|]*\s)?(?:-c|--config-env)(?:\s|=|$)/,
+  /\bgit\s[^;&|]*\bconfig\b[^;&|]*\balias\./,
   /--force\b/,
   /\brm\b[^;&|]*\s(?:-[a-z]*r|--recursive\b)/i,
   /\bsudo\b/,

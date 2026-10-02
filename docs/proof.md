@@ -40,6 +40,7 @@ Anything the rules leave at `ask` becomes an `agent.permission` card. The script
 
 - `gh pr merge` however it is spaced or flagged, and `gh api` calls to a pull request's `merge` endpoint;
 - any `git push` that has no refspec, whose refspec names `main`, `master` or `HEAD` (bare, as `<src>:<dst>`, or as `refs/heads/…`), or that starts with `+` or `:`;
+- any `git -c …` or `git --config-env …`, and any `git config` that sets an `alias.`, since an alias can hide a push;
 - any `git push` that uses `--force*`, `-f`, `-d`, `--mirror`, `--all`, `--delete`, `--tags`, `--follow-tags`, `--receive-pack`, `--exec` or `--prune`;
 - recursive `rm` in any flag form (`-r`, `-R`, `-rf`, `-fr`, `--recursive`, or `-r` after other flags), plus `sudo`, `curl`/`wget` and `reset --hard`;
 - any absolute path outside the repository or the temp home, and anything it cannot resolve from the text: a `..` segment, `~`, a `$` variable or substitution, or a backtick.
