@@ -33,6 +33,14 @@ const count = (
   return all(container, '.qd-table-counts dd')[index]?.textContent ?? '';
 };
 
+const renderedWidgets = (
+  all: typeof import('./page.js').all,
+  container: PageElement,
+): (string | null)[] =>
+  all(container, '[data-widget]').map((cell) =>
+    cell.getAttribute('data-widget'),
+  );
+
 const element = (container: PageElement, selector: string): HappyElement => {
   const found = container.querySelector(selector);
   if (found === null) throw new Error(`nothing matches ${selector}`);
@@ -121,10 +129,7 @@ describe('dashboard on a live server', () => {
         expect(await savedLayout()).toEqual([LAYOUT_PRESETS.minimal]);
       }, WAIT);
       const { WIDGETS } = await import('../../src/widgets/widgets.js');
-      const rendered = all(container, '[data-widget]').map((cell) =>
-        cell.getAttribute('data-widget'),
-      );
-      expect(rendered).toEqual(
+      expect(renderedWidgets(all, container)).toEqual(
         LAYOUT_PRESETS.minimal.items
           .map(({ widget }) => widget)
           .filter((widget) => WIDGETS.has(widget)),
@@ -207,8 +212,9 @@ describe('dashboard on a live server', () => {
   it(
     'shows the project on the Board and pauses everything through pause.all',
     async () => {
-      const { render, textOf } = await import('./page.js');
+      const { all, render, textOf } = await import('./page.js');
       const { App } = await import('../../src/app.js');
+      const { WIDGETS } = await import('../../src/widgets/widgets.js');
       const served = await deck.serve();
       const { container, unmount } = render(
         <App
@@ -227,7 +233,11 @@ describe('dashboard on a live server', () => {
         name: DASHBOARD_LAYOUT,
         spec: LAYOUT_PRESETS.minimal,
       });
+      const minimalWidgets = LAYOUT_PRESETS.minimal.items
+        .map(({ widget }) => widget)
+        .filter((widget) => WIDGETS.has(widget));
       await vi.waitFor(() => {
+        expect(renderedWidgets(all, container)).toEqual(minimalWidgets);
         expect(textOf(container, '.qd-board-stream')).toBe('Stream live');
         expect(textOf(container, '.qd-board-project h3')).toBe(deck.project);
       }, WAIT);
