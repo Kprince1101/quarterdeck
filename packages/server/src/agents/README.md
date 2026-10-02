@@ -4,7 +4,7 @@ Birth and retirement of Quarterdeck agents, and the names they carry.
 
 ## Names
 
-Names come from the naming theme, `rules/naming.json` (overridable through `rules.local.naming.json`), loaded with `loadRule('naming')` from `@quarterdeck/rules`. A name is held by every agent that is not `retired`, including `ended` and `killed` ones, in a project whose `archived_at` is null. Retiring an agent or archiving its project frees the name for the next birth.
+Names come from the naming theme, `rules/naming.json` (overridable through `rules.local.naming.json`), loaded with `loadRule('naming')` from `@quarterdeck/rules`. A name is held by every agent that is not `retired`, including `ended` and `killed` ones, in a project whose `archived_at` is null. Retiring an agent or archiving its project frees the name for the next birth. Archiving also retires the project's agents through this same `retire` (see [archive](../archive/README.md)), so their names stay free once it is unarchived.
 
 Uniqueness spans the stores `openStores()` returns, so the server opens every non-archived project at startup and keeps it open; a project left closed could hold a live name that a birth elsewhere reuses. Births are claimed one at a time in the process (`withNameLock`), so two births in parallel never pick the same name, and the `agents_live_name` partial unique index rejects a duplicate live name within one project even if something bypasses the lifecycle. When every name in the theme is taken, birth throws `NamesExhaustedError`; add names to the theme to raise the limit.
 

@@ -1,5 +1,6 @@
 export { PauseDroppedError, type DropReason } from './errors.js';
 export {
+  ARCHIVE_KIND,
   MAX_LABEL_LENGTH,
   PAUSE_EVENTS,
   UNPAUSE_KINDS,
@@ -16,6 +17,7 @@ export {
   GLOBAL_PAUSE_FILE,
   globalPausePath,
   isGloballyPaused,
+  isProjectArchived,
   pausedScopes,
   setGlobalPause,
   type PauseScope,

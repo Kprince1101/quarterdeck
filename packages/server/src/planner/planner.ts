@@ -3,7 +3,9 @@ import { getErrorMessage, loadRule } from '@quarterdeck/rules';
 import type { CardHuman } from '../acp/permissions/index.js';
 import { createAgentLifecycle, gitWorktrees } from '../agents/index.js';
 import {
+  ARCHIVE_KIND,
   PauseDroppedError,
+  isProjectArchived,
   pauseLabel,
   type PauseGuard,
   type PauseSubject,
@@ -47,7 +49,11 @@ export const NO_REPO_PATH =
 
 export const SUPERSEDED = 'superseded by a new conversation';
 
-export type ClearReason = 'new' | 'failed' | 'restart' | 'shutdown';
+export const PROJECT_ARCHIVED =
+  'The project is archived. Unarchive it before talking to the Planner.';
+
+export type ClearReason =
+  'new' | 'failed' | 'restart' | 'shutdown' | 'archived' | 'retired';
 
 export interface PlannerOptions {
   store: Store;
@@ -145,9 +151,23 @@ export const startPlanner = async (
   ): Promise<void> => {
     const ending = conversation;
     conversation = undefined;
-    if (ending) await ending.lifecycle.retire(store, ending.agent.id);
+    if (ending) {
+      await ending.lifecycle.retire(store, ending.agent.id);
+      const left = ending.host.current();
+      if (left) await ending.host.close(left.sessionId);
+    }
     if (!ending && intentId === null) return;
     await store.publish(clearedEvent(reason, intentId, ending?.agent.id));
+  };
+
+  const dropStaleConversation = async (): Promise<void> => {
+    if (!conversation) return;
+    if (await isProjectArchived(store.db, store.projectId)) {
+      await endConversation('archived');
+      return;
+    }
+    const live = await livePlannerIds(store.db, store.projectId);
+    if (!live.includes(conversation.agent.id)) await endConversation('retired');
   };
 
   const composePrompt = async (
@@ -217,7 +237,9 @@ export const startPlanner = async (
         signal: stop.signal,
       });
     } catch (err) {
-      if (!(err instanceof PauseDroppedError && stop.signal.aborted)) throw err;
+      if (!(err instanceof PauseDroppedError)) throw err;
+      if (err.reason === 'archived') await refuse(intent, PROJECT_ARCHIVED);
+      else if (!stop.signal.aborted) throw err;
     } finally {
       holding = undefined;
     }
@@ -240,6 +262,7 @@ export const startPlanner = async (
 
   const drainPending = async (): Promise<void> => {
     if (closing) return;
+    await dropStaleConversation();
     const pending = await pendingPlannerIntents(store.db, store.projectId);
     const nextIndex = Math.max(
       pending.findLastIndex((intent) => intent.kind === PLANNER_NEW),
@@ -273,7 +296,20 @@ export const startPlanner = async (
     return running;
   };
 
+  const stopForArchive = async (): Promise<void> => {
+    const active = conversation;
+    if (active && (await isProjectArchived(store.db, store.projectId))) {
+      stopSignInWaits();
+      await cancelTurn(active);
+    }
+    await drain();
+  };
+
   const onEvent = (event: StoreEvent): void => {
+    if (event.kind === ARCHIVE_KIND) {
+      stopForArchive().catch(onError);
+      return;
+    }
     if (!PLANNER_INTENT_KINDS.includes(event.kind)) return;
     if (event.kind === PLANNER_NEW) {
       stopSignInWaits();
