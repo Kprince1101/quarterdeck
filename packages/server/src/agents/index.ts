@@ -23,11 +23,19 @@ export {
   pickAgentName,
   withNameLock,
 } from './names.js';
+export { findAgent } from './rows.js';
 export type { RetireOptions } from './retire.js';
 export type { SessionHost } from './sessions.js';
 export {
+  WORKPLACE_EVENTS,
+  attachWorktree,
+  detachWorktree,
+  replaceSession,
+} from './workplace.js';
+export {
   WorktreeDirtyError,
   gitWorktrees,
+  type AddWorktreeOptions,
   type RemoveWorktreeOptions,
   type WorktreeHost,
 } from './worktrees.js';

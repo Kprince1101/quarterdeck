@@ -3,6 +3,7 @@ import { AGENT_COLUMNS, type Agent } from './agent.js';
 import { assertDiscardApproved } from './discard.js';
 import { findAgent, firstRow, markRetired, recordEvent } from './rows.js';
 import type { SessionHost } from './sessions.js';
+import { WORKPLACE_EVENTS, detachWorktree } from './workplace.js';
 import type { WorktreeHost } from './worktrees.js';
 
 export interface RetireOptions {
@@ -11,7 +12,7 @@ export interface RetireOptions {
 
 export interface RetireHosts {
   sessions: SessionHost;
-  worktrees: WorktreeHost;
+  worktrees: Pick<WorktreeHost, 'remove'>;
 }
 
 const detachSession = (
@@ -29,33 +30,11 @@ const detachSession = (
       [agent.id],
     );
     const ended = firstRow(rows, agent.id);
-    await recordEvent(tx, ended, 'agent.session_closed', {
+    await recordEvent(tx, ended, WORKPLACE_EVENTS.sessionClosed, {
       name: agent.name,
       sessionId,
     });
     return ended;
-  });
-
-const detachWorktree = (
-  store: Store,
-  agent: Agent,
-  worktreePath: string,
-  discarded: boolean,
-): Promise<Agent> =>
-  store.db.transaction(async (tx) => {
-    const { rows } = await tx.query<Agent>(
-      `update agents set worktree_path = null
-       where id = $1
-       returning ${AGENT_COLUMNS}`,
-      [agent.id],
-    );
-    const detached = firstRow(rows, agent.id);
-    await recordEvent(tx, detached, 'agent.worktree_removed', {
-      name: agent.name,
-      worktreePath,
-      discarded,
-    });
-    return detached;
   });
 
 const closeSession = async (
@@ -70,7 +49,7 @@ const closeSession = async (
 
 const removeWorktree = async (
   store: Store,
-  worktrees: WorktreeHost,
+  worktrees: RetireHosts['worktrees'],
   agent: Agent,
   options: RetireOptions,
 ): Promise<Agent> => {

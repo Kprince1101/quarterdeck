@@ -8,6 +8,15 @@ No API keys. No account. No telemetry. Everything Quarterdeck stores lives in on
 
 Status: being built, by itself. See SPEC.md.
 
+## Getting started
+
+```sh
+npx quarterdeck init path/to/your/repo   # creates ~/.quarterdeck and a project
+npx quarterdeck up                        # starts the server and prints the dashboard URL
+```
+
+`init` writes nothing into your repository unless you agree to a `.quarterdeck/` folder for that project's settings. See `packages/cli/README.md`.
+
 ## Rules
 
 The defaults live in `rules/`: `charter.md`, `reviewer.md`, `permissions.json`, `naming.json`, `lifecycle.json` and `models.json`. Override any of them with a file named `rules.local.<file>`, for example `rules.local.lifecycle.json`. Quarterdeck reads three layers, last one wins:

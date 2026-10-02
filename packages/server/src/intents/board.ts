@@ -46,6 +46,13 @@ export const BOARD_INTENTS = {
     'ticket.update needs title, body or dependsOn',
   ),
   'ticket.cancel': inProject({ ticketId: idSchema }),
+  'ticket.approve': inProject({
+    ticketId: idSchema,
+    title: titleSchema.optional(),
+    body: optionalTextSchema.optional(),
+    dependsOn: dependsOnSchema.optional(),
+  }),
+  'ticket.reject': inProject({ ticketId: idSchema }),
 };
 
 export type BoardIntentName = keyof typeof BOARD_INTENTS;

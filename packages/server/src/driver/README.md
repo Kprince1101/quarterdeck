@@ -79,23 +79,26 @@ While a prompt runs the agent is `working`; afterwards it is `idle` again. Only 
 
 ```ts
 import {
-  CLAUDE_ADAPTER,
+  KIRO_ADAPTER,
   projectTurnsDir,
   replayDriverChain,
 } from '@quarterdeck/server';
 
+const through = 7;
 const replay = await replayDriverChain({
   connect: ({ cwd, onPermissionRequest }) =>
-    CLAUDE_ADAPTER.connect(
-      { cwd },
+    KIRO_ADAPTER.connect(
+      { cwd, project: 'commander', agentName: `replay-${through}` },
       { clientName: 'quarterdeck', clientVersion, onPermissionRequest },
     ),
   turnsDir: projectTurnsDir('commander'),
   agentId: driver.id,
-  through: 7,
+  through,
   onTurn: (turn) => console.log(turn.seq, turn.result),
 });
 ```
+
+Kiro, the default runtime, needs a `project` and an `agentName`. Give it a throwaway name such as `replay-<seq>` so it doesn't collide with a live agent's. While the replay runs, Kiro's adapter writes that agent's config to `~/.kiro/agents/quarterdeck-<project>-replay-<seq>.json` and starts the process in `~/.quarterdeck/kiro/`. It removes the config when replay closes the client. That file is the runtime's launch config, not Quarterdeck state; with no MCP servers passed, it names none.
 
 `replayDriverChain` sends a Driver's saved prompts again, in order, in one new ACP session: each turn's `input.md`, re-prompts included, exactly as it was sent.
 
@@ -122,7 +125,7 @@ Each `ReplayTurn` holds the `seq`, the `input` sent, the `savedOutput` from `out
 npx quarterdeck replay commander 7d0f3a4e-2b1c-4c5d-9e8f-0a1b2c3d4e5f 7
 ```
 
-The `replay` CLI subcommand isn't shipped yet: `packages/cli` has no source, and SPEC's CLI is `up | init | doctor | wipe`. Until a ticket adds it, the line is the command's agreed shape, not one that runs.
+`packages/cli` has no `replay` subcommand yet (ticket QD11d). Until then, the line shows the command's agreed shape, but it doesn't run.
 
 It refuses a project that is not a slug, an agent id that is not a uuid and an `n` that is not a positive integer, so the line is always safe to paste. `agentId` is checked the same way by `readTurnChain`, since it names a folder under `turnsDir`.
 
@@ -137,6 +140,86 @@ It refuses a project that is not a slug, an agent id that is not a uuid and an `
 | `turn.failed`          | `{ seq, error }`                          |
 
 `seq` is the `turns.seq` of the prompt the event is about; every event carries the agent's id.
+
+## Builders
+
+The Driver hands tickets to builders and keeps them going with three entry points. All take a `BuilderContext`:
+
+```ts
+import {
+  assignTicket,
+  continueBuilder,
+  createAgentLifecycle,
+  gitWorktrees,
+  projectTurnsDir,
+  projectWorktreesDir,
+  reassignTickets,
+  type BuilderContext,
+} from '@quarterdeck/server';
+
+const ctx: BuilderContext = {
+  store,
+  lifecycle: createAgentLifecycle({
+    naming,
+    sessions,
+    worktrees: gitWorktrees,
+    openStores,
+  }),
+  sessions, // a BuilderSessionHost: the lifecycle's SessionHost plus client(sessionId)
+  worktrees: gitWorktrees,
+  runtime: 'kiro',
+  repoPath,
+  base: 'origin/main',
+  worktreesDir: projectWorktreesDir('commander'),
+  turnsDir: projectTurnsDir('commander'),
+};
+const assignment = await assignTicket(ctx, { ticketId });
+await continueBuilder(ctx, { builderId, prompt: 'CI failed on lint; fix it.' });
+await reassignTickets(ctx, retiredBuilderId);
+```
+
+`sessions` must be the `SessionHost` the lifecycle was made with. Its `open(agent)` opens the session with `agent.worktreePath` as the `cwd` (and the bus as an MCP server, as for the Driver); `client(sessionId)` returns the ACP client a live session prompts through, or `undefined` once it is gone.
+
+### Assigning
+
+`assignTicket(ctx, { ticketId, builderId? })` takes an approved ticket: status `open`, no assignee, and every ticket in `depends_on` `done`. Anything else throws `TicketNotAssignableError` before a builder is touched.
+
+Every builder works a ticket in its own worktree, `builderWorktreePath(worktreesDir, name, ticketId)`: `<worktreesDir>/<name>-<first 8 of the ticket id>`, detached at `base`. The builder branches there itself.
+
+- Without `builderId`, a new builder is born (`role: 'builder'`, `runtime`, `roundId` if set). Its worktree is added before its session opens, so the session starts in it. If the worktree or the session fails, the builder is retired (`agent.birth_failed`) and a worktree already added is removed.
+- With `builderId`, the builder must be an `idle` builder holding no ticket (`BuilderNotAvailableError` otherwise). It is marked `working`, its old worktree is removed, the new one added, and its session closed and reopened in the new worktree. Each step is saved as it completes. A dirty old worktree throws `WorktreeDirtyError` (raise the discard card as for a retire); the builder goes back to `idle` with its work in place.
+
+The ticket then becomes `assigned` to the builder, the builder `working`, and `ticket.assigned` is recorded with `{ name, worktreePath, born, previousAssigneeId }`, all in one transaction that fails with `TicketNotAssignableError` if the ticket changed meanwhile. Finally the assignment prompt (`buildAssignmentPrompt`: the ticket, where to work, and to `report` when the pull request is open) goes to the builder's session as one turn filed under the ticket.
+
+`assignTicket` resolves once the prompt is sent. `assignment.turn` settles with the `TurnRecord` when the builder's reply ends, which can take as long as the ticket does; the builder is `idle` again after it.
+
+### Continuing
+
+`continueBuilder(ctx, { builderId, prompt })` sends an `idle` builder with a session one more prompt in that session, filed under the ticket it holds if any, and records `builder.continued` with `{ name, prompt }`. A builder that is not idle, not a builder or has no session throws `BuilderNotAvailableError`; a session the host no longer knows throws `BuilderSessionLostError` and leaves the builder `idle`. `continuation.turn` settles like `assignment.turn`.
+
+### Re-assigning on retire
+
+`reassignTickets(ctx, agentId)` hands every ticket a retired builder still holds (`assigned`, `in_progress`, `in_review`, `bounced`) to a new builder, one at a time, in a new worktree. `in_review` and `bounced` keep their status; the others become `assigned`. The prompt names an open pull request if the ticket has one, so the new builder carries it on. An agent that is not `retired` throws `AgentNotRetiredError`; retire it first, which removes its worktree or raises the discard card.
+
+### Actions
+
+The Driver asks for these through its turn result. `DRIVER_TURN_INSTRUCTIONS` includes `BUILDER_ACTION_INSTRUCTIONS`:
+
+| `kind`     | Fields                         | Runs                                  |
+| ---------- | ------------------------------ | ------------------------------------- |
+| `assign`   | `ticket`, `builder` (optional) | `assignTicket`                        |
+| `continue` | `builder`, `prompt`            | `continueBuilder` (prompt is trimmed) |
+
+`builderActionSchema` parses one of them; `applyBuilderAction(ctx, action)` runs it and resolves to `{ kind: 'assign', assignment }` or `{ kind: 'continue', continuation }`.
+
+### Builder events
+
+| `kind`              | Payload                                            |
+| ------------------- | -------------------------------------------------- |
+| `ticket.assigned`   | `{ name, worktreePath, born, previousAssigneeId }` |
+| `builder.continued` | `{ name, prompt }`                                 |
+
+Both carry the builder's id and, when there is one, the ticket's.
 
 ## Other agents
 

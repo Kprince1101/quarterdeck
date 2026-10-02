@@ -36,6 +36,7 @@ describe('bus tool registry', () => {
 
     expect(tools.map((tool) => tool.name)).toEqual([
       'ask',
+      'propose',
       'read',
       'report',
       'status',

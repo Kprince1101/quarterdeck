@@ -53,7 +53,7 @@ export interface RemovedWorktree {
   force: boolean;
 }
 
-export interface FakeWorktrees extends WorktreeHost {
+export interface FakeWorktrees extends Pick<WorktreeHost, 'remove'> {
   removed: RemovedWorktree[];
   failNext: (error: Error) => void;
 }

@@ -10,7 +10,7 @@ import type { WorktreeHost } from './worktrees.js';
 export interface AgentLifecycleOptions {
   naming: Naming;
   sessions: SessionHost;
-  worktrees: WorktreeHost;
+  worktrees: Pick<WorktreeHost, 'remove'>;
   openStores: () => readonly Store[];
   random?: () => number;
 }
@@ -36,7 +36,12 @@ export const createAgentLifecycle = (
     });
 
   const birth = async (request: BirthRequest): Promise<Agent> =>
-    openSession(request.store, options.sessions, await claimName(request));
+    openSession(
+      request.store,
+      options.sessions,
+      await claimName(request),
+      request.prepare,
+    );
 
   const retire = (
     store: Store,
