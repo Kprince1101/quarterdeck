@@ -23,13 +23,20 @@ const addHidden = (
   return { ...layout, items: [...layout.items, item] };
 };
 
+const placeVisible = (
+  layout: GridLayout,
+  definition: WidgetDefinition,
+): GridLayout | null => {
+  if (definition.startHidden === true) return null;
+  return placeNew(layout, definition.type, definition.size);
+};
+
 export const defaultLayout = (
   registry: WidgetRegistry,
   bounds: Bounds = DEFAULT_BOUNDS,
 ): GridLayout =>
   [...registry.values()].reduce<GridLayout>(
     (layout, definition) =>
-      placeNew(layout, definition.type, definition.size) ??
-      addHidden(layout, definition),
+      placeVisible(layout, definition) ?? addHidden(layout, definition),
     { ...bounds, items: [] },
   );

@@ -118,6 +118,15 @@ describe('default layout', () => {
       item('alpha-1', { x: 0, y: 0, w: 4, h: 4 }, true),
     ]);
   });
+
+  it('puts a widget that starts hidden in the tray even when it fits', () => {
+    const tucked = defineWidget({ ...ALPHA, startHidden: true });
+    const layout = defaultLayout(createRegistry([tucked, BETA]));
+    expect(layout.items).toEqual([
+      item('alpha-1', { x: 0, y: 0, w: 4, h: 4 }, true),
+      item('beta-1', { x: 0, y: 0, w: 6, h: 6 }),
+    ]);
+  });
 });
 
 describe('labels', () => {
