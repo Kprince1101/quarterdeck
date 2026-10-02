@@ -13,6 +13,7 @@ import {
 } from '@quarterdeck/rules';
 import { CANCELLED_PERMISSION } from '../client/permission-gate.js';
 import type { PermissionHandler } from '../client/types.js';
+import { canonicalPath } from './canonical.js';
 import { decidePermission } from './decide.js';
 import { describeToolCall, type ToolRequest } from './tool-request.js';
 
@@ -80,9 +81,12 @@ export const createPermissionPolicy = ({
   loadLayers = () => loadPermissionLayers({ repoDir }),
   onRulesError = () => {},
 }: PermissionPolicyOptions): PermissionHandler => {
-  const lookUp = async (request: ToolRequest): Promise<Decision> => {
+  const lookUp = async (
+    request: ToolRequest,
+    repo: string,
+  ): Promise<Decision> => {
     try {
-      return decidePermission(await loadLayers(), request, repoDir);
+      return decidePermission(await loadLayers(), request, repo);
     } catch (err) {
       onRulesError(err);
       return 'deny';
@@ -92,8 +96,9 @@ export const createPermissionPolicy = ({
   const settle = async (
     permission: RequestPermissionRequest,
   ): Promise<Answer> => {
-    const request = describeToolCall(permission.toolCall, repoDir);
-    const decision = await lookUp(request);
+    const repo = await canonicalPath(repoDir);
+    const request = await describeToolCall(permission.toolCall, repo);
+    const decision = await lookUp(request, repo);
     if (decision === 'allow') return 'allow';
     if (decision === 'deny') return 'refuse';
     return askHuman(cardHuman, {

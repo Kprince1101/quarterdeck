@@ -42,7 +42,13 @@ A rule is `{ kind, pattern?, decision }`. The tool call's `kind` picks the rules
 | `fetch`         | the `url` from the raw input                                                                               | path glob                  |
 | everything else | every path in `locations`, diff content and the raw input, relative to the repo, or absolute if outside it | path glob                  |
 
-In a path glob `*` and `?` stay inside one path segment, `**` matches across segments, and `**/` matches zero or more leading directories.
+In a path glob `*` and `?` stay inside one path segment, `**` matches across segments, and `**/` matches zero or more leading directories. On macOS and Windows path globs ignore case, as those filesystems do. Shell patterns are always case-sensitive.
+
+A tool call that carries a `command` in its raw input is decided twice, once as its declared kind and once as `execute`, and the stricter answer wins. A tool labelled `read` cannot run a shell command under a read allow.
+
+## Canonical paths
+
+Before subjects or pinning are worked out, every path is resolved to its real location: the repo, each request path, the shell working directory and every shell argument. A leading `~`, `~/` or `~user` is expanded first. The longest prefix that exists on disk goes through `realpath`, and the missing tail is kept, so a new file still resolves. A dangling symlink is followed to its target. A symlink therefore cannot hide a denied file (`innocent.txt -> .env` is decided as `.env`), and it cannot carry a path out of the repo while looking like it is inside. A symlink loop, or any error other than a missing file, fails closed.
 
 For each subject, the strictest matching pattern rule wins. With no matching pattern, the strictest rule for the kind without a pattern applies, then the layer's `default`. The request takes the strictest answer across its subjects. Strictness is `deny`, then `ask`, then `allow`. The order rules are written in does not matter.
 
@@ -56,5 +62,6 @@ If the policy cannot see any subject and a non-allow pattern rule exists for the
 
 An `allow` from the rules becomes `ask` when the request is not pinned to the repo:
 
-- `execute` is pinned only when the command is known, its working directory (`cwd`, `working_dir`, `workdir` or `directory` in the raw input, otherwise the repo) is inside the repo, it has none of `; & | < > $` backticks or newlines, and no argument starting with `~` or containing `/` or `..` resolves outside the repo.
-- `edit`, `delete` and `move` are pinned only when every path is inside the repo.
+- `execute` is pinned only when the command is known, its working directory (`cwd`, `working_dir`, `workdir` or `directory` in the raw input, otherwise the repo) is inside the repo, it has none of `; & | < > $` backticks or newlines, no argument starting with `~` or containing `/` or `..` resolves outside the repo, and no argument's real path is outside the repo.
+- `read` and `search` are pinned only when they show at least one path and every path is inside the repo or is named by an `allow` rule of the same kind whose pattern is absolute, such as `{ "kind": "read", "pattern": "/usr/share/**", "decision": "allow" }`. A relative pattern such as `**` can deny or card an outside path but never allow one.
+- `edit`, `delete` and `move` are pinned only when they show at least one path and every path is inside the repo. No rule can allow a write outside it.

@@ -39,11 +39,28 @@ export const globSource = (pattern: string, mode: GlobMode): string => {
   return `^${source}$`;
 };
 
-export const compileGlob = (pattern: string, mode: GlobMode): RegExp =>
-  new RegExp(globSource(pattern, mode));
+const CASE_INSENSITIVE_PLATFORMS: ReadonlySet<NodeJS.Platform> = new Set([
+  'darwin',
+  'win32',
+]);
+
+export const globFlags = (
+  mode: GlobMode,
+  platform: NodeJS.Platform = process.platform,
+): string => {
+  if (mode === 'path' && CASE_INSENSITIVE_PLATFORMS.has(platform)) return 'i';
+  return '';
+};
+
+export const compileGlob = (
+  pattern: string,
+  mode: GlobMode,
+  platform: NodeJS.Platform = process.platform,
+): RegExp => new RegExp(globSource(pattern, mode), globFlags(mode, platform));
 
 export const matchesGlob = (
   pattern: string,
   subject: string,
   mode: GlobMode,
-): boolean => compileGlob(pattern, mode).test(subject);
+  platform: NodeJS.Platform = process.platform,
+): boolean => compileGlob(pattern, mode, platform).test(subject);

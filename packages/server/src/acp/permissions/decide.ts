@@ -1,3 +1,4 @@
+import { isAbsolute } from 'node:path';
 import type {
   Decision,
   PermissionLayers,
@@ -25,10 +26,17 @@ interface Subjects {
 
 const DECISION_RANK: Record<Decision, number> = { allow: 0, ask: 1, deny: 2 };
 
-const REPO_WRITE_KINDS: ReadonlySet<ToolKind> = new Set([
+const REPO_PINNED_KINDS: ReadonlySet<ToolKind> = new Set([
+  'read',
+  'search',
   'edit',
   'delete',
   'move',
+]);
+
+const OUTSIDE_BY_PATTERN_KINDS: ReadonlySet<ToolKind> = new Set([
+  'read',
+  'search',
 ]);
 
 export const stricter = (left: Decision, right: Decision): Decision => {
@@ -100,20 +108,45 @@ export const decideLayer = (
   return strictest(perSubject) ?? general;
 };
 
+const isNamedOutsideRepo = (
+  machine: PolicyLayer,
+  kind: ToolKind,
+  subject: string,
+): boolean => {
+  if (!OUTSIDE_BY_PATTERN_KINDS.has(kind)) return false;
+  return (machine.rules ?? []).some(
+    (rule) =>
+      rule.kind === kind &&
+      rule.decision === 'allow' &&
+      rule.pattern !== undefined &&
+      isAbsolute(rule.pattern) &&
+      matchesGlob(rule.pattern, subject, 'path'),
+  );
+};
+
 export const isPinnedToRepo = (
   request: ToolRequest,
   repoDir: string,
+  machine: PolicyLayer = {},
 ): boolean => {
   if (request.kind === 'execute') {
     if (request.command === undefined) return false;
-    return isPinnedCommand(repoDir, request.cwd, request.command);
+    return isPinnedCommand(repoDir, {
+      cwd: request.cwd,
+      command: request.command,
+      argPaths: request.argPaths,
+    });
   }
-  if (!REPO_WRITE_KINDS.has(request.kind)) return true;
+  if (!REPO_PINNED_KINDS.has(request.kind)) return true;
   if (request.paths.length === 0) return false;
-  return request.paths.every((path) => isInsideRepo(repoDir, path));
+  return request.paths.every(
+    (path) =>
+      isInsideRepo(repoDir, path) ||
+      isNamedOutsideRepo(machine, request.kind, pathSubject(repoDir, path)),
+  );
 };
 
-export const decidePermission = (
+const decideAs = (
   layers: PermissionLayers,
   request: ToolRequest,
   repoDir: string,
@@ -127,6 +160,20 @@ export const decidePermission = (
   );
   const repo = decideLayer(layers.repo ?? {}, request.kind, subjects, 'allow');
   const layered = stricter(machine, repo);
-  if (layered === 'allow' && !isPinnedToRepo(request, repoDir)) return 'ask';
-  return layered;
+  if (layered !== 'allow') return layered;
+  if (isPinnedToRepo(request, repoDir, layers.machine)) return 'allow';
+  return 'ask';
+};
+
+export const decidePermission = (
+  layers: PermissionLayers,
+  request: ToolRequest,
+  repoDir: string,
+): Decision => {
+  const declared = decideAs(layers, request, repoDir);
+  if (request.command === undefined || request.kind === 'execute') {
+    return declared;
+  }
+  const asShell = decideAs(layers, { ...request, kind: 'execute' }, repoDir);
+  return stricter(declared, asShell);
 };

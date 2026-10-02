@@ -33,8 +33,39 @@ describe('glob matcher', () => {
         fc.string(),
         modeArb,
         (pattern, subject, mode) => {
-          expect(matchesGlob(pattern, subject, mode)).toBe(pattern === subject);
+          expect(matchesGlob(pattern, subject, mode, 'linux')).toBe(
+            pattern === subject,
+          );
           expect(matchesGlob(pattern, pattern, mode)).toBe(true);
+        },
+      ),
+    );
+  });
+
+  it('folds case for paths on case-insensitive platforms only', () => {
+    expect(matchesGlob('secrets/**', 'Secrets/key', 'path', 'darwin')).toBe(
+      true,
+    );
+    expect(matchesGlob('secrets/**', 'SECRETS/key', 'path', 'win32')).toBe(
+      true,
+    );
+    expect(matchesGlob('secrets/**', 'Secrets/key', 'path', 'linux')).toBe(
+      false,
+    );
+    expect(matchesGlob('rm *', 'RM -rf x', 'command', 'darwin')).toBe(false);
+  });
+
+  it('matches an ASCII path in any casing on case-insensitive platforms', () => {
+    fc.assert(
+      fc.property(
+        fc.string({ unit: fc.constantFrom(...SAFE_CHARS, 'A', 'Q', 'Z', '/') }),
+        (path) => {
+          expect(matchesGlob(path, path.toUpperCase(), 'path', 'darwin')).toBe(
+            true,
+          );
+          expect(matchesGlob(path.toUpperCase(), path, 'path', 'win32')).toBe(
+            true,
+          );
         },
       ),
     );

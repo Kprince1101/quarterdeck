@@ -1,6 +1,12 @@
 import { resolve } from 'node:path';
 import { isInsideRepo } from './paths.js';
 
+export interface ShellRequest {
+  cwd: string;
+  command: string;
+  argPaths?: readonly string[] | undefined;
+}
+
 const SHELL_CONTROL = /[;&|<>`$\n\r]/;
 const SEGMENT_SEPARATOR = /&&|\|\||[;&|\n\r]/;
 const QUOTES = /["']/g;
@@ -27,6 +33,11 @@ const tokenPaths = (token: string): string[] => {
   return [token, token.slice(assigned + 1)];
 };
 
+export const commandArguments = (command: string): string[] =>
+  commandTokens(command)
+    .flatMap(tokenPaths)
+    .filter((candidate) => candidate.length > 0);
+
 const looksLikePath = (candidate: string): boolean =>
   candidate.includes('/') || candidate === '..';
 
@@ -38,12 +49,12 @@ const escapesRepo = (repoDir: string, cwd: string, candidate: string) => {
 
 export const isPinnedCommand = (
   repoDir: string,
-  cwd: string,
-  command: string,
+  { cwd, command, argPaths = [] }: ShellRequest,
 ): boolean => {
   if (!isInsideRepo(repoDir, cwd)) return false;
   if (hasShellControl(command)) return false;
-  return !commandTokens(command)
-    .flatMap(tokenPaths)
-    .some((candidate) => escapesRepo(repoDir, cwd, candidate));
+  if (!argPaths.every((path) => isInsideRepo(repoDir, path))) return false;
+  return !commandArguments(command).some((candidate) =>
+    escapesRepo(repoDir, cwd, candidate),
+  );
 };

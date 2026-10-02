@@ -1,12 +1,14 @@
-import { resolve } from 'node:path';
 import type { ToolCallUpdate } from '@agentclientprotocol/sdk';
 import { toolKindSchema, type ToolKind } from '@quarterdeck/rules';
+import { canonicalPath } from './canonical.js';
+import { commandArguments } from './shell.js';
 
 export interface ToolRequest {
   kind: ToolKind;
   cwd: string;
   paths: string[];
   command?: string;
+  argPaths?: string[];
   url?: string;
 }
 
@@ -74,21 +76,27 @@ const kindOf = (toolCall: ToolCallUpdate): ToolKind => {
   return 'other';
 };
 
-export const describeToolCall = (
+const canonicalPaths = async (
+  paths: readonly string[],
+  cwd: string,
+): Promise<string[]> => [
+  ...new Set(await Promise.all(paths.map((path) => canonicalPath(path, cwd)))),
+];
+
+export const describeToolCall = async (
   toolCall: ToolCallUpdate,
   repoDir: string,
-): ToolRequest => {
+): Promise<ToolRequest> => {
   const input = rawInputOf(toolCall);
-  const cwd = resolve(repoDir, firstString(input, CWD_KEYS) ?? '.');
-  const paths = [
-    ...new Set(
-      declaredPaths(toolCall, input).map((path) => resolve(cwd, path)),
-    ),
-  ];
+  const cwd = await canonicalPath(firstString(input, CWD_KEYS) ?? '.', repoDir);
+  const paths = await canonicalPaths(declaredPaths(toolCall, input), cwd);
   const request: ToolRequest = { kind: kindOf(toolCall), cwd, paths };
   const command = commandOf(input);
   const url = firstString(input, URL_KEYS);
-  if (command !== undefined) request.command = command;
+  if (command !== undefined) {
+    request.command = command;
+    request.argPaths = await canonicalPaths(commandArguments(command), cwd);
+  }
   if (url !== undefined) request.url = url;
   return request;
 };

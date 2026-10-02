@@ -1,4 +1,5 @@
-import { resolve } from 'node:path';
+import { homedir } from 'node:os';
+import { isAbsolute, join, resolve } from 'node:path';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { loadPermissionLayers } from '@quarterdeck/rules';
@@ -39,6 +40,7 @@ const edit = (...paths: string[]): ToolRequest => ({
 });
 
 const writeKindArb = fc.constantFrom('edit' as const, 'delete', 'move');
+const readKindArb = fc.constantFrom('read' as const, 'search');
 
 describe('permission matcher', () => {
   it('answers from the shipped defaults: reads allowed, edits and shell carded', async () => {
@@ -188,6 +190,87 @@ describe('permission matcher', () => {
     );
   });
 
+  it('never allows a read or search outside the repo that no absolute pattern names', () => {
+    fc.assert(
+      fc.property(
+        layersArb,
+        readKindArb,
+        fc.constantFrom(...OUTSIDE_PATHS),
+        fc.subarray(INSIDE_PATHS),
+        (layers, kind, outside, inside) => {
+          const unnamed = {
+            ...layers,
+            machine: {
+              ...layers.machine,
+              rules: layers.machine.rules.filter(
+                (rule) =>
+                  rule.pattern === undefined || !isAbsolute(rule.pattern),
+              ),
+            },
+          };
+          const request = { kind, cwd: REPO_DIR, paths: [...inside, outside] };
+          expect(decide(unnamed, request)).not.toBe('allow');
+        },
+      ),
+    );
+  });
+
+  it('never allows a read or search with no visible path', () => {
+    fc.assert(
+      fc.property(layersArb, readKindArb, (layers, kind) => {
+        expect(decide(layers, { kind, cwd: REPO_DIR, paths: [] })).not.toBe(
+          'allow',
+        );
+      }),
+    );
+  });
+
+  it('cards a read of a home secret and allows a read in the repo with the shipped defaults', async () => {
+    const layers = await loadPermissionLayers({ homeDir: resolve('/none') });
+    const readOf = (path: string): ToolRequest => ({
+      kind: 'read',
+      cwd: REPO_DIR,
+      paths: [path],
+    });
+
+    expect(decide(layers, readOf(join(homedir(), '.ssh/x')))).toBe('ask');
+    expect(decide(layers, readOf(resolve(REPO_DIR, 'src/a.ts')))).toBe('allow');
+  });
+
+  it('lets an absolute pattern allow a named read outside the repo, never a write', () => {
+    const layers: PermissionLayers = {
+      machine: {
+        default: 'allow',
+        rules: [
+          { kind: 'read', pattern: '/usr/share/**', decision: 'allow' },
+          { kind: 'edit', pattern: '/usr/share/**', decision: 'allow' },
+          { kind: 'read', pattern: '**/*.txt', decision: 'allow' },
+        ],
+      },
+    };
+    const at = (kind: 'read' | 'edit', path: string): ToolRequest => ({
+      kind,
+      cwd: REPO_DIR,
+      paths: [path],
+    });
+
+    expect(decide(layers, at('read', '/usr/share/dict/words'))).toBe('allow');
+    expect(decide(layers, at('edit', '/usr/share/dict/words'))).toBe('ask');
+    expect(decide(layers, at('read', '/etc/notes.txt'))).toBe('ask');
+  });
+
+  it('decides any request carrying a command at least as strictly as a shell command', () => {
+    fc.assert(
+      fc.property(layersArb, requestArb(), (layers, request) => {
+        fc.pre(request.command !== undefined);
+        const asShell = decide(layers, { ...request, kind: 'execute' });
+        expect(RANK[decide(layers, request)]).toBeGreaterThanOrEqual(
+          RANK[asShell],
+        );
+      }),
+    );
+  });
+
   it('only ever tightens with the repo layer', () => {
     fc.assert(
       fc.property(
@@ -282,6 +365,7 @@ describe('permission matcher', () => {
         toolKindArb,
         (layers, request, otherKind) => {
           fc.pre(otherKind !== request.kind);
+          fc.pre(otherKind !== 'execute' || request.command === undefined);
           const extra: PermissionLayers = {
             ...layers,
             machine: {
