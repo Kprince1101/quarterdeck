@@ -19,6 +19,7 @@ import type { DemoPlanner } from './demo-planner.js';
 import type { DemoReads } from './demo-reads.js';
 import { createDemoRequests } from './demo-requests.js';
 import type { DemoRules } from './demo-rules.js';
+import { createDemoServices } from './demo-services.js';
 import type { DemoWorld } from './demo-world.js';
 
 const NOT_FOUND = 404;
@@ -53,6 +54,7 @@ const UNRECORDED: ReadonlySet<IntentName> = new Set([
   'usage.read',
   'forge.read',
   'forge.requests',
+  'services.read',
   'rules.write',
   'rules.reset',
   'wipe.project',
@@ -72,6 +74,7 @@ export const createDemoIntents = (
   const { world, rules, planner, reads } = ctx;
   const { store } = world;
   const openRequests = createDemoRequests(world);
+  const services = createDemoServices();
 
   const found = <T>(row: T | undefined, what: string): T => {
     if (row === undefined) return refuse(NOT_FOUND, `${what} not found`);
@@ -431,6 +434,9 @@ export const createDemoIntents = (
       reply('applied', { forge: DEMO_FORGE, terms: forgeTerms(DEMO_FORGE) }),
     'forge.requests': (_input, reply) =>
       reply('applied', { projects: openRequests() }),
+    'services.read': (_input, reply) => reply('applied', services.read()),
+    'services.set': (input, reply) =>
+      reply('applied', { ...services.set(input) }),
   };
 
   return (name, input) => {

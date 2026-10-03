@@ -49,7 +49,7 @@ Nothing Quarterdeck stores leaves your machine. It has no hosted component, no a
     pg.lock                       which process has the project open
     turns/<agent-id>/<seq>/       one folder per agent turn: input.md, output.md, updates.jsonl, result.json
     worktrees/<builder>-<ticket>/ a builder's git worktree
-  plugins/<name>.mjs              ticket-source plugins you add yourself
+  plugins/<name>.mjs              ticket-source plugins you add yourself (superseded by project services)
   pause.json                      only while everything is paused
   sock/<hash>.sock                a project's bus socket, while running
   kiro/                           where kiro-cli runs

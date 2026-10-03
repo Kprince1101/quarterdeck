@@ -20,7 +20,7 @@ const wordedRun =
   (tool: BusTool, terms: ForgeTerms): BusTool['run'] =>
   async (call, args) => {
     try {
-      return forgeWording(await tool.run(call, args), terms);
+      return await tool.run(call, args);
     } catch (err) {
       throw wordedError(err, terms);
     }

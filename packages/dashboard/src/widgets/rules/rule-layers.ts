@@ -14,6 +14,7 @@ import {
   type RuleName,
 } from '@quarterdeck/rules/schemas';
 import { REPO_FORGES_REFUSED } from '@quarterdeck/rules/forges';
+import { REPO_SERVICES_REFUSED } from '@quarterdeck/rules/services';
 import { shellAllowWarnings } from '@quarterdeck/rules/shell-warnings';
 import { z } from 'zod';
 import type { RuleView } from '../../api/index.js';
@@ -92,6 +93,8 @@ const repoLayerOf = (
   const parsed = parseLayer(rule, path, text);
   if (rule.name === 'env') throw new RulesError(path, REPO_ENV_IGNORED);
   if (rule.name === 'forges') throw new RulesError(path, REPO_FORGES_REFUSED);
+  if (rule.name === 'services')
+    throw new RulesError(path, REPO_SERVICES_REFUSED);
   if (rule.name !== 'permissions') return upgradeLayer(rule, path, parsed);
   const result = repoPermissionsSchema.safeParse(parsed);
   if (!result.success) {

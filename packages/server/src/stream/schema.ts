@@ -34,6 +34,8 @@ export const projectRowSchema = z.object({
   updatedAt: timestampSchema,
   archivedAt: timestampSchema.nullable(),
   pausedAt: timestampSchema.nullable(),
+  tracker: z.json().nullable(),
+  publishes: z.boolean().nullable(),
 });
 
 export const voyageRowSchema = z.object({
@@ -93,6 +95,7 @@ export const ticketRowSchema = z.object({
   dependsOn: z.array(idSchema),
   source: z.string(),
   externalId: z.string().nullable(),
+  externalRef: z.string().nullable(),
   prUrl: z.string().nullable(),
   headSha: z.string().nullable(),
   createdAt: timestampSchema,

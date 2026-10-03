@@ -46,6 +46,7 @@ describe('intent registry', () => {
         'project',
         'voyage',
         'rules',
+        'services',
         'ticket',
         'turn',
         'usage',
@@ -130,6 +131,10 @@ describe('intent schemas', () => {
     );
     expect(
       INTENTS['project.update'].safeParse({ project, repoPath: null }).success,
+    ).toBe(true);
+    expect(INTENTS['services.set'].safeParse({ project }).success).toBe(false);
+    expect(
+      INTENTS['services.set'].safeParse({ project, tracker: null }).success,
     ).toBe(true);
   });
 

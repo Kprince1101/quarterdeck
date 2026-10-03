@@ -11,6 +11,7 @@ import {
   type UpgradedLayer,
 } from './lifecycle-layer.js';
 import { mergeLayer } from './merge-layer.js';
+import { SERVICES_FILE, refuseRepoServices } from './services.js';
 import { RULE_SCHEMAS, type RuleName, type Rules } from './schemas.js';
 
 export const DEFAULT_RULES_DIR = resolve(import.meta.dirname, '..');
@@ -27,6 +28,7 @@ export const RULE_FILES: Record<RuleName, string> = {
   env: 'env.json',
   kiro: 'kiro.json',
   forges: FORGES_FILE,
+  services: SERVICES_FILE,
 };
 
 export const RULE_NAMES = Object.keys(RULE_FILES) as RuleName[];
@@ -123,6 +125,7 @@ const REPO_LAYER_MERGES: Partial<Record<RuleName, RepoLayerMerge>> = {
   lifecycle: mergeRepoLifecycle,
   kiro: mergeRepoKiro,
   forges: refuseRepoForges,
+  services: refuseRepoServices,
 };
 
 type LayerUpgrade = (layer: unknown, path: string) => UpgradedLayer;

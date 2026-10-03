@@ -108,6 +108,26 @@ describe('bus propose', { timeout: TIMEOUT }, () => {
     ]);
   });
 
+  it('stores the tracker id the Planner names as external_ref', async () => {
+    const plain = proposedId((await propose(planner, { title: 'plain' })).text);
+    const linked = proposedId(
+      (await propose(planner, { title: 'linked', externalRef: ' EX-42 ' }))
+        .text,
+    );
+    const { rows } = await store.db.query(
+      'select id, external_ref from tickets where id = any($1::uuid[])',
+      [[plain, linked]],
+    );
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { id: plain, external_ref: null },
+        { id: linked, external_ref: 'EX-42' },
+      ]),
+    );
+    const blank = await propose(planner, { title: 'blank', externalRef: ' ' });
+    expect(blank.isError).toBe(true);
+  });
+
   it('lets a proposal depend on other proposals and open tickets', async () => {
     const first = proposedId((await propose(planner, { title: 'store' })).text);
     const open = await insertTicket('open');

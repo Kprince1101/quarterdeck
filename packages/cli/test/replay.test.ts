@@ -31,6 +31,10 @@ const DRIVER = '7d0f3a4e-2b1c-4c5d-9e8f-0a1b2c3d4e5f';
 const OLD_DRIVER = '0b1c2d3e-4f50-4617-8899-aabbccddeeff';
 const BUILDER = '11111111-2222-4333-8444-555555555555';
 const RESULT = '```json\n{ "summary": "Nothing to do.", "actions": [] }\n```';
+const NO_SERVICES = {
+  forge: { forge: 'github', host: null },
+  tracker: null,
+} as const;
 
 const birthInput = (voyage: number, name = 'driver-1'): string =>
   buildBirthInput({
@@ -302,6 +306,7 @@ describe('quarterdeck replay', () => {
             terms: forgeTerms('github'),
             waiting: [],
             builders: [],
+            services: NO_SERVICES,
           },
           {
             project: 'fleet',
@@ -310,6 +315,7 @@ describe('quarterdeck replay', () => {
             terms: forgeTerms('github'),
             waiting: [],
             builders: [],
+            services: NO_SERVICES,
           },
         ],
         instructions: DRIVER_TURN_INSTRUCTIONS,

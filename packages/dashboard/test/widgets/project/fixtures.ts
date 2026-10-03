@@ -43,6 +43,8 @@ export const project = (
   updatedAt: AT,
   archivedAt: null,
   pausedAt: null,
+  tracker: null,
+  publishes: null,
   ...overrides,
 });
 
@@ -97,6 +99,7 @@ export const ticket = (
   dependsOn: [],
   source: 'local',
   externalId: null,
+  externalRef: null,
   prUrl: null,
   headSha: null,
   createdAt: AT,

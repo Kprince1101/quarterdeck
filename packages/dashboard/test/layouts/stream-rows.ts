@@ -45,6 +45,8 @@ export const projectRow = (slug = 'deck'): ProjectRow => ({
   updatedAt: AT,
   archivedAt: null,
   pausedAt: null,
+  tracker: null,
+  publishes: null,
 });
 
 export const layoutRow = (

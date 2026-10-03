@@ -15,6 +15,7 @@ import {
 import { projectBusName } from '../bus/index.js';
 import { isProjectArchived, type PauseGate } from '../pause/index.js';
 import { projectSite } from '../planner/rows.js';
+import { servicesSection, ticketExternalRef } from '../services/index.js';
 import {
   projectTurnsDir,
   projectWorktreesDir,
@@ -72,10 +73,11 @@ export const builderContext = async (
   leg: VoyageLeg,
   home: string,
 ): Promise<BuilderContext> => {
-  const [models, rules, forge] = await Promise.all([
+  const [models, rules, forge, services] = await Promise.all([
     leg.rules.load('models'),
     leg.rules.load('lifecycle'),
     leg.rules.forge(),
+    leg.rules.services(),
   ]);
   return {
     store: leg.store,
@@ -86,6 +88,7 @@ export const builderContext = async (
     repoPath: leg.repoPath,
     base: await baseRef(leg.repoPath, rules.mergeGate.base),
     terms: forgeTerms(forge),
+    services,
     worktreesDir: projectWorktreesDir(leg.project, home),
     turnsDir: projectTurnsDir(leg.project, home),
     budget: rules.budget.window,
@@ -170,6 +173,18 @@ const liveBuilders = async (store: Store): Promise<BriefBuilder[]> => {
   return rows.map(toBriefBuilder);
 };
 
+export const ticketServices = async (
+  crew: Pick<CrewProject, 'store' | 'rules'>,
+  ticketId: string,
+): Promise<string> => {
+  const { db, projectId } = crew.store;
+  const [services, externalRef] = await Promise.all([
+    crew.rules.services(),
+    ticketExternalRef(db, projectId, ticketId),
+  ]);
+  return servicesSection(services, externalRef);
+};
+
 export const projectBrief = async (leg: VoyageLeg): Promise<ProjectBrief> => ({
   project: leg.project,
   repoPath: leg.repoPath,
@@ -177,6 +192,7 @@ export const projectBrief = async (leg: VoyageLeg): Promise<ProjectBrief> => ({
   terms: forgeTerms(await leg.rules.forge()),
   waiting: await readWaitingTickets(leg.store),
   builders: await liveBuilders(leg.store),
+  services: await leg.rules.services(),
 });
 
 export const sharedTerms = (

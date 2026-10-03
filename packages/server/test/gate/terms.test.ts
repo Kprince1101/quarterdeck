@@ -35,11 +35,13 @@ const assignment = (forge: Forge, prUrl: string | null): string =>
       body: 'Generalize the gate.',
       prUrl,
       headSha: HEAD,
+      externalRef: null,
     },
     worktreePath: '/wt/okapi',
     repoPath: '/repo',
     base: 'origin/main',
     terms: forgeTerms(forge),
+    services: { forge: { forge, host: 'git.example.org' }, tracker: null },
   });
 
 describe('assignment prompt', () => {
@@ -53,6 +55,12 @@ describe('assignment prompt', () => {
         '# Where to work',
         'Work in /wt/okapi, your git worktree of /repo, detached at origin/main. Create a branch there, commit, push and open a merge request. Never touch /repo itself.',
         `A merge request for this ticket is already open: ${MR} (head ${HEAD}). Its builder was retired; check out its branch and carry it on.`,
+        '# Services',
+        [
+          '- Forge: GitLab at git.example.org. Use the `glab` CLI for merge requests, reviews and checks.',
+          '- Tracker: none.',
+          'Use these tools yourself. Quarterdeck never calls the tracker for you.',
+        ].join('\n'),
         '# When you are done',
         'Call the bus tool `report` with ticket `t1`, the merge request URL, its head commit and what you tested. If you need a decision only a person can make, call `ask`. Use `status` for a one-line progress note.',
       ].join('\n\n'),
@@ -251,5 +259,27 @@ describe('propose refusal', () => {
 
   it('shows a GitHub Planner the spec format unchanged', async () => {
     expect(await refusal('github')).toContain(TICKET_SPEC_FORMAT);
+  });
+
+  it('leaves data a tool returns in its own words in a GitLab project', async () => {
+    const body = 'Link the pull request and the PRs it replaces.';
+    const { rows } = await store.db.query<{ id: string }>(
+      `insert into tickets (project_id, title, body) values ($1, 'Data', $2)
+       returning id`,
+      [store.projectId, body],
+    );
+    const tools = wordedTools(await loadBusTools(), GITLAB);
+    const client = await connectClient(store, plannerId, tools);
+    try {
+      const reply = await callTool(client, 'read', {
+        table: 'tickets',
+        columns: ['body'],
+        filters: [{ column: 'id', value: rows[0]?.id ?? '' }],
+      });
+      expect(reply.isError).toBe(false);
+      expect(JSON.parse(reply.text)).toEqual([{ body }]);
+    } finally {
+      await client.close();
+    }
   });
 });

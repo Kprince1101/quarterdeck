@@ -18,6 +18,8 @@ export {
   type MergeCardState,
 } from './facts.js';
 export {
+  detectProjectForge,
+  detectRepoForge,
   forgeHost,
   mergeForge,
   projectForge,
@@ -25,6 +27,7 @@ export {
   repositoryForge,
   type BotReview,
   type ChecksState,
+  type DetectedForge,
   type ForgeHost,
   type GitRunner,
   type Mergeable,

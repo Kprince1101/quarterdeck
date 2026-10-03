@@ -4,6 +4,7 @@ import { ArchiveControl } from './ArchiveControl.js';
 import { CrewSummary } from './CrewSummary.js';
 import type { ProjectOption } from './project-model.js';
 import { ProjectToggles } from './ProjectToggles.js';
+import { ServicesSection } from './ServicesSection.js';
 import {
   useProjectWidget,
   type ProjectChangeHandler,
@@ -41,6 +42,7 @@ export const ProjectWidget = (): JSX.Element => {
       />
       <div className="qd-project-body" key={panel.id}>
         <ProjectToggles panel={panel} />
+        <ServicesSection panel={panel} />
         <CrewSummary panel={panel} />
         <ArchiveControl panel={panel} />
       </div>

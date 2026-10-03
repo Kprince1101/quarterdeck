@@ -59,6 +59,7 @@ export const ticket = (
   dependsOn: [],
   source: 'local',
   externalId: null,
+  externalRef: null,
   prUrl: null,
   headSha: null,
   createdAt: ago(600_000),

@@ -67,6 +67,16 @@ export {
   type RulesView,
 } from './rules-view.js';
 export {
+  SERVICES_INTENTS,
+  forgeServiceSchema,
+  serviceSourceSchema,
+  servicesReadResultSchema,
+  type ForgeService,
+  type ServiceSource,
+  type ServicesIntentName,
+  type ServicesReadResult,
+} from './services.js';
+export {
   WIPE_ALL_CONFIRMATION,
   WORKSPACE_INTENTS,
   wipeResultSchema,

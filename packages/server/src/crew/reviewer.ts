@@ -25,6 +25,7 @@ export interface ReviewerDeskOptions {
   birth: (sites: readonly SeatSite[]) => Promise<SeatedAgent>;
   turnsDir: (project: string) => string;
   brief: (project: string) => Promise<string>;
+  services: (project: string, ticketId: string) => Promise<string>;
   report: (targets: readonly FailureTarget[]) => (err: unknown) => void;
 }
 
@@ -34,8 +35,12 @@ export interface ReviewerDesk extends ReviewerHost {
   close: () => Promise<void>;
 }
 
-export const reviewerInput = (brief: string, request: ReviewRequest): string =>
-  `${brief.trim()}\n\n# Review\n\n${reviewPrompt(request)}`;
+export const reviewerInput = (
+  brief: string,
+  request: ReviewRequest,
+  services: string,
+): string =>
+  `${brief.trim()}\n\n# Review\n\n${reviewPrompt(request)}\n\n${services}`;
 
 const projectLine = (seat: Seat, terms: ForgeTerms): string =>
   `This ${terms.long} belongs to project ${seat.project}: use the tools of the bus \`${projectBusName(seat.project)}\` for it.`;
@@ -129,7 +134,12 @@ export const createReviewerDesk = (
 
   const requestReview = async (request: ReviewRequest): Promise<void> => {
     const target = reviewTarget(request);
-    const input = `${reviewerInput(await options.brief(target.seat.project), request)}\n\n${projectLine(target.seat, request.terms)}`;
+    const { project } = target.seat;
+    const [brief, services] = await Promise.all([
+      options.brief(project),
+      options.services(project, request.ticket.id),
+    ]);
+    const input = `${reviewerInput(brief, request, services)}\n\n${projectLine(target.seat, request.terms)}`;
     const turn = queue
       .catch(() => undefined)
       .then(() => runPrompt(target, input));

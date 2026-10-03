@@ -86,6 +86,33 @@
   font-size: var(--qd-text-sm);
 }
 
+.qd-project-fields {
+  display: grid;
+  gap: var(--qd-space-2);
+}
+
+.qd-project-field,
+.qd-project-forge {
+  display: grid;
+  gap: var(--qd-space-1);
+  margin: 0;
+  color: var(--qd-muted);
+  font-size: var(--qd-text-sm);
+}
+
+.qd-project-forge-value {
+  color: var(--qd-fg);
+  font-family: var(--qd-mono);
+  overflow-wrap: anywhere;
+}
+
+.qd-project-note {
+  margin: 0;
+  color: var(--qd-faint);
+  font-size: var(--qd-text-sm);
+  overflow-wrap: anywhere;
+}
+
 .qd-project-toggle {
   display: flex;
   align-items: center;

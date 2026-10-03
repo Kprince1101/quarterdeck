@@ -18,6 +18,8 @@ export const project = (id: string, name: string): ProjectRow => ({
   updatedAt: '2026-09-01T00:00:00.000Z',
   archivedAt: null,
   pausedAt: null,
+  tracker: null,
+  publishes: null,
 });
 
 export const PROJECTS: ProjectRow[] = [

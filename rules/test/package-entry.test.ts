@@ -101,4 +101,21 @@ describe('@quarterdeck/rules package entry', () => {
       name: 'GitLab',
     });
   });
+
+  it('exposes the services refusal alone from plain Node', () => {
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '--eval',
+        "const { MACHINE_SERVICES_PATH } = await import('@quarterdeck/rules/services');\nprocess.stdout.write(JSON.stringify(MACHINE_SERVICES_PATH));",
+      ],
+      { cwd: ROOT, encoding: 'utf8' },
+    );
+
+    expect(result.stderr).toBe('');
+    expect(JSON.parse(result.stdout)).toBe(
+      '~/.quarterdeck/rules.local.services.json',
+    );
+  });
 });

@@ -1,6 +1,6 @@
 # tickets
 
-Where tickets come from and where their progress goes. A ticket source lists approved tickets and takes back a status, a note and a pull request. The project's `tickets` table is the default source; a plugin lets another system feed tickets in. No plugin for any specific system ships in this repo.
+Where tickets come from and where their progress goes. A ticket source lists approved tickets and takes back a status, a note and a pull request. The project's `tickets` table is the default source; a plugin lets another system feed tickets in. No plugin for any specific system ships in this repo, and plugins are superseded by [project services](../services/README.md) (see [Plugins](#plugins)).
 
 ## The interface
 
@@ -40,6 +40,8 @@ A `ref` is the source's own id for a ticket. Every source checks its arguments b
 Each write is one transaction: it locks the row, changes it, sets `updated_at`, and records its event on the ticket, so the change reaches the stream like every other ticket write. A ref that is not a ticket of this project throws `TicketNotFoundError` and writes nothing. It needs no migration: `source` and `external_id` have been on `tickets` since `0001_init`.
 
 ## Plugins
+
+> **Superseded.** Ticket-source plugins were the first plan for reaching an outside tracker. They are replaced by [project services](../services/README.md): each project names its tracker and how agents reach it (a CLI or an MCP server), every agent prompt carries that in a Services section, and the agents use the tracker themselves. Quarterdeck never calls the tracker. A ticket's tracker id lives in `external_ref`, which the Planner sets. The plugin loader below still works but nothing in the crew uses it, and new work should not build on it.
 
 A plugin is one ES module at `~/.quarterdeck/plugins/<name>.mjs` (`ticketPluginPath(name)`), and is never loaded from anywhere else, a repository included:
 

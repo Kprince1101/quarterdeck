@@ -131,6 +131,10 @@ describe('a Driver seated in every project', () => {
           terms: forgeTerms('github'),
           waiting: [{ id: 'ticket-1', title: 'Add a greeting' }],
           builders: [],
+          services: {
+            forge: { forge: 'github', host: 'github.com' },
+            tracker: { kind: 'tracker-mcp', how: 'mcp', server: 'tracker-mcp' },
+          },
         },
         {
           project: 'sample',
@@ -141,6 +145,10 @@ describe('a Driver seated in every project', () => {
           builders: [
             { id: builder, name: 'wren', status: 'idle', ticket: null },
           ],
+          services: {
+            forge: { forge: 'gitlab', host: 'gitlab.com' },
+            tracker: { kind: 'tracker-cli', how: 'cli', command: 'tracker' },
+          },
         },
       ];
       scripted.reply(say(resultText(RESULT)));
