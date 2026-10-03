@@ -1,4 +1,5 @@
 import { access, readFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import {
   kiroBaseRoleSchema,
@@ -8,7 +9,11 @@ import {
 } from '@quarterdeck/rules';
 import { z } from 'zod';
 import { getErrorMessage } from '../../../lib/errors.js';
-import { KiroConfigError, withoutUndefined } from './config.js';
+import {
+  KIRO_AGENT_PREFIX,
+  KiroConfigError,
+  withoutUndefined,
+} from './config.js';
 
 export type KiroResource = string | Record<string, unknown>;
 
@@ -38,9 +43,27 @@ export interface KiroBaseOptions {
 
 const optional = <T extends z.ZodType>(schema: T) => schema.nullish();
 
+const stringMap = z.record(z.string(), z.string());
+
+const mcpServerSchema = z
+  .looseObject({
+    type: z.string().optional(),
+    command: z.string().min(1).optional(),
+    args: z.array(z.string()).optional(),
+    env: stringMap.optional(),
+    url: z.string().min(1).optional(),
+    headers: stringMap.optional(),
+    timeout: z.number().optional(),
+    disabled: z.boolean().optional(),
+  })
+  .refine(
+    (server) => server.command !== undefined || server.url !== undefined,
+    'an MCP server needs a command or a url',
+  );
+
 const baseFileSchema = z.looseObject({
   prompt: optional(z.string()),
-  mcpServers: optional(z.record(z.string(), z.looseObject({}))),
+  mcpServers: optional(z.record(z.string(), mcpServerSchema)),
   tools: optional(z.array(z.string())),
   allowedTools: optional(z.array(z.string())),
   toolsSettings: optional(z.record(z.string(), z.unknown())),
@@ -71,13 +94,21 @@ const resolveResource = (resource: KiroResource, dir: string): KiroResource => {
 
 const FILE_SCHEME = 'file://';
 
+const HOME_PATH = /^~(?=$|[\\/])/;
+
+const promptFile = (prompt: string, path: string, home: string): string => {
+  const file = resolveUri(prompt, dirname(path)).slice(FILE_SCHEME.length);
+  return file.replace(HOME_PATH, home);
+};
+
 const readPrompt = async (
   prompt: string | null | undefined,
   path: string,
+  home: string,
 ): Promise<string | undefined> => {
   if (!prompt) return undefined;
   if (!prompt.startsWith(FILE_SCHEME)) return prompt;
-  const file = resolveUri(prompt, dirname(path)).slice(FILE_SCHEME.length);
+  const file = promptFile(prompt, path, home);
   try {
     return await readFile(file, 'utf8');
   } catch (err) {
@@ -96,10 +127,11 @@ const hasHooks = (hooks: unknown): boolean => {
 const toBaseConfig = async (
   file: BaseFile,
   path: string,
+  home: string,
 ): Promise<KiroBaseConfig> => {
   const dir = dirname(path);
   return withoutUndefined<KiroBaseConfig>({
-    prompt: await readPrompt(file.prompt, path),
+    prompt: await readPrompt(file.prompt, path, home),
     mcpServers: file.mcpServers ?? undefined,
     tools: file.tools ?? undefined,
     allowedTools: file.allowedTools ?? undefined,
@@ -192,13 +224,19 @@ export const loadKiroBaseAgent = async (
   const name = await kiroBaseAgentName(role, options.rules);
   if (name === null) return undefined;
   const paths = kiroBaseAgentPaths(role, name, options);
+  if (name.toLowerCase().startsWith(KIRO_AGENT_PREFIX)) {
+    throw new KiroConfigError(
+      `The ${role}'s Kiro base agent ${paths.join(' or ')} starts with ${KIRO_AGENT_PREFIX}, which is kept for the agents Quarterdeck writes. Rename it.`,
+    );
+  }
   const path = await findBaseFile(role, paths);
   const file = parseBaseFile(path, await readBaseFile(path));
+  const home = options.rules.homeDir ?? homedir();
   return {
     role,
     name,
     path,
-    config: await toBaseConfig(file, path),
+    config: await toBaseConfig(file, path, home),
     ignoredHooks: hasHooks(file.hooks),
   };
 };

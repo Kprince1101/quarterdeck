@@ -290,9 +290,45 @@ describe('kiro base agents', () => {
     expect(String(error)).toContain(join(box.agentsDir, 'nowhere.json'));
   });
 
+  it('reads a file://~/ prompt from the home folder', async () => {
+    await writeFile(join(box.home, 'prompt.md'), 'Prompt from home.');
+    await writeJson(join(box.agentsDir, 'everyday.json'), {
+      prompt: 'file://~/prompt.md',
+    });
+    await kiroRule(box.home, { baseAgents: { driver: 'everyday' } });
+
+    expect(JSON.parse(await writtenConfig('driver'))).toMatchObject({
+      prompt: 'Prompt from home.',
+    });
+  });
+
+  it('refuses a base that would be overwritten by the generated config', async () => {
+    const path = await writeJson(join(box.agentsDir, `${GENERATED}.json`), {
+      model: 'mine',
+    });
+    const original = await readFile(path, 'utf8');
+    await kiroRule(box.home, { baseAgents: { builder: GENERATED } });
+
+    const error = await connectError('builder');
+
+    expect(error).toBeInstanceOf(KiroConfigError);
+    expect(String(error)).toContain(path);
+    expect(await readFile(path, 'utf8')).toBe(original);
+  });
+
   it.each([
     ['not JSON', '{ nope'],
     ['the wrong shape', JSON.stringify({ allowedTools: 'read' })],
+    [
+      'an MCP server of the wrong shape',
+      JSON.stringify({
+        mcpServers: { tracker: { command: 123, args: '--stdio' } },
+      }),
+    ],
+    [
+      'an MCP server with no command or url',
+      JSON.stringify({ mcpServers: { tracker: { args: [] } } }),
+    ],
   ])('names the base when it is %s', async (_what, text) => {
     const path = join(box.agentsDir, 'broken.json');
     await mkdir(box.agentsDir, { recursive: true });

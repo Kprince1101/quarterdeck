@@ -45,13 +45,13 @@ A Quarterdeck agent can start from one of the user's own Kiro agents, so it gets
 - a builder's from `<repoDir>/.kiro/agents/<name>.json`, then `~/.kiro/agents/<name>.json` (the adapter's `agentsDir`). The workspace wins, as it does in Kiro. `repoDir` is the project's checkout from `launch.rules`, never the agent's worktree, so an agent cannot plant a base for its next launch;
 - a driver's or reviewer's from `~/.kiro/agents/<name>.json` only, with the rule read from the machine layer only.
 
-A base that is missing, is not JSON, or has a field of the wrong type throws `KiroConfigError` naming the path, before anything is written or spawned. So does a rule layer that breaks the schema (`RulesError`).
+A base that is missing, is not JSON, or has a field of the wrong type (an MCP server also needs a `command` or a `url`) throws `KiroConfigError` naming the path, before anything is written or spawned. So does a base named `quarterdeck-…`, which could be the very file `connect` writes and removes. A rule layer that breaks the schema throws `RulesError`.
 
 `buildKiroAgentConfig(name, servers, { base, prompt })` then writes the generated agent (the name stays `quarterdeck-<project>-<agentName>`, so the shadow check above is unchanged):
 
 | Field            | Value                                                                                                                                                                                                       |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `prompt`         | The base's prompt, then Quarterdeck's, joined by a blank line. A `file://` prompt is read from disk, relative to the base file.                                                                             |
+| `prompt`         | The base's prompt, then Quarterdeck's, joined by a blank line. A `file://` prompt is read from disk, relative to the base file (`~/` is the home folder).                                                   |
 | `mcpServers`     | The base's servers as written, then Quarterdeck's. A base server with the name of one of Quarterdeck's (the bus) throws `KiroConfigError` naming the base.                                                  |
 | `tools`          | The base's, or `["*"]`. When the base lists tools without `*`, `@<server>` is added for each of Quarterdeck's servers so the bus stays usable.                                                              |
 | `allowedTools`   | The base's, or `[]`. Tools listed here skip `session/request_permission`, so the base decides what runs without a card.                                                                                     |
