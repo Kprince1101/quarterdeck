@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_RULES_DIR,
   RULE_FILES,
@@ -272,6 +272,34 @@ describe('rules loader', () => {
     expect(warnings).toEqual([
       `${path}: mergeGate.requireCopilotReview is deprecated and reads as mergeGate.requireAiReview; rename it`,
     ]);
+  });
+
+  it('hands a custom warning sink the deprecation on every load, and warns once by default', async () => {
+    const path = await writeLocalJson(sandbox.homeDir, 'lifecycle.json', {
+      mergeGate: { requireCopilotReview: true },
+    });
+    const warnings: string[] = [];
+    const options = {
+      ...sandbox,
+      onWarning: (warning: string) => warnings.push(warning),
+    };
+
+    await loadRule('lifecycle', options);
+    await loadRule('lifecycle', options);
+    expect(warnings).toHaveLength(2);
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      await loadRule('lifecycle', sandbox);
+      await loadRule('lifecycle', sandbox);
+      expect(warn.mock.calls).toEqual([
+        [
+          `quarterdeck rules: ${path}: mergeGate.requireCopilotReview is deprecated and reads as mergeGate.requireAiReview; rename it`,
+        ],
+      ]);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('lets the deprecated key in the repo layer only tighten, as before', async () => {
