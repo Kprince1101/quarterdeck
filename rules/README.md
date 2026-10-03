@@ -1,6 +1,6 @@
 # Rules
 
-The shipped defaults: `charter.md`, `reviewer.md`, `permissions.json`, `naming.json`, `lifecycle.json`, `models.json`, `env.json`, `kiro.json` and `forges.json`. Override any of them with `~/.quarterdeck/rules.local.<file>` (this machine) or `<repo>/.quarterdeck/rules.local.<file>` (one project). The layers, the schemas and the tighten-only rules are described in the [rules docs](../site/public/docs/rules.html); how a permission request is decided is in [the permission policy](../packages/server/src/acp/permissions/README.md).
+The shipped defaults: `charter.md`, `reviewer.md`, `permissions.json`, `naming.json`, `lifecycle.json`, `models.json`, `env.json`, `kiro.json` and `forges.json`. Override any of them with `~/.quarterdeck/rules.local.<file>` (this machine). All but two can also be overridden with `<repo>/.quarterdeck/rules.local.<file>` (one project). The exceptions are machine-only: a repo `env.json` is ignored and a repo `forges.json` is an error. The layers, the schemas and the tighten-only rules are described in the [rules docs](../site/public/docs/rules.html); how a permission request is decided is in [the permission policy](../packages/server/src/acp/permissions/README.md).
 
 `examples/` holds layers you can copy into place. They are not loaded unless you copy them.
 

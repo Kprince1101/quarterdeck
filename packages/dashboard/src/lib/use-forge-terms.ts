@@ -54,6 +54,7 @@ export const useForgeTerms = (
       );
     return () => {
       live = false;
+      setLoaded(null);
     };
   }, [intents, project, enabled]);
 

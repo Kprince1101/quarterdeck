@@ -365,7 +365,7 @@ describe('Project widget', () => {
 
   it('asks before turning Auto-merge on and writes only once confirmed', async () => {
     const machine = JSON.stringify({ stuckAfterMinutes: 45 });
-    const { container, sent, unmount } = mount(
+    const { container, sent, forgeReads, unmount } = mount(
       projectTables(),
       200,
       {},
@@ -393,7 +393,9 @@ describe('Project widget', () => {
     expect(sent).toEqual([]);
 
     click(find(gate(container, 'autoMerge'), 'input'));
+    expect(isDisabled(button(toggles(), 'Turn on auto-merge'))).toBe(true);
     await settle();
+    expect(forgeReads).toHaveLength(2);
     click(button(toggles(), 'Turn on auto-merge'));
     await settle();
     expect(JSON.parse(writtenContent(sent))).toEqual({

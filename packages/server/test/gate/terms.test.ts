@@ -9,8 +9,15 @@ import { wordedTools } from '../../src/bus/wording.js';
 import { crewRules } from '../../src/crew/rules.js';
 import { buildAssignmentPrompt } from '../../src/driver/index.js';
 import { mergeQuestion } from '../../src/gate/index.js';
-import { openingPrompt, plannerBrief } from '../../src/planner/index.js';
+import { repromptText } from '../../src/planner/brief.js';
+import {
+  TICKET_SPEC_FORMAT,
+  openingPrompt,
+  plannerBrief,
+  ticketSpecFormat,
+} from '../../src/planner/index.js';
 import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
+import { callTool, connectClient, insertAgent } from '../bus/fixtures.ts';
 
 const PULL_TERMS = /pull request|\bPRs?\b/i;
 const GITLAB = forgeTerms('gitlab');
@@ -42,6 +49,7 @@ describe('assignment prompt', () => {
         'You are okapi, a builder on this project.',
         '# Ticket t1: QD19 forge seam',
         'Generalize the gate.',
+        "Work the ticket's `## Tasks` list in order, one task at a time. Before you report, prove its `Proven:` line: run or show the check it names.",
         '# Where to work',
         'Work in /wt/okapi, your git worktree of /repo, detached at origin/main. Create a branch there, commit, push and open a merge request. Never touch /repo itself.',
         `A merge request for this ticket is already open: ${MR} (head ${HEAD}). Its builder was retired; check out its branch and carry it on.`,
@@ -92,7 +100,10 @@ describe('merge card', () => {
 });
 
 describe('planner brief', () => {
-  it('says merge request in a GitLab project', () => {
+  const TASKS_LINE = (unit: string) =>
+    `- Tasks: a numbered checklist the builder works in order, sized for one ${unit}.`;
+
+  it('says merge request in a GitLab project, spec format included', () => {
     const brief = plannerBrief(GITLAB);
 
     expect(brief).toContain(
@@ -101,7 +112,27 @@ describe('planner brief', () => {
     expect(brief).toContain(
       'Do not edit files, run builds or open merge requests.',
     );
+    expect(brief).toContain(
+      `## Ticket format\n\n${ticketSpecFormat(GITLAB)}\n\n`,
+    );
+    expect(ticketSpecFormat(GITLAB)).toBe(
+      TICKET_SPEC_FORMAT.replace(
+        TASKS_LINE('pull request'),
+        TASKS_LINE('merge request'),
+      ),
+    );
+    expect(brief).toContain(TASKS_LINE('merge request'));
     expect(openingPrompt('Charter.', 'Hello', GITLAB)).not.toMatch(PULL_TERMS);
+  });
+
+  it('re-prompts a GitLab Planner in merge request terms', () => {
+    const text = repromptText(
+      '- Greeting: it has no `## Tasks` section',
+      GITLAB,
+    );
+
+    expect(text).toContain(TASKS_LINE('merge request'));
+    expect(text).not.toMatch(PULL_TERMS);
   });
 
   it('says pull request in a GitHub project', () => {
@@ -113,6 +144,8 @@ describe('planner brief', () => {
     expect(brief).toContain(
       'Do not edit files, run builds or open pull requests.',
     );
+    expect(brief).toContain(TASKS_LINE('pull request'));
+    expect(ticketSpecFormat(GITHUB)).toBe(TICKET_SPEC_FORMAT);
   });
 });
 
@@ -175,5 +208,46 @@ describe('bus tools', () => {
     const tools = await loadBusTools();
 
     expect(texts(wordedTools(tools, GITHUB))).toEqual(texts(tools));
+  });
+});
+
+describe('propose refusal', () => {
+  let store: Store;
+  let plannerId = '';
+
+  const refusal = async (forge: Forge): Promise<string> => {
+    const tools = wordedTools(await loadBusTools(), forgeTerms(forge));
+    const client = await connectClient(store, plannerId, tools);
+    try {
+      const reply = await callTool(client, 'propose', {
+        title: 'Greeting',
+        body: 'Say hello.',
+      });
+      expect(reply.isError).toBe(true);
+      return reply.text;
+    } finally {
+      await client.close();
+    }
+  };
+
+  beforeAll(async () => {
+    store = await openStore({ project: 'deck', dataDir: IN_MEMORY });
+    plannerId = await insertAgent(store, store.projectId, 'tern', 'planner');
+  });
+
+  afterAll(async () => {
+    await store.close();
+  });
+
+  it('shows a GitLab Planner the spec format in merge request terms', async () => {
+    const text = await refusal('gitlab');
+
+    expect(text).toContain('Nothing was proposed:');
+    expect(text).toContain(ticketSpecFormat(GITLAB));
+    expect(text).not.toMatch(PULL_TERMS);
+  });
+
+  it('shows a GitHub Planner the spec format unchanged', async () => {
+    expect(await refusal('github')).toContain(TICKET_SPEC_FORMAT);
   });
 });
