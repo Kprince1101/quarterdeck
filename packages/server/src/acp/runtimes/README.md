@@ -17,7 +17,7 @@ const client = await KIRO_ADAPTER.connect(
 | `command(...)` | The runtime's own `AgentCommand` for a launch                                                                                                                                    |
 | `connect(...)` | Spawns `launch.command` if given, otherwise `command(launch)`, and returns the connected `AcpClient`. An override runs in `launch.cwd` with `launch.env` unless it sets its own. |
 
-`launch.env` is a `ChildEnvSpec` (names to pass, values to set), never a whole environment; the process gets only what `childEnv` builds from it. `launch.command` replaces the runtime's command: tests point it at the fake ACP agent, and a user can point it at a custom install. `project` (the project slug) and `agentName` name kiro's `--agent`; other runtimes ignore them. `mcpServers` are the MCP servers the agent must always have, the bus first among them. A runtime that reads them from its own config (kiro) writes them there. The others ignore the field, and the caller passes the same servers to `session/new`.
+`launch.env` is a `ChildEnvSpec` (names to pass, values to set), never a whole environment; the process gets only what `childEnv` builds from it. `launch.command` replaces the runtime's command: tests point it at the fake ACP agent, and a user can point it at a custom install. `project` (the project slug) and `agentName` name kiro's `--agent`; other runtimes ignore them. `role` and `rules` (the `homeDir` and `repoDir` the project's rules load from) pick kiro's [base agent](#base-agents); other runtimes ignore them too. `mcpServers` are the MCP servers the agent must always have, the bus first among them. A runtime that reads them from its own config (kiro) writes them there. The others ignore the field, and the caller passes the same servers to `session/new`.
 
 Every adapter is tested with `describeRuntimeConformance(adapter, base?)` from `test/acp/runtime-conformance.ts`. It runs the ACP conformance suite through `adapter.connect` against the fake agent, merging `base` into every launch, and checks every spawned process has exited.
 
@@ -30,9 +30,39 @@ Every adapter is tested with `describeRuntimeConformance(adapter, base?)` from `
 - `tools: ["*"]`, `allowedTools: []`: no tool is pre-approved, so every tool call reaches Quarterdeck as a `session/request_permission` and is answered from the project's rules.
 - `includeMcpJson: false`: the user's own `mcp.json` servers are not loaded into Quarterdeck agents.
 
+That is the whole file when the role has no base agent. With one, the base fills in the rest (see below).
+
 The returned client drops from `session/new` and `session/resume` any MCP server whose name is already in the config, so Kiro does not start the bus twice. Servers that are not in the config (sse, acp, or ones added per session) are passed through.
 
 The project and agent name must be letters, digits, `-` and `_`. Anything else throws `KiroConfigError` before a file is written.
+
+### Base agents
+
+A Quarterdeck agent can start from one of the user's own Kiro agents, so it gets their MCP servers, steering, skills, prompt and model. `rules/kiro.json` names one per role in `baseAgents` (`driver`, `reviewer`, `builder`; all `null` by default). A project's repo layer may set only `builder` (see [rules/README.md](../../../../../rules/README.md#kiro-base-agents)). Other roles, the planner among them, never get a base.
+
+`connect` resolves the base for `launch.role`, by name:
+
+- a builder's from `<repoDir>/.kiro/agents/<name>.json`, then `~/.kiro/agents/<name>.json` (the adapter's `agentsDir`). The workspace wins, as it does in Kiro. `repoDir` is the project's checkout from `launch.rules`, never the agent's worktree, so an agent cannot plant a base for its next launch;
+- a driver's or reviewer's from `~/.kiro/agents/<name>.json` only, with the rule read from the machine layer only.
+
+A base that is missing, is not JSON, or has a field of the wrong type throws `KiroConfigError` naming the path, before anything is written or spawned. So does a rule layer that breaks the schema (`RulesError`).
+
+`buildKiroAgentConfig(name, servers, { base, prompt })` then writes the generated agent (the name stays `quarterdeck-<project>-<agentName>`, so the shadow check above is unchanged):
+
+| Field            | Value                                                                                                                                                                                                       |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prompt`         | The base's prompt, then Quarterdeck's, joined by a blank line. A `file://` prompt is read from disk, relative to the base file.                                                                             |
+| `mcpServers`     | The base's servers as written, then Quarterdeck's. A base server with the name of one of Quarterdeck's (the bus) throws `KiroConfigError` naming the base.                                                  |
+| `tools`          | The base's, or `["*"]`. When the base lists tools without `*`, `@<server>` is added for each of Quarterdeck's servers so the bus stays usable.                                                              |
+| `allowedTools`   | The base's, or `[]`. Tools listed here skip `session/request_permission`, so the base decides what runs without a card.                                                                                     |
+| `toolsSettings`  | The base's, if any.                                                                                                                                                                                         |
+| `resources`      | The base's, in order. A relative `file://` or `skill://` path, and a knowledge base's relative `file://` `source`, is resolved against the base file's folder, because Kiro runs in `~/.quarterdeck/kiro/`. |
+| `model`          | The base's, if any.                                                                                                                                                                                         |
+| `includeMcpJson` | The base's, or `false`.                                                                                                                                                                                     |
+
+`hooks` are never copied. A base with hooks is still used, and the adapter logs `Kiro base agent <path> has hooks; Quarterdeck ignored them.` through its `warn` option (`console.warn` by default). Any other base field is left out.
+
+`quarterdeck doctor` prints the base each role resolves to (`kiro base for builder: everyday (~/.kiro/agents/everyday.json)`), or the error, whenever any role has one. The builder line uses the repo layer of the folder doctor runs in.
 
 ### The worktree is never the process directory
 

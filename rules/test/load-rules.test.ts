@@ -52,6 +52,7 @@ describe('rules loader', () => {
     expect(Object.values(RULE_FILES).toSorted()).toEqual([
       'charter.md',
       'env.json',
+      'kiro.json',
       'lifecycle.json',
       'models.json',
       'naming.json',
@@ -70,6 +71,7 @@ describe('rules loader', () => {
     expect(rules.naming).toEqual(await readDefaultJson('naming.json'));
     expect(rules.lifecycle).toEqual(await readDefaultJson('lifecycle.json'));
     expect(rules.models).toEqual(await readDefaultJson('models.json'));
+    expect(rules.kiro).toEqual(await readDefaultJson('kiro.json'));
     expect(rules.charter).toContain('# Driver charter');
     expect(rules.reviewer).toContain('# Reviewer');
   });
@@ -443,6 +445,52 @@ describe('rules loader', () => {
     await expect(loadRule('naming', sandbox)).rejects.toThrow(
       'names must be unique',
     );
+  });
+
+  it('ships no Kiro base agent for any role', async () => {
+    expect(await loadRule('kiro', sandbox)).toEqual({
+      baseAgents: { driver: null, reviewer: null, builder: null },
+    });
+  });
+
+  it('lets the machine set every base and the project only the builder', async () => {
+    await writeLocalJson(sandbox.homeDir, 'kiro.json', {
+      baseAgents: { driver: 'everyday', reviewer: 'security', builder: 'a' },
+    });
+    await writeLocalJson(sandbox.repoDir, 'kiro.json', {
+      baseAgents: { builder: 'library-builder' },
+    });
+
+    expect(await loadRule('kiro', sandbox)).toEqual({
+      baseAgents: {
+        driver: 'everyday',
+        reviewer: 'security',
+        builder: 'library-builder',
+      },
+    });
+  });
+
+  it.each(['driver', 'reviewer'])(
+    'refuses a project layer that sets the %s base',
+    async (role) => {
+      const path = await writeLocalJson(sandbox.repoDir, 'kiro.json', {
+        baseAgents: { [role]: 'everyday' },
+      });
+
+      await expect(loadRule('kiro', sandbox)).rejects.toMatchObject({
+        name: 'RulesError',
+        path,
+        message: expect.stringContaining("only set the builder's base agent"),
+      });
+    },
+  );
+
+  it('refuses a Kiro base agent name that is not a file name', async () => {
+    const path = await writeLocalJson(sandbox.homeDir, 'kiro.json', {
+      baseAgents: { builder: '../escape' },
+    });
+
+    await expect(loadRule('kiro', sandbox)).rejects.toMatchObject({ path });
   });
 
   it('names a missing defaults file', async () => {

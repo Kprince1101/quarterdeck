@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 const AGENT_NAME = /^[a-z][a-z0-9-]*$/;
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const KIRO_AGENT_NAME = /^[a-z0-9][a-z0-9_-]*$/i;
 
 const hasUniqueValues = (values: string[]): boolean =>
   new Set(values).size === values.length;
@@ -105,6 +106,26 @@ export const envSchema = z.strictObject({
     .refine(hasUniqueValues, 'pass must not repeat a name'),
 });
 
+export const kiroAgentNameSchema = z.string().regex(KIRO_AGENT_NAME);
+
+const baseAgentSchema = kiroAgentNameSchema.nullable();
+
+export const kiroBaseRoleSchema = z.enum(['driver', 'reviewer', 'builder']);
+
+export const kiroSchema = z.strictObject({
+  baseAgents: z.strictObject({
+    driver: baseAgentSchema,
+    reviewer: baseAgentSchema,
+    builder: baseAgentSchema,
+  }),
+});
+
+export const repoKiroSchema = z.strictObject({
+  baseAgents: z
+    .strictObject({ builder: baseAgentSchema.optional() })
+    .optional(),
+});
+
 export const RULE_SCHEMAS = {
   charter: markdownSchema,
   reviewer: markdownSchema,
@@ -113,6 +134,7 @@ export const RULE_SCHEMAS = {
   lifecycle: lifecycleSchema,
   models: modelsSchema,
   env: envSchema,
+  kiro: kiroSchema,
 };
 
 export type RuleName = keyof typeof RULE_SCHEMAS;
@@ -135,3 +157,6 @@ export type Runtime = z.infer<typeof runtimeSchema>;
 export type RoleModel = z.infer<typeof roleModelSchema>;
 export type Models = z.infer<typeof modelsSchema>;
 export type EnvRule = z.infer<typeof envSchema>;
+export type KiroRule = z.infer<typeof kiroSchema>;
+export type RepoKiroRule = z.infer<typeof repoKiroSchema>;
+export type KiroBaseRole = z.infer<typeof kiroBaseRoleSchema>;

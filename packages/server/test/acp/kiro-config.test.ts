@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { McpServer } from '@agentclientprotocol/sdk';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { KiroBaseAgent } from '../../src/acp/runtimes/kiro/base-agent.js';
 import {
   buildKiroAgentConfig,
   kiroAgentConfigPath,
@@ -19,6 +20,38 @@ const BUS: McpServer = {
 };
 
 const NAME = 'quarterdeck-example-builder-1';
+
+describe('kiro agent config prompt', () => {
+  const base: KiroBaseAgent = {
+    role: 'builder',
+    name: 'everyday',
+    path: '/home/example/.kiro/agents/everyday.json',
+    config: { prompt: 'Base prompt.' },
+    ignoredHooks: false,
+  };
+
+  it('puts the base prompt first, then Quarterdeck’s', () => {
+    expect(
+      buildKiroAgentConfig(NAME, [BUS], { base, prompt: 'Quarterdeck prompt.' })
+        .prompt,
+    ).toBe('Base prompt.\n\nQuarterdeck prompt.');
+  });
+
+  it('keeps Quarterdeck’s prompt alone without a base', () => {
+    expect(
+      buildKiroAgentConfig(NAME, [BUS], { prompt: 'Quarterdeck prompt.' })
+        .prompt,
+    ).toBe('Quarterdeck prompt.');
+  });
+
+  it('adds Quarterdeck’s servers to a base that lists its tools', () => {
+    const listed = { ...base, config: { tools: ['read', '@bus'] } };
+    expect(buildKiroAgentConfig(NAME, [BUS], { base: listed }).tools).toEqual([
+      'read',
+      '@bus',
+    ]);
+  });
+});
 
 describe('kiro agent config file mode', () => {
   let agentsDir = '';
