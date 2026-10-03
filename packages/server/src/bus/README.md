@@ -98,7 +98,7 @@ Either way a `ticket.verdict` event is recorded for the reviewer and the ticket 
 
 Planner only: the caller must be a `planner` agent that is not ended, killed or retired, or the call is an error. Stores one ticket with status `proposed` in the project it names and records a `ticket.proposed` event in the caller's project, with the caller as `agentId` and `{ title, project, ticketId }`. The event's `ticketId` column is set only when the ticket is in the caller's project, since another project may be another database. Returns `proposed <ticketId>`.
 
-- `project`: the slug of an active project: open in this process (the host's `openStores`, or only the caller's project when it has none) and not archived.
+- `project`: the slug of an active project: the caller's own project or one in the host's `openStores`, and not archived. The caller's project always counts, even before the host lists it as open.
 - `title`: 1 to 200 characters after trimming. `body`: up to 100 000 characters, written as a spec (below).
 - `dependsOn`: up to 50 distinct ticket ids of the named project. Proposed tickets may be named; `rejected` and `cancelled` ones may not, since they will never be built.
 

@@ -63,7 +63,7 @@ Every ticket body is a spec, so a builder starts with requirements, design and t
 
 ## Moving a proposal
 
-The `planner.move` intent (see [api](../api/README.md)) moves a proposed ticket to another project with `moveProposal({ ticketId, from, to, title?, body? })`: it stores a proposed ticket in `to` with the edited title and body, then rejects the old one in `from`. If the old one was decided in the meantime, the new one is deleted and the move fails. Dependencies are not carried over, since they named `from`'s tickets. The API records `planner.proposal_moved` in the conversation's project, which is how the Planner widget and the decisions note follow the proposal.
+The `planner.move` intent (see [api](../api/README.md)) moves a proposed ticket to another project with `moveProposal({ ticketId, from, to, title?, body? })`: it stores a proposed ticket in `to` with the edited title and body, then rejects the old one in `from`. If the old one was decided in the meantime, the new one is deleted and the move fails. Dependencies are not carried over, since they named `from`'s tickets. The API records `planner.proposal_moved` in the conversation's project, which is how the Planner widget and the decisions note follow the proposal. It checks the conversation's project exists before moving anything, and if the move cannot be recorded, `undoMove` deletes the new ticket and puts the old one back to `proposed`.
 
 `parseTicketSpec(body)` reads a valid body into `{ intro, sections, proven }` and `specBody(spec)` writes it back; the Planner widget uses both, from `@quarterdeck/server/ticket-spec`, to show and edit a proposal section by section.
 

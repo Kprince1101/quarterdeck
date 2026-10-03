@@ -216,6 +216,24 @@ describe('bus propose', () => {
     expect(rows).toEqual([{ n: 0 }]);
   });
 
+  it('accepts its own project before the host lists it as open', async () => {
+    const starting = await connectClient(
+      store,
+      plannerId,
+      undefined,
+      undefined,
+      () => [],
+    );
+    clients.push(starting);
+    const reply = await propose(starting, { title: 'Early' });
+    expect(reply.isError).toBe(false);
+    const { rows } = await store.db.query(
+      'select title, status from tickets where id = $1',
+      [proposedId(reply.text)],
+    );
+    expect(rows).toEqual([{ title: 'Early', status: 'proposed' }]);
+  });
+
   it('stores a proposal in the other open project it names', async () => {
     const other = await openTestStore('sample');
     try {

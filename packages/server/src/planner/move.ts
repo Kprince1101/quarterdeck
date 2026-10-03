@@ -97,3 +97,18 @@ export const moveProposal = async (
   }
   return { ticketId, title };
 };
+
+export const undoMove = async (
+  move: ProposalMove,
+  moved: MovedProposal,
+): Promise<void> => {
+  await move.to.db.query(
+    `delete from tickets where id = $1 and project_id = $2`,
+    [moved.ticketId, move.to.projectId],
+  );
+  await move.from.db.query(
+    `update tickets set status = 'proposed'
+     where id = $1 and project_id = $2 and status = 'rejected'`,
+    [move.ticketId, move.from.projectId],
+  );
+};

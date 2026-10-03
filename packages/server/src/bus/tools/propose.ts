@@ -198,7 +198,7 @@ export default defineBusTool({
       .default([]),
   },
   run: async ({ store, agentId, openStores }, proposal) => {
-    const projects = await activeProjects(openStores?.() ?? [store]);
+    const projects = await activeProjects([store, ...(openStores?.() ?? [])]);
     const problems = proposalProblems(
       proposal,
       projects.map(({ slug }) => slug),

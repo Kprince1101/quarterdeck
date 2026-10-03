@@ -15,6 +15,7 @@ export {
   PROPOSAL_MOVED_EVENT,
   ProposalMoveError,
   moveProposal,
+  undoMove,
   type MovedProposal,
   type ProposalMove,
 } from './move.js';

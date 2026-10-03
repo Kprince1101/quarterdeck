@@ -15,7 +15,9 @@ import { repromptText } from '../../src/planner/brief.js';
 import {
   plannerBrief,
   PROJECT_ARCHIVED,
+  moveProposal,
   parseTicketSpec,
+  undoMove,
 } from '../../src/planner/index.js';
 import {
   SIGNED_IN,
@@ -477,6 +479,38 @@ describe('Planner', { timeout: TIMEOUT }, () => {
       to: 'plan',
     });
     expect(again.status).toBe(409);
+  });
+
+  it('moves nothing when the conversation project is unknown, and undoes a move it cannot record', async () => {
+    const p = await open({ others: ['sample'] });
+    const [sample] = p.others;
+    if (!sample) throw new Error('no sample project');
+    const { rows } = await sample.db.query<{ id: string }>(
+      `insert into tickets (project_id, title, status)
+       values ($1, 'QD2a store', 'proposed') returning id`,
+      [sample.projectId],
+    );
+    const ticketId = rows[0]?.id ?? '';
+
+    const refused = await t.send('planner.move', {
+      project: 'nowhere',
+      ticketId,
+      from: 'sample',
+      to: 'plan',
+    });
+    expect(refused.status).toBe(404);
+    expect(await docketOf(sample)).toEqual([
+      { id: ticketId, title: 'QD2a store', status: 'proposed' },
+    ]);
+    expect(await docketOf(p.store)).toEqual([]);
+
+    const move = { ticketId, from: sample, to: p.store };
+    const moved = await moveProposal(move);
+    await undoMove(move, moved);
+    expect(await docketOf(sample)).toEqual([
+      { id: ticketId, title: 'QD2a store', status: 'proposed' },
+    ]);
+    expect(await docketOf(p.store)).toEqual([]);
   });
 
   it('starts a new conversation after planner.new, ending the old session and its process', async () => {

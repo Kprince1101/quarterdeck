@@ -4,6 +4,7 @@ import {
   PROPOSAL_MOVED_EVENT,
   ProposalMoveError,
   moveProposal,
+  undoMove,
   type MovedProposal,
   type ProposalMove,
 } from '../../planner/move.js';
@@ -44,29 +45,36 @@ const moveProposalTo: IntentHandler<'planner.move'> = async (
   input,
   name,
 ) => {
+  await ctx.stores.get(input.project);
   const from = await ctx.stores.get(input.from);
   const to = await ctx.stores.get(input.to);
   if (await isProjectArchived(to.db, to.projectId))
     throw conflict(`project ${input.to} is archived`);
-  const moved = await move({
+  const proposal: ProposalMove = {
     ticketId: input.ticketId,
     from,
     to,
     title: input.title,
     body: input.body,
-  });
-  return applyInProject(ctx, name, input, async (tx, projectId) => {
-    await publishEvent(tx, projectId, {
-      kind: PROPOSAL_MOVED_EVENT,
-      payload: {
-        ticketId: input.ticketId,
-        project: input.from,
-        title: moved.title,
-        to: { project: input.to, ticketId: moved.ticketId },
-      },
+  };
+  const moved = await move(proposal);
+  try {
+    return await applyInProject(ctx, name, input, async (tx, projectId) => {
+      await publishEvent(tx, projectId, {
+        kind: PROPOSAL_MOVED_EVENT,
+        payload: {
+          ticketId: input.ticketId,
+          project: input.from,
+          title: moved.title,
+          to: { project: input.to, ticketId: moved.ticketId },
+        },
+      });
+      return { ticketId: moved.ticketId, project: input.to };
     });
-    return { ticketId: moved.ticketId, project: input.to };
-  });
+  } catch (err) {
+    await undoMove(proposal, moved);
+    throw err;
+  }
 };
 
 export const PLANNER_HANDLERS: IntentHandlers<PlannerIntentName> = {
