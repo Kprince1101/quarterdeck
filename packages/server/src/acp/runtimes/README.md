@@ -53,7 +53,7 @@ A base that is missing, is not JSON, or has a field of the wrong type (an MCP se
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `prompt`         | The base's prompt, then Quarterdeck's, joined by a blank line. A `file://` prompt is read from disk, relative to the base file (`~/` is the home folder).                                                    |
 | `mcpServers`     | The base's servers as written, then Quarterdeck's. A base server with the name of any server in the launch (the bus, or one Kiro's config cannot hold such as sse) throws `KiroConfigError` naming the base. |
-| `tools`          | The base's, or `["*"]`. When the base lists tools without `*`, `@<server>` is added for each of Quarterdeck's servers so the bus stays usable.                                                               |
+| `tools`          | The base's, or `["*"]`. When the base lists tools without `*`, `@<server>` is added for each server in the launch, whatever its transport, so the bus stays usable.                                          |
 | `allowedTools`   | The base's, or `[]`. Tools listed here skip `session/request_permission`, so a machine base decides what runs without a card.                                                                                |
 | `toolsSettings`  | The base's, if any.                                                                                                                                                                                          |
 | `resources`      | The base's, in order. A relative `file://` or `skill://` path, and a knowledge base's relative `file://` `source`, is resolved against the base file's folder, because Kiro runs in `~/.quarterdeck/kiro/`.  |
@@ -66,7 +66,13 @@ Some fields are dropped. The base is still used, and the adapter logs `Kiro base
 - A builder never gets `includeMcpJson: true`, even from a machine base. With it, Kiro loads the workspace `.kiro/settings/mcp.json` under the session cwd, which for a builder is its own worktree: a builder could add an MCP server by writing that file, and Kiro would start it on the next launch with no card. The servers in the global `~/.kiro/settings/mcp.json` are not copied in either; list the ones a builder needs in the base's `mcpServers`.
 - A base read from `<repoDir>/.kiro/agents/` also loses `mcpServers`, `allowedTools` and `toolsSettings`. Agents can write to the repo (a builder's pull request lands there, and the planner runs in it), so a committed agent must not start a server command or pre-approve a tool. It keeps `prompt`, `resources`, `tools` and `model`. A project that needs servers or pre-approvals for its builders puts the agent in `~/.kiro/agents/` and names it from the repo layer.
 
-A repo base may also only point inside the repo. Its `file://` prompt, and every `file://` or `skill://` resource and knowledge-base `source`, must resolve, after `~/` and `..`, to a path under `repoDir`. The prompt is checked again after following symlinks, since it is read into the config. Anything else, such as `file://~/.quarterdeck/api.token`, throws `KiroConfigError` naming the base, and nothing is read.
+A repo base may also only point inside the repo. Its `file://` prompt, and every `file://` or `skill://` resource and knowledge-base `source`, must resolve, after `~/` and `..`, to a path under `repoDir`. They are checked again on disk, against the repo's real path:
+
+- the prompt file after following symlinks;
+- each resource's path up to its first glob segment after following symlinks;
+- when that is a folder, every symlink anywhere under it.
+
+Anything else, such as `file://~/.quarterdeck/api.token`, throws `KiroConfigError` naming the base, and nothing is read.
 
 `quarterdeck doctor` prints the base each role resolves to (`kiro base for builder: everyday (~/.kiro/agents/everyday.json)`), or the error, whenever any role has one. The builder line uses the repo layer of the folder doctor runs in.
 

@@ -150,11 +150,11 @@ const assertNoNameClash = (
 
 const withOurServers = (
   tools: string[],
-  ours: Record<string, KiroMcpServer>,
+  ours: readonly McpServer[],
 ): string[] => {
   if (tools.includes('*')) return tools;
-  const missing = Object.keys(ours)
-    .map((server) => `@${server}`)
+  const missing = ours
+    .map((server) => `@${server.name}`)
     .filter((tool) => !tools.includes(tool));
   return [...tools, ...missing];
 };
@@ -198,7 +198,7 @@ export const buildKiroAgentConfig = (
     description: DESCRIPTION,
     prompt: joinPrompts(config.prompt, prompt),
     mcpServers: { ...config.mcpServers, ...ours },
-    tools: withOurServers(config.tools ?? ['*'], ours),
+    tools: withOurServers(config.tools ?? ['*'], mcpServers),
     allowedTools: config.allowedTools ?? [],
     toolsSettings: config.toolsSettings,
     resources: config.resources,

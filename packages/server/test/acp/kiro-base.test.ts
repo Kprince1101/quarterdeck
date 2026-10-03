@@ -334,6 +334,46 @@ describe('kiro base agents', () => {
     },
   );
 
+  describe.skipIf(process.platform === 'win32')(
+    'repo resources that link outside the repo',
+    () => {
+      const linkedBase = async (resources: unknown[]): Promise<void> => {
+        const outside = join(box.root, 'outside');
+        await mkdir(outside, { recursive: true });
+        await writeFile(join(outside, 'secret.md'), 'example-secret');
+        const steering = join(box.repo, '.kiro', 'steering');
+        await mkdir(steering, { recursive: true });
+        await symlink(join(outside, 'secret.md'), join(steering, 'linked.md'));
+        await symlink(outside, join(box.repo, '.kiro', 'linked-dir'));
+        await writeJson(
+          join(box.repo, '.kiro', 'agents', 'library-builder.json'),
+          { resources },
+        );
+        await kiroRule(box.repo, {
+          baseAgents: { builder: 'library-builder' },
+        });
+      };
+
+      it.each([
+        ['a linked file', ['file://../steering/linked.md']],
+        ['a glob over a linked file', ['file://../steering/**/*.md']],
+        ['a skill glob through a linked folder', ['skill://../**/SKILL.md']],
+        ['a path through a linked folder', ['file://../linked-dir/secret.md']],
+        [
+          'a knowledge base holding a link',
+          [{ type: 'knowledgeBase', source: 'file://../steering' }],
+        ],
+      ])('refuses %s', async (_what, resources) => {
+        await linkedBase(resources);
+
+        const error = await connectError('builder');
+
+        expect(error).toBeInstanceOf(KiroConfigError);
+        expect(String(error)).toContain('outside');
+      });
+    },
+  );
+
   it('lets a machine base read a ~/ prompt for a builder', async () => {
     await writeFile(join(box.home, 'prompt.md'), 'Prompt from home.');
     await writeJson(join(box.agentsDir, 'everyday.json'), {

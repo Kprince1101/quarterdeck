@@ -1,4 +1,4 @@
-import { access, readFile, realpath } from 'node:fs/promises';
+import { access, readdir, readFile, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
@@ -144,22 +144,76 @@ const assertInRepo = (scope: BaseScope, target: string, what: string): void => {
   );
 };
 
-const resolveUriIn = (uri: string, scope: BaseScope): string => {
+const GLOB = /[*?[\]{}]/;
+
+const staticPrefix = (target: string): string => {
+  const parts = target.split(sep);
+  const glob = parts.findIndex((part) => GLOB.test(part));
+  if (glob === -1) return target;
+  return parts.slice(0, glob).join(sep) || sep;
+};
+
+const realpathIfAny = (path: string): Promise<string | undefined> =>
+  realpath(path).catch(() => undefined);
+
+const linkOutside = async (
+  dir: string,
+  repo: string,
+): Promise<string | undefined> => {
+  const entries = await readdir(dir, { withFileTypes: true, recursive: true });
+  for (const entry of entries) {
+    if (!entry.isSymbolicLink()) continue;
+    const link = join(entry.parentPath, entry.name);
+    const target = await realpathIfAny(link);
+    if (target !== undefined && !isInside(repo, target)) return link;
+  }
+  return undefined;
+};
+
+const assertResourceInRepo = async (
+  scope: BaseScope,
+  target: string,
+): Promise<void> => {
+  if (scope.repoDir === undefined) return;
+  assertInRepo(scope, target, 'resource');
+  const real = await realpathIfAny(staticPrefix(target));
+  if (real === undefined) return;
+  const repo = await realpath(scope.repoDir);
+  assertInRepo({ ...scope, repoDir: repo }, real, 'resource');
+  if (!(await stat(real)).isDirectory()) return;
+  const link = await linkOutside(real, repo);
+  if (link === undefined) return;
+  throw new KiroConfigError(
+    `${scope.path} names resource ${target}, which holds ${link}, a link outside ${repo}. A base agent in the repo may only point inside the repo.`,
+  );
+};
+
+const resolveUriIn = async (uri: string, scope: BaseScope): Promise<string> => {
   const scheme = uriScheme(uri);
   if (scheme !== undefined) {
-    assertInRepo(scope, uriTarget(uri, scheme, scope), 'resource');
+    await assertResourceInRepo(scope, uriTarget(uri, scheme, scope));
   }
   return resolveUri(uri, dirname(scope.path));
 };
 
-const resolveResource = (
+const resolveResource = async (
   resource: KiroResource,
   scope: BaseScope,
-): KiroResource => {
+): Promise<KiroResource> => {
   if (typeof resource === 'string') return resolveUriIn(resource, scope);
   const { source } = resource;
   if (typeof source !== 'string') return resource;
-  return { ...resource, source: resolveUriIn(source, scope) };
+  return { ...resource, source: await resolveUriIn(source, scope) };
+};
+
+const resolveResources = async (
+  resources: KiroResource[] | null | undefined,
+  scope: BaseScope,
+): Promise<KiroResource[] | undefined> => {
+  if (!resources) return undefined;
+  return Promise.all(
+    resources.map((resource) => resolveResource(resource, scope)),
+  );
 };
 
 const unreadablePrompt = (
@@ -222,9 +276,7 @@ const toBaseConfig = async (
     tools: file.tools ?? undefined,
     allowedTools: unlessDropped(dropped, 'allowedTools', file.allowedTools),
     toolsSettings: unlessDropped(dropped, 'toolsSettings', file.toolsSettings),
-    resources: file.resources?.map((resource) =>
-      resolveResource(resource, scope),
-    ),
+    resources: await resolveResources(file.resources, scope),
     model: file.model ?? undefined,
     includeMcpJson: unlessDropped(
       dropped,

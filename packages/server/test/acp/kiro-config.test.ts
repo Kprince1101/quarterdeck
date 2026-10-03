@@ -69,6 +69,19 @@ describe('kiro agent config prompt', () => {
     ).toThrow(/named events/);
   });
 
+  it('adds every launch server, whatever its transport, to a base that lists its tools', () => {
+    const events: McpServer = {
+      type: 'sse',
+      name: 'events',
+      url: 'https://events.example/sse',
+      headers: [],
+    };
+    const listed = { ...base, config: { tools: ['read'] } };
+    expect(
+      buildKiroAgentConfig(NAME, [BUS, events], { base: listed }).tools,
+    ).toEqual(['read', '@bus', '@events']);
+  });
+
   it('never lets a builder load mcp.json', () => {
     const loads = { ...base, config: { includeMcpJson: true } };
     expect(
