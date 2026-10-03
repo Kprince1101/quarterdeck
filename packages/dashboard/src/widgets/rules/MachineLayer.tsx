@@ -17,10 +17,15 @@ const CheckStatus = ({ error }: { error: string | null }) => {
   );
 };
 
-const ShellWarnings = ({ warnings }: { warnings: string[] }) => {
+interface WarningsProps {
+  label: string;
+  warnings: string[];
+}
+
+const Warnings = ({ label, warnings }: WarningsProps) => {
   if (warnings.length === 0) return null;
   return (
-    <ul className="qd-rules-warnings" aria-label="Shell warnings">
+    <ul className="qd-rules-warnings" aria-label={label}>
       {warnings.map((warning) => (
         <li key={warning}>{warning}</li>
       ))}
@@ -46,7 +51,8 @@ export const MachineLayer = ({
       onChange={view.handleDraftChange}
     />
     <CheckStatus error={view.checkError} />
-    <ShellWarnings warnings={view.shellWarnings} />
+    <Warnings label="Shell warnings" warnings={view.shellWarnings} />
+    <Warnings label="Deprecated keys" warnings={view.deprecations} />
     <div className="qd-rules-actions">
       <button
         type="button"

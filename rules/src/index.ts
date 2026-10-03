@@ -10,14 +10,23 @@ export {
   loadRule,
   loadRules,
   ruleLayerPaths,
+  upgradeLayer,
+  warnOnce,
   type LoadRulesOptions,
   type RuleLayers,
 } from './load-rules.js';
 export { mergeRepoKiro } from './kiro-layer.js';
 export {
+  AiReviewConfigError,
+  DEPRECATED_AI_REVIEW_KEY,
+  MACHINE_LIFECYCLE_PATH,
+  aiReviewersOf,
+  deprecatedAiReviewWarning,
   mergeRepoLifecycle,
   tightenMergeGate,
   tightenSettleSeconds,
+  upgradeLifecycleLayer,
+  type UpgradedLayer,
 } from './lifecycle-layer.js';
 export {
   loadPermissionLayers,

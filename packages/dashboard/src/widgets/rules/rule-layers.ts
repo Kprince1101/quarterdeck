@@ -4,6 +4,8 @@ import {
   mergeLayer,
   mergeRepoKiro,
   mergeRepoLifecycle,
+  upgradeLifecycleLayer,
+  type UpgradedLayer,
 } from '@quarterdeck/rules/merge';
 import {
   RULE_SCHEMAS,
@@ -31,6 +33,7 @@ export interface DraftCheck {
   effective: unknown;
   repoLayer: unknown;
   repoError: string | null;
+  deprecations: string[];
 }
 
 export interface ValueSource {
@@ -42,7 +45,9 @@ export interface ValueSource {
 
 type Path = readonly string[];
 
-type RepoResult = Pick<DraftCheck, 'effective' | 'repoLayer' | 'repoError'>;
+type RepoResult = Pick<DraftCheck, 'effective' | 'repoLayer' | 'repoError'> & {
+  repoDeprecations: string[];
+};
 
 export const isMarkdownRule = (rule: RuleView): boolean =>
   rule.file.endsWith('.md');
@@ -70,11 +75,24 @@ const validate = (name: RuleName, path: string, value: unknown): unknown => {
   return result.data;
 };
 
-const repoLayerOf = (rule: RuleView, path: string, text: string): unknown => {
+const upgradeLayer = (
+  rule: RuleView,
+  path: string,
+  layer: unknown,
+): UpgradedLayer => {
+  if (rule.name !== 'lifecycle') return { layer, warnings: [] };
+  return upgradeLifecycleLayer(layer, path);
+};
+
+const repoLayerOf = (
+  rule: RuleView,
+  path: string,
+  text: string,
+): UpgradedLayer => {
   const parsed = parseLayer(rule, path, text);
   if (rule.name === 'env') throw new RulesError(path, REPO_ENV_IGNORED);
   if (rule.name === 'forges') throw new RulesError(path, REPO_FORGES_REFUSED);
-  if (rule.name !== 'permissions') return parsed;
+  if (rule.name !== 'permissions') return upgradeLayer(rule, path, parsed);
   const result = repoPermissionsSchema.safeParse(parsed);
   if (!result.success) {
     throw new RulesError(
@@ -82,7 +100,7 @@ const repoLayerOf = (rule: RuleView, path: string, text: string): unknown => {
       `the repo layer may only tighten permissions\n${z.prettifyError(result.error)}`,
     );
   }
-  return result.data;
+  return { layer: result.data, warnings: [] };
 };
 
 const mergeRepo = (
@@ -103,16 +121,26 @@ const mergeRepo = (
 
 const applyRepo = (rule: RuleView, merged: unknown): RepoResult => {
   const { repo } = rule;
+  const unmerged = {
+    effective: merged,
+    repoLayer: undefined,
+    repoDeprecations: [],
+  };
   if (repo === null || repo.content === null) {
-    return { effective: merged, repoLayer: undefined, repoError: null };
+    return { ...unmerged, repoError: null };
   }
   try {
-    const layer = repoLayerOf(rule, repo.path, repo.content);
+    const { layer, warnings } = repoLayerOf(rule, repo.path, repo.content);
     const effective = mergeRepo(rule, merged, layer, repo.path);
-    return { effective, repoLayer: layer, repoError: null };
+    return {
+      effective,
+      repoLayer: layer,
+      repoError: null,
+      repoDeprecations: warnings,
+    };
   } catch (err) {
     if (!(err instanceof RulesError)) throw err;
-    return { effective: merged, repoLayer: undefined, repoError: err.message };
+    return { ...unmerged, repoError: err.message };
   }
 };
 
@@ -125,6 +153,7 @@ const refused = (err: unknown): DraftCheck => {
     effective: undefined,
     repoLayer: undefined,
     repoError: null,
+    deprecations: [],
   };
 };
 
@@ -135,13 +164,19 @@ export const checkDraft = (rule: RuleView, draft: string): DraftCheck => {
       rule.defaults.path,
       parseLayer(rule, rule.defaults.path, rule.defaults.content),
     );
-    const layer = parseLayer(rule, rule.machine.path, draft);
+    const { layer, warnings } = upgradeLayer(
+      rule,
+      rule.machine.path,
+      parseLayer(rule, rule.machine.path, draft),
+    );
     const merged = validate(
       rule.name,
       rule.machine.path,
       mergeLayer(defaults, layer),
     );
-    return { error: null, layer, merged, ...applyRepo(rule, merged) };
+    const { repoDeprecations, ...repo } = applyRepo(rule, merged);
+    const deprecations = [...warnings, ...repoDeprecations];
+    return { error: null, layer, merged, ...repo, deprecations };
   } catch (err) {
     return refused(err);
   }

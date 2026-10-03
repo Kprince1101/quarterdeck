@@ -48,7 +48,8 @@ const WAITING = waitingReasons(forgeTerms('github'));
 const RULES: MergeGate = {
   requireReviewerApproval: true,
   requireChecksPassing: true,
-  requireCopilotReview: false,
+  requireAiReview: false,
+  aiReviewers: { github: [], gitlab: [] },
   autoMerge: false,
 };
 
@@ -61,7 +62,7 @@ const ready = (): PullRequest => ({
   draft: false,
   mergeable: 'mergeable',
   checks: { state: 'passing', failing: [] },
-  botReview: { reviewed: false, openThreads: 0 },
+  botReview: { reviewers: [], openThreads: [] },
 });
 
 describe('a merge answer does not bypass checks', { timeout: TIMEOUT }, () => {

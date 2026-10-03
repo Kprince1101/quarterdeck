@@ -13,7 +13,11 @@
   "mergeGate": {
     "requireReviewerApproval": true,
     "requireChecksPassing": true,
-    "requireCopilotReview": false,
+    "requireAiReview": false,
+    "aiReviewers": {
+      "github": ["copilot-pull-request-reviewer", "Copilot"],
+      "gitlab": []
+    },
     "autoMerge": false
   }
 }

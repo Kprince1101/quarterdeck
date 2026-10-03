@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { tightenRepoBudget } from './budget-layers.js';
 import { RulesError } from './errors.js';
 import { isJsonObject, mergeLayer, type JsonObject } from './merge-layer.js';
+import { FORGE_TERMS, type Forge } from './forges.js';
 import {
   repoMergeGateSchema,
   settleSecondsSchema,
@@ -9,6 +10,69 @@ import {
   type MergeGate,
   type RepoMergeGate,
 } from './schemas.js';
+
+export const MACHINE_LIFECYCLE_PATH =
+  '~/.quarterdeck/rules.local.lifecycle.json';
+
+export const DEPRECATED_AI_REVIEW_KEY = 'requireCopilotReview';
+
+export const deprecatedAiReviewWarning = (path: string): string =>
+  `${path}: mergeGate.${DEPRECATED_AI_REVIEW_KEY} is deprecated and reads as mergeGate.requireAiReview; rename it`;
+
+export interface UpgradedLayer {
+  layer: unknown;
+  warnings: string[];
+}
+
+const aliasedFlag = (current: unknown, deprecated: unknown): unknown => {
+  if (current === undefined) return deprecated;
+  if (typeof current !== 'boolean') return current;
+  if (typeof deprecated !== 'boolean') return deprecated;
+  return current || deprecated;
+};
+
+export const upgradeLifecycleLayer = (
+  layer: unknown,
+  path: string,
+): UpgradedLayer => {
+  if (!isJsonObject(layer) || !isJsonObject(layer['mergeGate']))
+    return { layer, warnings: [] };
+  const gate = layer['mergeGate'];
+  if (!Object.hasOwn(gate, DEPRECATED_AI_REVIEW_KEY))
+    return { layer, warnings: [] };
+  const { [DEPRECATED_AI_REVIEW_KEY]: deprecated, ...rest } = gate;
+  const mergeGate = {
+    ...rest,
+    requireAiReview: aliasedFlag(rest['requireAiReview'], deprecated),
+  };
+  return {
+    layer: { ...layer, mergeGate },
+    warnings: [deprecatedAiReviewWarning(path)],
+  };
+};
+
+export class AiReviewConfigError extends RulesError {
+  readonly forge: Forge;
+
+  constructor(forge: Forge) {
+    super(
+      MACHINE_LIFECYCLE_PATH,
+      `mergeGate.requireAiReview is on, but mergeGate.aiReviewers.${forge} lists no ${FORGE_TERMS[forge].name} bot logins; list the AI reviewer's exact bot logins there, or turn requireAiReview off`,
+    );
+    this.name = 'AiReviewConfigError';
+    this.forge = forge;
+  }
+}
+
+export const aiReviewersOf = (
+  gate: MergeGate,
+  forge: Forge,
+): readonly string[] => {
+  const logins = gate.aiReviewers[forge];
+  if (gate.requireAiReview && logins.length === 0)
+    throw new AiReviewConfigError(forge);
+  return logins;
+};
 
 export const tightenMergeGate = (
   machine: MergeGate,
@@ -19,8 +83,7 @@ export const tightenMergeGate = (
     machine.requireReviewerApproval || (repo.requireReviewerApproval ?? false),
   requireChecksPassing:
     machine.requireChecksPassing || (repo.requireChecksPassing ?? false),
-  requireCopilotReview:
-    machine.requireCopilotReview || (repo.requireCopilotReview ?? false),
+  requireAiReview: machine.requireAiReview || (repo.requireAiReview ?? false),
   autoMerge: machine.autoMerge && (repo.autoMerge ?? true),
 });
 

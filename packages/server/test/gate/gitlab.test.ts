@@ -1,21 +1,25 @@
-import { forgeTerms } from '@quarterdeck/rules';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { resolve } from 'node:path';
+import { forgeTerms, loadRule, type MergeGate } from '@quarterdeck/rules';
 import { describe, expect, it } from 'vitest';
 import {
   GITLAB_PAGE_SIZE,
   foreignPullRequest,
   forgeHost,
   glabCli,
-  isGitLabReviewBot,
-  openThreadsByAuthor,
+  mergeStep,
   parseMergeRequest,
   parseMergeRequestUrl,
+  readBotReview,
   readThreads,
+  type Approval,
   type GlabRunner,
   type RepositoryRef,
 } from '../../src/gate/index.js';
 import {
-  DUO,
   FINCH,
+  REVIEW_BOT,
   GITLAB_HEAD as HEAD,
   GITLAB_MR as MR,
   GITLAB_PIPELINE_ID,
@@ -122,7 +126,7 @@ describe('glab merge request', () => {
       draft: false,
       mergeable: 'mergeable',
       checks: { state: 'passing', failing: [] },
-      botReview: { reviewed: false, openThreads: 0 },
+      botReview: { reviewers: [], openThreads: [] },
     });
   });
 
@@ -254,38 +258,116 @@ describe('glab merge request', () => {
 describe('glab discussions', () => {
   const threads: GitlabShape = {
     threads: [
-      { author: DUO },
-      { author: DUO, replies: [FINCH] },
-      { author: DUO, resolved: true },
-      { author: DUO, resolvable: false },
+      { author: REVIEW_BOT },
+      { author: REVIEW_BOT, replies: [FINCH] },
+      { author: REVIEW_BOT, resolved: true },
+      { author: REVIEW_BOT, resolvable: false },
       { author: OKAPI },
       { author: OKAPI, resolved: true },
       { author: FINCH, resolvable: false },
     ],
   };
 
-  it('counts open threads by the author who opened them, skipping system notes', () => {
+  it('reads each discussion as the author who opened it and whether it is open, skipping system notes', () => {
     const read = readThreads(gitlabDiscussions(threads));
 
-    expect(read).toHaveLength(7);
-    expect(openThreadsByAuthor(read)).toEqual({ GitLabDuo: 2, okapi: 1 });
+    expect(read).toEqual([
+      { author: 'review-bot', resolved: false },
+      { author: 'review-bot', resolved: false },
+      { author: 'review-bot', resolved: true },
+      { author: 'review-bot', resolved: true },
+      { author: 'okapi', resolved: false },
+      { author: 'okapi', resolved: true },
+      { author: 'finch', resolved: true },
+    ]);
   });
 
-  it('fills the bot review from GitLab Duo threads only', () => {
+  it('reports every discussion author and who opened each open thread, leaving the choice of bot to the gate', () => {
     expect(parse(threads).botReview).toEqual({
-      reviewed: true,
-      openThreads: 2,
+      reviewers: ['review-bot', 'okapi', 'finch'],
+      openThreads: ['review-bot', 'review-bot', 'okapi'],
+    });
+    expect(parse({ threads: [] }).botReview).toEqual({
+      reviewers: [],
+      openThreads: [],
+    });
+    expect(readBotReview([{ author: null, resolved: false }])).toEqual({
+      reviewers: [],
+      openThreads: [],
+    });
+  });
+});
+
+describe('AI review on a GitLab merge request', () => {
+  const APPROVAL: Approval = {
+    eventId: 1,
+    reportId: 1,
+    pr: MR,
+    head: HEAD,
+    cardId: undefined,
+  };
+
+  const stepFor = async (shape: GitlabShape, rules: MergeGate) =>
+    mergeStep(
+      APPROVAL,
+      await glabCli(glabAnswers(() => shape)).pullRequest(MR),
+      'none',
+      rules,
+      PROJECT,
+      'gitlab',
+    );
+
+  const shipped = async (): Promise<MergeGate> => {
+    const home = await mkdtemp(resolve(tmpdir(), 'qd-gitlab-ai-'));
+    try {
+      return (await loadRule('lifecycle', { homeDir: home })).mergeGate;
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
+  };
+
+  it('waits for a configured bot login, bounces its open thread, then passes', async () => {
+    const gate = await shipped();
+    const rules: MergeGate = {
+      ...gate,
+      autoMerge: true,
+      requireAiReview: true,
+      aiReviewers: { ...gate.aiReviewers, gitlab: ['review-bot'] },
+    };
+
+    expect(await stepFor({ threads: [{ author: OKAPI }] }, rules)).toEqual({
+      kind: 'wait',
+      reason: 'waiting for an AI review from review-bot',
     });
     expect(
-      parse({ threads: [{ author: OKAPI }, { author: FINCH }] }).botReview,
-    ).toEqual({ reviewed: false, openThreads: 0 });
+      await stepFor(
+        { threads: [{ author: REVIEW_BOT, replies: [FINCH] }] },
+        rules,
+      ),
+    ).toEqual({
+      kind: 'bounce',
+      reason:
+        '1 AI review thread(s) from review-bot are unresolved on the merge request; answer and resolve each, then report again',
+    });
+    expect(
+      await stepFor(
+        {
+          threads: [{ author: REVIEW_BOT, resolved: true }, { author: OKAPI }],
+        },
+        rules,
+      ),
+    ).toEqual({ kind: 'merge' });
   });
 
-  it('knows the review bot by its exact username', () => {
-    expect(isGitLabReviewBot('GitLabDuo')).toBe(true);
-    expect(isGitLabReviewBot('gitlabduo')).toBe(false);
-    expect(isGitLabReviewBot('GitLabDuo-fan')).toBe(false);
-    expect(isGitLabReviewBot(null)).toBe(false);
+  it('is a config error with the shipped empty GitLab list', async () => {
+    const rules: MergeGate = { ...(await shipped()), requireAiReview: true };
+
+    expect(rules.aiReviewers.gitlab).toEqual([]);
+    await expect(
+      stepFor({ threads: [{ author: REVIEW_BOT, resolved: true }] }, rules),
+    ).rejects.toThrow(
+      '~/.quarterdeck/rules.local.lifecycle.json: mergeGate.requireAiReview is on, but mergeGate.aiReviewers.gitlab lists no GitLab bot logins',
+    );
   });
 });
 

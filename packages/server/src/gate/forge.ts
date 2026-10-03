@@ -25,8 +25,8 @@ export interface PullRequestRef extends RepositoryRef {
 }
 
 export interface BotReview {
-  reviewed: boolean;
-  openThreads: number;
+  reviewers: string[];
+  openThreads: string[];
 }
 
 export interface PullRequest {

@@ -192,25 +192,26 @@ const readChecks = (rollup: Rollup): PullRequest['checks'] => {
   return { state: rollupState(rollup.state), failing };
 };
 
-export const COPILOT_LOGINS: readonly string[] = [
-  'copilot-pull-request-reviewer',
-  'Copilot',
-];
+type Author = z.infer<typeof author>;
 
-export const isCopilot = (
-  who: { login: string; __typename?: string | undefined } | null | undefined,
-): boolean =>
-  who !== null &&
-  who !== undefined &&
-  COPILOT_LOGINS.includes(who.login) &&
-  who.__typename !== 'User';
+export const botLogin = (who: Author | undefined): string | undefined => {
+  if (who === null || who === undefined || who.__typename === 'User')
+    return undefined;
+  return who.login;
+};
 
 const readBotReview = (pr: Reply): PullRequest['botReview'] => ({
-  reviewed: pr.reviews.nodes.some((review) => isCopilot(review.author)),
-  openThreads: pr.reviewThreads.nodes.filter(
-    (thread) =>
-      !thread.isResolved && isCopilot(thread.comments.nodes[0]?.author),
-  ).length,
+  reviewers: [
+    ...new Set(
+      pr.reviews.nodes
+        .map((review) => botLogin(review.author))
+        .filter((login) => login !== undefined),
+    ),
+  ],
+  openThreads: pr.reviewThreads.nodes
+    .filter((thread) => !thread.isResolved)
+    .map((thread) => botLogin(thread.comments.nodes[0]?.author))
+    .filter((login) => login !== undefined),
 });
 
 const readRepository = (

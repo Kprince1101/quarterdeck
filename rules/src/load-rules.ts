@@ -5,7 +5,11 @@ import { z } from 'zod';
 import { getErrorMessage, isMissingFile, RulesError } from './errors.js';
 import { FORGES_FILE, refuseRepoForges } from './forges.js';
 import { mergeRepoKiro } from './kiro-layer.js';
-import { mergeRepoLifecycle } from './lifecycle-layer.js';
+import {
+  mergeRepoLifecycle,
+  upgradeLifecycleLayer,
+  type UpgradedLayer,
+} from './lifecycle-layer.js';
 import { mergeLayer } from './merge-layer.js';
 import { RULE_SCHEMAS, type RuleName, type Rules } from './schemas.js';
 
@@ -36,7 +40,16 @@ export interface LoadRulesOptions {
   defaultsDir?: string;
   homeDir?: string;
   repoDir?: string;
+  onWarning?: (warning: string) => void;
 }
+
+const warned = new Set<string>();
+
+export const warnOnce = (warning: string): void => {
+  if (warned.has(warning)) return;
+  warned.add(warning);
+  console.warn(`quarterdeck rules: ${warning}`);
+};
 
 export interface RuleLayers {
   defaults: string;
@@ -112,6 +125,19 @@ const REPO_LAYER_MERGES: Partial<Record<RuleName, RepoLayerMerge>> = {
   forges: refuseRepoForges,
 };
 
+type LayerUpgrade = (layer: unknown, path: string) => UpgradedLayer;
+
+const LAYER_UPGRADES: Partial<Record<RuleName, LayerUpgrade>> = {
+  lifecycle: upgradeLifecycleLayer,
+};
+
+export const upgradeLayer = (
+  name: RuleName,
+  layer: unknown,
+  path: string,
+): UpgradedLayer =>
+  LAYER_UPGRADES[name]?.(layer, path) ?? { layer, warnings: [] };
+
 const mergeLocal = (
   name: RuleName,
   merged: unknown,
@@ -136,10 +162,16 @@ export const loadRule = async <K extends RuleName>(
     await readDefaults(layers.defaults),
   );
   let merged = validateLayer(name, layers.defaults, defaults);
+  const warn = options.onWarning ?? warnOnce;
   for (const path of layers.local) {
     const text = await readLocal(path);
     if (text === undefined) continue;
-    const layer = parseLayer(path, text);
+    const { layer, warnings } = upgradeLayer(
+      name,
+      parseLayer(path, text),
+      path,
+    );
+    for (const warning of warnings) warn(warning);
     const next = mergeLocal(name, merged, layer, path, path === repoLayer);
     merged = validateLayer(name, path, next);
   }

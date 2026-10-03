@@ -33,6 +33,7 @@ export interface RulesWidgetView {
   editorLabel: string;
   checkError: string | null;
   shellWarnings: string[];
+  deprecations: string[];
   sources: ValueSource[];
   showNoFileNote: boolean;
   canWrite: boolean;
@@ -110,6 +111,7 @@ export const useRulesWidget = (): RulesWidgetView => {
     editorLabel: `Edit rules.local.${fileName}`,
     checkError: editor?.check.error ?? null,
     shellWarnings: editorShellWarnings(editor),
+    deprecations: editor?.check.deprecations ?? [],
     sources: editor?.sources ?? [],
     showNoFileNote: rule?.machine.content === null,
     canWrite: review.canWrite,

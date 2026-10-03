@@ -9,15 +9,10 @@ import {
   type PullRequestState,
   type RepositoryRef,
 } from '../../src/gate/index.js';
+import { bot, githubReply, type GithubShape } from './github-fixtures.ts';
 import {
-  COPILOT,
-  githubReply,
-  type GithubShape,
-  type Who,
-} from './github-fixtures.ts';
-import {
-  DUO,
   gitlabJob,
+  gitlabPerson,
   glabAnswers,
   type GitlabShape,
   type GitlabThread,
@@ -86,29 +81,22 @@ const GITHUB_ROLLUPS: Record<ChecksState, (failing: string[]) => unknown> = {
   }),
 };
 
-const repeat = <T>(count: number, item: T): T[] =>
-  Array.from({ length: count }, () => item);
-
-const githubShape = (pr: PullRequest): GithubShape => {
-  const reviews: Who[] = [];
-  if (pr.botReview.reviewed) reviews.push(COPILOT);
-  return {
-    state: GITHUB_STATES[pr.state],
-    isDraft: pr.draft,
-    mergeable: GITHUB_MERGEABLE[pr.mergeable],
-    head: pr.head,
-    rollup: GITHUB_ROLLUPS[pr.checks.state](pr.checks.failing),
-    reviews,
-    threads: repeat(pr.botReview.openThreads, {
-      isResolved: false,
-      author: COPILOT,
-    }),
-    base: pr.base,
-    nameWithOwner: `${pr.repository.owner}/${pr.repository.name}`,
-    repoUrl: `https://${pr.repository.hostname}/${pr.repository.owner}/${pr.repository.name}`,
-    defaultBranch: pr.defaultBranch,
-  };
-};
+const githubShape = (pr: PullRequest): GithubShape => ({
+  state: GITHUB_STATES[pr.state],
+  isDraft: pr.draft,
+  mergeable: GITHUB_MERGEABLE[pr.mergeable],
+  head: pr.head,
+  rollup: GITHUB_ROLLUPS[pr.checks.state](pr.checks.failing),
+  reviews: pr.botReview.reviewers.map(bot),
+  threads: pr.botReview.openThreads.map((login) => ({
+    isResolved: false,
+    author: bot(login),
+  })),
+  base: pr.base,
+  nameWithOwner: `${pr.repository.owner}/${pr.repository.name}`,
+  repoUrl: `https://${pr.repository.hostname}/${pr.repository.owner}/${pr.repository.name}`,
+  defaultBranch: pr.defaultBranch,
+});
 
 const GITLAB_STATES: Record<PullRequestState, string> = {
   open: 'opened',
@@ -129,13 +117,12 @@ const GITLAB_PIPELINES: Record<ChecksState, Record<string, unknown> | null> = {
   failing: { status: 'failed' },
 };
 
-const gitlabThreads = (pr: PullRequest): GitlabThread[] => {
-  const threads = repeat<GitlabThread>(pr.botReview.openThreads, {
-    author: DUO,
-  });
-  if (pr.botReview.reviewed) threads.push({ author: DUO, resolved: true });
-  return threads;
-};
+const gitlabThreads = ({ botReview }: PullRequest): GitlabThread[] => [
+  ...botReview.openThreads.map((login) => ({ author: gitlabPerson(login) })),
+  ...botReview.reviewers
+    .filter((login) => !botReview.openThreads.includes(login))
+    .map((login) => ({ author: gitlabPerson(login), resolved: true })),
+];
 
 const gitlabShape = (pr: PullRequest): GitlabShape => ({
   mergeRequest: {

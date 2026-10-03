@@ -29,7 +29,7 @@ describe('merge gate toggles', () => {
 
   it('labels both toggles as applying to all projects', () => {
     expect(gateToggles(lifecycle()).toggles.map(({ label }) => label)).toEqual([
-      'Copilot review (all projects)',
+      'AI review (all projects)',
       'Auto-merge (all projects)',
     ]);
   });
@@ -37,30 +37,30 @@ describe('merge gate toggles', () => {
   it('asks before turning auto-merge on, and only then', () => {
     expect(needsConfirm('autoMerge', true)).toBe(true);
     expect(needsConfirm('autoMerge', false)).toBe(false);
-    expect(needsConfirm('requireCopilotReview', true)).toBe(false);
-    expect(needsConfirm('requireCopilotReview', false)).toBe(false);
+    expect(needsConfirm('requireAiReview', true)).toBe(false);
+    expect(needsConfirm('requireAiReview', false)).toBe(false);
   });
 
   it('reads the effective values from defaults, machine and repo layers', () => {
     expect(checkedOf(lifecycle())).toEqual([
-      ['requireCopilotReview', false, false],
+      ['requireAiReview', false, false],
       ['autoMerge', false, false],
     ]);
     expect(
       checkedOf(lifecycle('{"mergeGate":{"autoMerge":true}}', '{}')),
     ).toEqual([
-      ['requireCopilotReview', false, false],
+      ['requireAiReview', false, false],
       ['autoMerge', true, false],
     ]);
     expect(
       checkedOf(
         lifecycle(
           '{"mergeGate":{"autoMerge":true}}',
-          '{"mergeGate":{"requireCopilotReview":true,"autoMerge":false}}',
+          '{"mergeGate":{"requireAiReview":true,"autoMerge":false}}',
         ),
       ),
     ).toEqual([
-      ['requireCopilotReview', true, true],
+      ['requireAiReview', true, true],
       ['autoMerge', false, true],
     ]);
   });
@@ -77,31 +77,49 @@ describe('merge gate toggles', () => {
     const machine = JSON.stringify({
       stuckAfterMinutes: 45,
       budget: { maxTokensPerTicket: 10 },
-      mergeGate: { requireCopilotReview: true, base: 'main' },
+      mergeGate: { requireAiReview: true, base: 'main' },
     });
-    const content = gateLayer(
-      lifecycle(machine),
-      'requireCopilotReview',
-      false,
-    );
+    const content = gateLayer(lifecycle(machine), 'requireAiReview', false);
     expect(content.endsWith('\n')).toBe(true);
     expect(JSON.parse(content)).toEqual({
       stuckAfterMinutes: 45,
       budget: { maxTokensPerTicket: 10 },
-      mergeGate: { requireCopilotReview: false, base: 'main' },
+      mergeGate: { requireAiReview: false, base: 'main' },
     });
     expect(
-      JSON.parse(gateLayer(lifecycle(machine), 'requireCopilotReview', true))
+      JSON.parse(gateLayer(lifecycle(machine), 'requireAiReview', true))
         .mergeGate,
-    ).toEqual({ requireCopilotReview: true, base: 'main' });
+    ).toEqual({ requireAiReview: true, base: 'main' });
+  });
+
+  it('reads the deprecated requireCopilotReview as the AI review toggle', () => {
+    expect(
+      checkedOf(lifecycle('{"mergeGate":{"requireCopilotReview":true}}')),
+    ).toEqual([
+      ['requireAiReview', true, false],
+      ['autoMerge', false, false],
+    ]);
+    expect(
+      checkedOf(lifecycle('{}', '{"mergeGate":{"requireCopilotReview":true}}')),
+    ).toEqual([
+      ['requireAiReview', true, true],
+      ['autoMerge', false, false],
+    ]);
+  });
+
+  it('renames the deprecated key when it writes the machine layer', () => {
+    const machine = '{"mergeGate":{"requireCopilotReview":true}}';
+    expect(
+      JSON.parse(gateLayer(lifecycle(machine), 'requireAiReview', false)),
+    ).toEqual({ mergeGate: { requireAiReview: false } });
+    expect(
+      JSON.parse(gateLayer(lifecycle(machine), 'autoMerge', true)),
+    ).toEqual({ mergeGate: { requireAiReview: true, autoMerge: true } });
   });
 
   it('refuses a key the repo layer pins or a machine layer it cannot read', () => {
-    const pinned = lifecycle(
-      '{}',
-      '{"mergeGate":{"requireCopilotReview":true}}',
-    );
-    expect(() => gateLayer(pinned, 'requireCopilotReview', false)).toThrow(
+    const pinned = lifecycle('{}', '{"mergeGate":{"requireAiReview":true}}');
+    expect(() => gateLayer(pinned, 'requireAiReview', false)).toThrow(
       'pinned by this project',
     );
     expect(() => gateLayer(lifecycle('{'), 'autoMerge', true)).toThrow();

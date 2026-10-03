@@ -16,8 +16,6 @@ export type GlabRunner = (args: string[]) => Promise<string>;
 
 export const GITLAB_PAGE_SIZE = 100;
 
-export const GITLAB_REVIEW_BOTS: readonly string[] = ['GitLabDuo'];
-
 const MERGE_REQUEST_PATH = /^\/(.+)\/([^/]+)\/-\/merge_requests\/(\d+)\/?$/;
 
 export const parseMergeRequestUrl = (url: string): PullRequestRef => {
@@ -148,9 +146,6 @@ const CONFLICTING_MERGE_STATUSES: readonly string[] = [
   'cannot_be_merged',
 ];
 
-export const isGitLabReviewBot = (username: string | null): boolean =>
-  username !== null && GITLAB_REVIEW_BOTS.includes(username);
-
 const readMergeable = (mr: MergeRequestReply): Mergeable => {
   const status = mr.detailed_merge_status ?? mr.merge_status ?? 'unchecked';
   if (mr.state === 'locked' || UNSETTLED_MERGE_STATUSES.includes(status))
@@ -185,27 +180,18 @@ export const readThreads = (json: string): DiscussionThread[] =>
       ),
     }));
 
-export const openThreadsByAuthor = (
-  threads: DiscussionThread[],
-): Record<string, number> => {
-  const open: Record<string, number> = {};
-  for (const thread of threads) {
-    if (thread.resolved || thread.author === null) continue;
-    open[thread.author] = (open[thread.author] ?? 0) + 1;
-  }
-  return open;
-};
+const authorOf = (thread: DiscussionThread): string | undefined =>
+  thread.author ?? undefined;
 
-const readBotReview = (threads: DiscussionThread[]): BotReview => {
-  const open = openThreadsByAuthor(threads);
-  return {
-    reviewed: threads.some((thread) => isGitLabReviewBot(thread.author)),
-    openThreads: GITLAB_REVIEW_BOTS.reduce(
-      (count, bot) => count + (open[bot] ?? 0),
-      0,
-    ),
-  };
-};
+export const readBotReview = (threads: DiscussionThread[]): BotReview => ({
+  reviewers: [
+    ...new Set(threads.map(authorOf).filter((login) => login !== undefined)),
+  ],
+  openThreads: threads
+    .filter((thread) => !thread.resolved)
+    .map(authorOf)
+    .filter((login) => login !== undefined),
+});
 
 const readRepository = (url: string, json: string): RepositoryRef => {
   const project = projectSchema.parse(JSON.parse(json));

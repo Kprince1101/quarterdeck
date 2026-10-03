@@ -27,6 +27,11 @@ const writeLocal = async (dir: string, file: string, content: string) => {
 const writeLocalJson = (dir: string, file: string, value: unknown) =>
   writeLocal(dir, file, JSON.stringify(value));
 
+const SHIPPED_AI_REVIEWERS = {
+  github: ['copilot-pull-request-reviewer', 'Copilot'],
+  gitlab: [],
+};
+
 const readDefaultJson = async (file: string): Promise<unknown> =>
   JSON.parse(await readFile(resolve(DEFAULT_RULES_DIR, file), 'utf8'));
 
@@ -187,7 +192,7 @@ describe('rules loader', () => {
     await writeLocalJson(sandbox.repoDir, 'lifecycle.json', {
       autoEndSettleSeconds: 60,
       budget: { window: { capTokens: null, holdAtFraction: 0.5 } },
-      mergeGate: { autoMerge: true, requireCopilotReview: true },
+      mergeGate: { autoMerge: true, requireAiReview: true },
     });
 
     const lifecycle = await loadRule('lifecycle', sandbox);
@@ -200,7 +205,7 @@ describe('rules loader', () => {
     });
     expect(lifecycle.mergeGate).toMatchObject({
       autoMerge: true,
-      requireCopilotReview: true,
+      requireAiReview: true,
     });
   });
 
@@ -215,14 +220,113 @@ describe('rules loader', () => {
     });
   });
 
-  it('ships the merge gate with auto merge and the Copilot gate off', async () => {
+  it('ships the merge gate with auto merge and the AI review gate off', async () => {
     const lifecycle = await loadRule('lifecycle', sandbox);
 
     expect(lifecycle.mergeGate).toEqual({
       requireReviewerApproval: true,
       requireChecksPassing: true,
-      requireCopilotReview: false,
+      requireAiReview: false,
+      aiReviewers: SHIPPED_AI_REVIEWERS,
       autoMerge: false,
+    });
+  });
+
+  it('lets the home layer list AI reviewer logins per forge', async () => {
+    await writeLocalJson(sandbox.homeDir, 'lifecycle.json', {
+      mergeGate: { aiReviewers: { gitlab: ['review-bot'] } },
+    });
+
+    expect(
+      (await loadRule('lifecycle', sandbox)).mergeGate.aiReviewers,
+    ).toEqual({ github: SHIPPED_AI_REVIEWERS.github, gitlab: ['review-bot'] });
+  });
+
+  it('refuses AI reviewer logins from the repo layer', async () => {
+    const path = await writeLocalJson(sandbox.repoDir, 'lifecycle.json', {
+      mergeGate: { aiReviewers: { github: ['my-bot'] } },
+    });
+
+    await expect(loadRule('lifecycle', sandbox)).rejects.toThrow(
+      `${path}: the repo layer may only tighten the merge gate`,
+    );
+  });
+
+  it('reads the deprecated requireCopilotReview as requireAiReview, with a warning', async () => {
+    const path = await writeLocalJson(sandbox.homeDir, 'lifecycle.json', {
+      mergeGate: { requireCopilotReview: true },
+    });
+    const warnings: string[] = [];
+
+    const lifecycle = await loadRule('lifecycle', {
+      ...sandbox,
+      onWarning: (warning) => warnings.push(warning),
+    });
+
+    expect(lifecycle.mergeGate.requireAiReview).toBe(true);
+    expect(lifecycle.mergeGate.aiReviewers.github).toEqual([
+      'copilot-pull-request-reviewer',
+      'Copilot',
+    ]);
+    expect(lifecycle.mergeGate).not.toHaveProperty('requireCopilotReview');
+    expect(warnings).toEqual([
+      `${path}: mergeGate.requireCopilotReview is deprecated and reads as mergeGate.requireAiReview; rename it`,
+    ]);
+  });
+
+  it('lets the deprecated key in the repo layer only tighten, as before', async () => {
+    await writeLocalJson(sandbox.homeDir, 'lifecycle.json', {
+      mergeGate: { requireAiReview: true },
+    });
+    const path = await writeLocalJson(sandbox.repoDir, 'lifecycle.json', {
+      mergeGate: { requireCopilotReview: false },
+    });
+    const warnings: string[] = [];
+    const options = {
+      ...sandbox,
+      onWarning: (warning: string) => warnings.push(warning),
+    };
+
+    expect(
+      (await loadRule('lifecycle', options)).mergeGate.requireAiReview,
+    ).toBe(true);
+    expect(warnings).toEqual([
+      `${path}: mergeGate.requireCopilotReview is deprecated and reads as mergeGate.requireAiReview; rename it`,
+    ]);
+
+    await writeLocalJson(sandbox.homeDir, 'lifecycle.json', {});
+    await writeLocalJson(sandbox.repoDir, 'lifecycle.json', {
+      mergeGate: { requireCopilotReview: true },
+    });
+
+    expect(
+      (await loadRule('lifecycle', options)).mergeGate.requireAiReview,
+    ).toBe(true);
+  });
+
+  it('turns the gate on when either key in one layer does', async () => {
+    await writeLocalJson(sandbox.homeDir, 'lifecycle.json', {
+      mergeGate: { requireAiReview: false, requireCopilotReview: true },
+    });
+
+    const lifecycle = await loadRule('lifecycle', {
+      ...sandbox,
+      onWarning: () => undefined,
+    });
+
+    expect(lifecycle.mergeGate.requireAiReview).toBe(true);
+  });
+
+  it('still rejects a deprecated key that is not a boolean', async () => {
+    const path = await writeLocalJson(sandbox.homeDir, 'lifecycle.json', {
+      mergeGate: { requireCopilotReview: 'yes' },
+    });
+
+    await expect(
+      loadRule('lifecycle', { ...sandbox, onWarning: () => undefined }),
+    ).rejects.toMatchObject({
+      path,
+      message: expect.stringContaining('mergeGate.requireAiReview'),
     });
   });
 
@@ -247,7 +351,7 @@ describe('rules loader', () => {
       mergeGate: {
         requireReviewerApproval: false,
         requireChecksPassing: true,
-        requireCopilotReview: true,
+        requireAiReview: true,
         autoMerge: true,
       },
     });
@@ -258,7 +362,8 @@ describe('rules loader', () => {
     expect(lifecycle.mergeGate).toEqual({
       requireReviewerApproval: true,
       requireChecksPassing: true,
-      requireCopilotReview: true,
+      requireAiReview: true,
+      aiReviewers: SHIPPED_AI_REVIEWERS,
       autoMerge: true,
     });
   });
