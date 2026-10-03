@@ -22,6 +22,8 @@ export const streamProject: ProjectRow = {
   updatedAt: hoursAgo(10),
   archivedAt: null,
   pausedAt: null,
+  tracker: null,
+  publishes: null,
 };
 
 export const githubRequest = (
