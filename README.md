@@ -76,7 +76,7 @@ Wiping keeps the rules files and everything else under `~/.quarterdeck/` that is
 
 ## Rules
 
-The defaults live in `rules/`: `charter.md`, `reviewer.md`, `permissions.json`, `naming.json`, `lifecycle.json`, `models.json` and `env.json`. Override any of them with a file named `rules.local.<file>`, for example `rules.local.lifecycle.json`. Quarterdeck reads three layers, last one wins:
+The defaults live in `rules/`: `charter.md`, `reviewer.md`, `permissions.json`, `naming.json`, `lifecycle.json`, `models.json`, `env.json` and `kiro.json`. Override any of them with a file named `rules.local.<file>`, for example `rules.local.lifecycle.json`. Quarterdeck reads three layers, last one wins:
 
 1. `rules/<file>`, shipped with Quarterdeck
 2. `~/.quarterdeck/rules.local.<file>`, for this machine

@@ -12,6 +12,7 @@ export {
   type LoadRulesOptions,
   type RuleLayers,
 } from './load-rules.js';
+export { mergeRepoKiro } from './kiro-layer.js';
 export {
   mergeRepoLifecycle,
   tightenMergeGate,

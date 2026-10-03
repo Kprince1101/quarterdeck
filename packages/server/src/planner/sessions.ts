@@ -85,6 +85,8 @@ const connectOnce = async (
       env: { pass: site.passEnv ?? [] },
       project: site.slug,
       agentName: agent.name,
+      role: agent.role,
+      rules: { homeDir: site.homeDir, repoDir: site.repoPath },
       mcpServers: [bus],
     },
     {
