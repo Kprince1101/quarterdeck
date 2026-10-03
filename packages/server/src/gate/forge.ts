@@ -53,6 +53,7 @@ export interface OpenPullRequest {
 
 export interface ForgeHost {
   forge: Forge;
+  pullRequestRef: (url: string) => PullRequestRef;
   pullRequest: (url: string) => Promise<PullRequest>;
   squashMerge: (url: string, head: string) => Promise<void>;
   listOpen: (repository: RepositoryRef) => Promise<OpenPullRequest[]>;
@@ -97,13 +98,14 @@ export const repoForge = async (
   options: RepoForgeOptions = {},
 ): Promise<Forge> => {
   if (repoPath === null) return DEFAULT_FORGE;
+  const rules: LoadRulesOptions = { repoDir: repoPath };
+  if (options.homeDir !== undefined) rules.homeDir = options.homeDir;
+  const { forges } = await loadRule('forges', rules);
   const repository = await originRepository(repoPath, options.run).catch(
     () => undefined,
   );
   if (repository === undefined) return DEFAULT_FORGE;
-  const rules: LoadRulesOptions = { repoDir: repoPath };
-  if (options.homeDir !== undefined) rules.homeDir = options.homeDir;
-  return repositoryForge(repository, rules);
+  return forgeOfHost(repository.hostname, forges);
 };
 
 export const projectForge = async (

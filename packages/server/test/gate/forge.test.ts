@@ -79,6 +79,17 @@ describe('project forge', () => {
     await expect(repoForge(repo, { homeDir })).rejects.toThrow(path);
   });
 
+  it('refuses a repo mapping even when there is no origin to read', async () => {
+    const path = await writeForges(repo, { 'git.example.org': 'gitlab' });
+
+    await expect(repoForge(repo, { homeDir })).rejects.toThrow(path);
+  });
+
+  it('detects GitLab from an origin in a nested group', async () => {
+    await withOrigin('git@gitlab.com:group/subgroup/quarterdeck.git');
+    expect(await repoForge(repo, { homeDir })).toBe('gitlab');
+  });
+
   it('keeps GitHub wording where there is no origin to read', async () => {
     expect(await repoForge(null, { homeDir })).toBe('github');
     expect(await repoForge(repo, { homeDir })).toBe('github');

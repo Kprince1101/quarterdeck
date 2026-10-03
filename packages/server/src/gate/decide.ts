@@ -1,7 +1,6 @@
 import type { ForgeTerms, MergeGate } from '@quarterdeck/rules';
 import type { MergeCardState, TicketFacts } from './facts.js';
 import type { PullRequest, PullRequestRef, RepositoryRef } from './forge.js';
-import { parsePullRequestUrl } from './github.js';
 import { repositoryName, sameRepository } from './repository.js';
 
 export interface Approval {
@@ -164,10 +163,11 @@ export const foreignPullRequest = (
   url: string,
   project: RepositoryRef,
   terms: ForgeTerms,
+  parse: (url: string) => PullRequestRef,
 ): string | undefined => {
   let ref: PullRequestRef;
   try {
-    ref = parsePullRequestUrl(url);
+    ref = parse(url);
   } catch {
     return `${url} is not a ${terms.name} ${terms.long} URL; report the ${terms.long}'s URL`;
   }

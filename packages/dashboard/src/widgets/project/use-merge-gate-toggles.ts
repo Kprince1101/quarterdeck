@@ -23,6 +23,7 @@ export interface MergeGateTogglesView {
   toggles: GateToggleView[];
   error: string | null;
   isConfirmingAutoMerge: boolean;
+  isConfirmDisabled: boolean;
   autoMergeWarning: string;
   handleConfirmAutoMerge: () => void;
   handleCancelAutoMerge: () => void;
@@ -66,6 +67,7 @@ export const useMergeGateToggles = (
     toggles,
     error: error ?? loadError ?? shown?.error ?? forge.error,
     isConfirmingAutoMerge: autoMerge.isConfirming,
+    isConfirmDisabled: !forge.isRead,
     autoMergeWarning: autoMergeWarning(forge.terms),
     handleConfirmAutoMerge: () => {
       autoMerge.settle();

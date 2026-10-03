@@ -299,6 +299,7 @@ export const listOpenArgs = (repository: RepositoryRef): string[] => [
 
 export const ghCli = (run: GhRunner = runGh): ForgeHost => ({
   forge: 'github',
+  pullRequestRef: parsePullRequestUrl,
   pullRequest: async (url) =>
     parsePullRequest(url, await run(pullRequestArgs(url))),
   squashMerge: async (url, head) => {

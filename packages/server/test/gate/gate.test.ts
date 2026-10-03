@@ -19,6 +19,7 @@ import type { Store } from '../../src/store/index.js';
 import {
   GATE_EVENTS,
   MERGE_CARD,
+  parsePullRequestUrl,
   reviewPrompt,
   startReviewGate,
   waitingReasons,
@@ -82,6 +83,7 @@ interface FakeGitHub extends ForgeHost {
 const fakeGitHub = (): FakeGitHub => {
   const github: FakeGitHub = {
     forge: 'github',
+    pullRequestRef: parsePullRequestUrl,
     pr: ready(),
     fetched: [],
     merges: [],

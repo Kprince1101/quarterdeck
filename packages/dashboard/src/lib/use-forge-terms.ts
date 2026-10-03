@@ -10,6 +10,7 @@ import { getErrorMessage } from './errors.js';
 
 export interface ForgeTermsRead {
   terms: ForgeTerms;
+  isRead: boolean;
   error: string | null;
 }
 
@@ -19,6 +20,7 @@ interface Loaded extends ForgeTermsRead {
 
 const UNREAD: ForgeTermsRead = {
   terms: forgeTerms(DEFAULT_FORGE),
+  isRead: false,
   error: null,
 };
 
@@ -38,7 +40,12 @@ export const useForgeTerms = (
       .then(
         (read) => {
           if (live)
-            setLoaded({ project, terms: forgeTerms(read.forge), error: null });
+            setLoaded({
+              project,
+              terms: forgeTerms(read.forge),
+              isRead: true,
+              error: null,
+            });
         },
         (err: unknown) => {
           if (live)
@@ -50,6 +57,6 @@ export const useForgeTerms = (
     };
   }, [intents, project, enabled]);
 
-  if (loaded?.project !== project) return UNREAD;
-  return { terms: loaded.terms, error: loaded.error };
+  if (!enabled || loaded?.project !== project) return UNREAD;
+  return { terms: loaded.terms, isRead: loaded.isRead, error: loaded.error };
 };

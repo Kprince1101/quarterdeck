@@ -1,8 +1,9 @@
 import { forgeTerms, type MergeGate } from '@quarterdeck/rules';
 import { describe, expect, it } from 'vitest';
 import {
-  foreignPullRequest,
+  foreignPullRequest as decideForeign,
   mergeStep as decideMerge,
+  parsePullRequestUrl,
   reviewStep,
   waitingReasons,
   type Approval,
@@ -70,6 +71,12 @@ const mergeStep = (
   card: MergeCardState,
   rules: MergeGate,
 ) => decideMerge(approval, pr, card, rules, PROJECT, GITHUB);
+
+const foreignPullRequest = (
+  url: string,
+  project: RepositoryRef,
+  terms: typeof GITHUB,
+) => decideForeign(url, project, terms, parsePullRequestUrl);
 
 const pull = (extra: Partial<PullRequest> = {}): PullRequest => ({
   repository: PROJECT,
@@ -374,6 +381,33 @@ describe('foreign pull request', () => {
         GITHUB,
       ),
     ).toContain('is not a GitHub pull request URL');
+  });
+
+  it('reads the URL with the forge host’s own parser', () => {
+    const mr = 'https://git.example.org/group/subgroup/deck/-/merge_requests/9';
+    const project = {
+      hostname: 'git.example.org',
+      owner: 'group/subgroup',
+      name: 'deck',
+    };
+    const parse = (url: string) => {
+      const match =
+        /^https:\/\/([^/]+)\/(.+)\/([^/]+)\/-\/merge_requests\/(\d+)$/.exec(
+          url,
+        );
+      if (!match?.[1] || !match[2] || !match[3]) throw new Error('not an MR');
+      return {
+        hostname: match[1],
+        owner: match[2],
+        name: match[3],
+        number: Number(match[4]),
+      };
+    };
+
+    expect(decideForeign(mr, project, GITLAB, parse)).toBeUndefined();
+    expect(decideForeign(PR, project, GITLAB, parse)).toBe(
+      `${PR} is not a GitLab merge request URL; report the merge request's URL`,
+    );
   });
 });
 

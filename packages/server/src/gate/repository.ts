@@ -3,8 +3,9 @@ import { promisify } from 'node:util';
 import type { Store } from '../store/index.js';
 import type { GitRunner, RepositoryRef } from './forge.js';
 
-const SCP_REMOTE = /^[^@/:]+@([^:/]+):\/?([^/]+)\/([^/]+?)(?:\.git)?\/?$/;
-const PATH_REMOTE = /^\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/;
+const SCP_REMOTE =
+  /^[^@/:]+@([^:/]+):\/?([^/]+(?:\/[^/]+)*)\/([^/]+?)(?:\.git)?\/?$/;
+const PATH_REMOTE = /^\/([^/]+(?:\/[^/]+)*)\/([^/]+?)(?:\.git)?\/?$/;
 const REMOTE_PROTOCOLS: readonly string[] = ['https:', 'http:', 'ssh:'];
 
 const parseUrlRemote = (remote: string): RepositoryRef | undefined => {

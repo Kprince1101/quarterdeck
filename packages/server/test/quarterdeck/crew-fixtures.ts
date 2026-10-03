@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import {
   defineRuntimeAdapter,
   launchSite,
+  parsePullRequestUrl,
   type AcpClient,
   type AcpClientOptions,
   type ForgeHost,
@@ -77,6 +78,7 @@ export const fakeGitHub = (): FakeGitHub => {
   });
   return {
     forge: 'github',
+    pullRequestRef: parsePullRequestUrl,
     merges,
     pullRequest,
     listOpen: async () => [],

@@ -403,6 +403,20 @@ describe('project repository', () => {
       expect(parseRemoteUrl(remote)).toEqual(QUARTERDECK);
   });
 
+  it('keeps a nested namespace as the owner', () => {
+    const nested = {
+      hostname: 'gitlab.com',
+      owner: 'group/subgroup',
+      name: 'project',
+    };
+    for (const remote of [
+      'git@gitlab.com:group/subgroup/project.git',
+      'https://gitlab.com/group/subgroup/project.git',
+      'ssh://git@gitlab.com/group/subgroup/project/',
+    ])
+      expect(parseRemoteUrl(remote)).toEqual(nested);
+  });
+
   it('refuses a remote it cannot place on a host', () => {
     for (const remote of [
       '/srv/git/quarterdeck.git',

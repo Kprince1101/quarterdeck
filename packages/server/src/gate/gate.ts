@@ -214,7 +214,12 @@ const runMergeGate = async (
   const host = await ctx.forge();
   const terms = forgeTerms(host.forge);
   const project = await ctx.repository();
-  const foreign = foreignPullRequest(approval.pr, project, terms);
+  const foreign = foreignPullRequest(
+    approval.pr,
+    project,
+    terms,
+    host.pullRequestRef,
+  );
   if (foreign !== undefined) {
     await bounce(ctx.store, guard, foreign, at);
     return;

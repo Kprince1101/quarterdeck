@@ -27,9 +27,9 @@ The repo layer, `<repo>/.quarterdeck/rules.local.lifecycle.json`, can only tight
 
 ## Which pull requests it will merge
 
-Only pull requests in the project's own repository, into its base. The repository comes from the project's `repo_path`: `git -C <repo_path> remote get-url origin`, parsed to host, owner and name (`https://`, `ssh://` and `git@host:owner/name` remotes), and resolved once per gate. A project with no `repo_path` or no `origin` cannot be checked, so its approvals stay in review and each evaluation fails with the reason until it is set.
+Only pull requests in the project's own repository, into its base. The repository comes from the project's `repo_path`: `git -C <repo_path> remote get-url origin`, parsed to host, owner and name (`https://`, `ssh://` and `git@host:owner/name` remotes; a nested namespace such as `group/subgroup` is the owner), and resolved once per gate. A project with no `repo_path` or no `origin` cannot be checked, so its approvals stay in review and each evaluation fails with the reason until it is set.
 
-1. Before calling GitHub at all, the gate checks the reported URL's host, owner and name against the project's repository (ignoring case). A URL anywhere else, or one that is not a pull request URL, bounces without being fetched.
+1. Before calling the forge at all, the gate parses the reported URL with the host's `pullRequestRef` and checks its host, owner and name against the project's repository (ignoring case). A URL anywhere else, or one that is not a pull request URL, bounces without being fetched.
 2. GitHub's own answer is checked again: the pull request's `repository` must be the project's, and its `baseRefName` must be `mergeGate.base` or the repository's default branch (`defaultBranchRef`). Otherwise it bounces, even if it has been merged already.
 
 ## One ticket, step by step
@@ -76,12 +76,13 @@ The gate does not prompt the builder after a bounce or the reviewer outside a re
 
 The gate talks to the project's forge through a `ForgeHost`, never to GitHub directly. `forgeHost(forge)` returns the host for a forge: `ghCli()` for `github`; `gitlab` throws `ForgeUnavailableError` ("GitLab forge not available yet") until a GitLab host lands.
 
-| Member                   | What it does                                                                                                                                                                                              |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `forge`                  | `'github'` or `'gitlab'`.                                                                                                                                                                                 |
-| `pullRequest(url)`       | Reads one pull or merge request as a forge-neutral `PullRequest`: `{ repository, base, defaultBranch, state, head, draft, mergeable, checks: { state, failing }, botReview: { reviewed, openThreads } }`. |
-| `squashMerge(url, head)` | Squash merges it, refusing if its head is no longer `head`.                                                                                                                                               |
-| `listOpen(repository)`   | The repository's open ones, newest first as the forge lists them, as `OpenPullRequest` `{ url, number, title, branch, head, draft, author }`. The gate does not call it; it is for the dashboard.         |
+| Member                   | What it does                                                                                                                                                                                                                           |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `forge`                  | `'github'` or `'gitlab'`.                                                                                                                                                                                                              |
+| `pullRequestRef(url)`    | Parses a reported URL into `{ hostname, owner, name, number }` the forge's way, throwing for anything that is not one of its pull or merge request URLs. The gate checks it against the project's repository before fetching anything. |
+| `pullRequest(url)`       | Reads one pull or merge request as a forge-neutral `PullRequest`: `{ repository, base, defaultBranch, state, head, draft, mergeable, checks: { state, failing }, botReview: { reviewed, openThreads } }`.                              |
+| `squashMerge(url, head)` | Squash merges it, refusing if its head is no longer `head`.                                                                                                                                                                            |
+| `listOpen(repository)`   | The repository's open ones, newest first as the forge lists them, as `OpenPullRequest` `{ url, number, title, branch, head, draft, author }`. The gate does not call it; it is for the dashboard.                                      |
 
 `botReview` is the review a bot gives on the forge. On GitHub it is Copilot (`isCopilot`), and `requireCopilotReview` gates on it.
 
@@ -91,7 +92,7 @@ The gate talks to the project's forge through a `ForgeHost`, never to GitHub dir
 { "forges": { "git.example.org": "gitlab" } }
 ```
 
-An unmapped host is an `UnknownForgeError` naming the host and that file. The repo layer may not set `forges`; a `<repo>/.quarterdeck/rules.local.forges.json` is an error naming it. A project with no `repo_path`, or whose `origin` cannot be read, keeps GitHub wording; its merge gate still refuses to merge until the repository is known. `repoForge(repoPath, { homeDir })` and `projectForge(store, { homeDir })` resolve it; `repositoryForge(repository, rules)` does it for a parsed remote.
+An unmapped host is an `UnknownForgeError` naming the host and that file. The repo layer may not set `forges`; a `<repo>/.quarterdeck/rules.local.forges.json` is an error naming it, checked even before the `origin` is read. A project with no `repo_path`, or whose `origin` cannot be read, keeps GitHub wording; its merge gate still refuses to merge until the repository is known. `repoForge(repoPath, { homeDir })` and `projectForge(store, { homeDir })` resolve it; `repositoryForge(repository, rules)` does it for a parsed remote.
 
 **Terms.** `forgeTerms(forge)` (from `@quarterdeck/rules`, re-exported here and importable alone from `@quarterdeck/rules/forges` in the browser) returns `{ short, long, cli, name }`: `PR`, `pull request`, `gh`, `GitHub` or `MR`, `merge request`, `glab`, `GitLab`. Every gate reason, merge card and review prompt is built from them, so an agent in a GitLab project only ever reads merge request terms. Text written for GitHub that Quarterdeck does not build itself (the charter, the reviewer brief, the bus tool descriptions) goes through `forgeWording(text, terms)`, which turns `pull request(s)` and `PR(s)` into the forge's words.
 

@@ -19,6 +19,7 @@ import type { Store } from '../../src/store/index.js';
 import {
   GATE_EVENTS,
   MERGE_CARD,
+  parsePullRequestUrl,
   startReviewGate,
   waitingReasons,
   type ForgeHost,
@@ -76,6 +77,7 @@ describe('a merge answer does not bypass checks', { timeout: TIMEOUT }, () => {
 
   const github: ForgeHost = {
     forge: 'github',
+    pullRequestRef: parsePullRequestUrl,
     listOpen: async () => [],
     pullRequest: async () => pr,
     squashMerge: async (url) => {

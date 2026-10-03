@@ -67,19 +67,26 @@ const fakeRules = (lifecycle: Lifecycle) => {
   return { asked, read, write };
 };
 
-const forgeReply = (forge: Forge) => ({
-  intent: 'forge.read',
-  status: 'applied',
-  id: null,
-  result: { forge, terms: forgeTerms(forge) },
-});
+const UNMAPPED = 'git.example.org is not a forge Quarterdeck knows';
+
+const forgeAnswer = (forge: Forge | null): Response => {
+  if (forge === null)
+    return new Response(JSON.stringify({ error: UNMAPPED }), { status: 409 });
+  const reply = {
+    intent: 'forge.read',
+    status: 'applied',
+    id: null,
+    result: { forge, terms: forgeTerms(forge) },
+  };
+  return new Response(JSON.stringify(reply), { status: 200 });
+};
 
 const mount = (
   tables: SnapshotTables,
   status = 202,
   reply: object = {},
   lifecycle: Lifecycle = {},
-  forge: Forge = 'github',
+  forge: Forge | null = 'github',
 ) => {
   const sent: Sent[] = [];
   const forgeReads: unknown[] = [];
@@ -88,8 +95,7 @@ const mount = (
     const body: unknown = JSON.parse(String(init?.body));
     if (String(url).endsWith('forge.read')) {
       forgeReads.push(body);
-      const answer = JSON.stringify(forgeReply(forge));
-      return Promise.resolve(new Response(answer, { status: 200 }));
+      return Promise.resolve(forgeAnswer(forge));
     }
     sent.push({ url: String(url), body });
     if (String(url).endsWith('rules.write') && status < 300) rules.write(body);
@@ -387,6 +393,7 @@ describe('Project widget', () => {
     expect(sent).toEqual([]);
 
     click(find(gate(container, 'autoMerge'), 'input'));
+    await settle();
     click(button(toggles(), 'Turn on auto-merge'));
     await settle();
     expect(JSON.parse(writtenContent(sent))).toEqual({
@@ -425,6 +432,34 @@ describe('Project widget', () => {
       'Turn on auto-merge for every project on this machine? Approved merge requests will squash-merge to GitLab with no merge card.',
     );
     expect(warning).not.toMatch(/pull request|\bPR\b|GitHub/);
+    expect(
+      isDisabled(button(section(container, 'Toggles'), 'Turn on auto-merge')),
+    ).toBe(false);
+    unmount();
+  });
+
+  it('will not confirm Auto-merge until it knows the project’s forge', async () => {
+    const { container, sent, unmount } = mount(
+      projectTables(),
+      200,
+      {},
+      {},
+      null,
+    );
+    await settle();
+    click(find(gate(container, 'autoMerge'), 'input'));
+    const confirm = () =>
+      button(section(container, 'Toggles'), 'Turn on auto-merge');
+    expect(isDisabled(confirm())).toBe(true);
+    await settle();
+
+    expect(isDisabled(confirm())).toBe(true);
+    expect(
+      textOf(section(container, 'Toggles'), '.qd-request-error'),
+    ).toContain(UNMAPPED);
+    click(confirm());
+    await settle();
+    expect(sent).toEqual([]);
     unmount();
   });
 
