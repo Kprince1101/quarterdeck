@@ -1,4 +1,4 @@
-import type { Scheduler } from '../../src/round-end/index.js';
+import type { Scheduler } from '../../src/voyage-end/index.js';
 import type { SessionHost } from '../../src/agents/index.js';
 import type { Store } from '../../src/store/index.js';
 
@@ -43,14 +43,14 @@ export const lenientSessions = (): SessionHost & { closed: string[] } => {
   };
 };
 
-export const insertRound = async (
+export const insertVoyage = async (
   store: Store,
   number: number,
   status = 'active',
 ): Promise<string> => {
   const { rows } = await store.db.query<{ id: string }>(
-    `insert into rounds (project_id, number, status, goal)
-     values ($1, $2, $3, 'Ship the round end.') returning id`,
+    `insert into voyages (project_id, number, status, goal)
+     values ($1, $2, $3, 'Ship the voyage end.') returning id`,
     [store.projectId, number, status],
   );
   return rows[0]?.id ?? '';
@@ -60,7 +60,7 @@ export interface AgentSeed {
   name: string;
   role?: string;
   status?: string;
-  roundId?: string | null;
+  voyageId?: string | null;
   sessionId?: string | null;
   worktreePath?: string | null;
 }
@@ -71,14 +71,14 @@ export const insertAgent = async (
 ): Promise<string> => {
   const { rows } = await store.db.query<{ id: string }>(
     `insert into agents
-       (project_id, name, role, status, round_id, session_id, worktree_path)
+       (project_id, name, role, status, voyage_id, session_id, worktree_path)
      values ($1, $2, $3, $4, $5, $6, $7) returning id`,
     [
       store.projectId,
       seed.name,
       seed.role ?? 'builder',
       seed.status ?? 'idle',
-      seed.roundId ?? null,
+      seed.voyageId ?? null,
       seed.sessionId ?? null,
       seed.worktreePath ?? null,
     ],
@@ -137,7 +137,7 @@ export const eventPayloads = async (
   return rows.map((row) => row.payload);
 };
 
-export const CLEAR_ROUND_TABLES = `delete from events; delete from turns;
+export const CLEAR_VOYAGE_TABLES = `delete from events; delete from turns;
   delete from notebook_proposals; delete from charter_proposals;
   delete from notebook; delete from cards; delete from tickets;
-  delete from agents; delete from rounds;`;
+  delete from agents; delete from voyages;`;

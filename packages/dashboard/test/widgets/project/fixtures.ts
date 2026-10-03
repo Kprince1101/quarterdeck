@@ -1,7 +1,7 @@
 import type {
   AgentRow,
   ProjectRow,
-  RoundRow,
+  VoyageRow,
   SnapshotTables,
   TicketRow,
 } from '@quarterdeck/server/stream-schema';
@@ -10,8 +10,8 @@ import { emptyTables } from '../../../src/api/index.js';
 export const DECK_ID = '00000000-0000-4000-8000-000000000001';
 export const SITE_ID = '00000000-0000-4000-8000-000000000002';
 export const OLD_ID = '00000000-0000-4000-8000-000000000003';
-export const ENDED_ROUND_ID = '00000000-0000-4000-8000-0000000000b1';
-export const ROUND_ID = '00000000-0000-4000-8000-0000000000b2';
+export const ENDED_VOYAGE_ID = '00000000-0000-4000-8000-0000000000b1';
+export const VOYAGE_ID = '00000000-0000-4000-8000-0000000000b2';
 export const IDLE_BUILDER_ID = '00000000-0000-4000-8000-0000000000c1';
 export const IDLE_REVIEWER_ID = '00000000-0000-4000-8000-0000000000c2';
 export const WORKING_BUILDER_ID = '00000000-0000-4000-8000-0000000000c3';
@@ -46,11 +46,11 @@ export const project = (
   ...overrides,
 });
 
-export const round = (
+export const voyage = (
   id: string,
   number: number,
-  overrides: Partial<RoundRow> = {},
-): RoundRow => ({
+  overrides: Partial<VoyageRow> = {},
+): VoyageRow => ({
   id,
   projectId: DECK_ID,
   number,
@@ -68,7 +68,7 @@ export const agent = (
 ): AgentRow => ({
   id,
   projectId: DECK_ID,
-  roundId: null,
+  voyageId: null,
   name,
   role: 'builder',
   runtime: 'claude',
@@ -88,7 +88,7 @@ export const ticket = (
 ): TicketRow => ({
   id: ticketId(n),
   projectId: DECK_ID,
-  roundId: ROUND_ID,
+  voyageId: VOYAGE_ID,
   assigneeId,
   title: `Ticket ${n}`,
   body: '',
@@ -109,20 +109,20 @@ export const projectTables = (): SnapshotTables => ({
     project(SITE_ID, 'site', 'Site'),
     project(DECK_ID, 'deck', 'Deck'),
   ],
-  rounds: [
-    round(ENDED_ROUND_ID, 1, { status: 'ended', endedAt: at(5) }),
-    round(ROUND_ID, 2),
+  voyages: [
+    voyage(ENDED_VOYAGE_ID, 1, { status: 'ended', endedAt: at(5) }),
+    voyage(VOYAGE_ID, 2),
   ],
   agents: [
     agent(IDLE_REVIEWER_ID, 'tern', { role: 'reviewer', createdAt: at(3) }),
     agent(IDLE_BUILDER_ID, 'quill', { createdAt: at(1) }),
-    agent(BUSY_BUILDER_ID, 'plover', { roundId: ROUND_ID, createdAt: at(2) }),
+    agent(BUSY_BUILDER_ID, 'plover', { voyageId: VOYAGE_ID, createdAt: at(2) }),
     agent(WORKING_BUILDER_ID, 'heron', {
-      roundId: ROUND_ID,
+      voyageId: VOYAGE_ID,
       status: 'working',
     }),
-    agent(IDLE_DRIVER_ID, 'kite', { role: 'driver', roundId: ROUND_ID }),
-    agent(RETIRED_ID, 'gull', { roundId: ROUND_ID, status: 'retired' }),
+    agent(IDLE_DRIVER_ID, 'kite', { role: 'driver', voyageId: VOYAGE_ID }),
+    agent(RETIRED_ID, 'gull', { voyageId: VOYAGE_ID, status: 'retired' }),
     agent(KILLED_REVIEWER_ID, 'skua', { role: 'reviewer', status: 'killed' }),
     agent(SITE_RETIRED_ID, 'wren', { projectId: SITE_ID, status: 'retired' }),
   ],

@@ -82,10 +82,10 @@ describe('intent API guard', { timeout: TIMEOUT }, () => {
       headers: bearer(t.api.token),
     });
     expect(res.status).toBe(404);
-    const unknown = await t.send('round.explode', {});
+    const unknown = await t.send('voyage.explode', {});
     expect(unknown).toMatchObject({
       status: 404,
-      body: { error: 'Unknown intent round.explode' },
+      body: { error: 'Unknown intent voyage.explode' },
     });
   });
 

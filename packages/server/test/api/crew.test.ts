@@ -31,7 +31,7 @@ describe('crew intents are recorded or applied', { timeout: TIMEOUT }, () => {
   });
 
   it.each([
-    ['round.start', { goal: 'ship QD6' }],
+    ['voyage.start', { goal: 'ship QD6' }],
     ['planner.message', { text: 'split the API ticket' }],
     ['planner.new', {}],
   ])('%s is stored as a pending intent', async (name, body) => {
@@ -59,23 +59,23 @@ describe('crew intents are recorded or applied', { timeout: TIMEOUT }, () => {
   });
 
   it.each([
-    ['round.end', 1],
-    ['round.kill', 2],
-  ])('%s checks the round exists and is still open', async (name, number) => {
+    ['voyage.end', 1],
+    ['voyage.kill', 2],
+  ])('%s checks the voyage exists and is still open', async (name, number) => {
     const missing = await t.send(name, {
       project,
-      roundId: crypto.randomUUID(),
+      voyageId: crypto.randomUUID(),
     });
     expect(missing.status).toBe(404);
     const { rows } = await store.db.query<{ id: string; status: string }>(
-      `insert into rounds (project_id, number, status)
+      `insert into voyages (project_id, number, status)
        values ($1, $2, 'ended'), ($1, $3, 'active') returning id, status`,
       [store.projectId, number * 10, number * 10 + 1],
     );
     const [ended, open] = rows;
-    const refused = await t.send(name, { project, roundId: ended?.id });
+    const refused = await t.send(name, { project, voyageId: ended?.id });
     expect(refused.status).toBe(409);
-    const queued = await t.send(name, { project, roundId: open?.id });
+    const queued = await t.send(name, { project, voyageId: open?.id });
     expect(queued).toMatchObject({
       status: 202,
       body: { intent: name, status: 'pending' },

@@ -1,5 +1,5 @@
 import type { WipeResult } from '@quarterdeck/server/intents';
-import type { RoundRow } from '@quarterdeck/server/stream-schema';
+import type { VoyageRow } from '@quarterdeck/server/stream-schema';
 import { createIntentClient } from '../api/intents.js';
 import { createRulesReader } from '../api/rules.js';
 import type { DeckSources } from '../deck/DeckProvider.js';
@@ -10,7 +10,7 @@ import { createDemoReads, DEMO_REPO_PATH } from './demo-reads.js';
 import { createDemoRules, shippedRule } from './demo-rules.js';
 import {
   planOf,
-  roundBeats,
+  voyageBeats,
   type DemoBeat,
   type DemoScriptOptions,
 } from './demo-script.js';
@@ -26,7 +26,7 @@ import { createDemoWorld, type DemoWorld } from './demo-world.js';
 
 export const DEMO_BEAT_MS = 2500;
 
-export const BEATS_BETWEEN_ROUNDS = 4;
+export const BEATS_BETWEEN_VOYAGES = 4;
 
 export const DEMO_STREAM_URL = 'ws://demo.quarterdeck.invalid/ws';
 
@@ -53,7 +53,7 @@ const namesOf = (): string[] =>
   (JSON.parse(shippedRule('naming')) as { names: string[] }).names;
 
 interface Director {
-  round: string | null;
+  voyage: string | null;
   beats: DemoBeat[];
   at: number;
   idle: number;
@@ -81,13 +81,13 @@ export const createDemoServer = (
   const planner = createDemoPlanner(world);
   const reads = createDemoReads(world, rules);
   const script: DemoScriptOptions = { names: namesOf() };
-  const director: Director = { round: null, beats: [], at: 0, idle: 0 };
+  const director: Director = { voyage: null, beats: [], at: 0, idle: 0 };
   const timers = new Set<ReturnType<typeof setTimeout>>();
   let interval: ReturnType<typeof setInterval> | undefined;
 
-  const adopt = (round: RoundRow, scriptOptions: DemoScriptOptions): void => {
-    director.round = round.id;
-    director.beats = roundBeats(world, round, scriptOptions);
+  const adopt = (voyage: VoyageRow, scriptOptions: DemoScriptOptions): void => {
+    director.voyage = voyage.id;
+    director.beats = voyageBeats(world, voyage, scriptOptions);
     director.at = 0;
     director.idle = 0;
   };
@@ -102,15 +102,15 @@ export const createDemoServer = (
 
   const step = (): void => {
     if (isHeld()) return;
-    const open = world.openRound();
+    const open = world.openVoyage();
     if (open === undefined) {
       director.idle += 1;
-      if (director.idle < BEATS_BETWEEN_ROUNDS) return;
-      const next = store.rows('rounds').length + 1;
-      adopt(world.startRound(planOf(next).goal), script);
+      if (director.idle < BEATS_BETWEEN_VOYAGES) return;
+      const next = store.rows('voyages').length + 1;
+      adopt(world.startVoyage(planOf(next).goal), script);
       return;
     }
-    if (director.round !== open.id) adopt(open, script);
+    if (director.voyage !== open.id) adopt(open, script);
     playBeat(director);
   };
 
@@ -133,15 +133,15 @@ export const createDemoServer = (
       lag = Math.max(0, lag - SEED_BEAT_MS);
     };
     seedProject(world);
-    const first = world.startRound(planOf(1).goal);
+    const first = world.startVoyage(planOf(1).goal);
     adopt(first, { ...script, answerCards: true });
-    while (world.openRound() !== undefined) {
+    while (world.openVoyage() !== undefined) {
       playBeat(director);
       tick();
     }
     planner.reply(planner.hear(store.newId(), PLANNER_ASK), PLANNER_ASK);
     tick();
-    adopt(world.startRound(planOf(2).goal), script);
+    adopt(world.startVoyage(planOf(2).goal), script);
     Array.from({ length: SEEDED_LIVE_BEATS }).forEach(() => {
       playBeat(director);
       tick();
@@ -167,7 +167,7 @@ export const createDemoServer = (
     rules,
     planner,
     reads,
-    startRound: (goal) => world.startRound(goal),
+    startVoyage: (goal) => world.startVoyage(goal),
     later,
     wipe,
   });

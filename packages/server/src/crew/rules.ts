@@ -10,12 +10,12 @@ import type { Store } from '../store/index.js';
 
 export const DEFAULT_BASE = 'origin/main';
 
-export const NO_ROUND_REPO =
-  "Set the project's repository path before starting a round.";
+export const NO_VOYAGE_REPO =
+  "Set the project's repository path before starting a voyage.";
 
 export class NoRepoPathError extends Error {
   constructor() {
-    super(NO_ROUND_REPO);
+    super(NO_VOYAGE_REPO);
     this.name = 'NoRepoPathError';
   }
 }

@@ -36,7 +36,7 @@ export const projectRowSchema = z.object({
   pausedAt: timestampSchema.nullable(),
 });
 
-export const roundRowSchema = z.object({
+export const voyageRowSchema = z.object({
   id: idSchema,
   projectId: idSchema,
   number: z.int().positive(),
@@ -49,7 +49,7 @@ export const roundRowSchema = z.object({
 export const agentRowSchema = z.object({
   id: idSchema,
   projectId: idSchema,
-  roundId: idSchema.nullable(),
+  voyageId: idSchema.nullable(),
   name: z.string(),
   role: z.enum(['planner', 'driver', 'builder', 'reviewer']),
   runtime: runtimeSchema,
@@ -73,7 +73,7 @@ export const agentRowSchema = z.object({
 export const ticketRowSchema = z.object({
   id: idSchema,
   projectId: idSchema,
-  roundId: idSchema.nullable(),
+  voyageId: idSchema.nullable(),
   assigneeId: idSchema.nullable(),
   title: z.string(),
   body: z.string(),
@@ -131,7 +131,7 @@ export const turnRowSchema = z.object({
 export const notebookRowSchema = z.object({
   id: idSchema,
   projectId: idSchema,
-  roundId: idSchema.nullable(),
+  voyageId: idSchema.nullable(),
   authorId: idSchema.nullable(),
   body: z.string(),
   pinned: z.boolean(),
@@ -144,7 +144,7 @@ const proposalStatusSchema = z.enum(['open', 'accepted', 'rejected']);
 export const notebookProposalRowSchema = z.object({
   id: idSchema,
   projectId: idSchema,
-  roundId: idSchema.nullable(),
+  voyageId: idSchema.nullable(),
   agentId: idSchema.nullable(),
   op: z.enum(['add', 'update', 'retire']),
   entryId: idSchema.nullable(),
@@ -159,7 +159,7 @@ export const notebookProposalRowSchema = z.object({
 export const charterProposalRowSchema = z.object({
   id: idSchema,
   projectId: idSchema,
-  roundId: idSchema.nullable(),
+  voyageId: idSchema.nullable(),
   agentId: idSchema.nullable(),
   body: z.string(),
   rationale: z.string(),
@@ -171,7 +171,7 @@ export const charterProposalRowSchema = z.object({
 export const budgetRowSchema = z.object({
   id: idSchema,
   projectId: idSchema,
-  roundId: idSchema.nullable(),
+  voyageId: idSchema.nullable(),
   agentId: idSchema.nullable(),
   limitTokens: countSchema.nullable(),
   limitUsd: decimalSchema.nullable(),
@@ -191,7 +191,7 @@ export const layoutRowSchema = z.object({
 
 export const tableRowSchemas = {
   projects: projectRowSchema,
-  rounds: roundRowSchema,
+  voyages: voyageRowSchema,
   agents: agentRowSchema,
   tickets: ticketRowSchema,
   cards: cardRowSchema,
@@ -219,7 +219,7 @@ export const streamEventSchema = z.object({
 
 export const snapshotTablesSchema = z.object({
   projects: z.array(projectRowSchema),
-  rounds: z.array(roundRowSchema),
+  voyages: z.array(voyageRowSchema),
   agents: z.array(agentRowSchema),
   tickets: z.array(ticketRowSchema),
   cards: z.array(cardRowSchema),
@@ -271,7 +271,7 @@ const changeOf = <
 
 export const changeMessageSchema = z.discriminatedUnion('table', [
   changeOf('projects', projectRowSchema),
-  changeOf('rounds', roundRowSchema),
+  changeOf('voyages', voyageRowSchema),
   changeOf('agents', agentRowSchema),
   changeOf('tickets', ticketRowSchema),
   changeOf('cards', cardRowSchema),
@@ -291,7 +291,7 @@ export const streamMessageSchema = z.discriminatedUnion('type', [
 ]);
 
 export type ProjectRow = z.infer<typeof projectRowSchema>;
-export type RoundRow = z.infer<typeof roundRowSchema>;
+export type VoyageRow = z.infer<typeof voyageRowSchema>;
 export type AgentRow = z.infer<typeof agentRowSchema>;
 export type TicketRow = z.infer<typeof ticketRowSchema>;
 export type CardRow = z.infer<typeof cardRowSchema>;

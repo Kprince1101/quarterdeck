@@ -3,7 +3,7 @@ import { assertProjectSlug } from '../lib/slug.js';
 export const REPLAY_COMMAND = 'npx quarterdeck replay';
 
 export interface ReplayCommandParts {
-  round: number;
+  voyage: number;
   through?: number;
   project?: string;
 }
@@ -20,15 +20,15 @@ export const assertThrough = (through: number): number => {
   return through;
 };
 
-const assertRound = (round: number): number => {
-  if (!isPositive(round)) {
-    throw new RangeError(`A round is a positive integer, not ${round}`);
+const assertVoyage = (voyage: number): number => {
+  if (!isPositive(voyage)) {
+    throw new RangeError(`A voyage is a positive integer, not ${voyage}`);
   }
-  return round;
+  return voyage;
 };
 
 export const replayCommand = (parts: ReplayCommandParts): string => {
-  const words = [REPLAY_COMMAND, String(assertRound(parts.round))];
+  const words = [REPLAY_COMMAND, String(assertVoyage(parts.voyage))];
   if (parts.through !== undefined) {
     words.push(String(assertThrough(parts.through)));
   }

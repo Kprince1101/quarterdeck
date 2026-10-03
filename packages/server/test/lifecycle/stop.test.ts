@@ -17,12 +17,12 @@ import {
   type FakeWorktrees,
 } from '../agents/fixtures.js';
 import {
-  CLEAR_ROUND_TABLES,
+  CLEAR_VOYAGE_TABLES,
   eventPayloads,
   insertAgent,
   insertTicket,
   lenientSessions,
-} from '../round-end/fixtures.js';
+} from '../voyage-end/fixtures.js';
 import {
   GRACE_MS,
   IS_WINDOWS,
@@ -50,7 +50,7 @@ describe('stopping a project before a wipe', { timeout: TIMEOUT }, () => {
   afterEach(async () => {
     stopSleepers();
     await store.db.exec(
-      `${CLEAR_ROUND_TABLES} update projects set archived_at = null;`,
+      `${CLEAR_VOYAGE_TABLES} update projects set archived_at = null;`,
     );
   });
 

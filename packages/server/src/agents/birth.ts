@@ -9,7 +9,7 @@ export interface BirthRequest {
   store: Store;
   role: AgentRole;
   runtime: Runtime;
-  roundId?: string;
+  voyageId?: string;
   ticketId?: string;
   prepare?: (agent: Agent) => Promise<Agent>;
 }
@@ -22,12 +22,12 @@ export const insertAgent = (
 ): Promise<Agent> =>
   request.store.db.transaction(async (tx) => {
     const { rows } = await tx.query<Agent>(
-      `insert into agents (project_id, round_id, name, role, runtime)
+      `insert into agents (project_id, voyage_id, name, role, runtime)
        values ($1, $2, $3, $4, $5)
        returning ${AGENT_COLUMNS}`,
       [
         request.store.projectId,
-        request.roundId ?? null,
+        request.voyageId ?? null,
         name,
         request.role,
         request.runtime,

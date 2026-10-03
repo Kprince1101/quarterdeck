@@ -35,9 +35,9 @@ import {
   ReplaySignInError,
   TurnInputMissingError,
   buildBirthInput,
-  findRoundSessions,
+  findVoyageSessions,
   isBirthInput,
-  openDriverRound,
+  openDriverVoyage,
   readBirth,
   readTurnChain,
   replayCommand,
@@ -80,10 +80,10 @@ const BUS: McpServerStdio = {
   env: [],
 };
 
-const birthInput = (round: number): string =>
+const birthInput = (voyage: number): string =>
   buildBirthInput({
     agent: { name: 'driver-1' },
-    round: { number: round, goal: `Goal ${round}.` },
+    voyage: { number: voyage, goal: `Goal ${voyage}.` },
     charter: '# Driver charter',
     notebook: [],
     instructions: DRIVER_TURN_INSTRUCTIONS,
@@ -182,7 +182,7 @@ describe('Driver replay', () => {
     afterEach(async () => {
       await store.db.exec(
         `delete from events; delete from turns; delete from cards;
-         delete from agents; delete from rounds;`,
+         delete from agents; delete from voyages;`,
       );
     });
 
@@ -200,10 +200,10 @@ describe('Driver replay', () => {
     });
 
     it(
-      'sends a recorded round from its saved inputs in one new session and writes nothing',
+      'sends a recorded voyage from its saved inputs in one new session and writes nothing',
       async () => {
-        const { rows: rounds } = await store.db.query<{ id: string }>(
-          `insert into rounds (project_id, number, status, goal)
+        const { rows: voyages } = await store.db.query<{ id: string }>(
+          `insert into voyages (project_id, number, status, goal)
            values ($1, 1, 'active', 'Ship replay.') returning id`,
           [store.projectId],
         );
@@ -220,21 +220,21 @@ describe('Driver replay', () => {
           say(resultText(ASSIGNED)),
           say(resultText(BIRTH)),
         );
-        const round = await openDriverRound({
+        const voyage = await openDriverVoyage({
           store,
           client: recorder.client,
           bus: { launch: async () => BUS },
           agentId,
-          roundId: rounds[0]?.id ?? '',
+          voyageId: voyages[0]?.id ?? '',
           cwd: '/work/deck',
           charter: '# Driver charter',
           turnsDir,
           budget: { hours: 5, capTokens: null, holdAtFraction: 0.8 },
           pause: { hold: (_subject, run) => run() },
         });
-        await round.birth;
-        await round.turn('heron reported QD12.');
-        await round.turn('Round goal changed.');
+        await voyage.birth;
+        await voyage.turn('heron reported QD12.');
+        await voyage.turn('Voyage goal changed.');
         await recorder.client.close();
         const recorded = recorder.prompts.map((prompt) => prompt.text);
         expect(recorded).toHaveLength(4);
@@ -390,7 +390,7 @@ describe('Driver replay', () => {
     );
   });
 
-  it('starts at the latest birth at or before n, so one round is replayed', async () => {
+  it('starts at the latest birth at or before n, so one voyage is replayed', async () => {
     await save(1, birthInput(1));
     await save(2, 'poke one');
     await save(3, birthInput(2));
@@ -552,19 +552,24 @@ describe('isBirthInput', () => {
 });
 
 describe('readBirth', () => {
-  it("reads the Driver's name and round from a birth input", () => {
-    expect(readBirth(birthInput(12))).toEqual({ name: 'driver-1', round: 12 });
+  it("reads the Driver's name and voyage from a birth input", () => {
+    expect(readBirth(birthInput(12))).toEqual({ name: 'driver-1', voyage: 12 });
     expect(readBirth('heron reported QD12.')).toBeUndefined();
+  });
+
+  it('reads a birth input saved before voyages were renamed', () => {
+    const saved = birthInput(4).replace('for voyage 4.', 'for round 4.');
+    expect(readBirth(saved)).toEqual({ name: 'driver-1', voyage: 4 });
   });
 });
 
-describe('findRoundSessions', () => {
+describe('findVoyageSessions', () => {
   const OTHER_ID = '0b1c2d3e-4f50-4617-8899-aabbccddeeff';
   const BUILDER_ID = '11111111-2222-4333-8444-555555555555';
   let turnsDir: string;
 
   beforeEach(async () => {
-    turnsDir = await mkdtemp(join(tmpdir(), 'qd-round-'));
+    turnsDir = await mkdtemp(join(tmpdir(), 'qd-voyage-'));
   });
 
   afterEach(async () => {
@@ -584,7 +589,7 @@ describe('findRoundSessions', () => {
     if (bornAt) await utimes(path, bornAt, bornAt);
   };
 
-  it('finds each Driver session of a round, its turns ending at the next birth', async () => {
+  it('finds each Driver session of a voyage, its turns ending at the next birth', async () => {
     await save(AGENT_ID, 1, birthInput(1), new Date('2026-01-01'));
     await save(AGENT_ID, 2, 'poke');
     await save(AGENT_ID, 3, birthInput(2), new Date('2026-01-02'));
@@ -596,13 +601,13 @@ describe('findRoundSessions', () => {
     await save(BUILDER_ID, 2, birthInput(2));
     await mkdir(join(turnsDir, 'not-an-agent', '0001'), { recursive: true });
 
-    const sessions = await findRoundSessions(turnsDir, 2);
+    const sessions = await findVoyageSessions(turnsDir, 2);
 
     expect(sessions).toEqual([
       {
         agentId: AGENT_ID,
         driverName: 'driver-1',
-        round: 2,
+        voyage: 2,
         firstSeq: 3,
         lastSeq: 5,
         bornAt: new Date('2026-01-02'),
@@ -610,41 +615,41 @@ describe('findRoundSessions', () => {
       {
         agentId: OTHER_ID,
         driverName: 'driver-1',
-        round: 2,
+        voyage: 2,
         firstSeq: 1,
         lastSeq: 1,
         bornAt: new Date('2026-01-03'),
       },
     ]);
-    expect(await findRoundSessions(turnsDir, 1)).toMatchObject([
+    expect(await findVoyageSessions(turnsDir, 1)).toMatchObject([
       { agentId: AGENT_ID, firstSeq: 1, lastSeq: 2 },
     ]);
-    expect(await findRoundSessions(turnsDir, 4)).toEqual([]);
+    expect(await findVoyageSessions(turnsDir, 4)).toEqual([]);
   });
 
   it('finds nothing in a folder that does not exist', async () => {
-    expect(await findRoundSessions(join(turnsDir, 'missing'), 1)).toEqual([]);
+    expect(await findVoyageSessions(join(turnsDir, 'missing'), 1)).toEqual([]);
   });
 });
 
 describe('replayCommand', () => {
-  it('prints the command the Driver widget shows for a round', () => {
-    expect(replayCommand({ round: 3 })).toBe(`${REPLAY_COMMAND} 3`);
-    expect(replayCommand({ round: 3, through: 7 })).toBe(
+  it('prints the command the Driver widget shows for a voyage', () => {
+    expect(replayCommand({ voyage: 3 })).toBe(`${REPLAY_COMMAND} 3`);
+    expect(replayCommand({ voyage: 3, through: 7 })).toBe(
       `${REPLAY_COMMAND} 3 7`,
     );
-    expect(replayCommand({ round: 3, through: 7, project: 'example' })).toBe(
+    expect(replayCommand({ voyage: 3, through: 7, project: 'example' })).toBe(
       `${REPLAY_COMMAND} 3 7 --project example`,
     );
     expect(REPLAY_COMMAND).toBe('npx quarterdeck replay');
   });
 
   it('refuses parts that are not safe to paste into a shell', () => {
-    expect(() => replayCommand({ round: 1, project: 'a; rm -rf ~' })).toThrow(
+    expect(() => replayCommand({ voyage: 1, project: 'a; rm -rf ~' })).toThrow(
       'Invalid project slug',
     );
-    expect(() => replayCommand({ round: 0 })).toThrow(RangeError);
-    expect(() => replayCommand({ round: 1.5 })).toThrow(RangeError);
-    expect(() => replayCommand({ round: 1, through: 0 })).toThrow(RangeError);
+    expect(() => replayCommand({ voyage: 0 })).toThrow(RangeError);
+    expect(() => replayCommand({ voyage: 1.5 })).toThrow(RangeError);
+    expect(() => replayCommand({ voyage: 1, through: 0 })).toThrow(RangeError);
   });
 });

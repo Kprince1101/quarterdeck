@@ -17,16 +17,16 @@ import {
   readSettleState,
   startAutoEnd,
   type AutoEnd,
-} from '../../src/round-end/index.js';
+} from '../../src/voyage-end/index.js';
 import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
 import {
-  CLEAR_ROUND_TABLES,
+  CLEAR_VOYAGE_TABLES,
   TIMEOUT,
   eventPayloads,
   fakeScheduler,
   insertAgent,
   insertCard,
-  insertRound,
+  insertVoyage,
   insertTicket,
   type FakeScheduler,
 } from './fixtures.js';
@@ -40,7 +40,7 @@ describe('auto-end', { timeout: TIMEOUT }, () => {
   let ended: string[];
   let errors: unknown[];
   let auto: AutoEnd | undefined;
-  let roundId: string;
+  let voyageId: string;
 
   beforeAll(async () => {
     store = await openStore({ project: 'deck', dataDir: IN_MEMORY });
@@ -54,19 +54,19 @@ describe('auto-end', { timeout: TIMEOUT }, () => {
     scheduler = fakeScheduler();
     ended = [];
     errors = [];
-    roundId = await insertRound(store, 1);
+    voyageId = await insertVoyage(store, 1);
   });
 
   afterEach(async () => {
     await auto?.close();
     auto = undefined;
-    await store.db.exec(CLEAR_ROUND_TABLES);
+    await store.db.exec(CLEAR_VOYAGE_TABLES);
   });
 
   const start = async (): Promise<AutoEnd> => {
     auto = await startAutoEnd({
       store,
-      roundId,
+      voyageId,
       settleSeconds: SETTLE_SECONDS,
       schedule: scheduler.schedule,
       home: HOME,
@@ -83,7 +83,7 @@ describe('auto-end', { timeout: TIMEOUT }, () => {
 
   const settling = () => eventPayloads(store, AUTO_END_EVENTS.settling);
 
-  it('reads what keeps a round from settling', async () => {
+  it('reads what keeps a voyage from settling', async () => {
     await insertTicket(store, 'in_review');
     await insertTicket(store, 'done');
     await insertTicket(store, 'proposed');
@@ -94,12 +94,12 @@ describe('auto-end', { timeout: TIMEOUT }, () => {
     const state = await readSettleState(
       store.db,
       store.projectId,
-      roundId,
+      voyageId,
       HOME,
     );
 
     expect(state).toEqual({
-      roundEnded: false,
+      voyageEnded: false,
       openTickets: 1,
       runningAgents: 1,
       openCards: 1,
@@ -107,7 +107,7 @@ describe('auto-end', { timeout: TIMEOUT }, () => {
     });
     expect(isSettled(state)).toBe(false);
     const quiet = {
-      roundEnded: false,
+      voyageEnded: false,
       openTickets: 0,
       runningAgents: 0,
       openCards: 0,
@@ -131,7 +131,7 @@ describe('auto-end', { timeout: TIMEOUT }, () => {
       await start();
       expect(scheduler.live()).toEqual([]);
       expect(
-        (await readSettleState(store.db, store.projectId, roundId, HOME))
+        (await readSettleState(store.db, store.projectId, voyageId, HOME))
           .paused,
       ).toBe(true);
 
@@ -148,24 +148,24 @@ describe('auto-end', { timeout: TIMEOUT }, () => {
     }
   });
 
-  it('arms the settle timer at once when the round is already settled, and ends it when it fires', async () => {
+  it('arms the settle timer at once when the voyage is already settled, and ends it when it fires', async () => {
     await insertTicket(store, 'done');
-    await insertAgent(store, { name: 'heron', status: 'idle', roundId });
+    await insertAgent(store, { name: 'heron', status: 'idle', voyageId });
     await start();
 
     expect(scheduler.live()).toHaveLength(1);
     expect(scheduler.live()[0]?.ms).toBe(SETTLE_SECONDS * 1000);
     expect(await settling()).toEqual([
-      { roundId, settleSeconds: SETTLE_SECONDS, rearmed: false },
+      { voyageId, settleSeconds: SETTLE_SECONDS, rearmed: false },
     ]);
 
     scheduler.live()[0]?.fire();
 
     await vi.waitFor(() => {
-      expect(ended).toEqual([roundId]);
+      expect(ended).toEqual([voyageId]);
     });
     expect(await eventPayloads(store, AUTO_END_EVENTS.settled)).toEqual([
-      { roundId, settleSeconds: SETTLE_SECONDS },
+      { voyageId, settleSeconds: SETTLE_SECONDS },
     ]);
     expect(errors).toEqual([]);
   });
@@ -225,8 +225,8 @@ describe('auto-end', { timeout: TIMEOUT }, () => {
       expect(scheduler.live()).toHaveLength(1);
     });
     expect(await settling()).toEqual([
-      { roundId, settleSeconds: SETTLE_SECONDS, rearmed: false },
-      { roundId, settleSeconds: SETTLE_SECONDS, rearmed: true },
+      { voyageId, settleSeconds: SETTLE_SECONDS, rearmed: false },
+      { voyageId, settleSeconds: SETTLE_SECONDS, rearmed: true },
     ]);
   });
 
@@ -239,7 +239,7 @@ describe('auto-end', { timeout: TIMEOUT }, () => {
     expect(await settling()).toHaveLength(1);
   });
 
-  it('does not end a round that is no longer settled when the timer fires', async () => {
+  it('does not end a voyage that is no longer settled when the timer fires', async () => {
     await start();
     const [armed] = scheduler.live();
     await insertTicket(store, 'open');
@@ -251,7 +251,7 @@ describe('auto-end', { timeout: TIMEOUT }, () => {
     expect(await eventPayloads(store, AUTO_END_EVENTS.settled)).toEqual([]);
   });
 
-  it('ends a round once, however often the timer fires', async () => {
+  it('ends a voyage once, however often the timer fires', async () => {
     await start();
     const [armed] = scheduler.live();
 
@@ -259,16 +259,16 @@ describe('auto-end', { timeout: TIMEOUT }, () => {
     armed?.fire();
 
     await vi.waitFor(() => {
-      expect(ended).toEqual([roundId]);
+      expect(ended).toEqual([voyageId]);
     });
     await auto?.check();
     expect(scheduler.timers).toHaveLength(1);
     expect(await eventPayloads(store, AUTO_END_EVENTS.settled)).toHaveLength(1);
   });
 
-  it('never arms for a round that has ended', async () => {
-    await store.db.query(`update rounds set status = 'ended' where id = $1`, [
-      roundId,
+  it('never arms for a voyage that has ended', async () => {
+    await store.db.query(`update voyages set status = 'ended' where id = $1`, [
+      voyageId,
     ]);
 
     await start();

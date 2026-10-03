@@ -4,11 +4,11 @@ import { recoverProject } from '../../src/lifecycle/index.js';
 import { PAUSE_EVENTS } from '../../src/pause/index.js';
 import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
 import {
-  CLEAR_ROUND_TABLES,
+  CLEAR_VOYAGE_TABLES,
   eventPayloads,
   insertAgent,
   insertTicket,
-} from '../round-end/fixtures.js';
+} from '../voyage-end/fixtures.js';
 import {
   GRACE_MS,
   IS_WINDOWS,
@@ -34,7 +34,7 @@ describe('recovering a project at startup', { timeout: TIMEOUT }, () => {
 
   afterEach(async () => {
     stopSleepers();
-    await store.db.exec(CLEAR_ROUND_TABLES);
+    await store.db.exec(CLEAR_VOYAGE_TABLES);
   });
 
   const recover = () => recoverProject(store, { killGraceMs: GRACE_MS });

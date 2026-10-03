@@ -39,7 +39,7 @@ describe('intent registry', () => {
         'pause',
         'planner',
         'project',
-        'round',
+        'voyage',
         'rules',
         'ticket',
         'turn',

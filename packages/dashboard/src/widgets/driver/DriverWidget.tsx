@@ -1,36 +1,36 @@
 import type { JSX } from 'react';
-import type { RoundRow } from '@quarterdeck/server/stream-schema';
+import type { VoyageRow } from '@quarterdeck/server/stream-schema';
 import { valueOf } from '../../grid/dom.js';
 import { defineWidget } from '../registry.js';
 import type { DriverTurn } from './driver-turns.js';
 import { TurnDetailView } from './TurnDetailView.js';
 import { useDriverWidget, type DriverWidgetView } from './use-driver-widget.js';
 
-interface RoundPickerProps {
-  rounds: RoundRow[];
-  round: RoundRow;
-  onPick: (roundId: string) => void;
+interface VoyagePickerProps {
+  voyages: VoyageRow[];
+  voyage: VoyageRow;
+  onPick: (voyageId: string) => void;
 }
 
-const RoundPicker = ({ rounds, round, onPick }: RoundPickerProps) => (
-  <div className="qd-driver-round">
+const VoyagePicker = ({ voyages, voyage, onPick }: VoyagePickerProps) => (
+  <div className="qd-driver-voyage">
     <label>
-      Round{' '}
+      Voyage{' '}
       <select
-        value={round.id}
+        value={voyage.id}
         onChange={(event) => {
           onPick(valueOf(event.currentTarget));
         }}
       >
-        {rounds.map(({ id, number, status }) => (
+        {voyages.map(({ id, number, status }) => (
           <option key={id} value={id}>
             {number} ({status})
           </option>
         ))}
       </select>
     </label>
-    <p className="qd-driver-goal" title={round.goal}>
-      {round.goal}
+    <p className="qd-driver-goal" title={voyage.goal}>
+      {voyage.goal}
     </p>
   </div>
 );
@@ -63,16 +63,16 @@ const TurnList = ({ turns, selected, onPick }: TurnListProps) => (
   </ol>
 );
 
-const RoundTurns = ({
+const VoyageTurns = ({
   view,
-  round,
+  voyage,
 }: {
   view: DriverWidgetView;
-  round: RoundRow;
+  voyage: VoyageRow;
 }) => {
   if (view.selected === null) {
     return (
-      <p className="qd-empty">No Driver turns in round {round.number} yet.</p>
+      <p className="qd-empty">No Driver turns in voyage {voyage.number} yet.</p>
     );
   }
   return (
@@ -93,15 +93,15 @@ const RoundTurns = ({
 
 export const DriverWidget = (): JSX.Element => {
   const view = useDriverWidget();
-  if (view.round === null) return <p className="qd-empty">No rounds yet.</p>;
+  if (view.voyage === null) return <p className="qd-empty">No voyages yet.</p>;
   return (
     <div className="qd-driver">
-      <RoundPicker
-        rounds={view.rounds}
-        round={view.round}
-        onPick={view.selectRound}
+      <VoyagePicker
+        voyages={view.voyages}
+        voyage={view.voyage}
+        onPick={view.selectVoyage}
       />
-      <RoundTurns view={view} round={view.round} />
+      <VoyageTurns view={view} voyage={view.voyage} />
     </div>
   );
 };

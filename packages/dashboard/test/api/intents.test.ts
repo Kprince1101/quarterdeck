@@ -52,8 +52,8 @@ describe('intent client', () => {
     expectTypeOf(client.wipe.all)
       .parameter(0)
       .toEqualTypeOf<{ confirm: 'wipe everything' }>();
-    expectTypeOf(client.round.start).returns.resolves.toEqualTypeOf<
-      IntentReply & { intent: 'round.start' }
+    expectTypeOf(client.voyage.start).returns.resolves.toEqualTypeOf<
+      IntentReply & { intent: 'voyage.start' }
     >();
     expectTypeOf(client.notebook).not.toHaveProperty('start');
   });
@@ -129,12 +129,12 @@ describe('intent client', () => {
     });
 
     it('returns the pending reply', async () => {
-      const reply = await deck.client.round.start({
+      const reply = await deck.client.voyage.start({
         project: deck.project,
         goal: 'ship QD6c',
       });
       expect(reply).toMatchObject({
-        intent: 'round.start',
+        intent: 'voyage.start',
         status: 'pending',
         id: expect.any(String),
       });

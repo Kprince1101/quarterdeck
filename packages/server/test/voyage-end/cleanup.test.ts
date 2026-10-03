@@ -5,29 +5,29 @@ import {
   createAgentLifecycle,
   type AgentLifecycle,
 } from '../../src/agents/index.js';
-import { RoundNotFoundError } from '../../src/driver/index.js';
+import { VoyageNotFoundError } from '../../src/driver/index.js';
 import {
   CARD_EXPIRED_EVENT,
-  ROUND_ENDED_EVENT,
+  VOYAGE_ENDED_EVENT,
   TICKET_REOPENED_EVENT,
-  cleanUpRound,
-  killRound,
-  releaseRound,
-} from '../../src/round-end/index.js';
+  cleanUpVoyage,
+  killVoyage,
+  releaseVoyage,
+} from '../../src/voyage-end/index.js';
 import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
 import { fakeWorktrees, type FakeWorktrees } from '../agents/fixtures.js';
 import {
-  CLEAR_ROUND_TABLES,
+  CLEAR_VOYAGE_TABLES,
   TIMEOUT,
   eventPayloads,
   insertAgent,
   insertCard,
-  insertRound,
+  insertVoyage,
   insertTicket,
   lenientSessions,
 } from './fixtures.js';
 
-describe('round cleanup', { timeout: TIMEOUT }, () => {
+describe('voyage cleanup', { timeout: TIMEOUT }, () => {
   let store: Store;
   let worktrees: FakeWorktrees;
   let sessions: ReturnType<typeof lenientSessions>;
@@ -42,7 +42,7 @@ describe('round cleanup', { timeout: TIMEOUT }, () => {
   });
 
   afterEach(async () => {
-    await store.db.exec(CLEAR_ROUND_TABLES);
+    await store.db.exec(CLEAR_VOYAGE_TABLES);
   });
 
   const setUp = () => {
@@ -83,43 +83,47 @@ describe('round cleanup', { timeout: TIMEOUT }, () => {
     );
   };
 
-  const roundRow = async (roundId: string) => {
+  const voyageRow = async (voyageId: string) => {
     const { rows } = await store.db.query<{ status: string; ended: boolean }>(
-      `select status, ended_at is not null as ended from rounds where id = $1`,
-      [roundId],
+      `select status, ended_at is not null as ended from voyages where id = $1`,
+      [voyageId],
     );
     return rows[0];
   };
 
-  it("retires the round's Driver and builders, then ends the round", async () => {
+  it("retires the voyage's Driver and builders, then ends the voyage", async () => {
     setUp();
-    const roundId = await insertRound(store, 4);
-    const other = await insertRound(store, 3, 'ended');
+    const voyageId = await insertVoyage(store, 4);
+    const other = await insertVoyage(store, 3, 'ended');
     const driver = await insertAgent(store, {
       name: 'lark',
       role: 'driver',
-      roundId,
+      voyageId,
       sessionId: 'driver-session',
     });
     const builder = await insertAgent(store, {
       name: 'pike',
-      roundId,
+      voyageId,
       sessionId: 'pike-session',
       worktreePath: '/wt/pike-1',
     });
-    await insertAgent(store, { name: 'reviewer-1', role: 'reviewer', roundId });
-    await insertAgent(store, { name: 'okapi', roundId: other });
+    await insertAgent(store, {
+      name: 'reviewer-1',
+      role: 'reviewer',
+      voyageId,
+    });
+    await insertAgent(store, { name: 'okapi', voyageId: other });
 
-    const cleanup = await cleanUpRound({
+    const cleanup = await cleanUpVoyage({
       store,
       lifecycle,
-      roundId,
+      voyageId,
       reason: 'settled',
     });
 
     expect(cleanup).toEqual({
-      roundId,
-      round: 4,
+      voyageId,
+      voyage: 4,
       ended: true,
       closedCards: [],
       retired: [builder, driver],
@@ -134,11 +138,11 @@ describe('round cleanup', { timeout: TIMEOUT }, () => {
     });
     expect(sessions.closed).toEqual(['pike-session', 'driver-session']);
     expect(worktrees.removed).toEqual([{ path: '/wt/pike-1', force: false }]);
-    expect(await roundRow(roundId)).toEqual({ status: 'ended', ended: true });
-    expect(await eventPayloads(store, ROUND_ENDED_EVENT)).toEqual([
+    expect(await voyageRow(voyageId)).toEqual({ status: 'ended', ended: true });
+    expect(await eventPayloads(store, VOYAGE_ENDED_EVENT)).toEqual([
       {
-        roundId,
-        round: 4,
+        voyageId,
+        voyage: 4,
         reason: 'settled',
         closedCards: [],
         retired: [builder, driver],
@@ -148,15 +152,15 @@ describe('round cleanup', { timeout: TIMEOUT }, () => {
     ]);
   });
 
-  it("closes the round's agents' open cards, and leaves other cards and discard cards open", async () => {
+  it("closes the voyage's agents' open cards, and leaves other cards and discard cards open", async () => {
     setUp();
-    const roundId = await insertRound(store, 5);
+    const voyageId = await insertVoyage(store, 5);
     const driver = await insertAgent(store, {
       name: 'lark',
       role: 'driver',
-      roundId,
+      voyageId,
     });
-    const builder = await insertAgent(store, { name: 'pike', roundId });
+    const builder = await insertAgent(store, { name: 'pike', voyageId });
     const reviewer = await insertAgent(store, {
       name: 'reviewer-1',
       role: 'reviewer',
@@ -174,10 +178,10 @@ describe('round cleanup', { timeout: TIMEOUT }, () => {
     const reviewers = await insertCard(store, { agentId: reviewer });
     const human = await insertCard(store);
 
-    const cleanup = await cleanUpRound({
+    const cleanup = await cleanUpVoyage({
       store,
       lifecycle,
-      roundId,
+      voyageId,
       reason: 'ended',
     });
 
@@ -194,7 +198,7 @@ describe('round cleanup', { timeout: TIMEOUT }, () => {
     );
     const expired = await eventPayloads(store, CARD_EXPIRED_EVENT);
     expect(expired).toHaveLength(2);
-    expect(expired[0]).toMatchObject({ roundId, reason: 'ended' });
+    expect(expired[0]).toMatchObject({ voyageId, reason: 'ended' });
     expect(cleanup.retired).toEqual([driver]);
     expect(cleanup.discardCards).toEqual([]);
     expect(await statuses()).toMatchObject({
@@ -203,19 +207,19 @@ describe('round cleanup', { timeout: TIMEOUT }, () => {
     });
   });
 
-  it('kills a round: reopens only the tickets its own builders hold', async () => {
+  it('kills a voyage: reopens only the tickets its own builders hold', async () => {
     setUp();
-    const roundId = await insertRound(store, 6);
-    const other = await insertRound(store, 7);
-    const builder = await insertAgent(store, { name: 'pike', roundId });
+    const voyageId = await insertVoyage(store, 6);
+    const other = await insertVoyage(store, 7);
+    const builder = await insertAgent(store, { name: 'pike', voyageId });
     const gone = await insertAgent(store, {
       name: 'wren',
-      roundId,
+      voyageId,
       status: 'retired',
     });
     const outsider = await insertAgent(store, {
       name: 'okapi',
-      roundId: other,
+      voyageId: other,
     });
     const assigned = await insertTicket(store, 'assigned', builder);
     const inReview = await insertTicket(store, 'in_review', gone);
@@ -225,7 +229,7 @@ describe('round cleanup', { timeout: TIMEOUT }, () => {
     const unassigned = await insertTicket(store, 'open');
     const mergeCard = await insertCard(store, { ticketId: inReview });
 
-    const cleanup = await killRound({ store, lifecycle, roundId });
+    const cleanup = await killVoyage({ store, lifecycle, voyageId });
 
     expect(cleanup.ended).toBe(true);
     expect(cleanup.reopened.toSorted()).toEqual(
@@ -244,11 +248,11 @@ describe('round cleanup', { timeout: TIMEOUT }, () => {
     expect(await cardStatuses()).toEqual({ [mergeCard]: 'expired' });
     const reopenedEvents = await eventPayloads(store, TICKET_REOPENED_EVENT);
     expect(reopenedEvents).toContainEqual({
-      roundId,
+      voyageId,
       previousStatus: 'in_review',
       previousAssigneeId: gone,
     });
-    expect(await eventPayloads(store, ROUND_ENDED_EVENT)).toEqual([
+    expect(await eventPayloads(store, VOYAGE_ENDED_EVENT)).toEqual([
       expect.objectContaining({ reason: 'killed', retired: [builder] }),
     ]);
     expect(await statuses()).toMatchObject({ okapi: 'idle', pike: 'retired' });
@@ -256,25 +260,25 @@ describe('round cleanup', { timeout: TIMEOUT }, () => {
 
   it('does not raise a second discard card for a builder already waiting on one', async () => {
     setUp();
-    const roundId = await insertRound(store, 8);
+    const voyageId = await insertVoyage(store, 8);
     await insertAgent(store, {
       name: 'pike',
-      roundId,
+      voyageId,
       worktreePath: '/wt/pike-1',
     });
     worktrees.failNext(new WorktreeDirtyError('/wt/pike-1', ' M src/a.ts'));
-    const released = await releaseRound({
+    const released = await releaseVoyage({
       store,
       lifecycle,
-      roundId,
+      voyageId,
       reason: 'ended',
     });
     expect(released.discardCards).toHaveLength(1);
 
-    const cleanup = await cleanUpRound({
+    const cleanup = await cleanUpVoyage({
       store,
       lifecycle,
-      roundId,
+      voyageId,
       reason: 'ended',
     });
 
@@ -287,20 +291,20 @@ describe('round cleanup', { timeout: TIMEOUT }, () => {
     expect(rows).toHaveLength(1);
   });
 
-  it('raises a discard card for a dirty worktree and still ends the round', async () => {
+  it('raises a discard card for a dirty worktree and still ends the voyage', async () => {
     setUp();
-    const roundId = await insertRound(store, 1);
+    const voyageId = await insertVoyage(store, 1);
     const builder = await insertAgent(store, {
       name: 'pike',
-      roundId,
+      voyageId,
       worktreePath: '/wt/pike-1',
     });
     worktrees.failNext(new WorktreeDirtyError('/wt/pike-1', ' M src/a.ts'));
 
-    const cleanup = await cleanUpRound({
+    const cleanup = await cleanUpVoyage({
       store,
       lifecycle,
-      roundId,
+      voyageId,
       reason: 'settled',
     });
 
@@ -314,31 +318,31 @@ describe('round cleanup', { timeout: TIMEOUT }, () => {
     expect(await statuses()).toEqual({ pike: 'idle' });
   });
 
-  it('is safe to run again and does not end a round twice', async () => {
+  it('is safe to run again and does not end a voyage twice', async () => {
     setUp();
-    const roundId = await insertRound(store, 2);
-    await cleanUpRound({ store, lifecycle, roundId, reason: 'settled' });
+    const voyageId = await insertVoyage(store, 2);
+    await cleanUpVoyage({ store, lifecycle, voyageId, reason: 'settled' });
 
-    const again = await cleanUpRound({
+    const again = await cleanUpVoyage({
       store,
       lifecycle,
-      roundId,
+      voyageId,
       reason: 'settled',
     });
 
     expect(again.ended).toBe(false);
-    expect(await eventPayloads(store, ROUND_ENDED_EVENT)).toHaveLength(1);
+    expect(await eventPayloads(store, VOYAGE_ENDED_EVENT)).toHaveLength(1);
   });
 
-  it('refuses a round outside the project', async () => {
+  it('refuses a voyage outside the project', async () => {
     setUp();
     await expect(
-      cleanUpRound({
+      cleanUpVoyage({
         store,
         lifecycle,
-        roundId: crypto.randomUUID(),
+        voyageId: crypto.randomUUID(),
         reason: 'settled',
       }),
-    ).rejects.toBeInstanceOf(RoundNotFoundError);
+    ).rejects.toBeInstanceOf(VoyageNotFoundError);
   });
 });

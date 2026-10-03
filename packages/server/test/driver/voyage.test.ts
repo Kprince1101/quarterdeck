@@ -16,20 +16,20 @@ import {
 } from 'vitest';
 import {
   NotADriverError,
-  ROUND_STARTED_EVENT,
-  RoundEndedError,
-  RoundNotFoundError,
+  VOYAGE_STARTED_EVENT,
+  VoyageEndedError,
+  VoyageNotFoundError,
   STUCK_AFTER_CONTINUES,
   STUCK_SURFACED_EVENT,
   TURN_EVENTS,
   flagIfStuck,
   markStuckFlagsSurfaced,
-  openDriverRound,
+  openDriverVoyage,
   unsurfacedStuckFlags,
   turnDir,
   turnFile,
-  type DriverRound,
-  type DriverRoundOptions,
+  type DriverVoyage,
+  type DriverVoyageOptions,
 } from '../../src/driver/index.js';
 import { BudgetHeldError } from '../../src/budget/index.js';
 import { startPauseGate, type PauseGate } from '../../src/pause/index.js';
@@ -103,17 +103,17 @@ describe('Driver turn loop', () => {
     await store.db.exec(
       `delete from events; delete from turns; delete from notebook;
        delete from cards; delete from tickets; delete from agents;
-       delete from rounds; update projects set paused_at = null;`,
+       delete from voyages; update projects set paused_at = null;`,
     );
   });
 
-  const insertRound = async (
+  const insertVoyage = async (
     number: number,
     status = 'active',
     goal = 'Ship the turn loop.',
   ): Promise<string> => {
     const { rows } = await store.db.query<{ id: string }>(
-      `insert into rounds (project_id, number, status, goal)
+      `insert into voyages (project_id, number, status, goal)
        values ($1, $2, $3, $4) returning id`,
       [store.projectId, number, status, goal],
     );
@@ -141,7 +141,7 @@ describe('Driver turn loop', () => {
     return rows[0]?.id ?? '';
   };
 
-  const options = (agentId: string, roundId: string): DriverRoundOptions => ({
+  const options = (agentId: string, voyageId: string): DriverVoyageOptions => ({
     store,
     client: scripted.client,
     bus: {
@@ -151,7 +151,7 @@ describe('Driver turn loop', () => {
       },
     },
     agentId,
-    roundId,
+    voyageId,
     cwd: '/work/deck',
     charter: CHARTER,
     turnsDir,
@@ -159,10 +159,10 @@ describe('Driver turn loop', () => {
     pause: pauseGate,
   });
 
-  const open = async (): Promise<DriverRound> => {
+  const open = async (): Promise<DriverVoyage> => {
     const agentId = await insertAgent();
-    const roundId = await insertRound(1);
-    return openDriverRound(options(agentId, roundId));
+    const voyageId = await insertVoyage(1);
+    return openDriverVoyage(options(agentId, voyageId));
   };
 
   const turnRows = async (agentId: string): Promise<TurnRow[]> => {
@@ -188,9 +188,9 @@ describe('Driver turn loop', () => {
     const { rows } = await store.db.query<{
       status: string;
       sessionId: string | null;
-      roundId: string | null;
+      voyageId: string | null;
     }>(
-      `select status, session_id as "sessionId", round_id as "roundId"
+      `select status, session_id as "sessionId", voyage_id as "voyageId"
        from agents where id = $1`,
       [agentId],
     );
@@ -209,8 +209,8 @@ describe('Driver turn loop', () => {
       const pinned = await addNote('PRs need tests.', true, '2026-03-01');
       scripted.reply(say(resultText(RESULT)));
 
-      const round = await open();
-      const birth = await round.birth;
+      const voyage = await open();
+      const birth = await voyage.birth;
 
       expect(birth).toEqual({
         status: 'result',
@@ -218,20 +218,20 @@ describe('Driver turn loop', () => {
         turns: [expect.objectContaining({ seq: 1, stopReason: 'end_turn' })],
       });
       expect(scripted.sessions).toEqual([
-        { sessionId: round.sessionId, cwd: '/work/deck', mcpServers: [BUS] },
+        { sessionId: voyage.sessionId, cwd: '/work/deck', mcpServers: [BUS] },
       ]);
-      expect(launched).toEqual([round.agent.id]);
-      expect(round.notebook.map((entry) => entry.id)).toEqual([
+      expect(launched).toEqual([voyage.agent.id]);
+      expect(voyage.notebook.map((entry) => entry.id)).toEqual([
         pinned,
         older,
         newer,
       ]);
 
       const [prompt] = scripted.prompts;
-      expect(prompt?.sessionId).toBe(round.sessionId);
+      expect(prompt?.sessionId).toBe(voyage.sessionId);
       const input = prompt?.text ?? '';
       expect(input).toContain(CHARTER);
-      expect(input).toContain('round 1');
+      expect(input).toContain('voyage 1');
       expect(input).toContain('Ship the turn loop.');
       expect(input).toContain('### Entry 1 (pinned)\n\nPRs need tests.');
       expect(input.indexOf('PRs need tests.')).toBeLessThan(
@@ -242,18 +242,18 @@ describe('Driver turn loop', () => {
       );
       expect(input).toContain('```json');
 
-      expect(await events(ROUND_STARTED_EVENT)).toEqual([
+      expect(await events(VOYAGE_STARTED_EVENT)).toEqual([
         {
-          roundId: round.round.id,
-          round: 1,
-          sessionId: round.sessionId,
+          voyageId: voyage.voyage.id,
+          voyage: 1,
+          sessionId: voyage.sessionId,
           notebook: [pinned, older, newer],
         },
       ]);
-      expect(await agentRow(round.agent.id)).toEqual({
+      expect(await agentRow(voyage.agent.id)).toEqual({
         status: 'idle',
-        sessionId: round.sessionId,
-        roundId: round.round.id,
+        sessionId: voyage.sessionId,
+        voyageId: voyage.voyage.id,
       });
     },
     TIMEOUT,
@@ -262,8 +262,8 @@ describe('Driver turn loop', () => {
   it('says when the notebook is empty', async () => {
     scripted.reply(say(resultText(RESULT)));
 
-    const round = await open();
-    await round.birth;
+    const voyage = await open();
+    await voyage.birth;
 
     expect(scripted.prompts[0]?.text).toContain('The notebook is empty.');
   });
@@ -275,11 +275,11 @@ describe('Driver turn loop', () => {
       }),
     );
 
-    const round = await open();
-    await round.birth;
+    const voyage = await open();
+    await voyage.birth;
 
-    const dir = turnDir(turnsDir, round.agent.id, 1);
-    expect(dir).toBe(join(turnsDir, round.agent.id, '0001'));
+    const dir = turnDir(turnsDir, voyage.agent.id, 1);
+    expect(dir).toBe(join(turnsDir, voyage.agent.id, '0001'));
     const input = await readFile(turnFile(dir, 'input'), 'utf8');
     expect(input).toBe(scripted.prompts[0]?.text);
     expect(await readFile(turnFile(dir, 'output'), 'utf8')).toBe(
@@ -296,7 +296,7 @@ describe('Driver turn loop', () => {
       'agent_message_chunk',
     ]);
 
-    expect(await turnRows(round.agent.id)).toEqual([
+    expect(await turnRows(voyage.agent.id)).toEqual([
       {
         seq: 1,
         prompt: input,
@@ -313,7 +313,7 @@ describe('Driver turn loop', () => {
   });
 
   it(
-    'keeps every turn of the round in the one session',
+    'keeps every turn of the voyage in the one session',
     async () => {
       scripted.reply(
         say(resultText(RESULT)),
@@ -321,10 +321,10 @@ describe('Driver turn loop', () => {
         say(resultText({ summary: 'Waiting on review.', actions: [] })),
       );
 
-      const round = await open();
-      await round.birth;
-      const second = await round.turn('heron reported QD1.');
-      const third = await round.turn('reviewer-1 approved QD1.');
+      const voyage = await open();
+      await voyage.birth;
+      const second = await voyage.turn('heron reported QD1.');
+      const third = await voyage.turn('reviewer-1 approved QD1.');
 
       expect(second.status === 'result' && second.result.summary).toBe(
         'Assigned QD1.',
@@ -334,29 +334,31 @@ describe('Driver turn loop', () => {
       );
       expect(scripted.sessions).toHaveLength(1);
       expect(scripted.prompts.map((prompt) => prompt.sessionId)).toEqual([
-        round.sessionId,
-        round.sessionId,
-        round.sessionId,
+        voyage.sessionId,
+        voyage.sessionId,
+        voyage.sessionId,
       ]);
       expect(scripted.prompts.slice(1).map((prompt) => prompt.text)).toEqual([
         'heron reported QD1.',
         'reviewer-1 approved QD1.',
       ]);
-      expect((await turnRows(round.agent.id)).map((row) => row.seq)).toEqual([
+      expect((await turnRows(voyage.agent.id)).map((row) => row.seq)).toEqual([
         1, 2, 3,
       ]);
     },
     TIMEOUT,
   );
 
-  it('opens a new session for the next round', async () => {
+  it('opens a new session for the next voyage', async () => {
     scripted.reply(say(resultText(RESULT)), say(resultText(RESULT)));
     const agentId = await insertAgent();
-    const first = await openDriverRound(options(agentId, await insertRound(1)));
+    const first = await openDriverVoyage(
+      options(agentId, await insertVoyage(1)),
+    );
     await first.birth;
 
-    const second = await openDriverRound(
-      options(agentId, await insertRound(2, 'active', 'Next goal.')),
+    const second = await openDriverVoyage(
+      options(agentId, await insertVoyage(2, 'active', 'Next goal.')),
     );
     await second.birth;
 
@@ -368,7 +370,7 @@ describe('Driver turn loop', () => {
     expect(scripted.prompts[1]?.text).toContain('Next goal.');
     expect(await agentRow(agentId)).toMatchObject({
       sessionId: second.sessionId,
-      roundId: second.round.id,
+      voyageId: second.voyage.id,
     });
     expect((await turnRows(agentId)).map((row) => row.seq)).toEqual([1, 2]);
   });
@@ -380,17 +382,17 @@ describe('Driver turn loop', () => {
     });
     scripted.reply(say(resultText(RESULT), { gate }), say(resultText(RESULT)));
 
-    const round = await open();
-    const next = round.turn('next');
+    const voyage = await open();
+    const next = voyage.turn('next');
     await expect.poll(() => scripted.prompts.length).toBe(1);
-    expect((await agentRow(round.agent.id))?.status).toBe('working');
+    expect((await agentRow(voyage.agent.id))?.status).toBe('working');
     release();
-    await round.birth;
+    await voyage.birth;
     await next;
 
     expect(scripted.maxConcurrent()).toBe(1);
     expect(scripted.prompts.map((prompt) => prompt.text)[1]).toBe('next');
-    expect((await agentRow(round.agent.id))?.status).toBe('idle');
+    expect((await agentRow(voyage.agent.id))?.status).toBe('idle');
   });
 
   it(
@@ -398,22 +400,22 @@ describe('Driver turn loop', () => {
     async () => {
       scripted.reply(say('I assigned the ticket.'), say(resultText(RESULT)));
 
-      const round = await open();
-      const birth = await round.birth;
+      const voyage = await open();
+      const birth = await voyage.birth;
 
       expect(birth.status).toBe('result');
       expect(birth.turns.map((turn) => turn.seq)).toEqual([1, 2]);
       const reprompt = scripted.prompts[1]?.text ?? '';
       expect(reprompt).toContain('the reply has no JSON object');
       expect(reprompt).toContain('```json');
-      expect(scripted.prompts[1]?.sessionId).toBe(round.sessionId);
+      expect(scripted.prompts[1]?.sessionId).toBe(voyage.sessionId);
       expect(await events(TURN_EVENTS.missed)).toEqual([
         { seq: 1, error: 'the reply has no JSON object', reprompt: true },
       ]);
       expect(await events(TURN_EVENTS.result)).toEqual([
         { seq: 2, result: RESULT },
       ]);
-      const dir = turnDir(turnsDir, round.agent.id, 1);
+      const dir = turnDir(turnsDir, voyage.agent.id, 1);
       expect(existsSync(turnFile(dir, 'result'))).toBe(false);
       expect(await readFile(turnFile(dir, 'output'), 'utf8')).toBe(
         'I assigned the ticket.',
@@ -428,8 +430,8 @@ describe('Driver turn loop', () => {
       say('```json\n{ "summary": "" }\n```'),
     );
 
-    const round = await open();
-    const birth = await round.birth;
+    const voyage = await open();
+    const birth = await voyage.birth;
 
     expect(birth.status).toBe('missed');
     expect(birth.status === 'missed' && birth.error).toContain('summary');
@@ -443,8 +445,8 @@ describe('Driver turn loop', () => {
   it('does not re-prompt a cancelled turn', async () => {
     scripted.reply(say('Working on it', { stopReason: 'cancelled' }));
 
-    const round = await open();
-    const birth = await round.birth;
+    const voyage = await open();
+    const birth = await voyage.birth;
 
     expect(birth).toMatchObject({ status: 'stopped', stopReason: 'cancelled' });
     expect(scripted.prompts).toHaveLength(1);
@@ -456,22 +458,22 @@ describe('Driver turn loop', () => {
   it('closes a failed turn, records why and rejects', async () => {
     scripted.reply(say('Partial thought', { fail: 'agent crashed' }));
 
-    const round = await open();
+    const voyage = await open();
 
-    await expect(round.birth).rejects.toThrow('agent crashed');
-    const [row] = await turnRows(round.agent.id);
+    await expect(voyage.birth).rejects.toThrow('agent crashed');
+    const [row] = await turnRows(voyage.agent.id);
     expect(row).toMatchObject({ seq: 1, stopReason: null, ended: true });
     expect(await events(TURN_EVENTS.failed)).toEqual([
       { seq: 1, error: expect.stringContaining('agent crashed') },
     ]);
-    expect((await agentRow(round.agent.id))?.status).toBe('idle');
-    const dir = turnDir(turnsDir, round.agent.id, 1);
+    expect((await agentRow(voyage.agent.id))?.status).toBe('idle');
+    const dir = turnDir(turnsDir, voyage.agent.id, 1);
     expect(await readFile(turnFile(dir, 'output'), 'utf8')).toBe(
       'Partial thought',
     );
 
     scripted.reply(say(resultText(RESULT)));
-    expect((await round.turn('try again')).status).toBe('result');
+    expect((await voyage.turn('try again')).status).toBe('result');
   });
 
   const stall = async (builderId: string, ticketId: string, head: string) => {
@@ -518,23 +520,23 @@ describe('Driver turn loop', () => {
         say(resultText(RESULT)),
       );
 
-      const round = await open();
-      await round.birth;
+      const voyage = await open();
+      await voyage.birth;
       const birth = scripted.prompts[0]?.text ?? '';
       expect(birth).toContain('# Stuck builders');
       expect(birth).toContain(
         `- builder-idle (${builderId}) on ticket ${ticketId} "QD9 widget", at ${'a'.repeat(40)}.`,
       );
 
-      await round.turn('heron reported QD1.');
+      await voyage.turn('heron reported QD1.');
       expect(scripted.prompts[1]?.text).toBe('heron reported QD1.');
 
       expect(await stall(builderId, ticketId, 'b'.repeat(40))).toBe(true);
-      expect((await round.turn('crane is idle.')).status).toBe('stopped');
-      await expect(round.turn('reviewer-1 approved QD1.')).rejects.toThrow(
+      expect((await voyage.turn('crane is idle.')).status).toBe('stopped');
+      await expect(voyage.turn('reviewer-1 approved QD1.')).rejects.toThrow(
         'agent crashed',
       );
-      await round.turn('try again');
+      await voyage.turn('try again');
       const resent = scripted.prompts.slice(2).map((prompt) => prompt.text);
       expect(resent).toHaveLength(3);
       for (const text of resent) {
@@ -612,7 +614,7 @@ describe('Driver turn loop', () => {
         `update agents set runtime = 'claude' where id = $1`,
         [agentId],
       );
-      const opening = openDriverRound(options(agentId, await insertRound(1)));
+      const opening = openDriverVoyage(options(agentId, await insertVoyage(1)));
 
       const card = await openSignInCard();
       expect(card).toMatchObject({
@@ -634,9 +636,9 @@ describe('Driver turn loop', () => {
       expect(scripted.sessions).toEqual([]);
 
       await settleCard(card.id, 'answered', SIGNED_IN);
-      const round = await opening;
+      const voyage = await opening;
 
-      expect((await round.birth).status).toBe('result');
+      expect((await voyage.birth).status).toBe('result');
       expect(scripted.sessionAttempts()).toBe(2);
       expect(scripted.sessions).toHaveLength(1);
       expect(launched).toEqual([agentId, agentId]);
@@ -652,7 +654,7 @@ describe('Driver turn loop', () => {
     async () => {
       scripted.reply(signInNeeded(), say(resultText(RESULT)));
 
-      const round = await open();
+      const voyage = await open();
       const card = await openSignInCard();
       expect(card.recommendation).toBe('kiro-cli login');
       expect(await events(SIGN_IN_EVENTS.required)).toEqual([
@@ -661,10 +663,10 @@ describe('Driver turn loop', () => {
           operation: 'session/prompt',
         }),
       ]);
-      expect((await agentRow(round.agent.id))?.status).toBe('working');
+      expect((await agentRow(voyage.agent.id))?.status).toBe('working');
 
       await settleCard(card.id, 'answered', SIGNED_IN);
-      const birth = await round.birth;
+      const birth = await voyage.birth;
 
       expect(birth).toMatchObject({
         status: 'result',
@@ -673,7 +675,7 @@ describe('Driver turn loop', () => {
       expect(scripted.prompts).toHaveLength(2);
       expect(scripted.prompts[1]).toEqual(scripted.prompts[0]);
       expect(scripted.sessions).toHaveLength(1);
-      expect((await turnRows(round.agent.id)).map((row) => row.seq)).toEqual([
+      expect((await turnRows(voyage.agent.id)).map((row) => row.seq)).toEqual([
         1,
       ]);
       expect(await events(TURN_EVENTS.failed)).toEqual([]);
@@ -706,11 +708,11 @@ describe('Driver turn loop', () => {
     async () => {
       scripted.reply(signInNeeded());
 
-      const round = await open();
+      const voyage = await open();
       const card = await openSignInCard();
       await settleCard(card.id, 'declined', null);
 
-      const failure = await round.birth.catch((err: unknown) => err);
+      const failure = await voyage.birth.catch((err: unknown) => err);
       expect(failure).toBeInstanceOf(SignInRequiredError);
       expect(failure).toMatchObject({
         runtime: 'kiro',
@@ -722,40 +724,42 @@ describe('Driver turn loop', () => {
         { seq: 1, error: expect.stringContaining('`kiro-cli login`') },
       ]);
       expect(await events(SIGN_IN_EVENTS.resumed)).toEqual([]);
-      expect((await agentRow(round.agent.id))?.status).toBe('idle');
+      expect((await agentRow(voyage.agent.id))?.status).toBe('idle');
       expect(scripted.prompts).toHaveLength(1);
     },
     TIMEOUT,
   );
 
-  it('refuses a round that has ended or does not exist', async () => {
+  it('refuses a voyage that has ended or does not exist', async () => {
     const agentId = await insertAgent();
 
     await expect(
-      openDriverRound(options(agentId, await insertRound(1, 'ended'))),
-    ).rejects.toBeInstanceOf(RoundEndedError);
+      openDriverVoyage(options(agentId, await insertVoyage(1, 'ended'))),
+    ).rejects.toBeInstanceOf(VoyageEndedError);
     await expect(
-      openDriverRound(options(agentId, '00000000-0000-4000-8000-000000000000')),
-    ).rejects.toBeInstanceOf(RoundNotFoundError);
+      openDriverVoyage(
+        options(agentId, '00000000-0000-4000-8000-000000000000'),
+      ),
+    ).rejects.toBeInstanceOf(VoyageNotFoundError);
     expect(scripted.sessions).toEqual([]);
   });
 
   it('refuses an agent that is not a live Driver', async () => {
-    const roundId = await insertRound(1);
+    const voyageId = await insertVoyage(1);
     const builder = await insertAgent('builder');
     const retired = await insertAgent('driver', 'retired');
 
     await expect(
-      openDriverRound(options(builder, roundId)),
+      openDriverVoyage(options(builder, voyageId)),
     ).rejects.toBeInstanceOf(NotADriverError);
     await expect(
-      openDriverRound(options(retired, roundId)),
+      openDriverVoyage(options(retired, voyageId)),
     ).rejects.toBeInstanceOf(NotADriverError);
     expect(scripted.sessions).toEqual([]);
     expect(launched).toEqual([]);
   });
 
-  it('holds the round launch while the project is paused and opens it on unpause', async () => {
+  it('holds the voyage launch while the project is paused and opens it on unpause', async () => {
     const setPaused = async (paused: boolean) => {
       await store.db.query(
         `update projects set paused_at = case when $2::boolean then now() end
@@ -775,7 +779,7 @@ describe('Driver turn loop', () => {
     expect(await events('pause.held')).toEqual([
       {
         operation: 'launch',
-        label: 'driver-idle, round 1',
+        label: 'driver-idle, voyage 1',
         scopes: ['project'],
       },
     ]);
@@ -783,14 +787,14 @@ describe('Driver turn loop', () => {
     expect(scripted.sessions).toEqual([]);
 
     await setPaused(false);
-    const round = await opening;
+    const voyage = await opening;
 
-    expect((await round.birth).status).toBe('result');
-    expect(launched).toEqual([round.agent.id]);
+    expect((await voyage.birth).status).toBe('result');
+    expect(launched).toEqual([voyage.agent.id]);
     expect(await events('pause.replayed')).toEqual([
       {
         operation: 'launch',
-        label: 'driver-idle, round 1',
+        label: 'driver-idle, voyage 1',
         heldEventId: expect.any(Number),
       },
     ]);
@@ -802,14 +806,14 @@ describe('Driver turn loop', () => {
       say(resultText(RESULT)),
       say(resultText(RESULT)),
     );
-    const round = await open();
-    await round.birth;
+    const voyage = await open();
+    await voyage.birth;
     await store.db.query(`update agents set status = 'paused' where id = $1`, [
-      round.agent.id,
+      voyage.agent.id,
     ]);
 
-    const first = round.turn('heron reported QD1.\nThe PR is open.');
-    const second = round.turn('reviewer-1 approved QD1.');
+    const first = voyage.turn('heron reported QD1.\nThe PR is open.');
+    const second = voyage.turn('reviewer-1 approved QD1.');
     await settle(async () => {
       expect(await events('pause.held')).toHaveLength(1);
     });
@@ -822,12 +826,12 @@ describe('Driver turn loop', () => {
       },
     ]);
     expect(scripted.prompts).toHaveLength(1);
-    expect((await agentRow(round.agent.id))?.status).toBe('paused');
+    expect((await agentRow(voyage.agent.id))?.status).toBe('paused');
 
     await store.db.query(`update agents set status = 'idle' where id = $1`, [
-      round.agent.id,
+      voyage.agent.id,
     ]);
-    await store.publish({ kind: 'agent.resume', agentId: round.agent.id });
+    await store.publish({ kind: 'agent.resume', agentId: voyage.agent.id });
     await first;
     await second;
 
@@ -838,21 +842,21 @@ describe('Driver turn loop', () => {
     expect(await events('pause.held')).toHaveLength(1);
   });
 
-  it('holds a round at the budget line before launching the bus or a session', async () => {
+  it('holds a voyage at the budget line before launching the bus or a session', async () => {
     const agentId = await insertAgent();
-    const roundId = await insertRound(1);
+    const voyageId = await insertVoyage(1);
     await store.db.query(
       `insert into turns (agent_id, seq, prompt, input_tokens, output_tokens,
                           ended_at)
        values ($1, 1, 'go', 600, 200, now())`,
       [agentId],
     );
-    const capped: DriverRoundOptions = {
-      ...options(agentId, roundId),
+    const capped: DriverVoyageOptions = {
+      ...options(agentId, voyageId),
       budget: { hours: 5, capTokens: 1000, holdAtFraction: 0.8 },
     };
 
-    await expect(openDriverRound(capped)).rejects.toBeInstanceOf(
+    await expect(openDriverVoyage(capped)).rejects.toBeInstanceOf(
       BudgetHeldError,
     );
     expect(scripted.sessions).toEqual([]);
@@ -860,6 +864,6 @@ describe('Driver turn loop', () => {
     expect(await events('budget.held')).toEqual([
       expect.objectContaining({ usedTokens: 800, holdAtTokens: 800 }),
     ]);
-    expect(await events(ROUND_STARTED_EVENT)).toEqual([]);
+    expect(await events(VOYAGE_STARTED_EVENT)).toEqual([]);
   });
 });

@@ -42,7 +42,7 @@ const meter = await readBudgetMeter(store.db, store.projectId, budget.window);
 
 ## The hold
 
-Every launch checks the budget first. `createAgentLifecycle().birth` checks before it claims a name (with the request's `ticketId`), and `openDriverRound` checks before it launches the bus (with the Driver's id). Both use `assertLaunchBudget`, which throws `BudgetHeldError` on a hold. The error carries `meter` and `releaseAt`. A held launch creates no agent row, name, worktree or session. The Driver's `assignTicket`, when it moves an existing builder to a ticket, and its `continueBuilder` check before they claim the builder (see [driver](../driver/README.md#assigning)). Any other launch path calls the same check:
+Every launch checks the budget first. `createAgentLifecycle().birth` checks before it claims a name (with the request's `ticketId`), and `openDriverVoyage` checks before it launches the bus (with the Driver's id). Both use `assertLaunchBudget`, which throws `BudgetHeldError` on a hold. The error carries `meter` and `releaseAt`. A held launch creates no agent row, name, worktree or session. The Driver's `assignTicket`, when it moves an existing builder to a ticket, and its `continueBuilder` check before they claim the builder (see [driver](../driver/README.md#assigning)). Any other launch path calls the same check:
 
 ```ts
 import { BudgetHeldError, assertLaunchBudget } from '@quarterdeck/server';

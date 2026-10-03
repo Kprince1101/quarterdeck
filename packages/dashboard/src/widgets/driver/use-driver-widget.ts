@@ -1,51 +1,54 @@
 import { useMemo, useState } from 'react';
-import type { RoundRow } from '@quarterdeck/server/stream-schema';
+import type { VoyageRow } from '@quarterdeck/server/stream-schema';
 import { useDeck } from '../../deck/DeckProvider.js';
 import {
-  currentRound,
-  roundTurns,
-  roundsNewestFirst,
+  currentVoyage,
+  voyageTurns,
+  voyagesNewestFirst,
   type DriverTurn,
 } from './driver-turns.js';
 import { useTurnDetail, type TurnDetail } from './use-turn-detail.js';
 
 export interface DriverWidgetView {
   project: string | null;
-  rounds: RoundRow[];
-  round: RoundRow | null;
+  voyages: VoyageRow[];
+  voyage: VoyageRow | null;
   turns: DriverTurn[];
   selected: DriverTurn | null;
   detail: TurnDetail | null;
-  selectRound: (roundId: string) => void;
+  selectVoyage: (voyageId: string) => void;
   selectTurn: (turnId: number) => void;
 }
 
 export const useDriverWidget = (): DriverWidgetView => {
   const { stream, intents } = useDeck();
   const { tables } = stream;
-  const [roundId, setRoundId] = useState<string | null>(null);
+  const [voyageId, setVoyageId] = useState<string | null>(null);
   const [turnId, setTurnId] = useState<number | null>(null);
 
   const project = tables.projects[0]?.slug ?? null;
-  const rounds = useMemo(() => roundsNewestFirst(tables.rounds), [tables]);
-  const round =
-    rounds.find((candidate) => candidate.id === roundId) ??
-    currentRound(rounds) ??
+  const voyages = useMemo(() => voyagesNewestFirst(tables.voyages), [tables]);
+  const voyage =
+    voyages.find((candidate) => candidate.id === voyageId) ??
+    currentVoyage(voyages) ??
     null;
-  const turns = useMemo(() => roundTurns(tables, round?.id), [tables, round]);
+  const turns = useMemo(
+    () => voyageTurns(tables, voyage?.id),
+    [tables, voyage],
+  );
   const selected =
     turns.find(({ turn }) => turn.id === turnId) ?? turns[0] ?? null;
   const detail = useTurnDetail(intents, project, selected?.turn ?? null);
 
   return {
     project,
-    rounds,
-    round,
+    voyages,
+    voyage,
     turns,
     selected,
     detail,
-    selectRound: (id) => {
-      setRoundId(id);
+    selectVoyage: (id) => {
+      setVoyageId(id);
       setTurnId(null);
     },
     selectTurn: setTurnId,

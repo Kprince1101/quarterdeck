@@ -9,7 +9,7 @@ import {
   NoBirthTurnError,
   ReplaySignInError,
   TurnInputMissingError,
-  findRoundSessions,
+  findVoyageSessions,
   projectTurnsDir,
   quarterdeckHome,
   replayDriverChain,
@@ -17,7 +17,7 @@ import {
   type ConnectReplay,
   type ReplayClient,
   type ReplayTurn,
-  type RoundSession,
+  type VoyageSession,
   type RuntimeLaunch,
 } from '@quarterdeck/server';
 import { projectSlugSchema } from '@quarterdeck/server/intents';
@@ -28,14 +28,14 @@ const RUNTIMES = runtimeSchema.options;
 export const REPLAY_CLIENT_NAME = 'quarterdeck';
 export const REPLAY_CLIENT_VERSION = '0.0.0';
 
-export const REPLAY_USAGE = `Usage: quarterdeck replay <round> [n] [options]
+export const REPLAY_USAGE = `Usage: quarterdeck replay <voyage> [n] [options]
 
-Sends the Driver's saved prompts for round <round> again, turns 1 to n of the
-round (default: all of them), in one new session, and prints the replies.
+Sends the Driver's saved prompts for voyage <voyage> again, turns 1 to n of the
+voyage (default: all of them), in one new session, and prints the replies.
 Nothing is written: the agent runs in a throwaway folder with no Quarterdeck
 tools, and every permission it asks for is refused.
 
-  --project <slug>     The round's project (default: the only one that has the round)
+  --project <slug>     The voyage's project (default: the only one that has the voyage)
   --runtime <runtime>  ${RUNTIMES.join(', ')} (default: the Driver's runtime in ~/.quarterdeck)`;
 
 export interface ReplayAdapter {
@@ -57,9 +57,9 @@ export interface ReplayCliOptions {
   adapters?: ReplayAdapters;
 }
 
-interface FoundRound {
+interface FoundVoyage {
   project: string;
-  session: RoundSession;
+  session: VoyageSession;
   sessions: number;
 }
 
@@ -133,16 +133,16 @@ const searchedPlace = (home: string, project: string | undefined): string => {
   return `any project in ${home}`;
 };
 
-const findRound = async (
+const findVoyage = async (
   home: string,
-  round: number,
+  voyage: number,
   project: string | undefined,
-): Promise<FoundRound> => {
-  const found: FoundRound[] = [];
+): Promise<FoundVoyage> => {
+  const found: FoundVoyage[] = [];
   for (const slug of await searchedProjects(home, project)) {
-    const sessions = await findRoundSessions(
+    const sessions = await findVoyageSessions(
       projectTurnsDir(slug, home),
-      round,
+      voyage,
     );
     const session = sessions.at(-1);
     if (session)
@@ -151,27 +151,27 @@ const findRound = async (
   const [first, ...rest] = found;
   if (!first) {
     throw new CliError(
-      `No saved Driver turns for round ${round} in ${searchedPlace(home, project)}`,
+      `No saved Driver turns for voyage ${voyage} in ${searchedPlace(home, project)}`,
     );
   }
   if (rest.length > 0) {
     const names = found.map((entry) => entry.project).join(', ');
     throw new CliError(
-      `Round ${round} is in more than one project (${names}). Pass --project <slug>.`,
+      `Voyage ${voyage} is in more than one project (${names}). Pass --project <slug>.`,
     );
   }
   return first;
 };
 
-const turnCount = (session: RoundSession): number =>
+const turnCount = (session: VoyageSession): number =>
   session.lastSeq - session.firstSeq + 1;
 
-const pickTurns = (found: FoundRound, n: number | undefined): number => {
+const pickTurns = (found: FoundVoyage, n: number | undefined): number => {
   const count = turnCount(found.session);
   if (n === undefined) return count;
   if (n > count) {
     throw new CliError(
-      `Round ${found.session.round} of ${found.project} has ${countOf(count, 'Driver turn')}; n must be from 1 to ${count}`,
+      `Voyage ${found.session.voyage} of ${found.project} has ${countOf(count, 'Driver turn')}; n must be from 1 to ${count}`,
     );
   }
   return n;
@@ -207,7 +207,7 @@ const isReplayError = (err: unknown): err is Error =>
   err instanceof NoBirthTurnError ||
   err instanceof TurnInputMissingError;
 
-export const replayRound = async (
+export const replayVoyage = async (
   args: string[],
   io: CliIo,
   { adapters = REPLAY_ADAPTERS }: ReplayCliOptions = {},
@@ -225,18 +225,18 @@ export const replayRound = async (
     io.out(REPLAY_USAGE);
     return 0;
   }
-  const [roundArg, nArg, ...extra] = positionals;
-  if (roundArg === undefined) {
-    throw new CliError(`replay needs a round\n\n${REPLAY_USAGE}`);
+  const [voyageArg, nArg, ...extra] = positionals;
+  if (voyageArg === undefined) {
+    throw new CliError(`replay needs a voyage\n\n${REPLAY_USAGE}`);
   }
-  if (extra.length > 0) throw new CliError('replay takes a round and n');
-  const round = parsePositive('round', roundArg);
+  if (extra.length > 0) throw new CliError('replay takes a voyage and n');
+  const voyage = parsePositive('voyage', voyageArg);
   const n = parseThrough(nArg);
   const project = parseProject(values.project);
   const runtime = await parseRuntime(values.runtime, io);
 
   const home = quarterdeckHome(io.homeDir);
-  const found = await findRound(home, round, project);
+  const found = await findVoyage(home, voyage, project);
   const turns = pickTurns(found, n);
   const { session } = found;
   const through = session.firstSeq + turns - 1;
@@ -270,11 +270,11 @@ export const replayRound = async (
   };
 
   io.out(
-    `Replaying round ${round} of ${found.project}: Driver ${session.driverName} (${session.agentId}), turns 1 to ${turns} of ${turnCount(session)}, on ${runtime}.`,
+    `Replaying voyage ${voyage} of ${found.project}: Driver ${session.driverName} (${session.agentId}), turns 1 to ${turns} of ${turnCount(session)}, on ${runtime}.`,
   );
   if (found.sessions > 1) {
     io.out(
-      `Round ${round} had ${found.sessions} Driver sessions; this is the latest.`,
+      `Voyage ${voyage} had ${found.sessions} Driver sessions; this is the latest.`,
     );
   }
   io.out(
@@ -305,4 +305,4 @@ export const replayRound = async (
   return 0;
 };
 
-export const runReplay: Command = (args, io) => replayRound(args, io);
+export const runReplay: Command = (args, io) => replayVoyage(args, io);

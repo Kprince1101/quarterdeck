@@ -2,7 +2,7 @@
 import type { TurnReadResult } from '@quarterdeck/server/intents';
 import type {
   AgentRow,
-  RoundRow,
+  VoyageRow,
   StreamMessage,
   TurnRow,
 } from '@quarterdeck/server/stream-schema';
@@ -25,15 +25,15 @@ import { typeInto, type DomElement } from '../primitives/dom.js';
 import { all, render, textOf, type PageElement } from '../shell/page.js';
 
 const PROJECT_ID = '00000000-0000-4000-8000-000000000001';
-const ROUND_1 = '00000000-0000-4000-8000-000000000011';
-const ROUND_2 = '00000000-0000-4000-8000-000000000012';
-const ROUND_3 = '00000000-0000-4000-8000-000000000013';
+const VOYAGE_1 = '00000000-0000-4000-8000-000000000011';
+const VOYAGE_2 = '00000000-0000-4000-8000-000000000012';
+const VOYAGE_3 = '00000000-0000-4000-8000-000000000013';
 const DRIVER_1 = '00000000-0000-4000-8000-000000000021';
 const KITE = '00000000-0000-4000-8000-000000000022';
 const OTTER = '00000000-0000-4000-8000-000000000023';
 const AT = '2026-10-01T12:00:00.000Z';
 
-const round = (id: string, number: number, status: RoundRow['status']) => ({
+const voyage = (id: string, number: number, status: VoyageRow['status']) => ({
   id,
   projectId: PROJECT_ID,
   number,
@@ -47,11 +47,11 @@ const agent = (
   id: string,
   name: string,
   role: AgentRow['role'],
-  roundId: string,
+  voyageId: string,
 ): AgentRow => ({
   id,
   projectId: PROJECT_ID,
-  roundId,
+  voyageId,
   name,
   role,
   runtime: 'claude',
@@ -95,11 +95,11 @@ const SNAPSHOT: StreamMessage = {
         pausedAt: null,
       },
     ],
-    rounds: [round(ROUND_1, 1, 'ended'), round(ROUND_2, 2, 'active')],
+    voyages: [voyage(VOYAGE_1, 1, 'ended'), voyage(VOYAGE_2, 2, 'active')],
     agents: [
-      agent(DRIVER_1, 'driver-1', 'driver', ROUND_2),
-      agent(KITE, 'kite', 'driver', ROUND_1),
-      agent(OTTER, 'otter', 'builder', ROUND_2),
+      agent(DRIVER_1, 'driver-1', 'driver', VOYAGE_2),
+      agent(KITE, 'kite', 'driver', VOYAGE_1),
+      agent(OTTER, 'otter', 'builder', VOYAGE_2),
     ],
     turns: [
       turn(5, KITE, 1),
@@ -112,9 +112,9 @@ const SNAPSHOT: StreamMessage = {
 };
 
 const READS: Record<number, Partial<TurnReadResult>> = {
-  5: { agentId: KITE, round: 1, n: 1, latestSession: false },
-  11: { round: 2, n: 1, latestSession: true, output: null, result: null },
-  12: { round: 2, n: 2, latestSession: true },
+  5: { agentId: KITE, voyage: 1, n: 1, latestSession: false },
+  11: { voyage: 2, n: 1, latestSession: true, output: null, result: null },
+  12: { voyage: 2, n: 2, latestSession: true },
 };
 
 const readOf = (turnId: number): TurnReadResult => ({
@@ -124,7 +124,7 @@ const readOf = (turnId: number): TurnReadResult => ({
   input: `input ${turnId}`,
   output: `output ${turnId}`,
   result: { summary: `result ${turnId}` },
-  round: null,
+  voyage: null,
   n: null,
   latestSession: false,
   ...READS[turnId],
@@ -206,17 +206,17 @@ describe('Driver widget', () => {
     vi.unstubAllGlobals();
   });
 
-  it('says so when there are no rounds', () => {
+  it('says so when there are no voyages', () => {
     const { container, unmount } = render(
       <DeckProvider stream={stream} intents={intents}>
         <DriverWidget />
       </DeckProvider>,
     );
-    expect(container.textContent).toBe('No rounds yet.');
+    expect(container.textContent).toBe('No voyages yet.');
     unmount();
   });
 
-  it("lists the active round's Driver turns, newest first", async () => {
+  it("lists the active voyage's Driver turns, newest first", async () => {
     const { container, unmount } = await mount();
     expect(all(container, 'option').map((o) => o.textContent)).toEqual([
       '2 (active)',
@@ -267,7 +267,7 @@ describe('Driver widget', () => {
     unmount();
   });
 
-  it('replays through an earlier turn of the round', async () => {
+  it('replays through an earlier turn of the voyage', async () => {
     const { container, unmount } = await mount();
     const field = container.querySelector('.qd-driver-through input');
     if (field === null) throw new Error('no turn field');
@@ -306,11 +306,11 @@ describe('Driver widget', () => {
     unmount();
   });
 
-  it('picks another round and offers no command for a replaced session', async () => {
+  it('picks another voyage and offers no command for a replaced session', async () => {
     const { container, unmount } = await mount();
     const select = container.querySelector('select');
-    if (select === null) throw new Error('no round picker');
-    choose(select, ROUND_1);
+    if (select === null) throw new Error('no voyage picker');
+    choose(select, VOYAGE_1);
     await settle();
     expect(turnButtons(container).map((b) => b.textContent)).toEqual([
       'Turn 1kite · end_turn',
@@ -318,7 +318,7 @@ describe('Driver widget', () => {
     expect(reads).toEqual([12, 5]);
     expect(container.querySelector('.qd-driver-command')).toBeNull();
     expect(textOf(container, '[aria-label="Turn detail"]')).toContain(
-      'Round 1 has a later Driver session',
+      'Voyage 1 has a later Driver session',
     );
     unmount();
   });
@@ -346,18 +346,18 @@ describe('Driver widget', () => {
     unmount();
   });
 
-  it('follows a new round until one is picked', async () => {
+  it('follows a new voyage until one is picked', async () => {
     const { container, unmount } = await mount();
     await deliver({
       type: 'change',
-      table: 'rounds',
+      table: 'voyages',
       op: 'insert',
-      id: ROUND_3,
-      row: round(ROUND_3, 3, 'active'),
+      id: VOYAGE_3,
+      row: voyage(VOYAGE_3, 3, 'active'),
     });
     expect(textOf(container, '.qd-driver-goal')).toBe('Goal 3.');
     expect(textOf(container, '.qd-driver')).toContain(
-      'No Driver turns in round 3 yet.',
+      'No Driver turns in voyage 3 yet.',
     );
     unmount();
   });

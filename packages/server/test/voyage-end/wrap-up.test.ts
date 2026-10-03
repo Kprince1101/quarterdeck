@@ -11,14 +11,14 @@ import {
   expect,
   it,
 } from 'vitest';
-import { openDriverRound, type DriverRound } from '../../src/driver/index.js';
+import { openDriverVoyage, type DriverVoyage } from '../../src/driver/index.js';
 import {
   MAX_NOTEBOOK_PROPOSALS,
   WRAP_UP_EVENTS,
   buildWrapUpPrompt,
-  wrapUpRound,
+  wrapUpVoyage,
   wrapUpResultSchema,
-} from '../../src/round-end/index.js';
+} from '../../src/voyage-end/index.js';
 import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
 import {
   resultText,
@@ -27,11 +27,11 @@ import {
   type ScriptedAgent,
 } from '../driver/scripted-agent.js';
 import {
-  CLEAR_ROUND_TABLES,
+  CLEAR_VOYAGE_TABLES,
   TIMEOUT,
   eventPayloads,
   insertAgent,
-  insertRound,
+  insertVoyage,
 } from './fixtures.js';
 
 const CHARTER = '# Driver charter\n\nTurn tickets into merged pull requests.';
@@ -50,7 +50,7 @@ interface ProposalRow {
   pinned: boolean;
   rationale: string;
   status: string;
-  roundId: string | null;
+  voyageId: string | null;
   agentId: string | null;
 }
 
@@ -75,7 +75,7 @@ describe('wrap-up', { timeout: TIMEOUT }, () => {
   afterEach(async () => {
     await scripted.client.close();
     await rm(turnsDir, { recursive: true, force: true });
-    await store.db.exec(CLEAR_ROUND_TABLES);
+    await store.db.exec(CLEAR_VOYAGE_TABLES);
   });
 
   const addNote = async (body: string, pinned = false): Promise<string> => {
@@ -87,34 +87,34 @@ describe('wrap-up', { timeout: TIMEOUT }, () => {
     return rows[0]?.id ?? '';
   };
 
-  const openRound = async (): Promise<DriverRound> => {
-    const roundId = await insertRound(store, 3);
+  const openVoyage = async (): Promise<DriverVoyage> => {
+    const voyageId = await insertVoyage(store, 3);
     const agentId = await insertAgent(store, {
       name: 'lark',
       role: 'driver',
-      roundId,
+      voyageId,
     });
     scripted.reply(say(resultText(BIRTH)));
-    const round = await openDriverRound({
+    const voyage = await openDriverVoyage({
       store,
       client: scripted.client,
       bus: { launch: async () => BUS },
       agentId,
-      roundId,
+      voyageId,
       cwd: '/work/deck',
       charter: CHARTER,
       turnsDir,
       budget: { hours: 5, capTokens: null, holdAtFraction: 0.8 },
       pause: { hold: (_subject, run) => run() },
     });
-    await round.birth;
-    return round;
+    await voyage.birth;
+    return voyage;
   };
 
   const notebookProposals = async (): Promise<ProposalRow[]> => {
     const { rows } = await store.db.query<ProposalRow>(
       `select op, entry_id as "entryId", body, pinned, rationale, status,
-              round_id as "roundId", agent_id as "agentId"
+              voyage_id as "voyageId", agent_id as "agentId"
        from notebook_proposals order by created_at, op`,
     );
     return rows;
@@ -124,19 +124,19 @@ describe('wrap-up', { timeout: TIMEOUT }, () => {
     const { rows } = await store.db.query<{
       body: string;
       rationale: string;
-      roundId: string | null;
+      voyageId: string | null;
       agentId: string | null;
     }>(
-      `select body, rationale, round_id as "roundId", agent_id as "agentId"
+      `select body, rationale, voyage_id as "voyageId", agent_id as "agentId"
        from charter_proposals`,
     );
     return rows;
   };
 
-  it('asks the Driver for proposals in its round session, listing entries by id', async () => {
+  it('asks the Driver for proposals in its voyage session, listing entries by id', async () => {
     const kept = await addNote('Reviews go to reviewer-1.');
     const pinned = await addNote('PRs need tests.', true);
-    const round = await openRound();
+    const voyage = await openVoyage();
     scripted.reply(
       say(
         resultText({
@@ -147,7 +147,7 @@ describe('wrap-up', { timeout: TIMEOUT }, () => {
       ),
     );
 
-    const wrapUp = await wrapUpRound({ store, round, charter: CHARTER });
+    const wrapUp = await wrapUpVoyage({ store, voyage, charter: CHARTER });
 
     expect(wrapUp).toEqual({
       status: 'proposed',
@@ -156,24 +156,24 @@ describe('wrap-up', { timeout: TIMEOUT }, () => {
       charterProposalId: null,
     });
     const prompt = scripted.prompts[1];
-    expect(prompt?.sessionId).toBe(round.sessionId);
+    expect(prompt?.sessionId).toBe(voyage.sessionId);
     expect(prompt?.text).toBe(
       buildWrapUpPrompt({
-        round: round.round,
+        voyage: voyage.voyage,
         charter: CHARTER,
-        notebook: round.notebook,
+        notebook: voyage.notebook,
       }),
     );
     expect(prompt?.text).toContain(`### ${pinned} (pinned)\n\nPRs need tests.`);
     expect(prompt?.text).toContain(`### ${kept}\n\nReviews go to reviewer-1.`);
-    expect(prompt?.text).toContain('Round 3 has settled');
+    expect(prompt?.text).toContain('Voyage 3 has settled');
     expect(prompt?.text).toContain(CHARTER);
   });
 
   it('saves notebook and charter proposals with an event, all open', async () => {
     const stale = await addNote('Deploy on Fridays.');
     const vague = await addNote('Tests matter.');
-    const round = await openRound();
+    const voyage = await openVoyage();
     scripted.reply(
       say(
         resultText({
@@ -201,9 +201,9 @@ describe('wrap-up', { timeout: TIMEOUT }, () => {
       ),
     );
 
-    const wrapUp = await wrapUpRound({ store, round, charter: CHARTER });
+    const wrapUp = await wrapUpVoyage({ store, voyage, charter: CHARTER });
 
-    const source = { roundId: round.round.id, agentId: round.agent.id };
+    const source = { voyageId: voyage.voyage.id, agentId: voyage.agent.id };
     expect(await notebookProposals()).toEqual([
       {
         op: 'add',
@@ -244,8 +244,8 @@ describe('wrap-up', { timeout: TIMEOUT }, () => {
     expect(wrapUp.notebookProposalIds).toHaveLength(3);
     expect(await eventPayloads(store, WRAP_UP_EVENTS.proposed)).toEqual([
       {
-        roundId: round.round.id,
-        round: 3,
+        voyageId: voyage.voyage.id,
+        voyage: 3,
         summary: 'Shipped QD5f; QD5g is next.',
         notebookProposals: wrapUp.notebookProposalIds,
         charterProposal: wrapUp.charterProposalId,
@@ -262,20 +262,20 @@ describe('wrap-up', { timeout: TIMEOUT }, () => {
 
   it('drops an update that changes nothing and a charter that matches the current one', async () => {
     const entry = await addNote('Tests matter.');
-    const round = await openRound();
+    const voyage = await openVoyage();
     scripted.reply(
       say(
         resultText({
-          summary: 'Quiet round.',
+          summary: 'Quiet voyage.',
           notebook: [{ op: 'update', entry, body: 'Tests matter.' }],
           charter: { body: CHARTER },
         }),
       ),
     );
 
-    expect(await wrapUpRound({ store, round, charter: CHARTER })).toEqual({
+    expect(await wrapUpVoyage({ store, voyage, charter: CHARTER })).toEqual({
       status: 'proposed',
-      summary: 'Quiet round.',
+      summary: 'Quiet voyage.',
       notebookProposalIds: [],
       charterProposalId: null,
     });
@@ -284,7 +284,7 @@ describe('wrap-up', { timeout: TIMEOUT }, () => {
 
   it('re-prompts once for an entry id that is not in the notebook, then records a miss', async () => {
     await addNote('Tests matter.');
-    const round = await openRound();
+    const voyage = await openVoyage();
     const unknown = {
       summary: 'Done.',
       notebook: [{ op: 'retire', entry: crypto.randomUUID() }],
@@ -292,7 +292,7 @@ describe('wrap-up', { timeout: TIMEOUT }, () => {
     };
     scripted.reply(say(resultText(unknown)), say(resultText(unknown)));
 
-    const wrapUp = await wrapUpRound({ store, round, charter: CHARTER });
+    const wrapUp = await wrapUpVoyage({ store, voyage, charter: CHARTER });
 
     expect(wrapUp.status).toBe('missed');
     expect(scripted.prompts).toHaveLength(3);
@@ -301,22 +301,22 @@ describe('wrap-up', { timeout: TIMEOUT }, () => {
     );
     expect(await notebookProposals()).toEqual([]);
     const [missed] = await eventPayloads(store, WRAP_UP_EVENTS.missed);
-    expect(missed).toMatchObject({ roundId: round.round.id, round: 3 });
+    expect(missed).toMatchObject({ voyageId: voyage.voyage.id, voyage: 3 });
     expect(String(missed?.['reason'])).toContain('active notebook entry');
   });
 
   it('records a miss when the wrap-up turn stops or fails', async () => {
-    const round = await openRound();
+    const voyage = await openVoyage();
     scripted.reply(say('No.', { stopReason: 'refusal' }));
 
-    expect(await wrapUpRound({ store, round, charter: CHARTER })).toEqual({
+    expect(await wrapUpVoyage({ store, voyage, charter: CHARTER })).toEqual({
       status: 'missed',
       reason: 'the wrap-up turn stopped: refusal',
     });
 
     scripted.reply({ fail: 'agent died' });
 
-    const failed = await wrapUpRound({ store, round, charter: CHARTER });
+    const failed = await wrapUpVoyage({ store, voyage, charter: CHARTER });
 
     expect(failed.status).toBe('missed');
     expect(await eventPayloads(store, WRAP_UP_EVENTS.missed)).toHaveLength(2);

@@ -22,7 +22,7 @@ export const agent = (
 ): AgentRow => ({
   id,
   projectId,
-  roundId: null,
+  voyageId: null,
   name,
   role: 'builder',
   runtime: 'claude',
@@ -41,7 +41,7 @@ export const ticket = (
 ): TicketRow => ({
   id,
   projectId,
-  roundId: null,
+  voyageId: null,
   assigneeId: MINK,
   title,
   body: '',

@@ -15,7 +15,7 @@ export * from './lifecycle/index.js';
 export * from './pause/index.js';
 export * from './planner/index.js';
 export * from './quarterdeck/index.js';
-export * from './round-end/index.js';
+export * from './voyage-end/index.js';
 export * from './signin/index.js';
 export * from './store/index.js';
 export * from './tickets/index.js';

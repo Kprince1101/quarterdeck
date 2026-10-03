@@ -17,9 +17,9 @@ await archive.close();
 - **No launches, no turns.** Every launch, continue, Driver turn and Planner turn passes the project's [pause](../pause/README.md) gate, and the gate refuses all of them while the project is archived (`PauseDroppedError`, `reason: 'archived'`). Work a pause was holding when the project was archived is dropped, not replayed later.
 - **The Planner lets go.** The [Planner](../planner/README.md) ends its conversation on archive and refuses messages until unarchive.
 
-Unarchive clears `archived_at`. The gate lets work through again at once, the Planner births a new agent on the next message, and the control leaves agents born after that alone. Agents retired by the archive stay retired; a new round births new ones.
+Unarchive clears `archived_at`. The gate lets work through again at once, the Planner births a new agent on the next message, and the control leaves agents born after that alone. Agents retired by the archive stay retired; a new voyage births new ones.
 
-Rounds are left as they were. Their agents are retired, so end or kill an open round after unarchive to put its tickets back to `open`.
+Voyages are left as they were. Their agents are retired, so end or kill an open voyage after unarchive to put its tickets back to `open`.
 
 ## API
 

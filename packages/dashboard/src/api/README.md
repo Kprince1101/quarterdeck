@@ -18,7 +18,7 @@ import { createIntentClient, intents, IntentError } from './api';
 await intents.notebook.add({ project: 'deck', body: 'remember this' });
 
 const remote = createIntentClient({ baseUrl: 'http://127.0.0.1:4317' });
-const reply = await remote.round.start({ project: 'deck', goal: 'ship it' });
+const reply = await remote.voyage.start({ project: 'deck', goal: 'ship it' });
 reply.status; // 'pending'
 ```
 

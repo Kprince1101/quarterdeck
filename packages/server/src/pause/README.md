@@ -36,9 +36,9 @@ Held work lives in the process. `hold(..., { signal })` drops an item when `sign
 | Operation      | Who holds it                                       | `agentId`               | `ticketId` | `label`                             |
 | -------------- | -------------------------------------------------- | ----------------------- | ---------- | ----------------------------------- |
 | `launch`       | `assignTicket`, `reassignTickets`                  | the builder, when named | the ticket | `assign: <title>`, `reassign: …`    |
-| `launch`       | `openDriverRound` (bus launch and `session/new`)   | the Driver              |            | `<name>, round <n>`                 |
+| `launch`       | `openDriverVoyage` (bus launch and `session/new`)  | the Driver              |            | `<name>, voyage <n>`                |
 | `continue`     | `continueBuilder`                                  | the builder             |            | `continue: <first line of prompt>`  |
-| `driver.turn`  | every `round.turn`, the birth turn included        | the Driver              |            | `turn: <first line>`, `birth turn…` |
+| `driver.turn`  | every `voyage.turn`, the birth turn included       | the Driver              |            | `turn: <first line>`, `birth turn…` |
 | `planner.turn` | each `planner.message`, the Planner's birth within | the Planner, if live    |            | `message: <first line>`             |
 | `resume`       | reserved for the session-resume path               |                         |            |                                     |
 

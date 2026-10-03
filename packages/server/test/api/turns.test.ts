@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   DRIVER_TURN_INSTRUCTIONS,
-  ROUND_STARTED_EVENT,
+  VOYAGE_STARTED_EVENT,
   buildBirthInput,
   turnDir,
   turnFile,
@@ -14,10 +14,10 @@ import { TIMEOUT, startTestApi, type TestApi } from './harness.js';
 
 const project = 'turns';
 
-const birthInput = (name: string, round: number): string =>
+const birthInput = (name: string, voyage: number): string =>
   buildBirthInput({
     agent: { name },
-    round: { number: round, goal: `Goal ${round}.` },
+    voyage: { number: voyage, goal: `Goal ${voyage}.` },
     charter: '# Driver charter',
     notebook: [],
     instructions: DRIVER_TURN_INSTRUCTIONS,
@@ -72,11 +72,11 @@ describe('turn.read', { timeout: TIMEOUT }, () => {
     return Number(rows[0]?.id);
   };
 
-  const roundStarted = (agentId: string, round: number) =>
+  const voyageStarted = (agentId: string, voyage: number) =>
     store.publish({
-      kind: ROUND_STARTED_EVENT,
+      kind: VOYAGE_STARTED_EVENT,
       agentId,
-      payload: { roundId: crypto.randomUUID(), round },
+      payload: { voyageId: crypto.randomUUID(), voyage },
     });
 
   const read = async (turnId: number) => {
@@ -101,9 +101,9 @@ describe('turn.read', { timeout: TIMEOUT }, () => {
     const heron = await insertAgent('heron', 'driver');
     const otter = await insertAgent('otter', 'builder');
     const stray = await insertAgent('stray', 'driver');
-    await roundStarted(driver1, 1);
-    await roundStarted(driver1, 2);
-    await roundStarted(heron, 2);
+    await voyageStarted(driver1, 1);
+    await voyageStarted(driver1, 2);
+    await voyageStarted(heron, 2);
     const result = { summary: 'assigned QD1', actions: [] };
     turns.birth = await save(driver1, {
       seq: 1,
@@ -122,7 +122,7 @@ describe('turn.read', { timeout: TIMEOUT }, () => {
       input: birthInput('driver-1', 2),
       bornAt: new Date('2026-01-02'),
     });
-    turns.earlier = await save(driver1, { seq: 4, input: 'still round 2' });
+    turns.earlier = await save(driver1, { seq: 4, input: 'still voyage 2' });
     turns.later = await save(heron, {
       seq: 1,
       input: birthInput('heron', 2),
@@ -163,35 +163,35 @@ describe('turn.read', { timeout: TIMEOUT }, () => {
     });
   });
 
-  it('places a Driver turn in its round, counting from the birth', async () => {
+  it('places a Driver turn in its voyage, counting from the birth', async () => {
     expect(await read(turns.birth ?? 0)).toMatchObject({
-      round: 1,
+      voyage: 1,
       n: 1,
       latestSession: true,
     });
     expect(await read(turns.second ?? 0)).toMatchObject({
-      round: 1,
+      voyage: 1,
       n: 2,
       latestSession: true,
     });
   });
 
-  it('says when a later Driver session took the round over', async () => {
+  it('says when a later Driver session took the voyage over', async () => {
     expect(await read(turns.earlier ?? 0)).toMatchObject({
-      round: 2,
+      voyage: 2,
       n: 2,
       latestSession: false,
     });
     expect(await read(turns.later ?? 0)).toMatchObject({
-      round: 2,
+      voyage: 2,
       n: 1,
       latestSession: true,
     });
   });
 
-  it('weighs only the sessions of agents that started the round', async () => {
+  it('weighs only the sessions of agents that started the voyage', async () => {
     expect(await read(turns.later ?? 0)).toMatchObject({
-      round: 2,
+      voyage: 2,
       latestSession: true,
     });
   });
@@ -204,10 +204,10 @@ describe('turn.read', { timeout: TIMEOUT }, () => {
     });
   });
 
-  it('gives no round for a turn outside a Driver session', async () => {
+  it('gives no voyage for a turn outside a Driver session', async () => {
     expect(await read(turns.builder ?? 0)).toMatchObject({
       input: 'build QD1',
-      round: null,
+      voyage: null,
       n: null,
       latestSession: false,
     });

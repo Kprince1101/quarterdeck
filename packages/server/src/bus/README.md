@@ -33,7 +33,7 @@ Sets the caller's one-line progress note. Whitespace runs, newlines included, fo
 
 Reads rows of the caller's project. The caller never sends SQL: tables and columns come from the allowlist in `tables.ts`, values are bound as parameters, and every query is scoped to the project.
 
-- `table`: `projects` (this project's row only), `rounds`, `agents`, `tickets`, `cards`, `turns` (scoped through their agent), `events`, `notebook`, `notebook_proposals`, `charter_proposals`, `budget`. `layouts`, `intents`, `schema_migrations`, `project_id` and `agents.session_id` are not readable. Names are matched as own keys of the allowlist, so `constructor` or `__proto__` is just an unknown column.
+- `table`: `projects` (this project's row only), `voyages`, `agents`, `tickets`, `cards`, `turns` (scoped through their agent), `events`, `notebook`, `notebook_proposals`, `charter_proposals`, `budget`. `layouts`, `intents`, `schema_migrations`, `project_id` and `agents.session_id` are not readable. Names are matched as own keys of the allowlist, so `constructor` or `__proto__` is just an unknown column.
 - `columns`: any subset of the table's readable columns; all of them by default.
 - `filters`: ANDed `{ column, op, value }`. `op` defaults to `eq`.
 

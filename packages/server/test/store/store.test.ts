@@ -135,7 +135,7 @@ describe.each(TEST_BACKENDS)('store schema on $name', (backend) => {
   });
 
   afterEach(async () => {
-    await store.db.exec('delete from agents; delete from rounds;');
+    await store.db.exec('delete from agents; delete from voyages;');
   });
 
   const insertAgent = (status: string) =>
@@ -176,7 +176,7 @@ describe.each(TEST_BACKENDS)('store schema on $name', (backend) => {
     await expect(insertAgent('zombie')).rejects.toThrow(/check constraint/);
   });
 
-  it('keeps one budget row per project, round and agent scope', async () => {
+  it('keeps one budget row per project, voyage and agent scope', async () => {
     const insertBudget = () =>
       store.db.query(
         'insert into budget (project_id, limit_tokens) values ($1, 1000)',
@@ -207,24 +207,25 @@ describe.each(TEST_BACKENDS)('store schema on $name', (backend) => {
 
   it('commits a transaction as a unit and rolls it back on error', async () => {
     await store.db.transaction(async (tx) => {
-      await tx.query(`insert into rounds (project_id, number) values ($1, 1)`, [
-        store.projectId,
-      ]);
+      await tx.query(
+        `insert into voyages (project_id, number) values ($1, 1)`,
+        [store.projectId],
+      );
     });
     await expect(
       store.db.transaction(async (tx) => {
         await tx.query(
-          `insert into rounds (project_id, number) values ($1, 2)`,
+          `insert into voyages (project_id, number) values ($1, 2)`,
           [store.projectId],
         );
         await tx.query(
-          `insert into rounds (project_id, number) values ($1, 1)`,
+          `insert into voyages (project_id, number) values ($1, 1)`,
           [store.projectId],
         );
       }),
     ).rejects.toThrow(/unique/);
     const { rows } = await store.db.query<{ number: number }>(
-      'select number from rounds where project_id = $1',
+      'select number from voyages where project_id = $1',
       [store.projectId],
     );
     expect(rows).toEqual([{ number: 1 }]);

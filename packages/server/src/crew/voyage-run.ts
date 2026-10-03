@@ -5,12 +5,12 @@ import {
   type BuilderActionOutcome,
   type BuilderContext,
   type DriverAction,
-  type DriverRound,
+  type DriverVoyage,
   type DriverTurnOutcome,
   type TurnRecord,
 } from '../driver/index.js';
 import { getErrorMessage } from '../lib/errors.js';
-import type { RoundDriver } from '../round-end/index.js';
+import type { VoyageDriver } from '../voyage-end/index.js';
 import type { Store } from '../store/index.js';
 import {
   actionDoneNote,
@@ -28,17 +28,17 @@ import type { CrewFailureReporter } from './failures.js';
 
 export const MAX_RETRY_TURNS = 3;
 
-export interface RoundRunOptions {
+export interface VoyageRunOptions {
   store: Store;
-  round: DriverRound;
+  voyage: DriverVoyage;
   charter: string;
   builders: BuilderContext;
   report: CrewFailureReporter;
 }
 
-export interface RoundRun {
-  roundId: string;
-  driver: RoundDriver;
+export interface VoyageRun {
+  voyageId: string;
+  driver: VoyageDriver;
   builders: BuilderContext;
   note: (note: DriverNote) => void;
   message: (text: string) => void;
@@ -59,9 +59,9 @@ const outcomeNote = (outcome: BuilderActionOutcome): DriverNote | undefined => {
   );
 };
 
-export const startRoundRun = (options: RoundRunOptions): RoundRun => {
-  const { store, round } = options;
-  const links = { roundId: round.round.id, agentId: round.agent.id };
+export const startVoyageRun = (options: VoyageRunOptions): VoyageRun => {
+  const { store, voyage } = options;
+  const links = { voyageId: voyage.voyage.id, agentId: voyage.agent.id };
   const pending: DriverNote[] = [];
   let turning: Promise<void> | undefined;
   let retries = 0;
@@ -156,14 +156,14 @@ export const startRoundRun = (options: RoundRunOptions): RoundRun => {
     const notes = pending.splice(0);
     if (notes.some((next) => next.wake === 'event')) retries = 0;
     else retries += 1;
-    settle(round.turn(composeTurnInput(notes)).then(applyOutcome));
+    settle(voyage.turn(composeTurnInput(notes)).then(applyOutcome));
   };
 
-  settle(round.birth.then(applyOutcome));
+  settle(voyage.birth.then(applyOutcome));
 
   return {
-    roundId: round.round.id,
-    driver: { round, charter: options.charter },
+    voyageId: voyage.voyage.id,
+    driver: { voyage, charter: options.charter },
     builders: options.builders,
     note,
     message: (text) => note(humanNote(text)),

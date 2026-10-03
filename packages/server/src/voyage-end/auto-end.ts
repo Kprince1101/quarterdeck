@@ -10,17 +10,17 @@ import type {
 import { isSettled, readSettleState } from './settle.js';
 
 export const AUTO_END_EVENTS = {
-  settling: 'round.settling',
-  settled: 'round.settled',
+  settling: 'voyage.settling',
+  settled: 'voyage.settled',
 } as const;
 
 export type Scheduler = (ms: number, fire: () => void) => () => void;
 
 export interface AutoEndOptions {
   store: Store;
-  roundId: string;
+  voyageId: string;
   settleSeconds: number;
-  end: (roundId: string) => Promise<void>;
+  end: (voyageId: string) => Promise<void>;
   schedule?: Scheduler;
   home?: string;
   onError?: (err: unknown) => void;
@@ -34,7 +34,7 @@ export interface AutoEnd {
 const PAUSE_KINDS: readonly string[] = ['pause.set', 'pause.all'];
 
 const SETTLE_TABLES: ReadonlySet<WatchedTable> = new Set([
-  'rounds',
+  'voyages',
   'tickets',
   'agents',
   'cards',
@@ -55,7 +55,7 @@ const reportAutoEndError = (err: unknown): void => {
 export const startAutoEnd = async (
   options: AutoEndOptions,
 ): Promise<AutoEnd> => {
-  const { store, roundId, settleSeconds } = options;
+  const { store, voyageId, settleSeconds } = options;
   const schedule = options.schedule ?? timerScheduler;
   const report = options.onError ?? reportAutoEndError;
   let disarm: (() => void) | undefined;
@@ -79,7 +79,7 @@ export const startAutoEnd = async (
 
   const settled = async (): Promise<boolean> =>
     isSettled(
-      await readSettleState(store.db, store.projectId, roundId, options.home),
+      await readSettleState(store.db, store.projectId, voyageId, options.home),
     );
 
   const fire = async (): Promise<boolean> => {
@@ -88,13 +88,13 @@ export const startAutoEnd = async (
     ending = true;
     await store.publish({
       kind: AUTO_END_EVENTS.settled,
-      payload: { roundId, settleSeconds },
+      payload: { voyageId, settleSeconds },
     });
     return true;
   };
 
   const endIfDue = async (due: boolean): Promise<void> => {
-    if (due) await options.end(roundId);
+    if (due) await options.end(voyageId);
   };
 
   const arm = async (rearmed: boolean): Promise<void> => {
@@ -103,7 +103,7 @@ export const startAutoEnd = async (
     });
     await store.publish({
       kind: AUTO_END_EVENTS.settling,
-      payload: { roundId, settleSeconds, rearmed },
+      payload: { voyageId, settleSeconds, rearmed },
     });
   };
 

@@ -2,7 +2,7 @@
 import { act } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { App } from '../../src/App.js';
-import { DEMO_ROUND_PLANS } from '../../src/demo/demo-plans.js';
+import { DEMO_VOYAGE_PLANS } from '../../src/demo/demo-plans.js';
 import { createDemoServer } from '../../src/demo/demo-server.js';
 import { PLANNER_ASK } from '../../src/demo/demo-seed.js';
 import { render, textOf } from '../shell/page.js';
@@ -41,7 +41,7 @@ describe('the dashboard on the demo server', () => {
     expect(textOf(container, '[role="status"]')).toBe('Live');
     expect(textOf(container, '[aria-label="Board"]')).toContain('Harbor');
     expect(textOf(container, '[aria-label="Project"]')).toContain(
-      DEMO_ROUND_PLANS[1]?.goal,
+      DEMO_VOYAGE_PLANS[1]?.goal,
     );
     expect(textOf(container, '[aria-label="Planner"]')).toContain(PLANNER_ASK);
     expect(textOf(container, '[aria-label="Events"]')).toContain('turn.ended');
@@ -52,7 +52,7 @@ describe('the dashboard on the demo server', () => {
     });
     await flush();
     expect(textOf(container, '[aria-label="Cards"]')).toContain(
-      DEMO_ROUND_PLANS[1]?.question.question,
+      DEMO_VOYAGE_PLANS[1]?.question.question,
     );
     expect(network).not.toHaveBeenCalled();
     unmount();

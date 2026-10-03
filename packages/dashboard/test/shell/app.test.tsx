@@ -162,7 +162,7 @@ describe('dashboard shell', () => {
       ),
     );
     expect(textOf(container, '[aria-label="Driver"]')).toContain(
-      'No rounds yet.',
+      'No voyages yet.',
     );
     unmount();
   });

@@ -2,22 +2,22 @@ import type { JSX } from 'react';
 import { RequestError } from '../RequestError.js';
 import type { ProjectPanel } from './project-model.js';
 import {
-  useRoundControls,
-  type RoundControlsView,
-} from './use-round-controls.js';
+  useVoyageControls,
+  type VoyageControlsView,
+} from './use-voyage-controls.js';
 
-interface RoundViewProps {
-  controls: RoundControlsView;
+interface VoyageViewProps {
+  controls: VoyageControlsView;
 }
 
-const RoundActions = ({ controls }: RoundViewProps) => (
+const VoyageActions = ({ controls }: VoyageViewProps) => (
   <div className="qd-project-actions">
     <button
       type="button"
       disabled={controls.isPending}
       onClick={controls.handleEnd}
     >
-      End round
+      End voyage
     </button>
     <button
       type="button"
@@ -25,12 +25,12 @@ const RoundActions = ({ controls }: RoundViewProps) => (
       disabled={controls.isPending}
       onClick={controls.handleKill}
     >
-      Kill round
+      Kill voyage
     </button>
   </div>
 );
 
-const KillConfirm = ({ controls }: RoundViewProps) => (
+const KillConfirm = ({ controls }: VoyageViewProps) => (
   <div className="qd-project-actions">
     <button
       type="button"
@@ -46,25 +46,25 @@ const KillConfirm = ({ controls }: RoundViewProps) => (
   </div>
 );
 
-const OpenRound = ({ controls }: RoundViewProps) => (
+const OpenVoyage = ({ controls }: VoyageViewProps) => (
   <>
-    <p className="qd-project-round">
-      <span className="qd-project-round-label">{controls.roundLabel}</span>
-      <span className="qd-project-goal">{controls.roundGoal}</span>
+    <p className="qd-project-voyage">
+      <span className="qd-project-voyage-label">{controls.voyageLabel}</span>
+      <span className="qd-project-goal">{controls.voyageGoal}</span>
     </p>
-    {controls.showRoundActions && <RoundActions controls={controls} />}
+    {controls.showVoyageActions && <VoyageActions controls={controls} />}
     {controls.isConfirmingKill && <KillConfirm controls={controls} />}
   </>
 );
 
-const NewRound = ({ controls }: RoundViewProps) => (
+const NewVoyage = ({ controls }: VoyageViewProps) => (
   <>
-    <p className="qd-empty">No round running.</p>
+    <p className="qd-empty">No voyage running.</p>
     <div className="qd-project-actions">
       <input
         className="qd-project-input"
-        aria-label="Round goal"
-        placeholder="Round goal"
+        aria-label="Voyage goal"
+        placeholder="Voyage goal"
         value={controls.goal}
         onChange={controls.handleGoalChange}
       />
@@ -73,23 +73,23 @@ const NewRound = ({ controls }: RoundViewProps) => (
         disabled={!controls.canStart}
         onClick={controls.handleStart}
       >
-        Start round
+        Start voyage
       </button>
     </div>
   </>
 );
 
-export interface RoundControlsProps {
+export interface VoyageControlsProps {
   panel: ProjectPanel;
 }
 
-export const RoundControls = ({ panel }: RoundControlsProps): JSX.Element => {
-  const controls = useRoundControls(panel);
+export const VoyageControls = ({ panel }: VoyageControlsProps): JSX.Element => {
+  const controls = useVoyageControls(panel);
   return (
-    <section className="qd-project-section" aria-label="Round">
-      <h3 className="qd-project-heading">Round</h3>
-      {controls.hasRound && <OpenRound controls={controls} />}
-      {controls.noRound && <NewRound controls={controls} />}
+    <section className="qd-project-section" aria-label="Voyage">
+      <h3 className="qd-project-heading">Voyage</h3>
+      {controls.hasVoyage && <OpenVoyage controls={controls} />}
+      {controls.noVoyage && <NewVoyage controls={controls} />}
       <RequestError error={controls.error} />
     </section>
   );
