@@ -18,83 +18,16 @@ import {
   type GhRunner,
   type GitRunner,
 } from '../../src/gate/index.js';
+import {
+  COPILOT,
+  GITHUB_HEAD as HEAD,
+  githubReply as reply,
+  user,
+} from './github-fixtures.ts';
 
 const exec = promisify(execFile);
 
 const PR = 'https://github.com/example-org/quarterdeck/pull/23';
-const HEAD = '0123456789abcdef0123456789abcdef01234567';
-
-interface Who {
-  login: string;
-  __typename: string;
-}
-
-interface Shape {
-  state?: string;
-  isDraft?: boolean;
-  mergeable?: string;
-  rollup?: unknown;
-  reviews?: (Who | null)[];
-  threads?: { isResolved: boolean; author: Who | null }[];
-  base?: string;
-  nameWithOwner?: string;
-  repoUrl?: string;
-  defaultBranch?: string | null;
-}
-
-const COPILOT: Who = {
-  login: 'copilot-pull-request-reviewer',
-  __typename: 'Bot',
-};
-const user = (login: string): Who => ({ login, __typename: 'User' });
-
-const login = (author: Who | null) => ({ author });
-
-const defaultBranchOf = (shape: Shape) => {
-  if (shape.defaultBranch === null) return null;
-  return { name: shape.defaultBranch ?? 'main' };
-};
-
-const rollupOf = (shape: Shape): unknown => {
-  if (Object.hasOwn(shape, 'rollup')) return shape.rollup;
-  return { state: 'SUCCESS', contexts: { nodes: [] } };
-};
-
-const reply = (shape: Shape = {}): string =>
-  JSON.stringify({
-    data: {
-      repository: {
-        pullRequest: {
-          repository: {
-            nameWithOwner: shape.nameWithOwner ?? 'example-org/quarterdeck',
-            url: shape.repoUrl ?? 'https://github.com/example-org/quarterdeck',
-            defaultBranchRef: defaultBranchOf(shape),
-          },
-          baseRefName: shape.base ?? 'main',
-          state: shape.state ?? 'OPEN',
-          isDraft: shape.isDraft ?? false,
-          mergeable: shape.mergeable ?? 'MERGEABLE',
-          headRefOid: HEAD,
-          commits: {
-            nodes: [
-              {
-                commit: {
-                  statusCheckRollup: rollupOf(shape),
-                },
-              },
-            ],
-          },
-          reviews: { nodes: (shape.reviews ?? []).map(login) },
-          reviewThreads: {
-            nodes: (shape.threads ?? []).map((thread) => ({
-              isResolved: thread.isResolved,
-              comments: { nodes: [login(thread.author)] },
-            })),
-          },
-        },
-      },
-    },
-  });
 
 describe('gh pull request host', () => {
   it('parses a pull request URL', () => {
