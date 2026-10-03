@@ -62,6 +62,12 @@ gh: 2.81.0, signed in (example-org on github.com)
 | `gemini`   | `gemini --version`                                                                                                                 | `GEMINI_API_KEY`, `GOOGLE_GENAI_USE_VERTEXAI=true` with `GOOGLE_API_KEY` or `GOOGLE_CLOUD_PROJECT`, or `~/.gemini/oauth_creds.json` | `npm install -g @google/gemini-cli`                                                                  | `gemini`, then choose Login with Google (or set `GEMINI_API_KEY`)                    |
 | `gh`       | `gh --version`                                                                                                                     | `gh auth status` exits 0                                                                                                            | `brew install gh` (macOS), `winget install --id GitHub.cli` (Windows), otherwise the gh install docs | `gh auth login`                                                                      |
 
+When a GitLab host is in use, doctor checks `glab` too, once per host: every host mapped to `gitlab` in `~/.quarterdeck/rules.local.forges.json`, and the origin host of the folder it runs in when that is on GitLab (`gitlab.com` or a mapped host). With no GitLab host it says nothing about `glab`. A missing `glab` is one line naming the hosts that need it, with the install command (`brew install glab` on macOS, `winget install --id GLab.GLab` on Windows, otherwise the glab install docs) and a sign-in per host. An installed one gets a line per host: signed in when `glab auth status --hostname <host>` exits 0, and otherwise `glab auth login --hostname <host>`.
+
+```
+glab on git.example.org: 1.46.1, signed in (example-user on git.example.org)
+```
+
 When `kiro.json` names a Kiro base agent for any role, doctor adds a line per role with the base it resolves to, `none`, or the error naming the missing or broken file. The builder's comes from the repo layer of the folder doctor runs in. These lines are informational and do not change the exit code. See [Base agents](../server/src/acp/runtimes/README.md#base-agents).
 
 ```

@@ -14,7 +14,6 @@ import {
   it,
 } from 'vitest';
 import {
-  ForgeUnavailableError,
   forgeHost,
   mergeForge,
   projectForge,
@@ -180,8 +179,7 @@ describe('forge host', () => {
     expect(forgeHost('github').forge).toBe('github');
   });
 
-  it('has no GitLab host yet', () => {
-    expect(() => forgeHost('gitlab')).toThrow(ForgeUnavailableError);
-    expect(() => forgeHost('gitlab')).toThrow('GitLab forge not available yet');
+  it('puts GitLab on the glab CLI', () => {
+    expect(forgeHost('gitlab').forge).toBe('gitlab');
   });
 });

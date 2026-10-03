@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { forgeTerms, type MergeGate } from '@quarterdeck/rules';
+import { FORGES, forgeTerms, type MergeGate } from '@quarterdeck/rules';
 import {
   afterAll,
   afterEach,
@@ -19,7 +19,7 @@ import type { Store } from '../../src/store/index.js';
 import {
   GATE_EVENTS,
   MERGE_CARD,
-  parsePullRequestUrl,
+  repositoryName,
   reviewPrompt,
   startReviewGate,
   waitingReasons,
@@ -29,6 +29,7 @@ import {
   type ReviewRequest,
   type ReviewerHost,
 } from '../../src/gate/index.js';
+import { FORGE_CASES, recordedCli, type ForgeCase } from './forge-fixtures.ts';
 import {
   TIMEOUT,
   callTool,
@@ -43,12 +44,9 @@ import {
 
 const exec = promisify(execFile);
 
-const ORIGIN = 'git@github.com:example-org/quarterdeck.git';
-const PR = 'https://github.com/example-org/quarterdeck/pull/23';
 const HEAD = '0123456789abcdef0123456789abcdef01234567';
 const NEXT = 'fedcba9876543210fedcba9876543210fedcba98';
 const HOUR = 3_600_000;
-const WAITING = waitingReasons(forgeTerms('github'));
 
 const RULES: MergeGate = {
   requireReviewerApproval: true,
@@ -57,12 +55,8 @@ const RULES: MergeGate = {
   autoMerge: true,
 };
 
-const ready = (): PullRequest => ({
-  repository: {
-    hostname: 'github.com',
-    owner: 'example-org',
-    name: 'quarterdeck',
-  },
+const readyOn = (kase: ForgeCase): PullRequest => ({
+  repository: kase.repository,
   base: 'main',
   defaultBranch: 'main',
   state: 'open',
@@ -73,33 +67,38 @@ const ready = (): PullRequest => ({
   botReview: { reviewed: false, openThreads: 0 },
 });
 
-interface FakeGitHub extends ForgeHost {
+interface FakeForge extends ForgeHost {
   pr: PullRequest;
+  calls: string[][];
   fetched: string[];
   merges: { url: string; head: string }[];
   mergeError: string | undefined;
 }
 
-const fakeGitHub = (): FakeGitHub => {
-  const github: FakeGitHub = {
-    forge: 'github',
-    pullRequestRef: parsePullRequestUrl,
-    pr: ready(),
+const fakeForge = (kase: ForgeCase): FakeForge => {
+  const calls: string[][] = [];
+  const cli = recordedCli(kase.forge, () => fake.pr, calls);
+  const fake: FakeForge = {
+    forge: cli.forge,
+    pullRequestRef: cli.pullRequestRef,
+    listOpen: cli.listOpen,
+    pr: readyOn(kase),
+    calls,
     fetched: [],
     merges: [],
     mergeError: undefined,
-    listOpen: async () => [],
     pullRequest: async (url) => {
-      github.fetched.push(url);
-      return github.pr;
+      fake.fetched.push(url);
+      return cli.pullRequest(url);
     },
     squashMerge: async (url, head) => {
-      if (github.mergeError !== undefined) throw new Error(github.mergeError);
-      github.merges.push({ url, head });
-      github.pr = { ...github.pr, state: 'merged' };
+      if (fake.mergeError !== undefined) throw new Error(fake.mergeError);
+      await cli.squashMerge(url, head);
+      fake.merges.push({ url, head });
+      fake.pr = { ...fake.pr, state: 'merged' };
     },
   };
-  return github;
+  return fake;
 };
 
 interface FakeReviewers extends ReviewerHost {
@@ -119,13 +118,18 @@ const fakeReviewers = (): FakeReviewers => {
 const kinds = (events: TicketEvent[]): string[] =>
   events.map((event) => event.kind);
 
-describe('review gate', () => {
+describe.each(FORGES)('review gate on %s', (forge) => {
+  const kase = FORGE_CASES[forge];
+  const PR = kase.pr;
+  const terms = forgeTerms(forge);
+  const WAITING = waitingReasons(terms);
+  const ready = () => readyOn(kase);
   let store: Store;
   let builderId = '';
   let reviewerId = '';
   let builder: Client;
   let reviewer: Client;
-  let github: FakeGitHub;
+  let host: FakeForge;
   let reviewers: FakeReviewers;
   let gate: ReviewGate | undefined;
   let errors: unknown[];
@@ -135,7 +139,7 @@ describe('review gate', () => {
     gate = await startReviewGate({
       store,
       rules: { ...RULES, ...rules },
-      forge: github,
+      forge: host,
       reviewers,
       pollMs: HOUR,
       onError: (err) => errors.push(err),
@@ -205,7 +209,7 @@ describe('review gate', () => {
     store = await openTestStore('gate');
     checkout = await mkdtemp(resolve(tmpdir(), 'quarterdeck-gate-'));
     await exec('git', ['init', '-q', checkout]);
-    await exec('git', ['-C', checkout, 'remote', 'add', 'origin', ORIGIN]);
+    await exec('git', ['-C', checkout, 'remote', 'add', 'origin', kase.origin]);
     builderId = await insertAgent(store, store.projectId, 'okapi');
     reviewerId = await insertAgent(store, store.projectId, 'heron', 'reviewer');
     builder = await connectClient(store, builderId);
@@ -230,7 +234,7 @@ describe('review gate', () => {
     await store.db.query(`update agents set status = 'working' where id = $1`, [
       reviewerId,
     ]);
-    github = fakeGitHub();
+    host = fakeForge(kase);
     reviewers = fakeReviewers();
     errors = [];
   });
@@ -261,7 +265,7 @@ describe('review gate', () => {
         pr: PR,
         head: HEAD,
         notes: 'Reviewer gate and merge, with tests.',
-        terms: forgeTerms('github'),
+        terms,
       },
     ]);
     expect(await gateEvents(GATE_EVENTS.reviewRequested)).toEqual([
@@ -345,7 +349,8 @@ describe('review gate', () => {
 
     await vi.waitFor(async () => expect(await status(ticketId)).toBe('done'));
 
-    expect(github.merges).toEqual([{ url: PR, head: HEAD }]);
+    expect(host.merges).toEqual([{ url: PR, head: HEAD }]);
+    expect(host.calls.at(-1)?.join(' ')).toContain(HEAD);
     expect(kinds(await ticketEvents(store))).toEqual([
       GATE_EVENTS.reported,
       GATE_EVENTS.reviewRequested,
@@ -378,7 +383,7 @@ describe('review gate', () => {
       }),
     ]);
     expect(cards[0]?.question).toContain(`Merge ${PR}`);
-    expect(github.merges).toEqual([]);
+    expect(host.merges).toEqual([]);
     expect(await status(ticketId)).toBe('in_review');
 
     await store.db.query(
@@ -388,10 +393,10 @@ describe('review gate', () => {
     );
 
     await vi.waitFor(async () => expect(await status(ticketId)).toBe('done'));
-    expect(github.merges).toEqual([{ url: PR, head: HEAD }]);
+    expect(host.merges).toEqual([{ url: PR, head: HEAD }]);
   });
 
-  it('holds on a hold answer and completes when a human merges on GitHub', async () => {
+  it('holds on a hold answer and completes when a human merges on the forge', async () => {
     const ticketId = await approvedTicket();
     const gate = await start({ autoMerge: false });
     await gate.evaluate(ticketId);
@@ -411,7 +416,7 @@ describe('review gate', () => {
     );
     await gate.evaluate(ticketId);
 
-    expect(github.merges).toEqual([]);
+    expect(host.merges).toEqual([]);
     expect(await status(ticketId)).toBe('in_review');
     expect(
       (await gateEvents(GATE_EVENTS.waiting)).map(
@@ -419,37 +424,37 @@ describe('review gate', () => {
       ),
     ).toEqual([WAITING.human, WAITING.held]);
 
-    github.pr = { ...github.pr, state: 'merged' };
+    host.pr = { ...host.pr, state: 'merged' };
     await gate.sweep();
 
     expect(await status(ticketId)).toBe('done');
     expect((await gateEvents(GATE_EVENTS.merged))[0]?.payload).toEqual({
       pr: PR,
       head: HEAD,
-      by: 'github',
+      by: forge,
     });
   });
 
   it('waits for pending checks once, then merges when they pass', async () => {
-    github.pr = { ...ready(), checks: { state: 'pending', failing: [] } };
+    host.pr = { ...ready(), checks: { state: 'pending', failing: [] } };
     const ticketId = await approvedTicket();
     const gate = await start();
 
     await gate.evaluate(ticketId);
     await gate.evaluate(ticketId);
 
-    expect(github.merges).toEqual([]);
+    expect(host.merges).toEqual([]);
     expect(await gateEvents(GATE_EVENTS.waiting)).toHaveLength(1);
 
-    github.pr = ready();
+    host.pr = ready();
     await gate.evaluate(ticketId);
 
-    expect(github.merges).toEqual([{ url: PR, head: HEAD }]);
+    expect(host.merges).toEqual([{ url: PR, head: HEAD }]);
     expect(await status(ticketId)).toBe('done');
   });
 
   it('bounces failing checks back to the builder', async () => {
-    github.pr = {
+    host.pr = {
       ...ready(),
       checks: { state: 'failing', failing: ['validate'] },
     };
@@ -459,7 +464,7 @@ describe('review gate', () => {
     await gate.evaluate(ticketId);
 
     expect(await status(ticketId)).toBe('bounced');
-    expect(github.merges).toEqual([]);
+    expect(host.merges).toEqual([]);
     expect(await gateEvents(GATE_EVENTS.bounced)).toEqual([
       {
         agent_id: null,
@@ -476,13 +481,13 @@ describe('review gate', () => {
   });
 
   it('bounces when the pull request head moved after the approval', async () => {
-    github.pr = { ...ready(), head: NEXT };
+    host.pr = { ...ready(), head: NEXT };
     const ticketId = await approvedTicket();
     const gate = await start();
 
     await gate.evaluate(ticketId);
 
-    expect(github.merges).toEqual([]);
+    expect(host.merges).toEqual([]);
     expect(await status(ticketId)).toBe('bounced');
   });
 
@@ -495,38 +500,38 @@ describe('review gate', () => {
       reason: WAITING.botReview,
     });
 
-    github.pr = { ...ready(), botReview: { reviewed: true, openThreads: 1 } };
+    host.pr = { ...ready(), botReview: { reviewed: true, openThreads: 1 } };
     await gate.evaluate(ticketId);
 
-    expect(github.merges).toEqual([]);
+    expect(host.merges).toEqual([]);
     expect(await status(ticketId)).toBe('bounced');
   });
 
   it('merges once Copilot has reviewed and its threads are resolved', async () => {
-    github.pr = { ...ready(), botReview: { reviewed: true, openThreads: 0 } };
+    host.pr = { ...ready(), botReview: { reviewed: true, openThreads: 0 } };
     const ticketId = await approvedTicket();
     const gate = await start({ requireCopilotReview: true });
 
     await gate.evaluate(ticketId);
 
-    expect(github.merges).toEqual([{ url: PR, head: HEAD }]);
+    expect(host.merges).toEqual([{ url: PR, head: HEAD }]);
   });
 
   it('a report after the approval withdraws it and asks for a new review', async () => {
     const ticketId = await approvedTicket();
     await report(ticketId, NEXT);
-    github.pr = { ...ready(), head: NEXT };
+    host.pr = { ...ready(), head: NEXT };
     const gate = await start();
 
     await gate.evaluate(ticketId);
 
-    expect(github.merges).toEqual([]);
+    expect(host.merges).toEqual([]);
     expect(await status(ticketId)).toBe('in_review');
     expect(reviewers.requests.map((request) => request.head)).toEqual([NEXT]);
   });
 
   it('raises a merge card naming the error when the merge fails', async () => {
-    github.mergeError = 'gh pr merge failed: base branch policy prohibits';
+    host.mergeError = 'gh pr merge failed: base branch policy prohibits';
     const ticketId = await approvedTicket();
     const gate = await start();
 
@@ -553,7 +558,7 @@ describe('review gate', () => {
 
     await gate.evaluate(ticketId);
 
-    expect(github.merges).toEqual([]);
+    expect(host.merges).toEqual([]);
     expect(await mergeCards()).toEqual([]);
     expect(await status(ticketId)).toBe('bounced');
   });
@@ -566,7 +571,7 @@ describe('review gate', () => {
     await gate.evaluate(ticketId);
 
     expect(reviewers.requests).toEqual([]);
-    expect(github.merges).toEqual([{ url: PR, head: HEAD }]);
+    expect(host.merges).toEqual([{ url: PR, head: HEAD }]);
     expect(await status(ticketId)).toBe('done');
   });
 
@@ -578,7 +583,7 @@ describe('review gate', () => {
 
     await gate.evaluate(ticketId);
 
-    expect(github.merges).toEqual([]);
+    expect(host.merges).toEqual([]);
     expect(await status(ticketId)).toBe('bounced');
   });
 
@@ -590,9 +595,9 @@ describe('review gate', () => {
     await vi.waitFor(async () => expect(await status(ticketId)).toBe('done'));
   });
 
-  it('reports a GitHub failure and leaves the ticket in review', async () => {
+  it('reports a forge failure and leaves the ticket in review', async () => {
     const ticketId = await approvedTicket();
-    github.pullRequest = async () => {
+    host.pullRequest = async () => {
       throw new Error('gh api graphql failed: not signed in');
     };
     const gate = await start();
@@ -606,7 +611,7 @@ describe('review gate', () => {
   });
 
   it('bounces a pull request in another repository without fetching or merging it', async () => {
-    const foreign = 'https://github.com/mallory/payroll/pull/9';
+    const { foreign } = kase;
     const ticketId = await assigned();
     await report(ticketId, HEAD, foreign);
     await verdict(ticketId);
@@ -614,43 +619,42 @@ describe('review gate', () => {
 
     await gate.evaluate(ticketId);
 
-    expect(github.fetched).toEqual([]);
-    expect(github.merges).toEqual([]);
+    expect(host.fetched).toEqual([]);
+    expect(host.merges).toEqual([]);
     expect(await mergeCards()).toEqual([]);
     expect(await status(ticketId)).toBe('bounced');
     expect((await gateEvents(GATE_EVENTS.bounced))[0]?.payload).toEqual({
-      reason: `the pull request ${foreign} is not in this project's repository github.com/example-org/quarterdeck; open it there and report again`,
+      reason: `the ${terms.long} ${foreign} is not in this project's repository ${repositoryName(kase.repository)}; open it there and report again`,
       pr: foreign,
       head: HEAD,
     });
   });
 
   it('bounces a pull request into a branch other than the default', async () => {
-    github.pr = { ...ready(), base: 'release/1.0' };
+    host.pr = { ...ready(), base: 'release/1.0' };
     const ticketId = await approvedTicket();
     const gate = await start();
 
     await gate.evaluate(ticketId);
 
-    expect(github.merges).toEqual([]);
+    expect(host.merges).toEqual([]);
     expect(await status(ticketId)).toBe('bounced');
     expect((await gateEvents(GATE_EVENTS.bounced))[0]?.payload).toMatchObject({
-      reason:
-        'the pull request merges into release/1.0, not main; retarget it to main and report again',
+      reason: `the ${terms.long} merges into release/1.0, not main; retarget it to main and report again`,
     });
   });
 
   it('merges into a configured base instead of the default branch', async () => {
-    github.pr = { ...ready(), base: 'trunk' };
+    host.pr = { ...ready(), base: 'trunk' };
     const ticketId = await approvedTicket();
     const gate = await start({ base: 'trunk' });
 
     await gate.evaluate(ticketId);
 
-    expect(github.merges).toEqual([{ url: PR, head: HEAD }]);
+    expect(host.merges).toEqual([{ url: PR, head: HEAD }]);
   });
 
-  it('touches GitHub for nothing while the project repository is unknown', async () => {
+  it('touches the forge for nothing while the project repository is unknown', async () => {
     await store.db.query('update projects set repo_path = null where id = $1', [
       store.projectId,
     ]);
@@ -661,8 +665,8 @@ describe('review gate', () => {
     await expect(gate.evaluate(ticketId)).rejects.toThrow(
       'the project has no repo_path',
     );
-    expect(github.fetched).toEqual([]);
-    expect(github.merges).toEqual([]);
+    expect(host.fetched).toEqual([]);
+    expect(host.merges).toEqual([]);
     expect(await status(ticketId)).toBe('in_review');
 
     await store.db.query('update projects set repo_path = $2 where id = $1', [
@@ -671,7 +675,7 @@ describe('review gate', () => {
     ]);
     await gate.evaluate(ticketId);
 
-    expect(github.merges).toEqual([{ url: PR, head: HEAD }]);
+    expect(host.merges).toEqual([{ url: PR, head: HEAD }]);
     errors = [];
   });
 });
@@ -703,14 +707,14 @@ describe('review prompt', () => {
     ].join('\n');
 
   it('names the ticket, pull request, head and notes', () => {
-    expect(reviewPrompt(request('github', PR))).toBe(
-      expected(`Pull request: ${PR}`),
+    const { pr } = FORGE_CASES.github;
+    expect(reviewPrompt(request('github', pr))).toBe(
+      expected(`Pull request: ${pr}`),
     );
   });
 
   it('says merge request in a GitLab project', () => {
-    const mr =
-      'https://git.example.org/example-org/quarterdeck/-/merge_requests/23';
+    const mr = FORGE_CASES.gitlab.pr;
     const prompt = reviewPrompt(request('gitlab', mr));
 
     expect(prompt).toBe(expected(`Merge request: ${mr}`));

@@ -4,8 +4,10 @@ import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import {
   RulesError,
+  forgeOfHost,
   loadRule,
   shellAllowWarnings,
+  type Forge,
   type KiroBaseRole,
   type LoadRulesOptions,
 } from '@quarterdeck/rules';
@@ -19,6 +21,7 @@ import {
   NPM_PUBLIC_REGISTRY,
   claudeCliCommand,
   loadKiroBaseAgent,
+  parseRemoteUrl,
   runCommand,
   type AgentCommand,
   type ChildEnvSpec,
@@ -31,8 +34,11 @@ export const DOCTOR_PROBE_TIMEOUT_MS = 15_000;
 export const DOCTOR_USAGE = `Usage: quarterdeck doctor
 
 Checks that kiro-cli, claude, gemini and gh are installed and signed in, and
-prints the command to run for each one that is not. Warns when gh is signed
-in only through GH_TOKEN or GITHUB_TOKEN, which agents do not get. Shows the
+prints the command to run for each one that is not. Checks glab the same way
+for each GitLab host in use: every host mapped to gitlab in
+~/.quarterdeck/rules.local.forges.json, and this folder's origin host when it
+is on GitLab. Warns when gh is signed in only through GH_TOKEN or
+GITHUB_TOKEN, which agents do not get. Shows the
 Kiro base agent each role starts from (the builder's as the project in this
 folder sets it). Exits 1 if any needs attention.`;
 
@@ -48,6 +54,8 @@ export const DOCTOR_FIXES = {
   geminiSignIn: 'gemini, then choose Login with Google (or set GEMINI_API_KEY)',
   ghSignIn: 'gh auth login',
 } as const;
+
+const GLAB_SIGN_IN = 'glab auth login';
 
 const GH_INSTALL: Partial<Record<NodeJS.Platform, string>> = {
   darwin: 'brew install gh',
@@ -285,10 +293,10 @@ const checkGemini = async ({
   return signedIn(name, version.version, credentials);
 };
 
-const GH_ACCOUNT = /Logged in to (\S+) (?:account|as) (\S+)/;
+const LOGGED_IN = /Logged in to (\S+) (?:account|as) (\S+)/;
 
-const ghAccount = (output: string): string | undefined => {
-  const match = GH_ACCOUNT.exec(output);
+const loggedInAccount = (output: string): string | undefined => {
+  const match = LOGGED_IN.exec(output);
   if (!match) return undefined;
   return `${match[2]} on ${match[1]}`;
 };
@@ -310,8 +318,102 @@ const checkGh = async ({ platform, run }: Probe): Promise<DoctorCheck> => {
   }
   const status = await run({ command: 'gh', args: ['auth', 'status'] });
   if (!succeeded(status)) return signedOut(name, version.version, signIn);
-  const account = ghAccount(`${status.stdout}\n${status.stderr}`);
+  const account = loggedInAccount(`${status.stdout}\n${status.stderr}`);
   return signedIn(name, version.version, account);
+};
+
+const GLAB_INSTALL: Partial<Record<NodeJS.Platform, string>> = {
+  darwin: 'brew install glab',
+  win32: 'winget install --id GLab.GLab',
+};
+const GLAB_INSTALL_DOCS =
+  'see https://gitlab.com/gitlab-org/cli#installation for your system';
+
+const glabSignIn = (host: string): Fix => ({
+  label: 'Sign in',
+  command: `${GLAB_SIGN_IN} --hostname ${host}`,
+});
+
+const originHost = async ({ io, run }: Probe): Promise<string | undefined> => {
+  const origin = await run({
+    command: 'git',
+    args: ['-C', io.cwd, 'remote', 'get-url', 'origin'],
+  });
+  if (!succeeded(origin)) return undefined;
+  try {
+    return parseRemoteUrl(origin.stdout).hostname;
+  } catch {
+    return undefined;
+  }
+};
+
+const isGitlabHost = (
+  host: string,
+  forges: Readonly<Record<string, Forge>>,
+): boolean => {
+  try {
+    return forgeOfHost(host, forges) === 'gitlab';
+  } catch {
+    return false;
+  }
+};
+
+const gitlabHosts = async (probe: Probe): Promise<string[]> => {
+  const { forges } = await loadRule('forges', { homeDir: probe.io.homeDir });
+  const hosts = new Set(
+    Object.keys(forges)
+      .map((host) => host.toLowerCase())
+      .filter((host) => isGitlabHost(host, forges)),
+  );
+  const origin = await originHost(probe);
+  if (origin !== undefined && isGitlabHost(origin, forges)) hosts.add(origin);
+  return [...hosts].toSorted();
+};
+
+const checkGlabHost = async (
+  { run }: Probe,
+  version: string,
+  host: string,
+): Promise<DoctorCheck> => {
+  const name = `glab on ${host}`;
+  const status = await run({
+    command: 'glab',
+    args: ['auth', 'status', '--hostname', host],
+  });
+  if (!succeeded(status)) return signedOut(name, version, glabSignIn(host));
+  const account = loggedInAccount(`${status.stdout}\n${status.stderr}`);
+  return signedIn(name, version, account);
+};
+
+const checkGlab = async (probe: Probe): Promise<DoctorCheck[]> => {
+  let hosts: string[];
+  try {
+    hosts = await gitlabHosts(probe);
+  } catch (err) {
+    if (!(err instanceof RulesError)) throw err;
+    return [{ name: 'glab', state: err.message, fixes: [] }];
+  }
+  if (hosts.length === 0) return [];
+  const version = installed(
+    await probe.run({ command: 'glab', args: ['--version'] }),
+    'glab --version',
+  );
+  if (!version.ok) {
+    const install = GLAB_INSTALL[probe.platform] ?? GLAB_INSTALL_DOCS;
+    return [
+      {
+        name: 'glab',
+        state: `${version.state}, needed for ${hosts.join(', ')}`,
+        fixes: [
+          { label: 'Install', command: install },
+          ...hosts.map(glabSignIn),
+        ],
+      },
+    ];
+  }
+  return Promise.all(
+    hosts.map((host) => checkGlabHost(probe, version.version, host)),
+  );
 };
 
 const GH_TOKEN_ENV = ['GH_TOKEN', 'GITHUB_TOKEN'];
@@ -355,12 +457,15 @@ export const runDoctorChecks = async (
     run: (command) =>
       runCommand({ cwd: io.cwd, env: shellEnv(io), ...command }, { timeoutMs }),
   };
-  const checks = await Promise.all(
-    [checkKiro, checkClaude, checkGemini, checkGh, checkGhForAgents].map(
-      (check) => check(probe),
+  const [checks, glab] = await Promise.all([
+    Promise.all(
+      [checkKiro, checkClaude, checkGemini, checkGh, checkGhForAgents].map(
+        (check) => check(probe),
+      ),
     ),
-  );
-  return checks.filter((check) => check !== undefined);
+    checkGlab(probe),
+  ]);
+  return [...checks.filter((check) => check !== undefined), ...glab];
 };
 
 const render = (io: CliIo, checks: DoctorCheck[], misses: number) => {

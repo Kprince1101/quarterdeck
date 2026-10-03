@@ -1,6 +1,5 @@
 import {
   DEFAULT_FORGE,
-  FORGE_TERMS,
   forgeOfHost,
   loadRule,
   type Forge,
@@ -8,6 +7,7 @@ import {
 } from '@quarterdeck/rules';
 import type { Store } from '../store/index.js';
 import { ghCli } from './github.js';
+import { glabCli } from './gitlab.js';
 import { originRepository, projectRepoPath } from './repository.js';
 
 export type PullRequestState = 'open' | 'merged' | 'closed';
@@ -61,21 +61,9 @@ export interface ForgeHost {
 
 export type GitRunner = (args: string[]) => Promise<string>;
 
-export class ForgeUnavailableError extends Error {
-  readonly forge: Forge;
-
-  constructor(forge: Forge) {
-    super(`${FORGE_TERMS[forge].name} forge not available yet`);
-    this.name = 'ForgeUnavailableError';
-    this.forge = forge;
-  }
-}
-
 const FORGE_HOSTS: Record<Forge, () => ForgeHost> = {
   github: () => ghCli(),
-  gitlab: () => {
-    throw new ForgeUnavailableError('gitlab');
-  },
+  gitlab: () => glabCli(),
 };
 
 export const forgeHost = (forge: Forge): ForgeHost => FORGE_HOSTS[forge]();

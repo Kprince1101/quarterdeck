@@ -17,7 +17,6 @@ export {
   type MergeCardState,
 } from './facts.js';
 export {
-  ForgeUnavailableError,
   forgeHost,
   mergeForge,
   projectForge,
@@ -59,6 +58,28 @@ export {
   squashMergeArgs,
   type GhRunner,
 } from './github.js';
+export {
+  GITLAB_PAGE_SIZE,
+  GITLAB_REVIEW_BOTS,
+  discussionsArgs,
+  failedJobsArgs,
+  glabCli,
+  glabListOpenArgs,
+  glabSquashMergeArgs,
+  isGitLabReviewBot,
+  mergeRequestArgs,
+  openThreadsByAuthor,
+  parseMergeRequest,
+  parseMergeRequestReply,
+  parseMergeRequestUrl,
+  parseOpenMergeRequests,
+  projectArgs,
+  readThreads,
+  runGlab,
+  type DiscussionThread,
+  type GlabRunner,
+  type MergeRequestReplies,
+} from './gitlab.js';
 export {
   originRepository,
   parseRemoteUrl,

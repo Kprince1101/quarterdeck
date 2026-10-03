@@ -304,6 +304,125 @@ describe.skipIf(IS_WINDOWS)('quarterdeck doctor', () => {
     });
   });
 
+  describe('glab', () => {
+    const GLAB = `case "$*" in
+  --version) echo "glab 1.46.1 (2024-09-26)" ;;
+  "auth status --hostname git.example.org")
+    echo "  ✓ Logged in to git.example.org as example-user (/home/u/.config/glab-cli/config.yml)" >&2 ;;
+  "auth status --hostname "*) echo "  x No token found" >&2; exit 1 ;;
+  *) exit 64 ;;
+esac`;
+
+    const mapGitlab = async (hosts: string[]) => {
+      await mkdir(join(box.home, '.quarterdeck'));
+      await writeFile(
+        join(box.home, '.quarterdeck', 'rules.local.forges.json'),
+        JSON.stringify({
+          forges: Object.fromEntries(hosts.map((host) => [host, 'gitlab'])),
+        }),
+      );
+    };
+
+    const glabChecks = (checks: DoctorCheck[]) =>
+      checks.filter((found) => found.name.startsWith('glab'));
+
+    it('says nothing about glab when no GitLab host is in use', async () => {
+      expect(glabChecks(await doctor())).toEqual([]);
+    });
+
+    it('names the install and a sign-in per host when glab is missing', async () => {
+      await mapGitlab(['git.example.org', 'Code.Example.com']);
+
+      expect(glabChecks(await doctor())).toEqual([
+        {
+          name: 'glab',
+          state: 'not installed, needed for code.example.com, git.example.org',
+          fixes: [
+            {
+              label: 'Install',
+              command:
+                'see https://gitlab.com/gitlab-org/cli#installation for your system',
+            },
+            {
+              label: 'Sign in',
+              command: 'glab auth login --hostname code.example.com',
+            },
+            {
+              label: 'Sign in',
+              command: 'glab auth login --hostname git.example.org',
+            },
+          ],
+        },
+      ]);
+    });
+
+    it('checks the sign-in on each mapped host', async () => {
+      await mapGitlab(['git.example.org', 'code.example.com']);
+      await fake('glab', GLAB);
+
+      expect(glabChecks(await doctor())).toEqual([
+        {
+          name: 'glab on code.example.com',
+          state: '1.46.1, not signed in',
+          fixes: [
+            {
+              label: 'Sign in',
+              command: 'glab auth login --hostname code.example.com',
+            },
+          ],
+        },
+        {
+          name: 'glab on git.example.org',
+          state: '1.46.1, signed in (example-user on git.example.org)',
+          fixes: [],
+        },
+      ]);
+    });
+
+    it('checks the origin host of this folder when it is on GitLab', async () => {
+      await fake('glab', GLAB);
+      await fake(
+        'git',
+        `case "$*" in
+  *"remote get-url origin") echo "git@gitlab.com:example-group/deck.git" ;;
+  *) exit 64 ;;
+esac`,
+      );
+
+      expect(glabChecks(await doctor())).toEqual([
+        {
+          name: 'glab on gitlab.com',
+          state: '1.46.1, not signed in',
+          fixes: [
+            {
+              label: 'Sign in',
+              command: 'glab auth login --hostname gitlab.com',
+            },
+          ],
+        },
+      ]);
+    });
+
+    it('leaves out an origin on GitHub', async () => {
+      await fake('git', 'echo "git@github.com:example-org/quarterdeck.git"');
+
+      expect(glabChecks(await doctor())).toEqual([]);
+    });
+
+    it('gives the platform install command for glab', async () => {
+      await mapGitlab(['git.example.org']);
+      const darwin = await runDoctorChecks(
+        { ...io, env: { PATH: bin } },
+        { platform: 'darwin' },
+      );
+
+      expect(check(darwin, 'glab')?.fixes[0]).toEqual({
+        label: 'Install',
+        command: 'brew install glab',
+      });
+    });
+  });
+
   it('prints each check with its commands and exits 1 while any needs attention', async () => {
     await fake('kiro-cli', KIRO_SIGNED_OUT);
     await fake(
