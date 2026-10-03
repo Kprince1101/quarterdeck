@@ -75,6 +75,10 @@
               environment.
             </td>
           </tr>
+          <tr>
+            <td><code>kiro.json</code></td>
+            <td>The Kiro agent each role starts from.</td>
+          </tr>
         </tbody>
       </table>
 
@@ -484,6 +488,25 @@
         project's agents <code>AWS_PROFILE</code>:
       </p>
       <pre><code>{ "pass": ["AWS_PROFILE"] }</code></pre>
+
+      <h2 id="kiro">kiro.json</h2>
+      <p>
+        <code>baseAgents</code> names a Kiro agent of your own for the
+        <code>driver</code>, the <code>reviewer</code> and the
+        <code>builder</code>, so they start with your MCP servers, steering,
+        skills, prompt, tools and model. Every role has none (<code>null</code>)
+        by default. A builder's base is looked up in
+        <code>&lt;repo&gt;/.kiro/agents/</code> first, then
+        <code>~/.kiro/agents/</code>; the others only in
+        <code>~/.kiro/agents/</code>. Quarterdeck always adds its own bus and
+        never copies the base's hooks, and a builder never loads
+        <code>mcp.json</code>. A base from the repo gives only its prompt,
+        resources, tools and model, and may only point at files inside the repo:
+        agents can write there. A repo layer may only set the builder. This
+        <code>~/.quarterdeck/rules.local.kiro.json</code> starts every builder
+        from <code>~/.kiro/agents/everyday.json</code>:
+      </p>
+      <pre><code>{ "baseAgents": { "builder": "everyday" } }</code></pre>
 
       <h2 id="prompts">charter.md and reviewer.md</h2>
       <p>

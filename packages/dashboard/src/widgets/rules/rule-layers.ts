@@ -2,6 +2,7 @@ import {
   RulesError,
   isJsonObject,
   mergeLayer,
+  mergeRepoKiro,
   mergeRepoLifecycle,
 } from '@quarterdeck/rules/merge';
 import {
@@ -91,6 +92,9 @@ const mergeRepo = (
   if (rule.name === 'permissions') return merged;
   if (rule.name === 'lifecycle') {
     return validate(rule.name, path, mergeRepoLifecycle(merged, layer, path));
+  }
+  if (rule.name === 'kiro') {
+    return validate(rule.name, path, mergeRepoKiro(merged, layer, path));
   }
   return validate(rule.name, path, mergeLayer(merged, layer));
 };

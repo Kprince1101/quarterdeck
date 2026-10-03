@@ -108,6 +108,8 @@ describe('Planner', { timeout: TIMEOUT }, () => {
         env: { pass: [] },
         project: p.project,
         agentName: agent?.name,
+        role: 'planner',
+        rules: { homeDir: t.homeDir, repoDir: p.repoDir },
         mcpServers: [expect.objectContaining({ name: 'bus' })],
       },
     ]);

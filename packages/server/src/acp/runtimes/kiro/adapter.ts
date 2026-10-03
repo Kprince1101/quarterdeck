@@ -15,6 +15,11 @@ import type {
   RuntimeLaunch,
 } from '../adapter.js';
 import {
+  isKiroBaseRole,
+  loadKiroBaseAgent,
+  type KiroBaseAgent,
+} from './base-agent.js';
+import {
   assertNoWorkspaceShadow,
   buildKiroAgentConfig,
   defaultKiroAgentsDir,
@@ -38,7 +43,23 @@ export const kiroArgs = ({ project, agentName }: RuntimeLaunch): string[] => [
 export interface KiroAdapterOptions {
   agentsDir?: string;
   processDir?: string;
+  warn?: (message: string) => void;
 }
+
+const warnOnConsole = (message: string): void => {
+  console.warn(message);
+};
+
+const launchBase = (
+  launch: RuntimeLaunch,
+  agentsDir: string,
+): Promise<KiroBaseAgent | undefined> => {
+  if (!isKiroBaseRole(launch.role)) return Promise.resolve(undefined);
+  return loadKiroBaseAgent(launch.role, {
+    agentsDir,
+    rules: launch.rules ?? {},
+  });
+};
 
 const withKiroExtensions = (options: LaunchOptions): LaunchOptions => ({
   ...options,
@@ -76,6 +97,7 @@ const wrapClient = (
 export const createKiroAdapter = ({
   agentsDir = defaultKiroAgentsDir(),
   processDir = defaultKiroProcessDir(),
+  warn = warnOnConsole,
 }: KiroAdapterOptions = {}): RuntimeAdapter => {
   const inProcessDir = (launch: RuntimeLaunch): RuntimeLaunch => ({
     ...launch,
@@ -113,7 +135,15 @@ export const createKiroAdapter = ({
   ): Promise<AcpClient> => {
     const name = kiroAgentName(launch.project, launch.agentName);
     await assertNoWorkspaceShadow(launch.cwd, name);
-    const config = buildKiroAgentConfig(name, launch.mcpServers ?? []);
+    const base = await launchBase(launch, agentsDir);
+    const config = buildKiroAgentConfig(name, launch.mcpServers ?? [], {
+      base,
+    });
+    if (base && base.ignored.length > 0) {
+      warn(
+        `Kiro base agent ${base.path} sets ${base.ignored.join(', ')}; Quarterdeck ignored them.`,
+      );
+    }
     await ensurePrivateDir(processDir);
     const path = await writeKiroAgentConfig(agentsDir, config);
     const remove = () => removeKiroAgentConfig(path);

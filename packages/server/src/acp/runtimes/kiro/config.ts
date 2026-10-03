@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { McpServer } from '@agentclientprotocol/sdk';
 import { writePrivateFile } from '../../../lib/private-fs.js';
 import { quarterdeckHome } from '../../../store/paths.js';
+import type { KiroBaseAgent, KiroResource } from './base-agent.js';
 
 export const KIRO_AGENT_PREFIX = 'quarterdeck-';
 
@@ -21,9 +22,13 @@ export type KiroMcpServer =
 export interface KiroAgentConfig {
   name: string;
   description: string;
-  mcpServers: Record<string, KiroMcpServer>;
+  prompt?: string;
+  mcpServers: Record<string, KiroMcpServer | Record<string, unknown>>;
   tools: string[];
   allowedTools: string[];
+  toolsSettings?: Record<string, unknown>;
+  resources?: KiroResource[];
+  model?: string;
   includeMcpJson: boolean;
 }
 
@@ -121,17 +126,86 @@ export const kiroMcpServers = (
     }),
   );
 
+export interface KiroConfigInputs {
+  base?: KiroBaseAgent | undefined;
+  prompt?: string | undefined;
+}
+
+const DESCRIPTION =
+  'Quarterdeck agent. Written by Quarterdeck, removed on close.';
+
+const assertNoNameClash = (
+  base: KiroBaseAgent,
+  ours: readonly McpServer[],
+): void => {
+  const names = new Set(ours.map((server) => server.name));
+  const clash = Object.keys(base.config.mcpServers ?? {}).find((server) =>
+    names.has(server),
+  );
+  if (clash === undefined) return;
+  throw new KiroConfigError(
+    `${base.path} has an MCP server named ${clash}, which is Quarterdeck's own. Rename it in the base agent.`,
+  );
+};
+
+const withOurServers = (
+  tools: string[],
+  ours: readonly McpServer[],
+): string[] => {
+  if (tools.includes('*')) return tools;
+  const missing = ours
+    .map((server) => `@${server.name}`)
+    .filter((tool) => !tools.includes(tool));
+  return [...tools, ...missing];
+};
+
+const joinPrompts = (
+  ...prompts: (string | undefined)[]
+): string | undefined => {
+  const present = prompts.filter((prompt) => prompt !== undefined);
+  if (present.length === 0) return undefined;
+  return present.join('\n\n');
+};
+
+export const withoutUndefined = <T extends object>(value: {
+  [K in keyof T]: T[K] | undefined;
+}): T =>
+  Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== undefined),
+  ) as T;
+
 export const buildKiroAgentConfig = (
   name: string,
   mcpServers: readonly McpServer[],
-): KiroAgentConfig => ({
-  name,
-  description: 'Quarterdeck agent. Written by Quarterdeck, removed on close.',
-  mcpServers: kiroMcpServers(mcpServers),
-  tools: ['*'],
-  allowedTools: [],
-  includeMcpJson: false,
-});
+  { base, prompt }: KiroConfigInputs = {},
+): KiroAgentConfig => {
+  const ours = kiroMcpServers(mcpServers);
+  if (!base) {
+    return withoutUndefined<KiroAgentConfig>({
+      name,
+      description: DESCRIPTION,
+      prompt,
+      mcpServers: ours,
+      tools: ['*'],
+      allowedTools: [],
+      includeMcpJson: false,
+    });
+  }
+  assertNoNameClash(base, mcpServers);
+  const { config } = base;
+  return withoutUndefined<KiroAgentConfig>({
+    name,
+    description: DESCRIPTION,
+    prompt: joinPrompts(config.prompt, prompt),
+    mcpServers: { ...config.mcpServers, ...ours },
+    tools: withOurServers(config.tools ?? ['*'], mcpServers),
+    allowedTools: config.allowedTools ?? [],
+    toolsSettings: config.toolsSettings,
+    resources: config.resources,
+    model: config.model,
+    includeMcpJson: base.role !== 'builder' && (config.includeMcpJson ?? false),
+  });
+};
 
 export const kiroAgentConfigPath = (agentsDir: string, name: string): string =>
   join(agentsDir, `${name}.json`);

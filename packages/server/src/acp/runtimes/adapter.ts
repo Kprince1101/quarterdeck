@@ -1,5 +1,5 @@
 import type { McpServer } from '@agentclientprotocol/sdk';
-import type { Runtime } from '@quarterdeck/rules';
+import type { LoadRulesOptions, Models, Runtime } from '@quarterdeck/rules';
 import { spawnAcpClient } from '../client/spawn.js';
 import type {
   AcpClient,
@@ -13,6 +13,8 @@ export interface RuntimeLaunch {
   env?: ChildEnvSpec;
   project?: string;
   agentName?: string;
+  role?: keyof Models;
+  rules?: LoadRulesOptions;
   mcpServers?: McpServer[];
   command?: AgentCommand;
 }

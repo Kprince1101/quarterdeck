@@ -1,8 +1,12 @@
 # Rules
 
-The shipped defaults: `charter.md`, `reviewer.md`, `permissions.json`, `naming.json`, `lifecycle.json`, `models.json` and `env.json`. Override any of them with `~/.quarterdeck/rules.local.<file>` (this machine) or `<repo>/.quarterdeck/rules.local.<file>` (one project). The layers, the schemas and the tighten-only rules are described in the [rules docs](../site/public/docs/rules.html); how a permission request is decided is in [the permission policy](../packages/server/src/acp/permissions/README.md).
+The shipped defaults: `charter.md`, `reviewer.md`, `permissions.json`, `naming.json`, `lifecycle.json`, `models.json`, `env.json` and `kiro.json`. Override any of them with `~/.quarterdeck/rules.local.<file>` (this machine) or `<repo>/.quarterdeck/rules.local.<file>` (one project). The layers, the schemas and the tighten-only rules are described in the [rules docs](../site/public/docs/rules.html); how a permission request is decided is in [the permission policy](../packages/server/src/acp/permissions/README.md).
 
 `examples/` holds layers you can copy into place. They are not loaded unless you copy them.
+
+## Kiro base agents
+
+`kiro.json` names, in `baseAgents`, the Kiro agent the `driver`, `reviewer` and `builder` start from. Each is `null` (no base) by default. The repo layer may set only `baseAgents.builder`, so one project (a component library, say) can give its builders a different agent; anything else there is an error naming the file. A base agent read from the repo's own `.kiro/agents/` gives only its prompt, resources, tools and model, never MCP servers or pre-approved tools, because agents can write to the repo. To give a project's builders more, name an agent in `~/.kiro/agents/`. How a base is found and merged is in [the runtime adapters README](../packages/server/src/acp/runtimes/README.md#base-agents).
 
 ## Shell permissions
 
