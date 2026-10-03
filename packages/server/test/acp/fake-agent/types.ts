@@ -25,7 +25,9 @@ export type FakeAgentFlag =
   | 'ignoreSigterm'
   | 'crew'
   | 'crashDriver'
-  | 'builderAsks';
+  | 'builderAsks'
+  | 'plannerSkipsDesign'
+  | 'plannerSkipsDesignTwice';
 
 export interface FakeAgentOptions extends Partial<
   Record<FakeAgentFlag, boolean>

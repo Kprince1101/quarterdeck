@@ -16,14 +16,43 @@ const APPROVED_LINE = /^- (Ticket approved|Approved tickets waiting)/;
 const TICKET_IDS = new RegExp(`\\(ticket (${UUID})\\)`, 'g');
 
 const PLANNER_OPENING = /^# Planner brief\n/;
+const PLANNER_REPROMPT = /^\[Quarterdeck\] These proposals were refused/;
 
 export const FAKE_PROPOSAL_TITLE = 'Fix the README greeting';
 
+export const FAKE_SPEC_BODY = `## Requirements
+
+- As a reader, I want the README to greet me, so that I feel welcome.
+  - WHEN someone opens the README THE SYSTEM SHALL show Hello on its first line.
+
+## Design
+
+Edit README.md only.
+
+## Tasks
+
+1. Add the greeting.
+2. Test that it shows.
+
+Proven: the README starts with Hello.`;
+
+export const FAKE_BODY_WITHOUT_DESIGN = FAKE_SPEC_BODY.replace(
+  '## Design\n\nEdit README.md only.\n\n',
+  '',
+);
+
 type CrewRole =
-  'birth' | 'wrap-up' | 'builder' | 'reviewer' | 'driver' | 'planner';
+  | 'birth'
+  | 'wrap-up'
+  | 'builder'
+  | 'reviewer'
+  | 'driver'
+  | 'planner'
+  | 'planner-reprompt';
 
 const roleOf = (text: string): CrewRole => {
   if (PLANNER_OPENING.test(text)) return 'planner';
+  if (PLANNER_REPROMPT.test(text)) return 'planner-reprompt';
   if (DRIVER_BIRTH.test(text)) return 'birth';
   if (WRAP_UP.test(text)) return 'wrap-up';
   if (REVIEW.test(text)) return 'reviewer';
@@ -52,12 +81,15 @@ const busServer = (servers: readonly McpServer[]) => {
   return server;
 };
 
-const callBus = async (
-  turn: FakeTurn,
-  name: string,
-  args: Record<string, unknown>,
-): Promise<string> => {
-  const server = busServer(turn.setup.mcpServers);
+interface BusConnection {
+  client: Client;
+  stderr: string[];
+  connected: Promise<void>;
+}
+
+const busConnections = new Map<string, BusConnection>();
+
+const connectBus = (server: ReturnType<typeof busServer>): BusConnection => {
   const client = new Client({ name: 'fake-crew', version: '0.0.0' });
   const transport = new StdioClientTransport({
     command: server.command,
@@ -67,23 +99,36 @@ const callBus = async (
   });
   const stderr: string[] = [];
   transport.stderr?.on('data', (chunk: Buffer) => stderr.push(String(chunk)));
+  return { client, stderr, connected: client.connect(transport) };
+};
+
+const reusedSessionBus = (turn: FakeTurn): BusConnection => {
+  const server = busServer(turn.setup.mcpServers);
+  const key = JSON.stringify(server.env);
+  const known = busConnections.get(key);
+  if (known) return known;
+  const connection = connectBus(server);
+  busConnections.set(key, connection);
+  return connection;
+};
+
+const callBus = async (
+  turn: FakeTurn,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<string> => {
+  const bus = reusedSessionBus(turn);
   try {
-    await client.connect(transport);
-    const result = await client.callTool({ name, arguments: args });
+    await bus.connected;
+    const result = await bus.client.callTool({ name, arguments: args });
     const content = result.content as { text?: string }[];
     return content.map((part) => part.text ?? '').join('');
   } catch (err) {
-    throw new Error(`bus ${name} failed: ${String(err)} ${stderr.join('')}`, {
-      cause: err,
-    });
-  } finally {
-    await client.close();
+    throw new Error(
+      `bus ${name} failed: ${String(err)} ${bus.stderr.join('')}`,
+      { cause: err },
+    );
   }
-};
-
-const PROPOSAL = {
-  title: FAKE_PROPOSAL_TITLE,
-  body: 'Say hello in the README.',
 };
 
 export const FAKE_BUILDER_PUSH = 'git push origin fake-branch';
@@ -101,14 +146,26 @@ const allowed = async (
   return response.outcome.optionId === 'allow-once';
 };
 
-const propose = async (turn: FakeTurn): Promise<StopReason> => {
+const proposalBody = (skipDesign: boolean | undefined): string => {
+  if (skipDesign) return FAKE_BODY_WITHOUT_DESIGN;
+  return FAKE_SPEC_BODY;
+};
+
+const propose = async (
+  turn: FakeTurn,
+  skipDesign: boolean | undefined,
+): Promise<StopReason> => {
+  const proposal = {
+    title: FAKE_PROPOSAL_TITLE,
+    body: proposalBody(skipDesign),
+  };
   const asked = await allowed(turn, {
     title: 'mcp__quarterdeck__propose',
     kind: 'other',
-    rawInput: PROPOSAL,
+    rawInput: proposal,
   });
   if (!asked) return say(turn, 'Quarterdeck refused my propose call.');
-  return say(turn, await callBus(turn, 'propose', PROPOSAL));
+  return say(turn, await callBus(turn, 'propose', proposal));
 };
 
 const pushAllowed = (
@@ -140,7 +197,9 @@ const HANDLERS: Record<
     if (options.crashDriver) turn.exitProcess(FAKE_CRASH_EXIT_CODE);
     return say(turn, fenced({ summary: 'Born.', actions: [] }));
   },
-  planner: propose,
+  planner: (turn, options) => propose(turn, options.plannerSkipsDesign),
+  'planner-reprompt': (turn, options) =>
+    propose(turn, options.plannerSkipsDesignTwice),
   'wrap-up': (turn) =>
     say(turn, fenced({ summary: 'Voyage done.', notebook: [], charter: null })),
   driver: (turn) =>

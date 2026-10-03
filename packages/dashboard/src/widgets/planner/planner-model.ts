@@ -3,6 +3,12 @@ import type {
   StreamEvent,
   TicketRow,
 } from '@quarterdeck/server/stream-schema';
+import {
+  SPEC_SECTIONS,
+  parseTicketSpec,
+  type SpecSection,
+  type TicketSpec,
+} from '@quarterdeck/server/ticket-spec';
 
 export const PLANNER_HUMAN = 'planner.human';
 export const PLANNER_REPLY = 'planner.reply';
@@ -59,10 +65,72 @@ export interface Proposal {
   ticketId: string;
   title: string;
   body: string;
+  spec: TicketSpec | null;
   statusLabel: string;
   isDecidable: boolean;
   dependsOn: Dependency[];
 }
+
+export type SpecPart = 'intro' | SpecSection | 'proven';
+
+export const SPEC_PART_LABELS: Record<SpecPart, string> = {
+  intro: 'Summary',
+  Requirements: 'Requirements',
+  Design: 'Design',
+  Tasks: 'Tasks',
+  proven: 'Proven',
+};
+
+export interface SpecPartView {
+  part: SpecPart;
+  label: string;
+  text: string;
+}
+
+export const SPEC_PART_ROWS: Record<SpecPart, number> = {
+  intro: 2,
+  Requirements: 4,
+  Design: 4,
+  Tasks: 4,
+  proven: 1,
+};
+
+const introParts = (spec: TicketSpec): SpecPart[] => {
+  if (spec.intro === '') return [];
+  return ['intro'];
+};
+
+export const specParts = (spec: TicketSpec): SpecPart[] => [
+  ...introParts(spec),
+  ...SPEC_SECTIONS,
+  'proven',
+];
+
+export const specPartText = (spec: TicketSpec, part: SpecPart): string => {
+  if (part === 'intro') return spec.intro;
+  if (part === 'proven') return spec.proven;
+  return spec.sections[part];
+};
+
+export const withSpecPart = (
+  spec: TicketSpec,
+  part: SpecPart,
+  text: string,
+): TicketSpec => {
+  if (part === 'intro') return { ...spec, intro: text };
+  if (part === 'proven') return { ...spec, proven: text };
+  return { ...spec, sections: { ...spec.sections, [part]: text } };
+};
+
+export const specPartViews = (
+  spec: TicketSpec,
+  parts: readonly SpecPart[] = specParts(spec),
+): SpecPartView[] =>
+  parts.map((part) => ({
+    part,
+    label: SPEC_PART_LABELS[part],
+    text: specPartText(spec, part),
+  }));
 
 export interface ConversationEntry {
   key: string;
@@ -136,6 +204,7 @@ export const proposalOf = (
       ticketId,
       title: proposedTitle,
       body: '',
+      spec: null,
       statusLabel: GONE_LABEL,
       isDecidable: false,
       dependsOn: [],
@@ -145,6 +214,7 @@ export const proposalOf = (
     ticketId,
     title: ticket.title,
     body: ticket.body,
+    spec: parseTicketSpec(ticket.body),
     statusLabel: STATUS_LABELS[ticket.status],
     isDecidable: ticket.status === 'proposed',
     dependsOn: dependenciesOf(ticket.dependsOn, tickets),

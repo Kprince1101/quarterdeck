@@ -7,7 +7,10 @@ import {
   payloadText,
   projectChoices,
   proposalOf,
+  specPartViews,
+  specParts,
   waitingMessages,
+  withSpecPart,
   type ConversationEntry,
   type PendingMessage,
 } from '../../../src/widgets/planner/planner-model.js';
@@ -19,6 +22,7 @@ import {
   PROJECTS,
   SHIP,
   SITE,
+  SPEC_BODY,
   cleared,
   human,
   plannerEvent,
@@ -106,6 +110,7 @@ describe('proposalOf', () => {
       ticketId: SHIP,
       title: 'Ship it',
       body: 'all of it',
+      spec: null,
       statusLabel: 'Proposed',
       isDecidable: true,
       dependsOn: [{ id: DOCS, title: 'Write docs' }],
@@ -132,10 +137,55 @@ describe('proposalOf', () => {
       ticketId: SHIP,
       title: 'Ship',
       body: '',
+      spec: null,
       statusLabel: GONE_LABEL,
       isDecidable: false,
       dependsOn: [],
     });
+  });
+
+  it('reads a spec body into its parts', () => {
+    const tickets = new Map([
+      [SHIP, ticket(SHIP, 'Ship', { body: SPEC_BODY })],
+    ]);
+    const { spec } = proposalOf(SHIP, 'Ship', tickets);
+    expect(spec).not.toBeNull();
+    if (spec === null) return;
+    expect(specPartViews(spec)).toEqual([
+      {
+        part: 'Requirements',
+        label: 'Requirements',
+        text: '- As a visitor, I want every page shipped.\n  - WHEN the site builds THE SYSTEM SHALL publish every page.',
+      },
+      {
+        part: 'Design',
+        label: 'Design',
+        text: 'Build with the site generator; touch nothing in the server.',
+      },
+      {
+        part: 'Tasks',
+        label: 'Tasks',
+        text: '1. Build the pages.\n2. Publish them.',
+      },
+      {
+        part: 'proven',
+        label: 'Proven',
+        text: 'every page loads on the published site.',
+      },
+    ]);
+    const intro = { ...spec, intro: 'Pairs with docs.' };
+    expect(specParts(intro)).toEqual([
+      'intro',
+      'Requirements',
+      'Design',
+      'Tasks',
+      'proven',
+    ]);
+    expect(withSpecPart(spec, 'Design', 'Use the old one.').sections).toEqual({
+      ...spec.sections,
+      Design: 'Use the old one.',
+    });
+    expect(withSpecPart(spec, 'proven', 'it loads.').proven).toBe('it loads.');
   });
 });
 

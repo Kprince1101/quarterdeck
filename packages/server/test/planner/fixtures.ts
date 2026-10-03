@@ -8,6 +8,7 @@ import {
   type AcpClientOptions,
   type RuntimeLaunch,
 } from '../../src/index.js';
+import type { CardHuman } from '../../src/acp/permissions/index.js';
 import { startBusHost, type BusHost } from '../../src/bus/index.js';
 import { startPauseGate, type PauseGate } from '../../src/pause/index.js';
 import {
@@ -94,6 +95,7 @@ export interface PlannerProject {
 export interface PlannerProjectOptions {
   repo?: boolean;
   fake?: FakeAgentOptions;
+  cardHuman?: CardHuman;
 }
 
 const PLANNER_PROJECT = 'plan';
@@ -151,6 +153,7 @@ export const openPlannerProject = async (
       adapters: fake.adapters,
       homeDir: t.homeDir,
       onError: (err) => errors.push(err),
+      ...(options.cardHuman && { cardHuman: options.cardHuman }),
     });
     return running;
   };

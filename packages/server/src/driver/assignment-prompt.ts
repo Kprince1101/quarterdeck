@@ -9,6 +9,9 @@ export interface AssignmentPromptParts {
   base: string;
 }
 
+const SPEC_INSTRUCTION =
+  "Work the ticket's `## Tasks` list in order, one task at a time. Before you report, prove its `Proven:` line: run or show the check it names.";
+
 const openPullRequest = (ticket: AssignmentPromptParts['ticket']): string[] => {
   if (ticket.prUrl === null) return [];
   const head = ticket.headSha ?? 'unknown';
@@ -22,6 +25,7 @@ export const buildAssignmentPrompt = (parts: AssignmentPromptParts): string =>
     `You are ${parts.builder.name}, a builder on this project.`,
     `# Ticket ${parts.ticket.id}: ${parts.ticket.title}`,
     parts.ticket.body.trim() || 'The ticket has no body.',
+    SPEC_INSTRUCTION,
     '# Where to work',
     `Work in ${parts.worktreePath}, your git worktree of ${parts.repoPath}, detached at ${parts.base}. Create a branch there, commit, push and open a pull request. Never touch ${parts.repoPath} itself.`,
     ...openPullRequest(parts.ticket),

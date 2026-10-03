@@ -30,6 +30,42 @@ const ProposalActions = ({ view }: ProposalPartProps) => (
   </div>
 );
 
+const ProposalSpec = ({ view }: ProposalPartProps) => (
+  <div className="qd-proposal-spec">
+    {view.specParts.map(({ part, label, text }) => (
+      <section key={part} className="qd-proposal-section" data-part={part}>
+        <h4>{label}</h4>
+        <p>{text}</p>
+      </section>
+    ))}
+  </div>
+);
+
+const BodyField = ({ view }: ProposalPartProps) => (
+  <label>
+    <span>Body</span>
+    <textarea
+      rows={6}
+      value={view.draft.body}
+      disabled={view.isBusy}
+      onChange={view.handleBodyChange}
+    />
+  </label>
+);
+
+const SpecFields = ({ view }: ProposalPartProps) =>
+  view.specFields.map(({ part, label, text, rows, handleChange }) => (
+    <label key={part} data-part={part}>
+      <span>{label}</span>
+      <textarea
+        rows={rows}
+        value={text}
+        disabled={view.isBusy}
+        onChange={handleChange}
+      />
+    </label>
+  ));
+
 const ProposalEditor = ({ view }: ProposalPartProps) => (
   <form className="qd-proposal-editor" onSubmit={view.handleSave}>
     <label>
@@ -41,15 +77,8 @@ const ProposalEditor = ({ view }: ProposalPartProps) => (
         onChange={view.handleTitleChange}
       />
     </label>
-    <label>
-      <span>Body</span>
-      <textarea
-        rows={6}
-        value={view.draft.body}
-        disabled={view.isBusy}
-        onChange={view.handleBodyChange}
-      />
-    </label>
+    {view.showSpecFields && <SpecFields view={view} />}
+    {view.showBodyField && <BodyField view={view} />}
     <div className="qd-proposal-actions">
       <button
         type="submit"
@@ -102,6 +131,7 @@ export const ProposalCard = ({
         <span className="qd-proposal-status">{proposal.statusLabel}</span>
       </header>
       {view.hasBody && <p className="qd-proposal-body">{proposal.body}</p>}
+      {view.hasSpec && <ProposalSpec view={view} />}
       {view.hasDependencies && (
         <DependencyList dependencies={proposal.dependsOn} />
       )}

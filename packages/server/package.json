@@ -26,6 +26,11 @@
       "types": "./dist/stream/schema.d.ts",
       "default": "./dist/stream/schema.js"
     },
+    "./ticket-spec": {
+      "@quarterdeck/source": "./src/planner/spec.ts",
+      "types": "./dist/planner/spec.d.ts",
+      "default": "./dist/planner/spec.js"
+    },
     "./replay-command": {
       "@quarterdeck/source": "./src/driver/replay-command.ts",
       "types": "./dist/driver/replay-command.d.ts",

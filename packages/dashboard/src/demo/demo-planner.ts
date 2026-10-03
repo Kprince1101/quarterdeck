@@ -1,4 +1,5 @@
 import type { AgentRow } from '@quarterdeck/server/stream-schema';
+import { specBody } from '@quarterdeck/server/ticket-spec';
 import { DEMO_PLANNER_REPLY } from './demo-plans.js';
 import { turnTokens } from './demo-script.js';
 import type { DemoWorld } from './demo-world.js';
@@ -19,6 +20,19 @@ const titleOf = (text: string): string => {
   if (line.length <= MAX_TITLE) return line;
   return `${line.slice(0, MAX_TITLE - 1)}…`;
 };
+
+const demoSpec = (text: string): string =>
+  specBody({
+    intro: 'From the Planner conversation.',
+    sections: {
+      Requirements: `- As the person who asked, I want this built: ${text.trim()}\n  - WHEN a builder finishes the ticket THE SYSTEM SHALL do what that request describes.`,
+      Design:
+        'Read the repository first and change only the code the request touches.',
+      Tasks:
+        '1. Find the code the request touches.\n2. Make the change, with tests.\n3. Open a pull request.',
+    },
+    proven: 'the new tests pass and show the request working.',
+  });
 
 export const createDemoPlanner = (world: DemoWorld): DemoPlanner => {
   const { store } = world;
@@ -55,7 +69,7 @@ export const createDemoPlanner = (world: DemoWorld): DemoPlanner => {
       world.setAgent(planner, 'idle');
       const ticket = world.createTicket(
         titleOf(text),
-        `From the Planner conversation:\n\n${text}`,
+        demoSpec(text),
         'proposed',
         null,
       );

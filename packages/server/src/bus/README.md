@@ -98,8 +98,10 @@ Either way a `ticket.verdict` event is recorded for the reviewer and the ticket 
 
 Planner only: the caller must be a `planner` agent that is not ended, killed or retired, or the call is an error. Stores one ticket with status `proposed` and records a `ticket.proposed` event with the caller as `agentId`, the ticket as `ticketId` and `{ title }`. Returns `proposed <ticketId>`.
 
-- `title`: 1 to 200 characters after trimming. `body`: up to 100 000 characters, default empty.
+- `title`: 1 to 200 characters after trimming. `body`: up to 100 000 characters, written as a spec (below).
 - `dependsOn`: up to 50 distinct ticket ids of this project. Proposed tickets may be named; `rejected` and `cancelled` ones may not, since they will never be built.
+
+The body must pass `proposalProblems` from [planner/spec.ts](../planner/spec.ts): `## Requirements` (user stories with acceptance criteria containing `SHALL`, as in WHEN ... THE SYSTEM SHALL ...), `## Design`, and `## Tasks` (a numbered list), once each, in that order and not empty, with a last line `Proven: <observable check>`. Text before `## Requirements` is allowed. A body that fails stores nothing: the call is an error naming each problem, followed by the format (`TICKET_SPEC_FORMAT`), and a `planner.proposal_refused` event is recorded for the caller with `{ title, problems }`. The Planner uses that event to re-prompt once (see [planner](../planner/README.md#spec-tickets)). Every per-proposal check goes in `proposalProblems`, so the tool and the re-prompt agree.
 
 The human then approves (`ticket.approve`, which opens it), edits (`ticket.update`) or rejects (`ticket.reject`) the proposal; see [api](../api/README.md#intents).
 

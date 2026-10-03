@@ -9,13 +9,24 @@ import {
   it,
   vi,
 } from 'vitest';
-import { PLANNER_BRIEF, PROJECT_ARCHIVED } from '../../src/planner/index.js';
+import type { CardHuman } from '../../src/acp/permissions/index.js';
+import { repromptText } from '../../src/planner/brief.js';
+import {
+  PLANNER_BRIEF,
+  PROJECT_ARCHIVED,
+  parseTicketSpec,
+} from '../../src/planner/index.js';
 import {
   SIGNED_IN,
   SIGN_IN_CARD,
   SIGN_IN_EVENTS,
 } from '../../src/signin/index.js';
-import { SIGNED_IN_AGAIN_TEXT, WAITING_TEXT } from '../acp/fake-agent/index.ts';
+import {
+  FAKE_PROPOSAL_TITLE,
+  FAKE_SPEC_BODY,
+  SIGNED_IN_AGAIN_TEXT,
+  WAITING_TEXT,
+} from '../acp/fake-agent/index.ts';
 import { startTestApi, type TestApi } from '../api/harness.ts';
 import { callTool, connectClient } from '../bus/fixtures.ts';
 import {
@@ -134,7 +145,9 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     const [agent] = await p.agents();
     const bus = await connectClient(p.store, agent?.id ?? '');
     const propose = async (title: string) =>
-      (await callTool(bus, 'propose', { title })).text.replace('proposed ', '');
+      (
+        await callTool(bus, 'propose', { title, body: FAKE_SPEC_BODY })
+      ).text.replace('proposed ', '');
     const kept = await propose('QD2a store');
     const dropped = await propose('QD2z rewrite');
     await bus.close();
@@ -161,6 +174,136 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     expect(third?.['text']).toBe('and then?');
     expect(p.fake.launches).toHaveLength(1);
     expect(await p.agents()).toHaveLength(1);
+  });
+
+  const allow: CardHuman = () => Promise.resolve('allow');
+
+  const docket = async (p: PlannerProject) => {
+    const { rows } = await p.store.db.query<{
+      title: string;
+      body: string;
+      status: string;
+    }>('select title, body, status from tickets where project_id = $1', [
+      p.store.projectId,
+    ]);
+    return rows;
+  };
+
+  const turnPrompts = async (p: PlannerProject) => {
+    const { rows } = await p.store.db.query<{ seq: number; prompt: string }>(
+      `select t.seq, t.prompt from turns t join agents a on a.id = t.agent_id
+       where a.project_id = $1 order by t.seq`,
+      [p.store.projectId],
+    );
+    return rows;
+  };
+
+  const refusal = `- ${FAKE_PROPOSAL_TITLE}: the ticket does not follow the spec format: it has no \`## Design\` section`;
+
+  it('puts a scripted spec proposal on the docket with all four parts', async () => {
+    const p = await open({ fake: { crew: true }, cardHuman: allow });
+    await p.start();
+    await say(p, 'fix the README greeting');
+
+    const [ticket] = await docket(p);
+    expect(ticket).toEqual({
+      title: FAKE_PROPOSAL_TITLE,
+      body: FAKE_SPEC_BODY,
+      status: 'proposed',
+    });
+    expect(parseTicketSpec(ticket?.body ?? '')).toEqual({
+      intro: '',
+      sections: {
+        Requirements: expect.stringContaining(
+          'WHEN someone opens the README THE SYSTEM SHALL',
+        ),
+        Design: 'Edit README.md only.',
+        Tasks: '1. Add the greeting.\n2. Test that it shows.',
+      },
+      proven: 'the README starts with Hello.',
+    });
+    expect((await p.events()).map((event) => event.kind)).toEqual([
+      'planner.human',
+      'ticket.proposed',
+      'planner.reply',
+    ]);
+    expect(await turnPrompts(p)).toHaveLength(1);
+  });
+
+  it('re-prompts once when a proposal has no Design section, and docks the fixed one', async () => {
+    const p = await open({
+      fake: { crew: true, plannerSkipsDesign: true },
+      cardHuman: allow,
+    });
+    await p.start();
+    const intentId = await say(p, 'fix the README greeting');
+
+    const [agent] = await p.agents();
+    expect(await p.intent(intentId)).toEqual({
+      status: 'applied',
+      result: { agentId: agent?.id, seq: 1 },
+    });
+    const events = await p.events();
+    expect(events.map((event) => event.kind)).toEqual([
+      'planner.human',
+      'planner.proposal_refused',
+      'planner.reply',
+      'planner.missed',
+      'ticket.proposed',
+      'planner.reply',
+    ]);
+    expect(events[1]?.payload).toEqual({
+      title: FAKE_PROPOSAL_TITLE,
+      problems: ['it has no `## Design` section'],
+    });
+    expect(String(events[2]?.payload['text'])).toContain(
+      'Nothing was proposed: the ticket does not follow the spec format',
+    );
+    expect(events[3]?.payload).toEqual({
+      seq: 1,
+      error: refusal,
+      reprompt: true,
+    });
+    expect(events[5]?.payload).toMatchObject({ seq: 2 });
+    const prompts = await turnPrompts(p);
+    expect(prompts.map(({ seq }) => seq)).toEqual([1, 2]);
+    expect(prompts[1]?.prompt).toBe(repromptText(refusal));
+    expect(await docket(p)).toEqual([
+      { title: FAKE_PROPOSAL_TITLE, body: FAKE_SPEC_BODY, status: 'proposed' },
+    ]);
+    expect((await p.agents())[0]?.status).toBe('idle');
+  });
+
+  it('stops after one re-prompt and keeps a proposal that is still wrong off the docket', async () => {
+    const p = await open({
+      fake: {
+        crew: true,
+        plannerSkipsDesign: true,
+        plannerSkipsDesignTwice: true,
+      },
+      cardHuman: allow,
+    });
+    await p.start();
+    await say(p, 'fix the README greeting');
+
+    const events = await p.events();
+    expect(events.map((event) => event.kind)).toEqual([
+      'planner.human',
+      'planner.proposal_refused',
+      'planner.reply',
+      'planner.missed',
+      'planner.proposal_refused',
+      'planner.reply',
+      'planner.missed',
+    ]);
+    expect(events.at(-1)?.payload).toEqual({
+      seq: 2,
+      error: refusal,
+      reprompt: false,
+    });
+    expect(await turnPrompts(p)).toHaveLength(2);
+    expect(await docket(p)).toEqual([]);
+    expect(p.errors).toEqual([]);
   });
 
   it('starts a new conversation after planner.new, ending the old session and its process', async () => {
