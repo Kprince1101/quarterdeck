@@ -230,7 +230,7 @@ const runMergeGate = async (
     approval.cardId,
   );
   const pr = await host.pullRequest(approval.pr);
-  const step = mergeStep(approval, pr, card, ctx.rules, project, terms);
+  const step = mergeStep(approval, pr, card, ctx.rules, project, host.forge);
   await applyMergeStep(ctx, facts, step, { guard, at, host });
 };
 

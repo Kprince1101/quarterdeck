@@ -31,7 +31,7 @@ import {
   ticket,
 } from './fixtures.js';
 
-const COPILOT = 'Copilot review (all projects)';
+const AI_REVIEW = 'AI review (all projects)';
 const AUTO_MERGE = 'Auto-merge (all projects)';
 
 interface Sent {
@@ -312,17 +312,17 @@ describe('Project widget', () => {
     unmount();
   });
 
-  it('shows Copilot and Auto-merge from the loaded lifecycle rule, labelled for all projects', async () => {
+  it('shows AI review and Auto-merge from the loaded lifecycle rule, labelled for all projects', async () => {
     const { container, asked, unmount } = mount(projectTables());
     await settle();
     expect(asked).toEqual(['deck']);
     expect(gates(container)).toEqual([
-      [COPILOT, false, false],
+      [AI_REVIEW, false, false],
       [AUTO_MERGE, false, false],
     ]);
     const machinePath = `${HOME}/rules.local.lifecycle.json`;
-    expect(gate(container, 'requireCopilotReview').getAttribute('title')).toBe(
-      `Machine-wide: sets mergeGate.requireCopilotReview in ${machinePath}, which applies to every project.`,
+    expect(gate(container, 'requireAiReview').getAttribute('title')).toBe(
+      `Machine-wide: sets mergeGate.requireAiReview in ${machinePath}, which applies to every project.`,
     );
     expect(gate(container, 'autoMerge').getAttribute('title')).toBe(
       `Machine-wide: sets mergeGate.autoMerge in ${machinePath}, which applies to every project.`,
@@ -330,7 +330,7 @@ describe('Project widget', () => {
     unmount();
   });
 
-  it('turns Copilot on in the machine layer and keeps its other keys', async () => {
+  it('turns the AI review on in the machine layer and keeps its other keys', async () => {
     const machine = JSON.stringify({
       stuckAfterMinutes: 45,
       mergeGate: { requireChecksPassing: false },
@@ -344,7 +344,7 @@ describe('Project widget', () => {
       },
     );
     await settle();
-    click(find(gate(container, 'requireCopilotReview'), 'input'));
+    click(find(gate(container, 'requireAiReview'), 'input'));
     await settle();
     expect(sentTo(sent)).toEqual([
       [
@@ -354,10 +354,10 @@ describe('Project widget', () => {
     ]);
     expect(JSON.parse(writtenContent(sent))).toEqual({
       stuckAfterMinutes: 45,
-      mergeGate: { requireChecksPassing: false, requireCopilotReview: true },
+      mergeGate: { requireChecksPassing: false, requireAiReview: true },
     });
     expect(gates(container)).toEqual([
-      [COPILOT, true, false],
+      [AI_REVIEW, true, false],
       [AUTO_MERGE, false, false],
     ]);
     unmount();
@@ -377,7 +377,7 @@ describe('Project widget', () => {
     await settle();
     expect(sent).toEqual([]);
     expect(gates(container)).toEqual([
-      [COPILOT, false, true],
+      [AI_REVIEW, false, true],
       [AUTO_MERGE, false, true],
     ]);
     expect(textOf(toggles(), '.qd-project-warning')).toBe(
@@ -387,7 +387,7 @@ describe('Project widget', () => {
     click(button(toggles(), 'Cancel'));
     expect(toggles().querySelector('.qd-project-confirm')).toBeNull();
     expect(gates(container)).toEqual([
-      [COPILOT, false, false],
+      [AI_REVIEW, false, false],
       [AUTO_MERGE, false, false],
     ]);
     expect(sent).toEqual([]);
@@ -404,7 +404,7 @@ describe('Project widget', () => {
     });
     expect(toggles().querySelector('.qd-project-confirm')).toBeNull();
     expect(gates(container)).toEqual([
-      [COPILOT, false, false],
+      [AI_REVIEW, false, false],
       [AUTO_MERGE, true, false],
     ]);
     unmount();
@@ -480,7 +480,7 @@ describe('Project widget', () => {
     );
     await settle();
     expect(gates(container)).toEqual([
-      [COPILOT, false, false],
+      [AI_REVIEW, false, false],
       [AUTO_MERGE, true, false],
     ]);
     click(find(gate(container, 'autoMerge'), 'input'));
@@ -491,7 +491,7 @@ describe('Project widget', () => {
       mergeGate: { autoMerge: false },
     });
     expect(gates(container)).toEqual([
-      [COPILOT, false, false],
+      [AI_REVIEW, false, false],
       [AUTO_MERGE, false, false],
     ]);
     unmount();
@@ -505,13 +505,13 @@ describe('Project widget', () => {
       {
         machine: JSON.stringify({ mergeGate: { autoMerge: true } }),
         repo: JSON.stringify({
-          mergeGate: { requireCopilotReview: true, autoMerge: false },
+          mergeGate: { requireAiReview: true, autoMerge: false },
         }),
       },
     );
     await settle();
     expect(gates(container)).toEqual([
-      [COPILOT, true, true],
+      [AI_REVIEW, true, true],
       [AUTO_MERGE, false, true],
     ]);
     expect(gate(container, 'autoMerge').getAttribute('title')).toContain(

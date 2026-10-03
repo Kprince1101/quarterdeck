@@ -1,4 +1,5 @@
 export {
+  aiReviewWaiting,
   foreignPullRequest,
   mergeStep,
   reviewStep,
@@ -43,12 +44,11 @@ export {
   type ReviewGateOptions,
 } from './gate.js';
 export {
-  COPILOT_LOGINS,
   OPEN_PULL_REQUEST_FIELDS,
   OPEN_PULL_REQUEST_LIMIT,
   PULL_REQUEST_QUERY,
+  botLogin,
   ghCli,
-  isCopilot,
   listOpenArgs,
   parseOpenPullRequests,
   parsePullRequest,
@@ -60,20 +60,18 @@ export {
 } from './github.js';
 export {
   GITLAB_PAGE_SIZE,
-  GITLAB_REVIEW_BOTS,
   discussionsArgs,
   failedJobsArgs,
   glabCli,
   glabListOpenArgs,
   glabSquashMergeArgs,
-  isGitLabReviewBot,
   mergeRequestArgs,
-  openThreadsByAuthor,
   parseMergeRequest,
   parseMergeRequestReply,
   parseMergeRequestUrl,
   parseOpenMergeRequests,
   projectArgs,
+  readBotReview,
   readThreads,
   runGlab,
   type DiscussionThread,

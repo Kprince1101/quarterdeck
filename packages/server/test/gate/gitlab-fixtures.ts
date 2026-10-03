@@ -16,11 +16,17 @@ const person = (id: number, username: string) => ({
   web_url: `https://git.example.org/${username}`,
 });
 
-export const DUO = person(7, 'GitLabDuo');
+export const REVIEW_BOT = person(7, 'review-bot');
 export const FINCH = person(31, 'finch');
 export const OKAPI = person(32, 'okapi');
 
 export type GitlabPerson = ReturnType<typeof person>;
+
+const PEOPLE: readonly GitlabPerson[] = [REVIEW_BOT, FINCH, OKAPI];
+
+export const gitlabPerson = (username: string): GitlabPerson =>
+  PEOPLE.find((who) => who.username === username) ??
+  person(100 + username.length, username);
 
 const RECORDED_PIPELINE = {
   id: GITLAB_PIPELINE_ID,

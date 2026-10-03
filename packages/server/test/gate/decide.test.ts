@@ -1,4 +1,8 @@
-import { forgeTerms, type MergeGate } from '@quarterdeck/rules';
+import {
+  AiReviewConfigError,
+  forgeTerms,
+  type MergeGate,
+} from '@quarterdeck/rules';
 import { describe, expect, it } from 'vitest';
 import {
   foreignPullRequest as decideForeign,
@@ -27,10 +31,13 @@ const PR = 'https://github.com/example-org/quarterdeck/pull/23';
 const HEAD = '0123456789abcdef0123456789abcdef01234567';
 const OTHER = 'fedcba9876543210fedcba9876543210fedcba98';
 
+const COPILOT = ['copilot-pull-request-reviewer', 'Copilot'];
+
 const RULES: MergeGate = {
   requireReviewerApproval: true,
   requireChecksPassing: true,
-  requireCopilotReview: false,
+  requireAiReview: false,
+  aiReviewers: { github: COPILOT, gitlab: [] },
   autoMerge: true,
 };
 
@@ -70,7 +77,7 @@ const mergeStep = (
   pr: PullRequest,
   card: MergeCardState,
   rules: MergeGate,
-) => decideMerge(approval, pr, card, rules, PROJECT, GITHUB);
+) => decideMerge(approval, pr, card, rules, PROJECT, 'github');
 
 const foreignPullRequest = (
   url: string,
@@ -87,7 +94,7 @@ const pull = (extra: Partial<PullRequest> = {}): PullRequest => ({
   draft: false,
   mergeable: 'mergeable',
   checks: { state: 'passing', failing: [] },
-  botReview: { reviewed: false, openThreads: 0 },
+  botReview: { reviewers: [], openThreads: [] },
   ...extra,
 });
 
@@ -259,24 +266,62 @@ describe('merge step', () => {
     expect(mergeStep(APPROVAL, none, 'none', RULES)).toEqual({ kind: 'merge' });
   });
 
-  it('gates on Copilot only when asked to', () => {
-    const copilot = { ...RULES, requireCopilotReview: true };
-    expect(mergeStep(APPROVAL, pull(), 'none', copilot)).toEqual({
+  it('gates on the AI review only when asked to', () => {
+    const ai = { ...RULES, requireAiReview: true };
+    expect(mergeStep(APPROVAL, pull(), 'none', ai)).toEqual({
       kind: 'wait',
-      reason: WAITING.botReview,
+      reason:
+        'waiting for an AI review from copilot-pull-request-reviewer or Copilot',
     });
-    const threads = pull({ botReview: { reviewed: true, openThreads: 2 } });
-    expect(mergeStep(APPROVAL, threads, 'none', copilot)).toMatchObject({
+    const threads = pull({
+      botReview: {
+        reviewers: ['copilot-pull-request-reviewer'],
+        openThreads: ['Copilot', 'Copilot'],
+      },
+    });
+    expect(mergeStep(APPROVAL, threads, 'none', ai)).toEqual({
       kind: 'bounce',
-      reason: expect.stringContaining('2 Copilot review thread(s)'),
+      reason:
+        '2 AI review thread(s) from Copilot are unresolved on the pull request; answer and resolve each, then report again',
     });
-    const resolved = pull({ botReview: { reviewed: true, openThreads: 0 } });
-    expect(mergeStep(APPROVAL, resolved, 'none', copilot)).toEqual({
+    const resolved = pull({
+      botReview: { reviewers: ['Copilot'], openThreads: [] },
+    });
+    expect(mergeStep(APPROVAL, resolved, 'none', ai)).toEqual({
       kind: 'merge',
     });
     expect(mergeStep(APPROVAL, threads, 'none', RULES)).toEqual({
       kind: 'merge',
     });
+  });
+
+  it('counts only the configured bots as the AI review', () => {
+    const ai = { ...RULES, requireAiReview: true };
+    const others = pull({
+      botReview: {
+        reviewers: ['renovate', 'dependabot'],
+        openThreads: ['dependabot'],
+      },
+    });
+    expect(mergeStep(APPROVAL, others, 'none', ai)).toEqual({
+      kind: 'wait',
+      reason:
+        'waiting for an AI review from copilot-pull-request-reviewer or Copilot',
+    });
+  });
+
+  it('refuses requireAiReview with no logins for the forge, naming the file', () => {
+    const ai = {
+      ...RULES,
+      requireAiReview: true,
+      aiReviewers: { github: [], gitlab: [] },
+    };
+    expect(() => mergeStep(APPROVAL, pull(), 'none', ai)).toThrow(
+      AiReviewConfigError,
+    );
+    expect(() => mergeStep(APPROVAL, pull(), 'none', ai)).toThrow(
+      '~/.quarterdeck/rules.local.lifecycle.json: mergeGate.requireAiReview is on, but mergeGate.aiReviewers.github lists no GitHub bot logins',
+    );
   });
 
   it('bounces a pull request GitHub places in another repository, even merged', () => {
@@ -417,8 +462,11 @@ describe('gate reasons in a GitLab project', () => {
     owner: 'example-org',
     name: 'quarterdeck',
   };
-  const gitlabStep = (pr: PullRequest, card: MergeCardState = 'none') =>
-    decideMerge(APPROVAL, pr, card, RULES, GITLAB_PROJECT, GITLAB);
+  const gitlabStep = (
+    pr: PullRequest,
+    card: MergeCardState = 'none',
+    rules: MergeGate = RULES,
+  ) => decideMerge(APPROVAL, pr, card, rules, GITLAB_PROJECT, 'gitlab');
   const onGitlab = (extra: Partial<PullRequest> = {}) =>
     pull({ repository: GITLAB_PROJECT, ...extra });
   const reasons = (): string[] =>
@@ -452,6 +500,37 @@ describe('gate reasons in a GitLab project', () => {
       foreignPullRequest('https://git.example.org/a/b', GITLAB_PROJECT, GITLAB),
     ).toBe(
       "https://git.example.org/a/b is not a GitLab merge request URL; report the merge request's URL",
+    );
+  });
+
+  it('waits for a configured GitLab bot, then passes once it has reviewed', () => {
+    const ai = {
+      ...RULES,
+      requireAiReview: true,
+      aiReviewers: { github: COPILOT, gitlab: ['review-bot'] },
+    };
+    expect(gitlabStep(onGitlab(), 'none', ai)).toEqual({
+      kind: 'wait',
+      reason: 'waiting for an AI review from review-bot',
+    });
+    const threads = onGitlab({
+      botReview: { reviewers: ['review-bot'], openThreads: ['review-bot'] },
+    });
+    expect(gitlabStep(threads, 'none', ai)).toEqual({
+      kind: 'bounce',
+      reason:
+        '1 AI review thread(s) from review-bot are unresolved on the merge request; answer and resolve each, then report again',
+    });
+    const reviewed = onGitlab({
+      botReview: { reviewers: ['review-bot'], openThreads: [] },
+    });
+    expect(gitlabStep(reviewed, 'none', ai)).toEqual({ kind: 'merge' });
+  });
+
+  it('is a config error to require an AI review on GitLab with no logins', () => {
+    const ai = { ...RULES, requireAiReview: true };
+    expect(() => gitlabStep(onGitlab(), 'none', ai)).toThrow(
+      '~/.quarterdeck/rules.local.lifecycle.json: mergeGate.requireAiReview is on, but mergeGate.aiReviewers.gitlab lists no GitLab bot logins',
     );
   });
 

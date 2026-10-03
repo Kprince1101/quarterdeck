@@ -74,7 +74,7 @@ export const fakeGitHub = (): FakeGitHub => {
     draft: false,
     mergeable: 'mergeable',
     checks: { state: 'passing', failing: [] },
-    botReview: { reviewed: false, openThreads: 0 },
+    botReview: { reviewers: [], openThreads: [] },
   });
   return {
     forge: 'github',

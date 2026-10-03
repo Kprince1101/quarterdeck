@@ -1,12 +1,12 @@
 import type { ForgeTerms } from '@quarterdeck/rules/forges';
-import { isJsonObject } from '@quarterdeck/rules/merge';
+import { isJsonObject, upgradeLifecycleLayer } from '@quarterdeck/rules/merge';
 import type { MergeGate } from '@quarterdeck/rules/schemas';
 import type { RuleView, RulesView } from '../../api/index.js';
 import { getErrorMessage } from '../../lib/errors.js';
 import { EMPTY_JSON_LAYER } from '../rules/constants.js';
 import { checkDraft } from '../rules/rule-layers.js';
 
-export type GateKey = 'requireCopilotReview' | 'autoMerge';
+export type GateKey = 'requireAiReview' | 'autoMerge';
 
 export interface GateToggle {
   key: GateKey;
@@ -22,7 +22,7 @@ export interface GateToggles {
 }
 
 const GATE_LABELS: Record<GateKey, string> = {
-  requireCopilotReview: 'Copilot review (all projects)',
+  requireAiReview: 'AI review (all projects)',
   autoMerge: 'Auto-merge (all projects)',
 };
 
@@ -89,7 +89,10 @@ export const gateToggles = (rule: RuleView): GateToggles => {
 };
 
 const machineLayer = (rule: RuleView): Record<string, unknown> => {
-  const layer = JSON.parse(rule.machine.content ?? EMPTY_JSON_LAYER) as unknown;
+  const parsed = JSON.parse(
+    rule.machine.content ?? EMPTY_JSON_LAYER,
+  ) as unknown;
+  const { layer } = upgradeLifecycleLayer(parsed, rule.machine.path);
   if (!isJsonObject(layer)) {
     throw new Error(`${rule.machine.path} is not a JSON object`);
   }

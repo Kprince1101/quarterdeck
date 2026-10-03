@@ -128,7 +128,9 @@ describe('valueSources', () => {
       'budget.window.holdAtFraction': 'defaults',
       'mergeGate.requireReviewerApproval': 'defaults',
       'mergeGate.requireChecksPassing': 'defaults',
-      'mergeGate.requireCopilotReview': 'defaults',
+      'mergeGate.requireAiReview': 'defaults',
+      'mergeGate.aiReviewers.github': 'defaults',
+      'mergeGate.aiReviewers.gitlab': 'defaults',
       'mergeGate.autoMerge': 'defaults',
     });
   });
@@ -137,13 +139,45 @@ describe('valueSources', () => {
     const rule = ruleView(
       'lifecycle',
       {
-        repo: '{ "mergeGate": { "requireCopilotReview": true, "autoMerge": true } }',
+        repo: '{ "mergeGate": { "requireAiReview": true, "autoMerge": true } }',
       },
       REPO,
     );
     const sources = sourcesOf(rule, '{ "mergeGate": { "autoMerge": false } }');
-    expect(sources['mergeGate.requireCopilotReview']).toBe('repo');
+    expect(sources['mergeGate.requireAiReview']).toBe('repo');
     expect(sources['mergeGate.autoMerge']).toBe('machine');
+  });
+
+  it('reads the deprecated requireCopilotReview as requireAiReview, with a warning', () => {
+    const rule = ruleView(
+      'lifecycle',
+      { repo: '{ "mergeGate": { "requireCopilotReview": true } }' },
+      REPO,
+    );
+    const draft = '{ "mergeGate": { "requireCopilotReview": false } }';
+    const check = checkDraft(rule, draft);
+    expect(check.error).toBeNull();
+    expect(check.repoError).toBeNull();
+    expect(check.effective).toMatchObject({
+      mergeGate: { requireAiReview: true },
+    });
+    expect(sourcesOf(rule, draft)['mergeGate.requireAiReview']).toBe('repo');
+    expect(check.deprecations).toEqual([
+      `${rule.machine.path}: mergeGate.requireCopilotReview is deprecated and reads as mergeGate.requireAiReview; rename it`,
+      `${rule.repo?.path ?? ''}: mergeGate.requireCopilotReview is deprecated and reads as mergeGate.requireAiReview; rename it`,
+    ]);
+    expect(checkDraft(rule, '{}').deprecations).toHaveLength(1);
+  });
+
+  it('refuses AI reviewer logins from the repo layer', () => {
+    const rule = ruleView(
+      'lifecycle',
+      { repo: '{ "mergeGate": { "aiReviewers": { "github": ["my-bot"] } } }' },
+      REPO,
+    );
+    expect(checkDraft(rule, '{}').repoError).toContain(
+      'the repo layer may only tighten the merge gate',
+    );
   });
 
   it('credits the repo layer for the settle time only when it lengthens it', () => {
@@ -197,7 +231,9 @@ describe('valueSources', () => {
       'budget.window.holdAtFraction',
       'mergeGate.requireReviewerApproval',
       'mergeGate.requireChecksPassing',
-      'mergeGate.requireCopilotReview',
+      'mergeGate.requireAiReview',
+      'mergeGate.aiReviewers.github',
+      'mergeGate.aiReviewers.gitlab',
       'mergeGate.autoMerge',
     ]);
     const permissions = ruleView('permissions');

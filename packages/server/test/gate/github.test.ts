@@ -3,13 +3,15 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
+import { loadRule } from '@quarterdeck/rules';
 import { describe, expect, it } from 'vitest';
 import {
   OPEN_PULL_REQUEST_FIELDS,
   OPEN_PULL_REQUEST_LIMIT,
   PULL_REQUEST_QUERY,
+  botLogin,
   ghCli,
-  isCopilot,
+  mergeStep,
   originRepository,
   parsePullRequest,
   parsePullRequestUrl,
@@ -21,6 +23,7 @@ import {
 import {
   COPILOT,
   GITHUB_HEAD as HEAD,
+  bot,
   githubReply as reply,
   user,
 } from './github-fixtures.ts';
@@ -28,6 +31,8 @@ import {
 const exec = promisify(execFile);
 
 const PR = 'https://github.com/example-org/quarterdeck/pull/23';
+const BOT = bot('review-bot');
+const OTHER_BOT = bot('lint-bot');
 
 describe('gh pull request host', () => {
   it('parses a pull request URL', () => {
@@ -67,7 +72,7 @@ describe('gh pull request host', () => {
       draft: false,
       mergeable: 'mergeable',
       checks: { state: 'passing', failing: [] },
-      botReview: { reviewed: false, openThreads: 0 },
+      botReview: { reviewers: [], openThreads: [] },
     });
   });
 
@@ -144,43 +149,79 @@ describe('gh pull request host', () => {
     expect(pr.defaultBranch).toBeNull();
   });
 
-  it('counts Copilot reviews and its unresolved threads only', () => {
+  it('lists the bots that reviewed and who opened each unresolved bot thread', () => {
     const pr = parsePullRequest(
       PR,
       reply({
-        reviews: [user('heron'), null, COPILOT],
+        reviews: [user('heron'), null, BOT, OTHER_BOT, BOT],
         threads: [
-          { isResolved: false, author: COPILOT },
-          { isResolved: true, author: COPILOT },
+          { isResolved: false, author: BOT },
+          { isResolved: true, author: BOT },
+          { isResolved: false, author: OTHER_BOT },
+          { isResolved: false, author: BOT },
           { isResolved: false, author: user('heron') },
           { isResolved: false, author: null },
         ],
       }),
     );
 
-    expect(pr.botReview).toEqual({ reviewed: true, openThreads: 1 });
+    expect(pr.botReview).toEqual({
+      reviewers: ['review-bot', 'lint-bot'],
+      openThreads: ['review-bot', 'lint-bot', 'review-bot'],
+    });
   });
 
-  it('does not take a user whose login starts with copilot for Copilot', () => {
+  it('never takes a user account for a bot, whatever its login', () => {
     const pr = parsePullRequest(
       PR,
       reply({
-        reviews: [user('copilot-fan'), user('Copilot')],
-        threads: [{ isResolved: false, author: user('copilot-fan') }],
+        reviews: [user('review-bot')],
+        threads: [{ isResolved: false, author: user('review-bot') }],
       }),
     );
 
-    expect(pr.botReview).toEqual({ reviewed: false, openThreads: 0 });
+    expect(pr.botReview).toEqual({ reviewers: [], openThreads: [] });
   });
 
-  it('knows Copilot by its exact bot logins', () => {
-    expect(isCopilot(COPILOT)).toBe(true);
-    expect(isCopilot({ login: 'Copilot', __typename: 'Bot' })).toBe(true);
-    expect(isCopilot({ login: 'Copilot' })).toBe(true);
-    expect(isCopilot({ login: 'copilot-fan', __typename: 'Bot' })).toBe(false);
-    expect(isCopilot({ login: 'copilot', __typename: 'Bot' })).toBe(false);
-    expect(isCopilot(user('copilot-pull-request-reviewer'))).toBe(false);
-    expect(isCopilot(null)).toBe(false);
+  it('bounces an open Copilot thread under requireAiReview with the shipped GitHub logins', async () => {
+    const home = await mkdtemp(resolve(tmpdir(), 'qd-ai-review-'));
+    try {
+      const { mergeGate } = await loadRule('lifecycle', { homeDir: home });
+      const pr = parsePullRequest(
+        PR,
+        reply({
+          reviews: [COPILOT],
+          threads: [{ isResolved: false, author: COPILOT }],
+        }),
+      );
+      const approval = {
+        eventId: 1,
+        reportId: 1,
+        pr: PR,
+        head: HEAD,
+        cardId: undefined,
+      };
+      const project = pr.repository;
+      const rules = { ...mergeGate, requireAiReview: true };
+
+      expect(mergeStep(approval, pr, 'none', rules, project, 'github')).toEqual(
+        {
+          kind: 'bounce',
+          reason:
+            '1 AI review thread(s) from copilot-pull-request-reviewer are unresolved on the pull request; answer and resolve each, then report again',
+        },
+      );
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
+  it('knows a bot author by its account type', () => {
+    expect(botLogin(BOT)).toBe('review-bot');
+    expect(botLogin({ login: 'review-bot' })).toBe('review-bot');
+    expect(botLogin(user('review-bot'))).toBeUndefined();
+    expect(botLogin(null)).toBeUndefined();
+    expect(botLogin(undefined)).toBeUndefined();
   });
 
   it('throws when GitHub has no such pull request', () => {

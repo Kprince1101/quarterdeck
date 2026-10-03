@@ -61,6 +61,15 @@ export const namingSchema = z.strictObject({
 
 export const settleSecondsSchema = z.number().int().positive();
 
+export const botLoginsSchema = z
+  .array(z.string().min(1))
+  .refine(hasUniqueValues, 'bot logins must be unique');
+
+export const aiReviewersSchema = z.strictObject({
+  github: botLoginsSchema,
+  gitlab: botLoginsSchema,
+});
+
 export const lifecycleSchema = z.strictObject({
   autoEndSettleSeconds: settleSecondsSchema,
   stuckAfterMinutes: z.number().int().positive(),
@@ -76,7 +85,8 @@ export const lifecycleSchema = z.strictObject({
   mergeGate: z.strictObject({
     requireReviewerApproval: z.boolean(),
     requireChecksPassing: z.boolean(),
-    requireCopilotReview: z.boolean(),
+    requireAiReview: z.boolean(),
+    aiReviewers: aiReviewersSchema,
     autoMerge: z.boolean(),
     base: z.string().min(1).optional(),
   }),
@@ -85,7 +95,7 @@ export const lifecycleSchema = z.strictObject({
 export const repoMergeGateSchema = z.strictObject({
   requireReviewerApproval: z.boolean().optional(),
   requireChecksPassing: z.boolean().optional(),
-  requireCopilotReview: z.boolean().optional(),
+  requireAiReview: z.boolean().optional(),
   autoMerge: z.boolean().optional(),
 });
 
@@ -160,6 +170,7 @@ export type Naming = z.infer<typeof namingSchema>;
 export type Lifecycle = z.infer<typeof lifecycleSchema>;
 export type BudgetWindow = Lifecycle['budget']['window'];
 export type MergeGate = Lifecycle['mergeGate'];
+export type AiReviewers = MergeGate['aiReviewers'];
 export type RepoMergeGate = z.infer<typeof repoMergeGateSchema>;
 export type Runtime = z.infer<typeof runtimeSchema>;
 export type RoleModel = z.infer<typeof roleModelSchema>;

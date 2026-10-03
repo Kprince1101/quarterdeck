@@ -145,10 +145,11 @@
         In <code>&lt;repo&gt;/.quarterdeck/rules.local.lifecycle.json</code>,
         <code>mergeGate</code> is tighten-only: a <code>require*</code> flag is
         on if any layer turns it on, <code>autoMerge</code> is on only if no
-        layer turns it off, and <code>base</code> may not be set there at all.
-        This one makes the project wait for a Copilot review too:
+        layer turns it off, and <code>base</code> and
+        <code>aiReviewers</code> may not be set there at all. This one makes the
+        project wait for an AI review too:
       </p>
-      <pre><code>{ "mergeGate": { "requireCopilotReview": true } }</code></pre>
+      <pre><code>{ "mergeGate": { "requireAiReview": true } }</code></pre>
       <p>
         <code>budget.window</code> is tighten-only there too. A repo layer gets
         the smaller cap (a <code>null</code> cap never lifts a machine cap), the
@@ -424,11 +425,29 @@
             </td>
           </tr>
           <tr>
-            <td><code>requireCopilotReview</code></td>
+            <td><code>requireAiReview</code></td>
             <td><code>false</code></td>
             <td>
-              Also wait for a Copilot review, and send it back while any thread
-              Copilot opened is unresolved.
+              Also wait for an AI review from one of the forge's
+              <code>aiReviewers</code>, and send it back while any thread one of
+              them opened is unresolved. On with no logins listed for the
+              project's forge, the gate stops with an error naming
+              <code>~/.quarterdeck/rules.local.lifecycle.json</code> instead of
+              passing. The old key <code>requireCopilotReview</code> still
+              works: it reads as <code>requireAiReview</code>, with a
+              deprecation warning, and on GitHub the default logins are
+              Copilot's, so it gates exactly as before.
+            </td>
+          </tr>
+          <!-- prettier-ignore -->
+          <tr>
+            <td><code>aiReviewers</code></td>
+            <td><code>{"github":["copilot-pull-request-reviewer","Copilot"],"gitlab":[]}</code></td>
+            <td>
+              The exact bot logins that count as the AI reviewer, per forge. A
+              user account never counts, whatever its login. GitLab has none by
+              default; there the Quarterdeck reviewer agent is the review.
+              Machine-only: the repo layer may not set it.
             </td>
           </tr>
           <tr>

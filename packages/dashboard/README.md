@@ -43,7 +43,7 @@ src/widgets/driver/          the Driver widget: voyage picker, turns, turn detai
 src/widgets/planner/         Planner: the conversation, proposals to approve, edit or reject
 src/widgets/rules/           Rules: edit rules.local.* with validation, a diff and provenance
 src/lib/use-forge-terms.ts   useForgeTerms(project, enabled?): the project's forge terms from forge.read ({ short, long, cli, name }); GitHub's until read
-src/widgets/project/         Project: voyage Start/End/Kill, pause, Copilot and auto-merge (machine lifecycle layer), reviewer, retired count, Refresh agents, archive
+src/widgets/project/         Project: voyage Start/End/Kill, pause, AI review and auto-merge (machine lifecycle layer), reviewer, retired count, Refresh agents, archive
 src/widgets/usage/           Usage: this project's tokens in the budget window and the share of budget.window.capTokens
 src/widgets/agents/          Agents: state, since, tickets, held work; Pause/Poke/Kill/Retire/Reset
 src/grid/                    the grid: layout JSON, actions, drag, resize, keyboard, tray
@@ -116,7 +116,8 @@ Nothing is kept: a reload starts the demo over.
 - **Validation as you type.** The draft is parsed, merged over the shipped defaults and checked with the same zod schemas and merge code the loader uses (`@quarterdeck/rules/schemas` and `@quarterdeck/rules/merge`). A refusal names the machine file, like the loader's error. The server checks it again on save.
 - **A diff before every write.** _Review changes_ shows the line diff against the file on disk; only _Save_ in that panel sends `rules.write`. _Remove file_ shows what goes and sends `rules.reset`. Both use `scope: "machine"`; the widget never writes the shipped defaults or a repo layer.
 - **Where each value comes from.** The _In effect after saving_ table lists every key with its value and its layer: `defaults`, `machine` or `repo`. Arrays are one value, since a layer replaces them; a Markdown rule is one value from its highest layer.
-- **The repo layer, read-only.** Pick a project and its `<repo>/.quarterdeck/rules.local.<file>` is shown, read-only, and applied on top. The widget says plainly that the repo layer can only tighten permissions (decided on their own, `deny` or `ask` only), `mergeGate` (a flag can only turn a gate on) and `autoEndSettleSeconds` (only lengthened); those keys carry a `tighten-only` tag, and a repo value that tightened nothing is not credited to the repo.
+- **The repo layer, read-only.** Pick a project and its `<repo>/.quarterdeck/rules.local.<file>` is shown, read-only, and applied on top. The widget says plainly that the repo layer can only tighten permissions (decided on their own, `deny` or `ask` only), `mergeGate` (a flag can only turn a gate on, and `base` and `aiReviewers` are machine-only) and `autoEndSettleSeconds` (only lengthened); those keys carry a `tighten-only` tag, and a repo value that tightened nothing is not credited to the repo.
+- **Deprecated keys.** A layer that still sets `mergeGate.requireCopilotReview` is read as `mergeGate.requireAiReview`, as the loader does, and the widget lists it under _Deprecated keys_ naming the file. The project widget's AI review toggle renames the old key when it writes the machine layer.
 
 ## The Board widget
 

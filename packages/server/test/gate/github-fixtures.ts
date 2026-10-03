@@ -26,6 +26,8 @@ export const COPILOT: Who = {
 
 export const user = (login: string): Who => ({ login, __typename: 'User' });
 
+export const bot = (login: string): Who => ({ login, __typename: 'Bot' });
+
 const login = (author: Who | null) => ({ author });
 
 const defaultBranchOf = (shape: GithubShape) => {

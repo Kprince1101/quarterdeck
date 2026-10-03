@@ -1,4 +1,10 @@
-import type { ForgeTerms, MergeGate } from '@quarterdeck/rules';
+import {
+  aiReviewersOf,
+  forgeTerms,
+  type Forge,
+  type ForgeTerms,
+  type MergeGate,
+} from '@quarterdeck/rules';
 import type { MergeCardState, TicketFacts } from './facts.js';
 import type { PullRequest, PullRequestRef, RepositoryRef } from './forge.js';
 import { repositoryName, sameRepository } from './repository.js';
@@ -33,7 +39,6 @@ export interface WaitingReasons {
   draft: string;
   checks: string;
   mergeable: string;
-  botReview: string;
 }
 
 export const waitingReasons = (terms: ForgeTerms): WaitingReasons => ({
@@ -43,8 +48,15 @@ export const waitingReasons = (terms: ForgeTerms): WaitingReasons => ({
   draft: `waiting: the ${terms.long} is a draft`,
   checks: 'waiting for checks to finish',
   mergeable: `waiting for ${terms.name} to work out whether it merges cleanly`,
-  botReview: 'waiting for a Copilot review',
 });
+
+const orList = (names: readonly string[]): string => {
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} or ${names.at(-1) ?? ''}`;
+};
+
+export const aiReviewWaiting = (bots: readonly string[]): string =>
+  `waiting for an AI review from ${orList(bots)}`;
 
 const approvalOf = (
   facts: TicketFacts,
@@ -96,6 +108,7 @@ export const reviewStep = (
 interface MergeContext {
   rules: MergeGate;
   project: RepositoryRef;
+  forge: Forge;
   terms: ForgeTerms;
   waiting: WaitingReasons;
 }
@@ -118,17 +131,20 @@ const checksStep = (
   return undefined;
 };
 
-const botReviewStep = (
+const aiReviewStep = (
   pr: PullRequest,
   ctx: MergeContext,
 ): MergeStep | undefined => {
-  if (pr.botReview.openThreads > 0)
+  const bots = aiReviewersOf(ctx.rules, ctx.forge);
+  const isAiReviewer = (login: string): boolean => bots.includes(login);
+  const open = pr.botReview.openThreads.filter(isAiReviewer);
+  if (open.length > 0)
     return {
       kind: 'bounce',
-      reason: `${pr.botReview.openThreads} Copilot review thread(s) are unresolved; answer and resolve each, then report again`,
+      reason: `${open.length} AI review thread(s) from ${orList([...new Set(open)])} are unresolved on the ${ctx.terms.long}; answer and resolve each, then report again`,
     };
-  if (!pr.botReview.reviewed)
-    return { kind: 'wait', reason: ctx.waiting.botReview };
+  if (!pr.botReview.reviewers.some(isAiReviewer))
+    return { kind: 'wait', reason: aiReviewWaiting(bots) };
   return undefined;
 };
 
@@ -148,7 +164,7 @@ const readinessStep = (
     };
   if (pr.mergeable === 'unknown')
     return { kind: 'wait', reason: ctx.waiting.mergeable };
-  if (ctx.rules.requireCopilotReview) return botReviewStep(pr, ctx);
+  if (ctx.rules.requireAiReview) return aiReviewStep(pr, ctx);
   return undefined;
 };
 
@@ -228,9 +244,11 @@ export const mergeStep = (
   card: MergeCardState,
   rules: MergeGate,
   project: RepositoryRef,
-  terms: ForgeTerms,
+  forge: Forge,
 ): MergeStep => {
-  const ctx = { rules, project, terms, waiting: waitingReasons(terms) };
+  const terms = forgeTerms(forge);
+  const waiting = waitingReasons(terms);
+  const ctx = { rules, project, forge, terms, waiting };
   const settled = settledStep(approval, pr, ctx);
   if (settled) return settled;
   if (card === 'held') return { kind: 'wait', reason: ctx.waiting.held };

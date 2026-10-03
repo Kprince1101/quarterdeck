@@ -4,7 +4,13 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { FORGES, forgeTerms, type MergeGate } from '@quarterdeck/rules';
+import {
+  AiReviewConfigError,
+  FORGES,
+  forgeTerms,
+  type Forge,
+  type MergeGate,
+} from '@quarterdeck/rules';
 import {
   afterAll,
   afterEach,
@@ -19,6 +25,7 @@ import type { Store } from '../../src/store/index.js';
 import {
   GATE_EVENTS,
   MERGE_CARD,
+  aiReviewWaiting,
   repositoryName,
   reviewPrompt,
   startReviewGate,
@@ -48,11 +55,29 @@ const HEAD = '0123456789abcdef0123456789abcdef01234567';
 const NEXT = 'fedcba9876543210fedcba9876543210fedcba98';
 const HOUR = 3_600_000;
 
+const COPILOT = ['copilot-pull-request-reviewer', 'Copilot'];
+
 const RULES: MergeGate = {
   requireReviewerApproval: true,
   requireChecksPassing: true,
-  requireCopilotReview: false,
+  requireAiReview: false,
+  aiReviewers: { github: COPILOT, gitlab: [] },
   autoMerge: true,
+};
+
+const AI_REVIEWERS: MergeGate['aiReviewers'] = {
+  github: COPILOT,
+  gitlab: ['review-bot'],
+};
+
+const AI_REVIEW: Partial<MergeGate> = {
+  requireAiReview: true,
+  aiReviewers: AI_REVIEWERS,
+};
+
+const AI_BOT: Record<Forge, string> = {
+  github: 'Copilot',
+  gitlab: 'review-bot',
 };
 
 const readyOn = (kase: ForgeCase): PullRequest => ({
@@ -64,7 +89,7 @@ const readyOn = (kase: ForgeCase): PullRequest => ({
   draft: false,
   mergeable: 'mergeable',
   checks: { state: 'passing', failing: [] },
-  botReview: { reviewed: false, openThreads: 0 },
+  botReview: { reviewers: [], openThreads: [] },
 });
 
 interface FakeForge extends ForgeHost {
@@ -491,30 +516,74 @@ describe.each(FORGES)('review gate on %s', (forge) => {
     expect(await status(ticketId)).toBe('bounced');
   });
 
-  it('gates on Copilot when asked: waits for it, bounces open threads', async () => {
+  it(`gates on the AI review when asked: waits for ${AI_BOT[forge]}, bounces its open thread`, async () => {
     const ticketId = await approvedTicket();
-    const gate = await start({ requireCopilotReview: true });
+    const gate = await start(AI_REVIEW);
 
     await gate.evaluate(ticketId);
     expect((await gateEvents(GATE_EVENTS.waiting))[0]?.payload).toMatchObject({
-      reason: WAITING.botReview,
+      reason: aiReviewWaiting(AI_REVIEWERS[forge]),
     });
 
-    host.pr = { ...ready(), botReview: { reviewed: true, openThreads: 1 } };
+    host.pr = {
+      ...ready(),
+      botReview: { reviewers: [AI_BOT[forge]], openThreads: [AI_BOT[forge]] },
+    };
     await gate.evaluate(ticketId);
 
     expect(host.merges).toEqual([]);
     expect(await status(ticketId)).toBe('bounced');
+    expect((await gateEvents(GATE_EVENTS.bounced))[0]?.payload).toMatchObject({
+      reason: `1 AI review thread(s) from ${AI_BOT[forge]} are unresolved on the ${terms.long}; answer and resolve each, then report again`,
+    });
   });
 
-  it('merges once Copilot has reviewed and its threads are resolved', async () => {
-    host.pr = { ...ready(), botReview: { reviewed: true, openThreads: 0 } };
+  it('merges once the AI reviewer has reviewed and its threads are resolved', async () => {
+    host.pr = {
+      ...ready(),
+      botReview: { reviewers: [AI_BOT[forge]], openThreads: [] },
+    };
     const ticketId = await approvedTicket();
-    const gate = await start({ requireCopilotReview: true });
+    const gate = await start(AI_REVIEW);
 
     await gate.evaluate(ticketId);
 
     expect(host.merges).toEqual([{ url: PR, head: HEAD }]);
+  });
+
+  it('counts only the configured logins as the AI review', async () => {
+    host.pr = {
+      ...ready(),
+      botReview: { reviewers: ['okapi'], openThreads: ['okapi'] },
+    };
+    const ticketId = await approvedTicket();
+    const gate = await start(AI_REVIEW);
+
+    await gate.evaluate(ticketId);
+
+    expect(host.merges).toEqual([]);
+    expect(await status(ticketId)).toBe('in_review');
+    expect((await gateEvents(GATE_EVENTS.waiting))[0]?.payload).toMatchObject({
+      reason: aiReviewWaiting(AI_REVIEWERS[forge]),
+    });
+  });
+
+  it('fails with the config error when the forge has no AI reviewer logins', async () => {
+    const ticketId = await approvedTicket();
+    const gate = await start({
+      requireAiReview: true,
+      aiReviewers: { github: [], gitlab: [] },
+    });
+
+    await expect(gate.evaluate(ticketId)).rejects.toThrow(
+      `~/.quarterdeck/rules.local.lifecycle.json: mergeGate.requireAiReview is on, but mergeGate.aiReviewers.${forge} lists no ${terms.name} bot logins`,
+    );
+    expect(host.merges).toEqual([]);
+    expect(await status(ticketId)).toBe('in_review');
+    expect(errors).toEqual([
+      expect.objectContaining({ cause: expect.any(AiReviewConfigError) }),
+    ]);
+    errors.length = 0;
   });
 
   it('a report after the approval withdraws it and asks for a new review', async () => {
