@@ -8,7 +8,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 import type { McpServer } from '@agentclientprotocol/sdk';
 import { RulesError } from '@quarterdeck/rules';
 import {
@@ -371,6 +371,50 @@ describe('kiro base agents', () => {
 
         expect(error).toBeInstanceOf(KiroConfigError);
         expect(String(error)).toContain('outside');
+      });
+
+      it('refuses a glob through an in-repo folder link to an outside link', async () => {
+        const outside = join(box.root, 'outside');
+        await mkdir(outside, { recursive: true });
+        await writeFile(join(outside, 'secret.md'), 'example-secret');
+        const docs = join(box.repo, 'docs');
+        await mkdir(docs, { recursive: true });
+        await symlink(join(outside, 'secret.md'), join(docs, 'private.md'));
+        const steering = join(box.repo, '.kiro', 'steering');
+        await mkdir(steering, { recursive: true });
+        await symlink(docs, join(steering, 'alias'));
+        await symlink(steering, join(docs, 'back'));
+        await writeJson(
+          join(box.repo, '.kiro', 'agents', 'library-builder.json'),
+          { resources: ['file://../steering/*/private.md'] },
+        );
+        await kiroRule(box.repo, {
+          baseAgents: { builder: 'library-builder' },
+        });
+
+        const error = await connectError('builder');
+
+        expect(error).toBeInstanceOf(KiroConfigError);
+        expect(String(error)).toContain(`${sep}private.md, a link outside`);
+      });
+
+      it('forwards the path it checked, not one that .. can walk out of', async () => {
+        const outside = join(box.root, 'outside');
+        await mkdir(join(outside, 'sub'), { recursive: true });
+        await writeFile(join(outside, 'secret.md'), 'example-secret');
+        await writeFile(join(box.repo, 'secret.md'), 'harmless');
+        await symlink(join(outside, 'sub'), join(box.repo, 'link'));
+        await writeJson(
+          join(box.repo, '.kiro', 'agents', 'library-builder.json'),
+          { resources: [`file://${box.repo}/link/../secret.md`] },
+        );
+        await kiroRule(box.repo, {
+          baseAgents: { builder: 'library-builder' },
+        });
+
+        expect(JSON.parse(await writtenConfig('builder'))).toMatchObject({
+          resources: [`file://${join(box.repo, 'secret.md')}`],
+        });
       });
     },
   );

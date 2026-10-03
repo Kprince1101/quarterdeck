@@ -159,13 +159,20 @@ const realpathIfAny = (path: string): Promise<string | undefined> =>
 const linkOutside = async (
   dir: string,
   repo: string,
+  visited: Set<string> = new Set(),
 ): Promise<string | undefined> => {
+  if (visited.has(dir)) return undefined;
+  visited.add(dir);
   const entries = await readdir(dir, { withFileTypes: true, recursive: true });
   for (const entry of entries) {
     if (!entry.isSymbolicLink()) continue;
     const link = join(entry.parentPath, entry.name);
     const target = await realpathIfAny(link);
-    if (target !== undefined && !isInside(repo, target)) return link;
+    if (target === undefined) continue;
+    if (!isInside(repo, target)) return link;
+    if (!(await stat(target)).isDirectory()) continue;
+    const beyond = await linkOutside(target, repo, visited);
+    if (beyond !== undefined) return beyond;
   }
   return undefined;
 };
@@ -191,14 +198,16 @@ const assertResourceInRepo = async (
 const resolveUriIn = async (uri: string, scope: BaseScope): Promise<string> => {
   const scheme = uriScheme(uri);
   if (scheme === undefined) return uri;
+  const target = uriTarget(uri, scheme, scope);
   try {
-    await assertResourceInRepo(scope, uriTarget(uri, scheme, scope));
+    await assertResourceInRepo(scope, target);
   } catch (err) {
     if (err instanceof KiroConfigError) throw err;
     throw new KiroConfigError(
       `${scope.path} names resource ${uri}, which Quarterdeck cannot check: ${getErrorMessage(err)}`,
     );
   }
+  if (scope.repoDir !== undefined) return `${scheme}${target}`;
   return resolveUri(uri, dirname(scope.path));
 };
 
