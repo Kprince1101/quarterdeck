@@ -190,8 +190,14 @@ const assertResourceInRepo = async (
 
 const resolveUriIn = async (uri: string, scope: BaseScope): Promise<string> => {
   const scheme = uriScheme(uri);
-  if (scheme !== undefined) {
+  if (scheme === undefined) return uri;
+  try {
     await assertResourceInRepo(scope, uriTarget(uri, scheme, scope));
+  } catch (err) {
+    if (err instanceof KiroConfigError) throw err;
+    throw new KiroConfigError(
+      `${scope.path} names resource ${uri}, which Quarterdeck cannot check: ${getErrorMessage(err)}`,
+    );
   }
   return resolveUri(uri, dirname(scope.path));
 };
@@ -249,11 +255,18 @@ const readPrompt = async (
   if (!prompt.startsWith(FILE_SCHEME)) return prompt;
   const file = uriTarget(prompt, FILE_SCHEME, scope);
   await assertPromptInRepo(scope, file);
+  let text: string;
   try {
-    return await readFile(file, 'utf8');
+    text = await readFile(file, 'utf8');
   } catch (err) {
     throw unreadablePrompt(scope, file, err);
   }
+  if (scope.repoDir !== undefined && text.trimStart().startsWith(FILE_SCHEME)) {
+    throw new KiroConfigError(
+      `${scope.path} names prompt ${file}, which is itself a file:// reference. A base agent in the repo may only use prompt text.`,
+    );
+  }
+  return text;
 };
 
 const unlessDropped = <K extends DroppedField>(
@@ -374,6 +387,24 @@ const baseScope = (
   return { path, home, repoDir: resolve(repoDir) };
 };
 
+const assertBaseFileInRepo = async (scope: BaseScope): Promise<void> => {
+  if (scope.repoDir === undefined) return;
+  let real: string;
+  let repo: string;
+  try {
+    real = await realpath(scope.path);
+    repo = await realpath(scope.repoDir);
+  } catch (err) {
+    throw new KiroConfigError(
+      `${scope.path} could not be read: ${getErrorMessage(err)}`,
+    );
+  }
+  if (isInside(repo, real)) return;
+  throw new KiroConfigError(
+    `${scope.path} links outside ${repo}. A base agent in the repo must be a file in the repo.`,
+  );
+};
+
 const scopeSource = (scope: BaseScope): KiroBaseSource => {
   if (scope.repoDir === undefined) return 'machine';
   return 'workspace';
@@ -392,8 +423,9 @@ export const loadKiroBaseAgent = async (
     );
   }
   const path = await findBaseFile(role, paths);
-  const file = parseBaseFile(path, await readBaseFile(path));
   const scope = baseScope(role, name, path, options.rules);
+  await assertBaseFileInRepo(scope);
+  const file = parseBaseFile(path, await readBaseFile(path));
   const source = scopeSource(scope);
   const dropped = droppedFields(role, source);
   return {

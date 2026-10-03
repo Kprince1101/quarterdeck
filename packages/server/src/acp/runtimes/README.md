@@ -72,7 +72,7 @@ A repo base may also only point inside the repo. Its `file://` prompt, and every
 - each resource's path up to its first glob segment after following symlinks;
 - when that is a folder, every symlink anywhere under it.
 
-Anything else, such as `file://~/.quarterdeck/api.token`, throws `KiroConfigError` naming the base, and nothing is read.
+Anything else, such as `file://~/.quarterdeck/api.token`, throws `KiroConfigError` naming the base, and nothing is read. The same applies to the base file itself: a `.kiro/agents/<name>.json` that links outside the repo is refused before it is read. A repo prompt file whose text is itself a `file://` reference is refused, because Kiro would follow it. A folder that cannot be inspected is reported as a `KiroConfigError` too.
 
 `quarterdeck doctor` prints the base each role resolves to (`kiro base for builder: everyday (~/.kiro/agents/everyday.json)`), or the error, whenever any role has one. The builder line uses the repo layer of the folder doctor runs in.
 

@@ -1,4 +1,5 @@
 import {
+  chmod,
   mkdir,
   mkdtemp,
   readFile,
@@ -371,6 +372,66 @@ describe('kiro base agents', () => {
         expect(error).toBeInstanceOf(KiroConfigError);
         expect(String(error)).toContain('outside');
       });
+    },
+  );
+
+  it('refuses a repo prompt file that is itself a file:// reference', async () => {
+    const agents = join(box.repo, '.kiro', 'agents');
+    await mkdir(agents, { recursive: true });
+    await writeFile(join(agents, 'prompt.md'), '  file:///etc/hosts\n');
+    await writeJson(join(agents, 'library-builder.json'), {
+      prompt: 'file://./prompt.md',
+    });
+    await kiroRule(box.repo, { baseAgents: { builder: 'library-builder' } });
+
+    const error = await connectError('builder');
+
+    expect(error).toBeInstanceOf(KiroConfigError);
+    expect(String(error)).toContain('file:// reference');
+  });
+
+  it.skipIf(process.platform === 'win32').each([
+    ['valid JSON', JSON.stringify({ model: 'example-secret' })],
+    ['invalid JSON', '{ example-secret'],
+  ])(
+    'never reads a repo base that links outside the repo (%s)',
+    async (_what, text) => {
+      await writeFile(join(box.root, 'private.json'), text);
+      const agents = join(box.repo, '.kiro', 'agents');
+      await mkdir(agents, { recursive: true });
+      await symlink(
+        join(box.root, 'private.json'),
+        join(agents, 'library-builder.json'),
+      );
+      await kiroRule(box.repo, { baseAgents: { builder: 'library-builder' } });
+
+      const error = await connectError('builder');
+
+      expect(error).toBeInstanceOf(KiroConfigError);
+      expect(String(error)).toContain('links outside');
+      expect(String(error)).not.toContain('example-secret');
+    },
+  );
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'reports a resource folder it cannot read as a config error',
+    async () => {
+      const locked = join(box.repo, '.kiro', 'steering', 'locked');
+      await mkdir(locked, { recursive: true });
+      await writeJson(
+        join(box.repo, '.kiro', 'agents', 'library-builder.json'),
+        { resources: ['file://../steering/**/*.md'] },
+      );
+      await kiroRule(box.repo, { baseAgents: { builder: 'library-builder' } });
+      await chmod(locked, 0o000);
+      try {
+        const error = await connectError('builder');
+
+        expect(error).toBeInstanceOf(KiroConfigError);
+        expect(String(error)).toContain('cannot check');
+      } finally {
+        await chmod(locked, 0o755);
+      }
     },
   );
 
