@@ -33,7 +33,6 @@ describe('crew intents are recorded or applied', { timeout: TIMEOUT }, () => {
   it.each([
     ['voyage.start', { goal: 'ship QD6' }],
     ['planner.message', { text: 'split the API ticket' }],
-    ['planner.new', {}],
   ])('%s is stored as a pending intent', async (name, body) => {
     const res = await t.send(name, { project, ...body });
     expect(res).toMatchObject({
@@ -46,6 +45,37 @@ describe('crew intents are recorded or applied', { timeout: TIMEOUT }, () => {
       settled: false,
       events: 1,
     });
+  });
+
+  it('queues planner.new in every project, since the Planner conversation is global', async () => {
+    await t.send('project.create', { project: 'crew2' });
+    const other = await t.store('crew2');
+    const queued = async (s: Store) => {
+      const { rows } = await s.db.query<{ input: unknown; status: string }>(
+        `select input, status from intents
+         where project_id = $1 and kind = 'planner.new'`,
+        [s.projectId],
+      );
+      return rows;
+    };
+
+    const res = await t.send('planner.new', {});
+
+    expect(res).toMatchObject({
+      status: 200,
+      body: {
+        intent: 'planner.new',
+        id: null,
+        result: { projects: ['crew', 'crew2'], failed: [] },
+      },
+    });
+    expect(await queued(store)).toEqual([
+      { input: { project }, status: 'pending' },
+    ]);
+    expect(await queued(other)).toEqual([
+      { input: { project: 'crew2' }, status: 'pending' },
+    ]);
+    expect((await t.send('planner.new', { project })).status).toBe(400);
   });
 
   it('notifies the events channel with the intent kind', async () => {

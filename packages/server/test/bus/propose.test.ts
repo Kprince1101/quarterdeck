@@ -71,7 +71,11 @@ describe('bus propose', () => {
   });
 
   const propose = (client: Client, args: Record<string, unknown>) =>
-    callTool(client, 'propose', { body: FAKE_SPEC_BODY, ...args });
+    callTool(client, 'propose', {
+      project: 'propose',
+      body: FAKE_SPEC_BODY,
+      ...args,
+    });
 
   it('stores a proposed ticket and records who proposed it', async () => {
     const reply = await propose(planner, { title: '  QD5b Planner  ' });
@@ -99,7 +103,7 @@ describe('bus propose', () => {
         kind: 'ticket.proposed',
         agent_id: plannerId,
         ticket_id: ticketId,
-        payload: { title: 'QD5b Planner' },
+        payload: { title: 'QD5b Planner', project: 'propose', ticketId },
       },
     ]);
   });
@@ -170,7 +174,7 @@ describe('bus propose', () => {
     });
     expect(reply.isError).toBe(true);
     expect(reply.text).toContain(
-      'Nothing was proposed: the ticket does not follow the spec format: it has no `## Design` section. Fix the body and propose the ticket again.',
+      'Nothing was proposed: the proposal does not follow the proposal format: it has no `## Design` section. Fix the proposal and propose the ticket again.',
     );
     expect(reply.text).toContain(TICKET_SPEC_FORMAT);
     expect(
@@ -189,10 +193,74 @@ describe('bus propose', () => {
       ticket_id: null,
       payload: {
         title: 'Greeting',
+        project: 'propose',
         problems: ['it has no `## Design` section'],
       },
     });
     expect(events.rows).toHaveLength(2);
+  });
+
+  it('refuses a proposal that names no project or one that is not active', async () => {
+    const unnamed = await propose(planner, { title: 'x', project: '' });
+    expect(unnamed.isError).toBe(true);
+    expect(unnamed.text).toContain(
+      'it names no project; name one of `propose`',
+    );
+    const unknown = await propose(planner, { title: 'x', project: 'sample' });
+    expect(unknown.text).toContain(
+      'it names `sample`, which is not an active project; name one of `propose`',
+    );
+    const { rows } = await store.db.query(
+      'select count(*)::int as n from tickets',
+    );
+    expect(rows).toEqual([{ n: 0 }]);
+  });
+
+  it('stores a proposal in the other open project it names', async () => {
+    const other = await openTestStore('sample');
+    try {
+      const spanning = await connectClient(
+        store,
+        plannerId,
+        undefined,
+        undefined,
+        () => [store, other],
+      );
+      clients.push(spanning);
+      const reply = await propose(spanning, {
+        title: 'Elsewhere',
+        project: 'sample',
+      });
+      expect(reply.isError).toBe(false);
+      const ticketId = proposedId(reply.text);
+      const there = await other.db.query(
+        'select title, status from tickets where id = $1',
+        [ticketId],
+      );
+      expect(there.rows).toEqual([{ title: 'Elsewhere', status: 'proposed' }]);
+      const here = await store.db.query(
+        'select kind, agent_id, ticket_id, payload from events',
+      );
+      expect(here.rows).toEqual([
+        {
+          kind: 'ticket.proposed',
+          agent_id: plannerId,
+          ticket_id: null,
+          payload: { title: 'Elsewhere', project: 'sample', ticketId },
+        },
+      ]);
+      await other.db.query(
+        `update projects set archived_at = now() where id = $1`,
+        [other.projectId],
+      );
+      const archived = await propose(spanning, {
+        title: 'Archived',
+        project: 'sample',
+      });
+      expect(archived.text).toContain('which is not an active project');
+    } finally {
+      await other.close();
+    }
   });
 
   it('rejects a blank title', async () => {

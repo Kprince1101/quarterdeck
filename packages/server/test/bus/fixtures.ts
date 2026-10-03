@@ -103,9 +103,10 @@ export const connectClient = async (
   agentId: string,
   tools?: readonly BusTool[],
   askExpiryMs?: number,
+  openStores?: () => readonly Store[],
 ): Promise<Client> => {
   const server = createBusServer(
-    { store, agentId, askExpiryMs },
+    { store, agentId, askExpiryMs, openStores },
     tools ?? (await loadBusTools()),
   );
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();

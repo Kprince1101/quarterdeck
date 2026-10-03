@@ -8,6 +8,7 @@ import type {
 import { conflict } from '../http-error.js';
 import { findRow, queueInProject } from '../record.js';
 import { PAUSE_HANDLERS } from './pause.js';
+import { PLANNER_HANDLERS } from './planner.js';
 
 type AgentIntentName = Extract<CrewIntentName, `agent.${string}`>;
 type VoyageIntentName = Extract<CrewIntentName, 'voyage.end' | 'voyage.kill'>;
@@ -48,7 +49,10 @@ const requireOpenVoyage =
     }
   };
 
-type QueuedIntentName = Exclude<CrewIntentName, 'pause.all'>;
+type QueuedIntentName = Exclude<
+  CrewIntentName,
+  'pause.all' | 'planner.new' | 'planner.move'
+>;
 
 const queue: IntentHandler<QueuedIntentName> = (ctx, input, name) =>
   queueInProject(ctx, name, input);
@@ -75,6 +79,5 @@ export const CREW_HANDLERS: IntentHandlers<CrewIntentName> = {
   'agent.retire': queueForUnretiredAgent,
   'agent.reset': queueForUnretiredAgent,
   'agent.message': queueForAgent,
-  'planner.message': queue,
-  'planner.new': queue,
+  ...PLANNER_HANDLERS,
 };

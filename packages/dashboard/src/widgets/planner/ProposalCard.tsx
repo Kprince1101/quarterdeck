@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import type { Dependency, Proposal } from './planner-model.js';
+import type { Dependency, ProjectChoice, Proposal } from './planner-model.js';
 import { useProposalCard, type ProposalCardView } from './use-proposal-card.js';
 
 interface ProposalPartProps {
@@ -16,9 +16,11 @@ const ProposalActions = ({ view }: ProposalPartProps) => (
     >
       Approve
     </button>
-    <button type="button" disabled={view.isBusy} onClick={view.handleEdit}>
-      Edit
-    </button>
+    {view.showEdit && (
+      <button type="button" disabled={view.isBusy} onClick={view.handleEdit}>
+        Edit
+      </button>
+    )}
     <button
       type="button"
       className="qd-proposal-reject"
@@ -66,8 +68,26 @@ const SpecFields = ({ view }: ProposalPartProps) =>
     </label>
   ));
 
+const ProjectField = ({ view }: ProposalPartProps) => (
+  <label>
+    <span>Project</span>
+    <select
+      value={view.draft.project}
+      disabled={view.isBusy}
+      onChange={view.handleProjectChange}
+    >
+      {view.projectOptions.map(({ slug, label }) => (
+        <option key={slug} value={slug}>
+          {label}
+        </option>
+      ))}
+    </select>
+  </label>
+);
+
 const ProposalEditor = ({ view }: ProposalPartProps) => (
   <form className="qd-proposal-editor" onSubmit={view.handleSave}>
+    <ProjectField view={view} />
     <label>
       <span>Title</span>
       <input
@@ -111,24 +131,28 @@ const DependencyList = ({ dependencies }: DependencyListProps) => (
 
 export interface ProposalCardProps {
   proposal: Proposal;
-  project: string;
+  home: string;
+  projects: ProjectChoice[];
 }
 
 export const ProposalCard = ({
   proposal,
-  project,
+  home,
+  projects,
 }: ProposalCardProps): JSX.Element => {
-  const view = useProposalCard(proposal, project);
+  const view = useProposalCard(proposal, home, projects);
   return (
     <article
       className="qd-proposal"
       aria-label={`Proposed ticket: ${proposal.title}`}
       aria-busy={view.isBusy}
       data-ticket-id={proposal.ticketId}
+      data-project={proposal.project}
     >
       <header className="qd-proposal-head">
         <h3>{proposal.title}</h3>
-        <span className="qd-proposal-status">{proposal.statusLabel}</span>
+        <span className="qd-proposal-project">{proposal.projectLabel}</span>
+        <span className="qd-proposal-status">{view.statusLabel}</span>
       </header>
       {view.hasBody && <p className="qd-proposal-body">{proposal.body}</p>}
       {view.hasSpec && <ProposalSpec view={view} />}

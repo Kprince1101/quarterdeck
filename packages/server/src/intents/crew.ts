@@ -1,7 +1,25 @@
 import { z } from 'zod';
-import { idSchema, inProject, textSchema } from './fields.js';
+import {
+  idSchema,
+  inProject,
+  optionalTextSchema,
+  projectSlugSchema,
+  textSchema,
+  titleSchema,
+} from './fields.js';
 
 const agentTarget = inProject({ agentId: idSchema });
+
+const proposalMove = inProject({
+  ticketId: idSchema,
+  from: projectSlugSchema,
+  to: projectSlugSchema,
+  title: titleSchema.optional(),
+  body: optionalTextSchema.optional(),
+}).refine(
+  (input) => input.from !== input.to,
+  'planner.move needs two different projects',
+);
 
 export const CREW_INTENTS = {
   'voyage.start': inProject({ goal: textSchema }),
@@ -17,7 +35,8 @@ export const CREW_INTENTS = {
   'agent.reset': agentTarget,
   'agent.message': inProject({ agentId: idSchema, text: textSchema }),
   'planner.message': inProject({ text: textSchema }),
-  'planner.new': inProject({}),
+  'planner.new': z.strictObject({}),
+  'planner.move': proposalMove,
 };
 
 export type CrewIntentName = keyof typeof CREW_INTENTS;

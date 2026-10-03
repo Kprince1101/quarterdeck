@@ -107,7 +107,7 @@ describe('planner brief', () => {
     const brief = plannerBrief(GITLAB);
 
     expect(brief).toContain(
-      '- One ticket is one merge request one builder can finish.',
+      '- One ticket is one merge request one builder can finish, in one project.',
     );
     expect(brief).toContain(
       'Do not edit files, run builds or open merge requests.',
@@ -122,7 +122,9 @@ describe('planner brief', () => {
       ),
     );
     expect(brief).toContain(TASKS_LINE('merge request'));
-    expect(openingPrompt('Charter.', 'Hello', GITLAB)).not.toMatch(PULL_TERMS);
+    expect(openingPrompt('Charter.', [], 'Hello', GITLAB)).not.toMatch(
+      PULL_TERMS,
+    );
   });
 
   it('re-prompts a GitLab Planner in merge request terms', () => {
@@ -139,7 +141,7 @@ describe('planner brief', () => {
     const brief = plannerBrief(GITHUB);
 
     expect(brief).toContain(
-      '- One ticket is one pull request one builder can finish.',
+      '- One ticket is one pull request one builder can finish, in one project.',
     );
     expect(brief).toContain(
       'Do not edit files, run builds or open pull requests.',

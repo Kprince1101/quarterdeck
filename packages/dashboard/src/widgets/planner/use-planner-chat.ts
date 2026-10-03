@@ -34,14 +34,10 @@ export const usePlannerChat = (
   };
 
   const handleNew = (): void => {
-    if (project === null) return;
     void fresh
-      .run(() => intents.planner.new({ project: project.slug }))
+      .run(() => intents.planner.new({}))
       .then((started) => {
-        if (!started) return;
-        setPending((current) =>
-          current.filter(({ projectId }) => projectId !== project.id),
-        );
+        if (started) setPending([]);
       });
   };
 

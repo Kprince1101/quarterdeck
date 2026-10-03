@@ -21,6 +21,7 @@ import {
   type StoreEvent,
 } from '../store/index.js';
 import { decisionsNote, openingPrompt } from './brief.js';
+import { activeProjects, openProjects } from './projects.js';
 import {
   PLANNER_FAILED_EVENT,
   cancelTurn,
@@ -186,12 +187,22 @@ export const startPlanner = async (
     active: Conversation,
     text: string,
   ): Promise<string> => {
+    const stores = [store, ...ctx.openStores()];
     if (active.turns === 0)
-      return openingPrompt(active.charter, text, active.terms);
+      return openingPrompt(
+        active.charter,
+        await activeProjects(stores),
+        text,
+        active.terms,
+      );
     const decided = await decidedProposals(
       store.db,
-      store.projectId,
-      active.agent.id,
+      {
+        projectId: store.projectId,
+        slug: active.slug,
+        agentId: active.agent.id,
+      },
+      await openProjects(stores),
     );
     const fresh = decided.filter(
       ({ ticketId }) => !active.reported.has(ticketId),

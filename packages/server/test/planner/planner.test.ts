@@ -22,9 +22,11 @@ import {
   SIGN_IN_CARD,
   SIGN_IN_EVENTS,
 } from '../../src/signin/index.js';
+import type { Store } from '../../src/store/index.js';
 import {
   FAKE_PROPOSAL_TITLE,
   FAKE_SPEC_BODY,
+  FAKE_UNKNOWN_PROJECT,
   SIGNED_IN_AGAIN_TEXT,
   WAITING_TEXT,
 } from '../acp/fake-agent/index.ts';
@@ -34,6 +36,7 @@ import {
   TIMEOUT,
   createPlannerProject,
   openPlannerProject,
+  otherRepoPath,
   writeMachineRule,
   type PlannerProject,
 } from './fixtures.ts';
@@ -130,6 +133,9 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     expect(reply.stopReason).toBe('end_turn');
     expect(reply.text.startsWith(PLANNER_BRIEF)).toBe(true);
     expect(reply.text).toContain(CHARTER_HEADING);
+    expect(reply.text).toContain(
+      `# Projects\n\n- \`plan\` (plan): ${p.repoDir}`,
+    );
     expect(reply.text.endsWith('# The human\n\nbuild a login page')).toBe(true);
 
     const { rows } = await p.store.db.query(
@@ -150,7 +156,11 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     const bus = await connectClient(p.store, agent?.id ?? '');
     const propose = async (title: string) =>
       (
-        await callTool(bus, 'propose', { title, body: FAKE_SPEC_BODY })
+        await callTool(bus, 'propose', {
+          project: p.project,
+          title,
+          body: FAKE_SPEC_BODY,
+        })
       ).text.replace('proposed ', '');
     const kept = await propose('QD2a store');
     const dropped = await propose('QD2z rewrite');
@@ -169,8 +179,8 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     expect(second?.['text']).toBe(
       [
         '[Quarterdeck] Since your last reply the human decided on your proposals:',
-        `- approved: QD2a store (${kept})`,
-        `- rejected: QD2z rewrite (${dropped})`,
+        `- approved in \`plan\`: QD2a store (${kept})`,
+        `- rejected in \`plan\`: QD2z rewrite (${dropped})`,
         '',
         'what next?',
       ].join('\n'),
@@ -202,7 +212,7 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     return rows;
   };
 
-  const refusal = `- ${FAKE_PROPOSAL_TITLE}: the ticket does not follow the spec format: it has no \`## Design\` section`;
+  const refusal = `- ${FAKE_PROPOSAL_TITLE}: the proposal does not follow the proposal format: it has no \`## Design\` section`;
 
   it('puts a scripted spec proposal on the docket with all four parts', async () => {
     const p = await open({ fake: { crew: true }, cardHuman: allow });
@@ -258,10 +268,11 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     ]);
     expect(events[1]?.payload).toEqual({
       title: FAKE_PROPOSAL_TITLE,
+      project: p.project,
       problems: ['it has no `## Design` section'],
     });
     expect(String(events[2]?.payload['text'])).toContain(
-      'Nothing was proposed: the ticket does not follow the spec format',
+      'Nothing was proposed: the proposal does not follow the proposal format',
     );
     expect(events[3]?.payload).toEqual({
       seq: 1,
@@ -312,15 +323,171 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     expect(p.errors).toEqual([]);
   });
 
+  const docketOf = async (store: Store) => {
+    const { rows } = await store.db.query<{
+      id: string;
+      title: string;
+      status: string;
+    }>(
+      'select id, title, status from tickets where project_id = $1 order by created_at',
+      [store.projectId],
+    );
+    return rows;
+  };
+
+  it('lists every active project and docks one reply’s proposals in each project it names', async () => {
+    const p = await open({
+      fake: { crew: true, plannerSpreads: true },
+      cardHuman: allow,
+      others: ['sample'],
+    });
+    const [sample] = p.others;
+    if (!sample) throw new Error('no sample project');
+    await p.start();
+    await say(p, 'greet readers in both projects');
+
+    const [opening] = await turnPrompts(p);
+    expect(opening?.prompt).toContain(
+      [
+        '# Projects',
+        '',
+        `- \`plan\` (plan): ${p.repoDir}`,
+        `- \`sample\` (sample): ${otherRepoPath('sample')}`,
+      ].join('\n'),
+    );
+    const [here] = await docketOf(p.store);
+    const [there] = await docketOf(sample);
+    expect(here).toMatchObject({
+      title: `${FAKE_PROPOSAL_TITLE} in plan`,
+      status: 'proposed',
+    });
+    expect(there).toMatchObject({
+      title: `${FAKE_PROPOSAL_TITLE} in sample`,
+      status: 'proposed',
+    });
+    expect(await docketOf(p.store)).toHaveLength(1);
+    expect(await docketOf(sample)).toHaveLength(1);
+    const proposed = (await p.events()).filter(
+      (event) => event.kind === 'ticket.proposed',
+    );
+    expect(proposed.map((event) => event.payload)).toEqual([
+      { title: here?.title, project: 'plan', ticketId: here?.id },
+      { title: there?.title, project: 'sample', ticketId: there?.id },
+    ]);
+    expect(await turnPrompts(p)).toHaveLength(1);
+    expect(p.errors).toEqual([]);
+  });
+
+  it('refuses a proposal naming an unknown project with an error and re-prompts once', async () => {
+    const p = await open({
+      fake: { crew: true, plannerNamesUnknown: true },
+      cardHuman: allow,
+      others: ['sample'],
+    });
+    await p.start();
+    await say(p, 'fix the README greeting');
+
+    const problem = `it names \`${FAKE_UNKNOWN_PROJECT}\`, which is not an active project; name one of \`plan\`, \`sample\``;
+    const events = await p.events();
+    expect(events.map((event) => event.kind)).toEqual([
+      'planner.human',
+      'planner.proposal_refused',
+      'planner.reply',
+      'planner.missed',
+      'ticket.proposed',
+      'planner.reply',
+    ]);
+    expect(events[1]?.payload).toEqual({
+      title: FAKE_PROPOSAL_TITLE,
+      project: FAKE_UNKNOWN_PROJECT,
+      problems: [problem],
+    });
+    expect(String(events[2]?.payload['text'])).toContain(
+      `Nothing was proposed: the proposal does not follow the proposal format: ${problem}.`,
+    );
+    expect(events[3]?.payload).toEqual({
+      seq: 1,
+      error: `- ${FAKE_PROPOSAL_TITLE}: the proposal does not follow the proposal format: ${problem}`,
+      reprompt: true,
+    });
+    expect(await docket(p)).toEqual([
+      { title: FAKE_PROPOSAL_TITLE, body: FAKE_SPEC_BODY, status: 'proposed' },
+    ]);
+    expect(await docketOf(p.others[0] ?? p.store)).toEqual([]);
+  });
+
+  it('tells the Planner a proposal moved to another project, then what was decided there', async () => {
+    const p = await open({ others: ['sample'] });
+    const [sample] = p.others;
+    if (!sample) throw new Error('no sample project');
+    await p.start();
+    await say(p, 'plan the store');
+    const [agent] = await p.agents();
+    const bus = await connectClient(
+      p.store,
+      agent?.id ?? '',
+      undefined,
+      undefined,
+      () => [p.store, sample],
+    );
+    const proposed = await callTool(bus, 'propose', {
+      project: 'sample',
+      title: 'QD2a store',
+      body: FAKE_SPEC_BODY,
+    });
+    await bus.close();
+    const old = proposed.text.replace('proposed ', '');
+
+    const moved = await p.send('planner.move', {
+      ticketId: old,
+      from: 'sample',
+      to: 'plan',
+      title: 'QD2a store, here',
+    });
+    expect(moved.status).toBe(200);
+    const result = moved.body['result'] as {
+      ticketId: string;
+      project: string;
+    };
+    expect(result.project).toBe('plan');
+    expect(await docketOf(sample)).toEqual([
+      { id: old, title: 'QD2a store', status: 'rejected' },
+    ]);
+    expect(await docketOf(p.store)).toEqual([
+      { id: result.ticketId, title: 'QD2a store, here', status: 'proposed' },
+    ]);
+    expect(
+      (await p.send('ticket.approve', { ticketId: result.ticketId })).status,
+    ).toBe(200);
+
+    await say(p, 'what next?');
+    const [, second] = await replies(p);
+    expect(second?.['text']).toBe(
+      [
+        '[Quarterdeck] Since your last reply the human decided on your proposals:',
+        `- moved to \`plan\`: QD2a store, here (${old}, now ${result.ticketId})`,
+        `- approved in \`plan\`: QD2a store, here (${result.ticketId})`,
+        '',
+        'what next?',
+      ].join('\n'),
+    );
+    const again = await p.send('planner.move', {
+      ticketId: old,
+      from: 'sample',
+      to: 'plan',
+    });
+    expect(again.status).toBe(409);
+  });
+
   it('starts a new conversation after planner.new, ending the old session and its process', async () => {
     const p = await open();
     await p.start();
     await say(p, 'hello');
     const [first] = await p.agents();
 
-    const cleared = await p.send('planner.new');
+    const cleared = await p.startNew();
     await p.planner().drain();
-    expect(await p.intent(cleared.body.id)).toMatchObject({
+    expect(await p.intent(cleared)).toMatchObject({
       status: 'applied',
     });
     expect((await p.agents())[0]).toMatchObject({
@@ -347,7 +514,7 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     expect(clearedEvent).toEqual({
       kind: 'planner.cleared',
       agentId: first?.id,
-      payload: { reason: 'new', intentId: cleared.body.id },
+      payload: { reason: 'new', intentId: cleared },
     });
   });
 
@@ -371,7 +538,7 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     await p.send('planner.message', { text: 'wait_for_cancel' });
     const draining = p.planner().drain();
     await waiting;
-    await p.send('planner.new');
+    await p.startNew();
     await draining;
     await p.planner().drain();
 
@@ -390,7 +557,7 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     const p = await open();
     const one = await p.send('planner.message', { text: 'one' });
     const two = await p.send('planner.message', { text: 'two' });
-    const cleared = await p.send('planner.new');
+    const cleared = await p.startNew();
     const three = await p.send('planner.message', { text: 'three' });
     await p.start();
     await p.planner().drain();
@@ -401,7 +568,7 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     };
     expect(await p.intent(one.body.id)).toEqual(superseded);
     expect(await p.intent(two.body.id)).toEqual(superseded);
-    expect(await p.intent(cleared.body.id)).toMatchObject({
+    expect(await p.intent(cleared)).toMatchObject({
       status: 'applied',
     });
     expect(await p.intent(three.body.id)).toMatchObject({ status: 'applied' });
@@ -543,7 +710,7 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     const draining = p.planner().drain();
     const card = await signInCard(p);
 
-    await p.send('planner.new');
+    await p.startNew();
     await draining;
     await p.planner().drain();
 
@@ -767,9 +934,9 @@ describe('Planner', { timeout: TIMEOUT }, () => {
       expect(await pauseEvents(p)).toHaveLength(1);
     });
 
-    const cleared = await p.send('planner.new');
+    const cleared = await p.startNew();
     await settle(async () => {
-      expect(await p.intent(cleared.body.id)).toMatchObject({
+      expect(await p.intent(cleared)).toMatchObject({
         status: 'applied',
       });
     });

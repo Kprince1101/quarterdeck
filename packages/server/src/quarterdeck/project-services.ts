@@ -87,6 +87,7 @@ export const startProjectServices = async (
       forge: async () =>
         context.forge?.forge ??
         projectForge(store, { homeDir: context.homeDir }),
+      openStores: context.openStores,
     });
     closers.push(() => bus.close());
     const stream = createStream({

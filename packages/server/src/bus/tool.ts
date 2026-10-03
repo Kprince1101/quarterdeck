@@ -7,6 +7,7 @@ export interface BusContext {
   store: BusStore;
   agentId: string;
   askExpiryMs?: number | undefined;
+  openStores?: (() => readonly BusStore[]) | undefined;
 }
 
 export interface BusCall extends BusContext {

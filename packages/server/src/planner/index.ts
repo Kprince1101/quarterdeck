@@ -12,10 +12,24 @@ export {
   PLANNER_REPLY_EVENT,
 } from './conversation.js';
 export {
+  PROPOSAL_MOVED_EVENT,
+  ProposalMoveError,
+  moveProposal,
+  type MovedProposal,
+  type ProposalMove,
+} from './move.js';
+export {
+  activeProjects,
+  openProjects,
+  type OpenProject,
+  type ProjectStore,
+} from './projects.js';
+export {
   PROVEN_PREFIX,
   SPEC_SECTIONS,
   TICKET_SPEC_FORMAT,
   parseTicketSpec,
+  projectProblems,
   proposalProblems,
   specBody,
   specProblems,

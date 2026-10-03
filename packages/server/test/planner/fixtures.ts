@@ -78,12 +78,14 @@ export interface PlannerAgent {
 export interface PlannerProject {
   project: string;
   store: Store;
+  others: Store[];
   repoDir: string;
   bus: BusHost;
   pause: PauseGate;
   fake: FakeRuntime;
   errors: unknown[];
   send: (name: string, body?: Record<string, unknown>) => Promise<Reply>;
+  startNew: () => Promise<string>;
   start: () => Promise<Planner>;
   planner: () => Planner;
   events: () => Promise<PlannerEvent[]>;
@@ -96,6 +98,7 @@ export interface PlannerProjectOptions {
   repo?: boolean;
   fake?: FakeAgentOptions;
   cardHuman?: CardHuman;
+  others?: readonly string[];
 }
 
 const PLANNER_PROJECT = 'plan';
@@ -118,6 +121,18 @@ const resetPlannerProject = async (
   );
 };
 
+const otherProject = async (t: TestApi, project: string): Promise<Store> => {
+  const created = await t.send('project.create', { project });
+  if (created.status >= 300 && created.status !== 409)
+    throw new Error(`project ${project} was not created`);
+  const store = await t.store(project);
+  await resetPlannerProject(store, otherRepoPath(project));
+  return store;
+};
+
+export const otherRepoPath = (project: string): string =>
+  join(tmpdir(), `qd-plan-${project}`);
+
 export const writeMachineRule = async (
   homeDir: string,
   file: string,
@@ -138,7 +153,11 @@ export const openPlannerProject = async (
   if (options.repo === false) repoPath = null;
   const store = await t.store(project);
   await resetPlannerProject(store, repoPath);
-  const bus = await startBusHost({ store, home: t.homeDir });
+  const others = await Promise.all(
+    (options.others ?? []).map((other) => otherProject(t, other)),
+  );
+  const openStores = (): Store[] => [store, ...others];
+  const bus = await startBusHost({ store, home: t.homeDir, openStores });
   const pause = await startPauseGate({ store, home: t.api.stores.dataHome });
   const fake = fakeRuntime(options.fake);
   const errors: unknown[] = [];
@@ -148,7 +167,7 @@ export const openPlannerProject = async (
     running = await startPlanner({
       store,
       bus,
-      openStores: () => [store],
+      openStores,
       pause,
       adapters: fake.adapters,
       homeDir: t.homeDir,
@@ -195,15 +214,30 @@ export const openPlannerProject = async (
     return row;
   };
 
+  const startNew = async (): Promise<string> => {
+    const reply = await t.send('planner.new', {});
+    if (reply.status !== 200) throw new Error(JSON.stringify(reply.body));
+    const { rows } = await store.db.query<{ id: string }>(
+      `select id from intents where project_id = $1 and kind = 'planner.new'
+       order by created_at desc, id desc limit 1`,
+      [store.projectId],
+    );
+    const [row] = rows;
+    if (!row) throw new Error('planner.new was not recorded');
+    return row.id;
+  };
+
   return {
     project,
     store,
+    others,
     repoDir,
     bus,
     pause,
     fake,
     errors,
     send: (name, body = {}) => t.send(name, { project, ...body }),
+    startNew,
     start,
     planner,
     events,

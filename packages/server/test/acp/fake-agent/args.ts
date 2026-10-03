@@ -15,6 +15,8 @@ export const FAKE_AGENT_FLAGS: Record<FakeAgentFlag, string> = {
   builderAsks: '--builder-asks',
   plannerSkipsDesign: '--planner-skips-design',
   plannerSkipsDesignTwice: '--planner-skips-design-twice',
+  plannerSpreads: '--planner-spreads',
+  plannerNamesUnknown: '--planner-names-unknown',
 };
 
 const FLAG_ENTRIES = Object.entries(FAKE_AGENT_FLAGS) as [

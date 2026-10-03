@@ -12,7 +12,7 @@ import {
   type Agent,
   type AgentLifecycle,
 } from '../agents/index.js';
-import type { StopReason } from '@agentclientprotocol/sdk';
+import type { PromptResponse, StopReason } from '@agentclientprotocol/sdk';
 import { MAX_REPROMPTS } from '../driver/turns.js';
 import { repoForge } from '../gate/index.js';
 import { redactValue } from '../lib/redact.js';
@@ -49,6 +49,8 @@ export const PLANNER_MISSED_EVENT = 'planner.missed';
 
 const STOPPING: ReadonlySet<StopReason> = new Set(['cancelled', 'refusal']);
 
+const CANCELLED_BEFORE_SENDING: PromptResponse = { stopReason: 'cancelled' };
+
 export interface PlannerContext {
   store: Store;
   bus: PlannerBus;
@@ -61,6 +63,7 @@ export interface PlannerContext {
 
 export interface Conversation {
   agent: Agent;
+  slug: string;
   charter: string;
   terms: ForgeTerms;
   host: PlannerSessionHost;
@@ -114,6 +117,7 @@ export const startConversation = async (
   });
   return {
     agent,
+    slug: site.slug,
     charter: forgeWording(charter, terms),
     terms,
     host,
@@ -195,9 +199,9 @@ const sendPrompt = async (
   ctx: PlannerContext,
   conversation: Conversation,
   intent: PlannerIntent,
-  turn: { turnId: number; prompt: string },
+  turn: { turnId: number; prompt: string; ending: AbortSignal },
 ): Promise<StopReason> => {
-  const { turnId, prompt } = turn;
+  const { turnId, prompt, ending } = turn;
   const session = openSession(conversation);
   const reply = collectReply(session);
   conversation.inTurn = true;
@@ -207,9 +211,10 @@ const sendPrompt = async (
     ctx.signInSignal(),
     () => session.client.agent.authMethods,
   );
-  const response = await withSignIn(gate, 'session/prompt', () =>
-    session.client.prompt(session.sessionId, prompt),
-  )
+  const response = await withSignIn(gate, 'session/prompt', () => {
+    if (ending.aborted) return Promise.resolve(CANCELLED_BEFORE_SENDING);
+    return session.client.prompt(session.sessionId, prompt);
+  })
     .catch(async (err: unknown) => {
       await finishTurn(ctx, conversation, turnId, {
         kind: PLANNER_FAILED_EVENT,
@@ -260,12 +265,12 @@ export const runTurn = async (
     humanOpening(ctx, conversation, intent),
   );
   conversation.turns += 1;
-  let turn = { turnId, prompt };
+  let turn = { turnId, prompt, ending };
   for (let reprompts = 0; ; reprompts += 1) {
     const stopReason = await sendPrompt(ctx, conversation, intent, turn);
     if (STOPPING.has(stopReason) || ending.aborted) return;
     const error = await unfixedRefusals(ctx, conversation, since);
-    if (error === null) return;
+    if (error === null || ending.aborted) return;
     const miss = { error, reprompt: reprompts < MAX_REPROMPTS };
     if (!miss.reprompt) {
       await recordMiss(ctx, conversation, ctx.store.db, miss);
@@ -276,7 +281,7 @@ export const runTurn = async (
       recordMiss(ctx, conversation, tx, miss),
     );
     conversation.turns += 1;
-    turn = { turnId: next.turnId, prompt: text };
+    turn = { turnId: next.turnId, prompt: text, ending };
   }
 };
 
