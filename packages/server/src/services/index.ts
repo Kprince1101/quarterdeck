@@ -11,6 +11,9 @@ export {
   SERVICES_DIRECT,
   SERVICES_HEADING,
   promptServices,
+  servicesLines,
   servicesSection,
+  ticketExternalRef,
   type PromptServices,
+  type PromptServicesOptions,
 } from './section.js';

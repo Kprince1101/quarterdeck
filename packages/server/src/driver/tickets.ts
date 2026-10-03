@@ -20,10 +20,12 @@ export interface BuilderTicket {
   dependsOn: string[];
   prUrl: string | null;
   headSha: string | null;
+  externalRef: string | null;
 }
 
 export const TICKET_COLUMNS = `id, title, body, status, assignee_id as "assigneeId",
-  depends_on as "dependsOn", pr_url as "prUrl", head_sha as "headSha"`;
+  depends_on as "dependsOn", pr_url as "prUrl", head_sha as "headSha",
+  external_ref as "externalRef"`;
 
 export const findTicket = async (
   db: Queryable,

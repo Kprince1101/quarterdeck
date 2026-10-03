@@ -129,6 +129,7 @@ describe('builder assignment and continue', () => {
       repoPath: repo,
       base,
       terms: forgeTerms('github'),
+      services: { forge: { forge: 'github', host: null }, tracker: null },
       worktreesDir: join(root, 'worktrees'),
       turnsDir: join(root, 'turns'),
       budget: NO_CAP,

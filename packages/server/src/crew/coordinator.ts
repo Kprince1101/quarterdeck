@@ -13,7 +13,7 @@ import { startCrewIntents, type CrewIntents } from './intents.js';
 import { createReviewerDesk } from './reviewer.js';
 import { machineRules } from './rules.js';
 import { birthSeated, type SeatSite } from './seats.js';
-import type { CrewProject } from './voyage-legs.js';
+import { ticketServices, type CrewProject } from './voyage-legs.js';
 import { startCrewVoyages, type CrewVoyages } from './voyages.js';
 
 export interface CoordinatorOptions {
@@ -78,6 +78,12 @@ export const startCoordinator = (options: CoordinatorOptions): Coordinator => {
     turnsDir: (project) => projectTurnsDir(project, options.home),
     brief: (project) =>
       (joined.get(project)?.crew.rules ?? rules).load('reviewer'),
+    services: async (project, ticketId) => {
+      const crew = joined.get(project)?.crew;
+      if (crew === undefined)
+        throw new Error(`project ${project} is not in the crew`);
+      return ticketServices(crew, ticketId);
+    },
     report: (targets) => reportToEach(targets, 'reviewer', log),
     birth: async (sites) => {
       const [models, naming, lifecycle] = await Promise.all([

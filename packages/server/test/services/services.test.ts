@@ -82,7 +82,8 @@ describe('servicesSection', () => {
       servicesSection({ forge: github, tracker: MCP_TRACKER }, 'EX-42'),
     ).toBe(
       [
-        '## Services',
+        '# Services',
+        '',
         '- Forge: GitHub at github.com. Use the `gh` CLI for pull requests, reviews and checks.',
         '- Tracker: tracker-mcp, reached through the `tracker-mcp` MCP server. Notes: tickets are stories in the Example board',
         '- This ticket in the tracker: EX-42',

@@ -1,5 +1,6 @@
 import type { ForgeTerms } from '@quarterdeck/rules';
 import type { Agent } from '../agents/index.js';
+import { servicesLines, type PromptServices } from '../services/index.js';
 import type { Queryable, Store } from '../store/index.js';
 
 export interface NotebookEntry {
@@ -36,6 +37,7 @@ export interface ProjectBrief {
   terms: ForgeTerms;
   waiting: readonly BriefTicket[];
   builders: readonly BriefBuilder[];
+  services: PromptServices;
 }
 
 export interface BirthInputParts {
@@ -142,6 +144,8 @@ const projectSection = (brief: ProjectBrief): string =>
     ),
     'Builders:',
     listOr(brief.builders.map(builderLine), 'None.'),
+    'Services:',
+    servicesLines(brief.services),
   ].join('\n\n');
 
 const projectsSection = (projects: readonly ProjectBrief[]): string[] => {

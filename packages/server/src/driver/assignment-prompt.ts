@@ -1,14 +1,19 @@
 import type { ForgeTerms } from '@quarterdeck/rules';
 import type { Agent } from '../agents/index.js';
+import { servicesSection, type PromptServices } from '../services/index.js';
 import type { BuilderTicket } from './tickets.js';
 
 export interface AssignmentPromptParts {
   builder: Pick<Agent, 'name'>;
-  ticket: Pick<BuilderTicket, 'id' | 'title' | 'body' | 'prUrl' | 'headSha'>;
+  ticket: Pick<
+    BuilderTicket,
+    'id' | 'title' | 'body' | 'prUrl' | 'headSha' | 'externalRef'
+  >;
   worktreePath: string;
   repoPath: string;
   base: string;
   terms: ForgeTerms;
+  services: PromptServices;
 }
 
 const SPEC_INSTRUCTION =
@@ -32,6 +37,7 @@ export const buildAssignmentPrompt = (parts: AssignmentPromptParts): string =>
     '# Where to work',
     `Work in ${parts.worktreePath}, your git worktree of ${parts.repoPath}, detached at ${parts.base}. Create a branch there, commit, push and open a ${parts.terms.long}. Never touch ${parts.repoPath} itself.`,
     ...openPullRequest(parts),
+    servicesSection(parts.services, parts.ticket.externalRef),
     '# When you are done',
     `Call the bus tool \`report\` with ticket \`${parts.ticket.id}\`, the ${parts.terms.long} URL, its head commit and what you tested. If you need a decision only a person can make, call \`ask\`. Use \`status\` for a one-line progress note.`,
   ].join('\n\n');

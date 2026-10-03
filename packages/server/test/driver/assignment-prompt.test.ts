@@ -14,11 +14,16 @@ describe('buildAssignmentPrompt', () => {
           body: FAKE_SPEC_BODY,
           prUrl: null,
           headSha: null,
+          externalRef: 'EX-9',
         },
         worktreePath: '/work/crane',
         repoPath: '/repo',
         base: 'origin/main',
         terms: forgeTerms('github'),
+        services: {
+          forge: { forge: 'github', host: 'github.com' },
+          tracker: { kind: 'tracker-cli', how: 'cli', command: 'tracker' },
+        },
       }),
     ).toMatchInlineSnapshot(`
       "You are crane, a builder on this project.
@@ -46,6 +51,13 @@ describe('buildAssignmentPrompt', () => {
       # Where to work
 
       Work in /work/crane, your git worktree of /repo, detached at origin/main. Create a branch there, commit, push and open a pull request. Never touch /repo itself.
+
+      # Services
+
+      - Forge: GitHub at github.com. Use the \`gh\` CLI for pull requests, reviews and checks.
+      - Tracker: tracker-cli, reached with the \`tracker\` CLI.
+      - This ticket in the tracker: EX-9
+      Use these tools yourself. Quarterdeck never calls the tracker for you.
 
       # When you are done
 

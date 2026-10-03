@@ -255,6 +255,7 @@ const handOver = async (
     repoPath: ctx.repoPath,
     base: ctx.base,
     terms: ctx.terms,
+    services: ctx.services,
   });
   return {
     ticket: recorded.ticket,

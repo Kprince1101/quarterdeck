@@ -9,6 +9,7 @@ import {
 } from '@quarterdeck/rules';
 import { projectForge, runGit, type GitRunner } from '../gate/index.js';
 import { projectSite } from '../planner/rows.js';
+import { promptServices, type PromptServices } from '../services/index.js';
 import type { Store } from '../store/index.js';
 
 export const DEFAULT_BASE = 'origin/main';
@@ -27,6 +28,7 @@ export interface CrewRules {
   load: <K extends RuleName>(name: K) => Promise<Rules[K]>;
   repoPath: () => Promise<string>;
   forge: () => Promise<Forge>;
+  services: () => Promise<PromptServices>;
 }
 
 const WORDED_RULES: ReadonlySet<RuleName> = new Set(['charter', 'reviewer']);
@@ -56,6 +58,7 @@ export const crewRules = (
   return {
     load,
     forge,
+    services: () => promptServices(store, { homeDir, forge: forgeOf }),
     repoPath: async () => {
       const repoPath = await optionalRepoPath();
       if (repoPath === null) throw new NoRepoPathError();
