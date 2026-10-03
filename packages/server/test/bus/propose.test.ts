@@ -1,6 +1,11 @@
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { TICKET_SPEC_FORMAT } from '../../src/planner/index.js';
 import type { Store } from '../../src/store/index.js';
+import {
+  FAKE_BODY_WITHOUT_DESIGN,
+  FAKE_SPEC_BODY,
+} from '../acp/fake-agent/index.ts';
 import {
   TIMEOUT,
   callTool,
@@ -65,11 +70,11 @@ describe('bus propose', () => {
     await store.db.exec('delete from events; delete from tickets');
   });
 
+  const propose = (client: Client, args: Record<string, unknown>) =>
+    callTool(client, 'propose', { body: FAKE_SPEC_BODY, ...args });
+
   it('stores a proposed ticket and records who proposed it', async () => {
-    const reply = await callTool(planner, 'propose', {
-      title: '  QD5b Planner  ',
-      body: 'Conversation per project.',
-    });
+    const reply = await propose(planner, { title: '  QD5b Planner  ' });
     expect(reply.isError).toBe(false);
     const ticketId = proposedId(reply.text);
     const { rows } = await store.db.query(
@@ -80,7 +85,7 @@ describe('bus propose', () => {
     expect(rows).toEqual([
       {
         title: 'QD5b Planner',
-        body: 'Conversation per project.',
+        body: FAKE_SPEC_BODY,
         status: 'proposed',
         depends_on: [],
         source: 'local',
@@ -100,17 +105,10 @@ describe('bus propose', () => {
   });
 
   it('lets a proposal depend on other proposals and open tickets', async () => {
-    const first = proposedId(
-      (await callTool(planner, 'propose', { title: 'store' })).text,
-    );
+    const first = proposedId((await propose(planner, { title: 'store' })).text);
     const open = await insertTicket('open');
     const second = proposedId(
-      (
-        await callTool(planner, 'propose', {
-          title: 'api',
-          dependsOn: [first, open],
-        })
-      ).text,
+      (await propose(planner, { title: 'api', dependsOn: [first, open] })).text,
     );
     const { rows } = await store.db.query(
       'select depends_on from tickets where id = $1',
@@ -122,14 +120,14 @@ describe('bus propose', () => {
   it('refuses dependencies that do not exist or will never be built', async () => {
     const missing = crypto.randomUUID();
     expect(
-      await callTool(planner, 'propose', { title: 'x', dependsOn: [missing] }),
+      await propose(planner, { title: 'x', dependsOn: [missing] }),
     ).toEqual({
       text: `dependsOn names tickets that do not exist: ${missing}`,
       isError: true,
     });
     const rejected = await insertTicket('rejected');
     expect(
-      await callTool(planner, 'propose', { title: 'x', dependsOn: [rejected] }),
+      await propose(planner, { title: 'x', dependsOn: [rejected] }),
     ).toEqual({
       text: `dependsOn names tickets that will never be built: ${rejected} (rejected)`,
       isError: true,
@@ -144,12 +142,14 @@ describe('bus propose', () => {
     const builder = await connect(
       await insertAgent(store, store.projectId, `okapi-${crypto.randomUUID()}`),
     );
-    expect(await callTool(builder, 'propose', { title: 'x' })).toEqual({
+    const refused = {
       text: 'only the Planner can propose tickets',
       isError: true,
-    });
+    };
+    expect(await propose(builder, { title: 'x' })).toEqual(refused);
+    expect(await callTool(builder, 'propose', { title: 'x' })).toEqual(refused);
     const ended = await connect(await insertPlanner(store, 'ended'));
-    expect(await callTool(ended, 'propose', { title: 'x' })).toEqual({
+    expect(await propose(ended, { title: 'x' })).toEqual({
       text: 'this conversation has ended',
       isError: true,
     });
@@ -157,10 +157,46 @@ describe('bus propose', () => {
       'select count(*)::int as n from tickets',
     );
     expect(rows).toEqual([{ n: 0 }]);
+    const events = await store.db.query(
+      'select count(*)::int as n from events',
+    );
+    expect(events.rows).toEqual([{ n: 0 }]);
+  });
+
+  it('refuses a body that is not a spec, records why and stores nothing', async () => {
+    const reply = await propose(planner, {
+      title: 'Greeting',
+      body: FAKE_BODY_WITHOUT_DESIGN,
+    });
+    expect(reply.isError).toBe(true);
+    expect(reply.text).toContain(
+      'Nothing was proposed: the ticket does not follow the spec format: it has no `## Design` section. Fix the body and propose the ticket again.',
+    );
+    expect(reply.text).toContain(TICKET_SPEC_FORMAT);
+    expect(
+      (await propose(planner, { title: 'Blank', body: '' })).text,
+    ).toContain('it has no `## Requirements` section');
+    const { rows } = await store.db.query(
+      'select count(*)::int as n from tickets',
+    );
+    expect(rows).toEqual([{ n: 0 }]);
+    const events = await store.db.query(
+      'select kind, agent_id, ticket_id, payload from events order by id',
+    );
+    expect(events.rows[0]).toEqual({
+      kind: 'planner.proposal_refused',
+      agent_id: plannerId,
+      ticket_id: null,
+      payload: {
+        title: 'Greeting',
+        problems: ['it has no `## Design` section'],
+      },
+    });
+    expect(events.rows).toHaveLength(2);
   });
 
   it('rejects a blank title', async () => {
-    const reply = await callTool(planner, 'propose', { title: '   ' });
+    const reply = await propose(planner, { title: '   ' });
     expect(reply.isError).toBe(true);
   });
 });

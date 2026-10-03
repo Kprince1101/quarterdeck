@@ -5,10 +5,17 @@ import {
   idSchema,
   titleSchema,
 } from '../../intents/fields.js';
+import {
+  TICKET_SPEC_FORMAT,
+  describeProblems,
+  proposalProblems,
+} from '../../planner/spec.js';
 import { publishEvent, type Queryable } from '../../store/index.js';
-import { BusToolError, defineBusTool } from '../tool.js';
+import { BusToolError, defineBusTool, type BusStore } from '../tool.js';
 
 export const PROPOSED_EVENT = 'ticket.proposed';
+
+export const PROPOSAL_REFUSED_EVENT = 'planner.proposal_refused';
 
 const MAX_DEPENDENCIES = 50;
 
@@ -59,9 +66,29 @@ const assertDependencies = async (
     );
 };
 
+const refuse = async (
+  store: BusStore,
+  agentId: string,
+  title: string,
+  problems: readonly string[],
+): Promise<never> => {
+  await store.db.transaction(async (tx) => {
+    await assertPlanner(tx, store.projectId, agentId);
+    await publishEvent(tx, store.projectId, {
+      kind: PROPOSAL_REFUSED_EVENT,
+      agentId,
+      payload: { title, problems },
+    });
+  });
+  throw new BusToolError(
+    `Nothing was proposed: ${describeProblems(problems)}. Fix the body and propose the ticket again.\n\n${TICKET_SPEC_FORMAT}`,
+  );
+};
+
 export default defineBusTool({
   description: [
-    'Planner only. Propose one ticket: a title, a body saying what to build and how it is tested, and the ids of tickets it depends on.',
+    'Planner only. Propose one ticket: a title, a body written as a spec (## Requirements, ## Design, ## Tasks, then a final `Proven:` line), and the ids of tickets it depends on.',
+    'A body that does not follow the spec format is refused and nothing is stored.',
     'The ticket is stored as proposed. The human approves, edits or rejects it; only approved tickets reach the Driver.',
     'Returns the new ticket id, which later proposals can name in dependsOn.',
   ].join('\n'),
@@ -74,8 +101,10 @@ export default defineBusTool({
       .refine(hasUniqueValues, 'dependsOn must not repeat a ticket')
       .default([]),
   },
-  run: ({ store, agentId }, { title, body, dependsOn }) =>
-    store.db.transaction(async (tx) => {
+  run: async ({ store, agentId }, { title, body, dependsOn }) => {
+    const problems = proposalProblems({ title, body, dependsOn });
+    if (problems.length > 0) return refuse(store, agentId, title, problems);
+    return store.db.transaction(async (tx) => {
       await assertPlanner(tx, store.projectId, agentId);
       await assertDependencies(tx, store.projectId, dependsOn);
       const { rows } = await tx.query<{ id: string }>(
@@ -93,5 +122,6 @@ export default defineBusTool({
         payload: { title },
       });
       return `proposed ${ticketId}`;
-    }),
+    });
+  },
 });

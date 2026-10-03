@@ -33,6 +33,7 @@ import {
   PROJECTS,
   SHIP,
   SITE,
+  SPEC_BODY,
   cleared,
   human,
   plannerEvent,
@@ -282,6 +283,73 @@ describe('Planner widget', () => {
       'Approve',
       'Edit',
       'Reject',
+    ]);
+  });
+
+  it('shows a spec proposal as its sections with the Proven line last', () => {
+    const { container } = mountPlanner();
+    deliver(
+      snapshot([ticket(SHIP, 'Ship it', { body: SPEC_BODY })]),
+      ...arrive(proposed(1, SHIP, 'Ship it')),
+    );
+    const ship = card(container, SHIP);
+    expect(findAll(ship, '.qd-proposal-body')).toHaveLength(0);
+    expect(
+      findAll(ship, '.qd-proposal-section').map((section) => [
+        section.querySelector('h4')?.textContent,
+        section.querySelector('p')?.textContent,
+      ]),
+    ).toEqual([
+      [
+        'Requirements',
+        '- As a visitor, I want every page shipped.\n  - WHEN the site builds THE SYSTEM SHALL publish every page.',
+      ],
+      ['Design', 'Build with the site generator; touch nothing in the server.'],
+      ['Tasks', '1. Build the pages.\n2. Publish them.'],
+      ['Proven', 'every page loads on the published site.'],
+    ]);
+  });
+
+  it('edits a spec proposal section by section and saves it as one body', async () => {
+    const { container, sent } = mountPlanner();
+    deliver(
+      snapshot([ticket(SHIP, 'Ship it', { body: SPEC_BODY })]),
+      ...arrive(proposed(1, SHIP, 'Ship it')),
+    );
+    await click(button(card(container, SHIP), 'Edit'));
+    const field = (part: string) =>
+      find(
+        card(container, SHIP),
+        `.qd-proposal-editor label[data-part="${part}"] textarea`,
+      );
+    expect(
+      findAll(card(container, SHIP), '.qd-proposal-editor label span').map(
+        ({ textContent }) => textContent,
+      ),
+    ).toEqual(['Title', 'Requirements', 'Design', 'Tasks', 'Proven']);
+    expect(valueOf(field('Design'))).toBe(
+      'Build with the site generator; touch nothing in the server.',
+    );
+    typeInto(field('Design'), 'Use the static exporter.');
+    typeInto(field('proven'), 'the home page loads.');
+    await click(button(card(container, SHIP), 'Save'));
+    await settle();
+    expect(sent).toEqual([
+      {
+        intent: 'ticket.update',
+        body: {
+          project: 'deck',
+          ticketId: SHIP,
+          title: 'Ship it',
+          body: SPEC_BODY.replace(
+            'Build with the site generator; touch nothing in the server.',
+            'Use the static exporter.',
+          ).replace(
+            'every page loads on the published site.',
+            'the home page loads.',
+          ),
+        },
+      },
     ]);
   });
 

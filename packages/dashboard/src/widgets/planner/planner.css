@@ -81,7 +81,8 @@
 }
 
 .qd-planner-message p,
-.qd-proposal-body {
+.qd-proposal-body,
+.qd-proposal-section p {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -130,6 +131,28 @@
 .qd-proposal-head h3 {
   margin: 0;
   font-size: var(--qd-text-md);
+}
+
+.qd-proposal-spec {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qd-space-2);
+}
+
+.qd-proposal-section h4 {
+  margin: 0 0 var(--qd-space-1);
+  color: var(--qd-muted);
+  font-size: var(--qd-text-sm);
+  font-weight: 600;
+}
+
+.qd-proposal-section[data-part='proven'] {
+  padding-top: var(--qd-space-2);
+  border-top: 1px solid var(--qd-line);
+}
+
+.qd-proposal-section[data-part='proven'] h4 {
+  color: var(--qd-ok);
 }
 
 .qd-proposal-status,

@@ -6,12 +6,21 @@ import {
   type Agent,
   type AgentLifecycle,
 } from '../agents/index.js';
+import type { StopReason } from '@agentclientprotocol/sdk';
+import { MAX_REPROMPTS } from '../driver/turns.js';
 import { redactValue } from '../lib/redact.js';
 import { withSignIn } from '../signin/index.js';
-import { publishEvent, type Store } from '../store/index.js';
+import {
+  publishEvent,
+  type Queryable,
+  type Store,
+  type StoreEvent,
+} from '../store/index.js';
+import { refusalsText, repromptText } from './brief.js';
 import { collectReply } from './reply.js';
 import {
   endTurn,
+  refusedProposals,
   setPlannerStatus,
   settleIntent,
   startTurn,
@@ -29,6 +38,9 @@ import {
 export const PLANNER_HUMAN_EVENT = 'planner.human';
 export const PLANNER_REPLY_EVENT = 'planner.reply';
 export const PLANNER_FAILED_EVENT = 'planner.failed';
+export const PLANNER_MISSED_EVENT = 'planner.missed';
+
+const STOPPING: ReadonlySet<StopReason> = new Set(['cancelled', 'refusal']);
 
 export interface PlannerContext {
   store: Store;
@@ -106,24 +118,48 @@ const openSession = (conversation: Conversation): PlannerSession => {
   return session;
 };
 
+interface StartedTurn {
+  turnId: number;
+  since: number;
+}
+
 const beginTurn = (
   ctx: PlannerContext,
   conversation: Conversation,
-  intent: PlannerIntent,
   prompt: string,
-): Promise<number> =>
+  opening: (tx: Queryable, seq: number) => Promise<StoreEvent>,
+): Promise<StartedTurn> =>
   ctx.store.db.transaction(async (tx) => {
     const { agent } = conversation;
     const seq = conversation.turns + 1;
     const turnId = await startTurn(tx, agent.id, seq, prompt);
     await setPlannerStatus(tx, agent.id, 'working');
+    const opened = await opening(tx, seq);
+    return { turnId, since: opened.id };
+  });
+
+const humanOpening =
+  (ctx: PlannerContext, conversation: Conversation, intent: PlannerIntent) =>
+  async (tx: Queryable, seq: number): Promise<StoreEvent> => {
+    const { agent } = conversation;
     await settleIntent(tx, intent.id, 'applied', { agentId: agent.id, seq });
-    await publishEvent(tx, ctx.store.projectId, {
+    return publishEvent(tx, ctx.store.projectId, {
       kind: PLANNER_HUMAN_EVENT,
       agentId: agent.id,
       payload: { intentId: intent.id, seq, text: intent.text },
     });
-    return turnId;
+  };
+
+const recordMiss = (
+  ctx: PlannerContext,
+  conversation: Conversation,
+  db: Queryable,
+  miss: { error: string; reprompt: boolean },
+): Promise<StoreEvent> =>
+  publishEvent(db, ctx.store.projectId, {
+    kind: PLANNER_MISSED_EVENT,
+    agentId: conversation.agent.id,
+    payload: redactValue({ seq: conversation.turns, ...miss }),
   });
 
 const finishTurn = (
@@ -143,15 +179,14 @@ const finishTurn = (
     });
   });
 
-export const runTurn = async (
+const sendPrompt = async (
   ctx: PlannerContext,
   conversation: Conversation,
   intent: PlannerIntent,
-  prompt: string,
-): Promise<void> => {
+  turn: { turnId: number; prompt: string },
+): Promise<StopReason> => {
+  const { turnId, prompt } = turn;
   const session = openSession(conversation);
-  const turnId = await beginTurn(ctx, conversation, intent, prompt);
-  conversation.turns += 1;
   const reply = collectReply(session);
   conversation.inTurn = true;
   const gate = plannerSignInGate(
@@ -180,6 +215,57 @@ export const runTurn = async (
     stopReason: response.stopReason,
     payload: { text: reply.text(), stopReason: response.stopReason },
   });
+  return response.stopReason;
+};
+
+const unfixedRefusals = async (
+  ctx: PlannerContext,
+  conversation: Conversation,
+  since: number,
+): Promise<string | null> => {
+  const refused = await refusedProposals(
+    ctx.store.db,
+    ctx.store.projectId,
+    conversation.agent.id,
+    since,
+  );
+  if (refused.length === 0) return null;
+  return refusalsText(refused);
+};
+
+export const runTurn = async (
+  ctx: PlannerContext,
+  conversation: Conversation,
+  intent: PlannerIntent,
+  prompt: string,
+): Promise<void> => {
+  openSession(conversation);
+  const ending = ctx.signInSignal();
+  const { turnId, since } = await beginTurn(
+    ctx,
+    conversation,
+    prompt,
+    humanOpening(ctx, conversation, intent),
+  );
+  conversation.turns += 1;
+  let turn = { turnId, prompt };
+  for (let reprompts = 0; ; reprompts += 1) {
+    const stopReason = await sendPrompt(ctx, conversation, intent, turn);
+    if (STOPPING.has(stopReason) || ending.aborted) return;
+    const error = await unfixedRefusals(ctx, conversation, since);
+    if (error === null) return;
+    const miss = { error, reprompt: reprompts < MAX_REPROMPTS };
+    if (!miss.reprompt) {
+      await recordMiss(ctx, conversation, ctx.store.db, miss);
+      return;
+    }
+    const text = repromptText(error);
+    const next = await beginTurn(ctx, conversation, text, (tx) =>
+      recordMiss(ctx, conversation, tx, miss),
+    );
+    conversation.turns += 1;
+    turn = { turnId: next.turnId, prompt: text };
+  }
 };
 
 export const cancelTurn = async (conversation: Conversation): Promise<void> => {

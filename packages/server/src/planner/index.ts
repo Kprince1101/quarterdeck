@@ -7,8 +7,21 @@ export {
 export {
   PLANNER_FAILED_EVENT,
   PLANNER_HUMAN_EVENT,
+  PLANNER_MISSED_EVENT,
   PLANNER_REPLY_EVENT,
 } from './conversation.js';
+export {
+  PROVEN_PREFIX,
+  SPEC_SECTIONS,
+  TICKET_SPEC_FORMAT,
+  parseTicketSpec,
+  proposalProblems,
+  specBody,
+  specProblems,
+  type ProposalDraft,
+  type SpecSection,
+  type TicketSpec,
+} from './spec.js';
 export {
   NO_REPO_PATH,
   PLANNER_CLEARED_EVENT,

@@ -1,4 +1,7 @@
-import { PROPOSED_EVENT } from '../bus/tools/propose.js';
+import {
+  PROPOSAL_REFUSED_EVENT,
+  PROPOSED_EVENT,
+} from '../bus/tools/propose.js';
 import { redactSecrets } from '../lib/redact.js';
 import type { Queryable } from '../store/index.js';
 import type { ProposalDecision } from './brief.js';
@@ -113,6 +116,44 @@ export const decidedProposals = async (
     [projectId, agentId, PROPOSED_EVENT],
   );
   return rows;
+};
+
+export interface RefusedProposal {
+  title: string;
+  problems: string[];
+}
+
+interface ProposalOutcome {
+  kind: string;
+  title: string;
+  problems: string[] | null;
+}
+
+export const refusedProposals = async (
+  db: Queryable,
+  projectId: string,
+  agentId: string,
+  afterEventId: number,
+): Promise<RefusedProposal[]> => {
+  const { rows } = await db.query<ProposalOutcome>(
+    `select kind, payload ->> 'title' as title, payload -> 'problems' as problems
+     from events
+     where project_id = $1 and agent_id = $2 and id > $3
+       and kind = any($4::text[])
+     order by id`,
+    [
+      projectId,
+      agentId,
+      afterEventId,
+      [PROPOSED_EVENT, PROPOSAL_REFUSED_EVENT],
+    ],
+  );
+  return rows.flatMap((row, index) => {
+    if (row.kind !== PROPOSAL_REFUSED_EVENT) return [];
+    const later = rows.slice(index + 1);
+    if (later.some(({ title }) => title === row.title)) return [];
+    return [{ title: row.title, problems: row.problems ?? [] }];
+  });
 };
 
 export const startTurn = async (

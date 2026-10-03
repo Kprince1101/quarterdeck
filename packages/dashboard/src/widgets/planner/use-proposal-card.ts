@@ -1,22 +1,49 @@
-import { useState, type ChangeEvent, type FormEvent } from 'react';
+import { specBody, type TicketSpec } from '@quarterdeck/server/ticket-spec';
+import {
+  useState,
+  type ChangeEvent,
+  type Dispatch,
+  type FormEvent,
+  type SetStateAction,
+} from 'react';
 import { useDeck } from '../../deck/DeckProvider.js';
 import { valueOf } from '../../grid/dom.js';
 import { useIntentRequest } from '../use-intent-request.js';
-import type { Proposal } from './planner-model.js';
+import {
+  SPEC_PART_ROWS,
+  specPartViews,
+  specParts,
+  withSpecPart,
+  type Proposal,
+  type SpecPart,
+  type SpecPartView,
+} from './planner-model.js';
 
 export interface ProposalDraft {
   title: string;
   body: string;
+  spec: TicketSpec | null;
+  parts: SpecPart[];
+}
+
+export interface SpecFieldView extends SpecPartView {
+  rows: number;
+  handleChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
 }
 
 export interface ProposalCardView {
   draft: ProposalDraft;
+  specParts: SpecPartView[];
+  specFields: SpecFieldView[];
   isBusy: boolean;
   error: string | null;
   hasError: boolean;
   showActions: boolean;
   showEditor: boolean;
+  showSpecFields: boolean;
+  showBodyField: boolean;
   hasBody: boolean;
+  hasSpec: boolean;
   hasDependencies: boolean;
   isSaveDisabled: boolean;
   handleApprove: () => void;
@@ -28,6 +55,56 @@ export interface ProposalCardView {
   handleBodyChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
 }
 
+const EMPTY_DRAFT: ProposalDraft = {
+  title: '',
+  body: '',
+  spec: null,
+  parts: [],
+};
+
+const partsOf = (spec: TicketSpec | null): SpecPart[] => {
+  if (spec === null) return [];
+  return specParts(spec);
+};
+
+const viewsOf = (spec: TicketSpec | null): SpecPartView[] => {
+  if (spec === null) return [];
+  return specPartViews(spec);
+};
+
+const draftOf = (proposal: Proposal): ProposalDraft => ({
+  title: proposal.title,
+  body: proposal.body,
+  spec: proposal.spec,
+  parts: partsOf(proposal.spec),
+});
+
+const draftBody = (draft: ProposalDraft): string => {
+  if (draft.spec === null) return draft.body;
+  return specBody(draft.spec);
+};
+
+const specFieldsOf = (
+  draft: ProposalDraft,
+  setDraft: Dispatch<SetStateAction<ProposalDraft>>,
+): SpecFieldView[] => {
+  if (draft.spec === null) return [];
+  return specPartViews(draft.spec, draft.parts).map((view) => ({
+    ...view,
+    rows: SPEC_PART_ROWS[view.part],
+    handleChange: ({ currentTarget }) => {
+      const text = valueOf(currentTarget);
+      setDraft((current) => {
+        if (current.spec === null) return current;
+        return {
+          ...current,
+          spec: withSpecPart(current.spec, view.part, text),
+        };
+      });
+    },
+  }));
+};
+
 export const useProposalCard = (
   proposal: Proposal,
   project: string,
@@ -35,7 +112,7 @@ export const useProposalCard = (
   const { intents } = useDeck();
   const request = useIntentRequest();
   const [isEditing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<ProposalDraft>({ title: '', body: '' });
+  const [draft, setDraft] = useState<ProposalDraft>(EMPTY_DRAFT);
   const target = { project, ticketId: proposal.ticketId };
 
   const decide = (work: () => Promise<unknown>): void => {
@@ -44,12 +121,17 @@ export const useProposalCard = (
 
   return {
     draft,
+    specParts: viewsOf(proposal.spec),
+    specFields: specFieldsOf(draft, setDraft),
     isBusy: request.isPending,
     error: request.error,
     hasError: request.error !== null,
     showActions: proposal.isDecidable && !isEditing,
     showEditor: proposal.isDecidable && isEditing,
-    hasBody: proposal.body !== '',
+    showSpecFields: draft.spec !== null,
+    showBodyField: draft.spec === null,
+    hasBody: proposal.spec === null && proposal.body !== '',
+    hasSpec: proposal.spec !== null,
     hasDependencies: proposal.dependsOn.length > 0,
     isSaveDisabled: request.isPending || draft.title.trim() === '',
     handleApprove: () => {
@@ -59,7 +141,7 @@ export const useProposalCard = (
       decide(() => intents.ticket.reject(target));
     },
     handleEdit: () => {
-      setDraft({ title: proposal.title, body: proposal.body });
+      setDraft(draftOf(proposal));
       setEditing(true);
     },
     handleCancel: () => {
@@ -67,8 +149,9 @@ export const useProposalCard = (
     },
     handleSave: (event) => {
       event.preventDefault();
+      const edit = { title: draft.title, body: draftBody(draft) };
       void request
-        .run(() => intents.ticket.update({ ...target, ...draft }))
+        .run(() => intents.ticket.update({ ...target, ...edit }))
         .then((saved) => {
           if (saved) setEditing(false);
         });

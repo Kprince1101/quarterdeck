@@ -9,6 +9,22 @@ export const DOCS = '00000000-0000-4000-8000-0000000000b2';
 export const INTENT_1 = '00000000-0000-4000-8000-0000000000c1';
 export const INTENT_2 = '00000000-0000-4000-8000-0000000000c2';
 
+export const SPEC_BODY = `## Requirements
+
+- As a visitor, I want every page shipped.
+  - WHEN the site builds THE SYSTEM SHALL publish every page.
+
+## Design
+
+Build with the site generator; touch nothing in the server.
+
+## Tasks
+
+1. Build the pages.
+2. Publish them.
+
+Proven: every page loads on the published site.`;
+
 interface EventInit {
   projectId?: string;
   ticketId?: string | null;

@@ -13,6 +13,8 @@ export const FAKE_AGENT_FLAGS: Record<FakeAgentFlag, string> = {
   crew: '--crew',
   crashDriver: '--crash-driver',
   builderAsks: '--builder-asks',
+  plannerSkipsDesign: '--planner-skips-design',
+  plannerSkipsDesignTwice: '--planner-skips-design-twice',
 };
 
 const FLAG_ENTRIES = Object.entries(FAKE_AGENT_FLAGS) as [
