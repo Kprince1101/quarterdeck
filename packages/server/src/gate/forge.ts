@@ -112,3 +112,18 @@ export const projectForge = async (
   store: Pick<Store, 'db' | 'projectId'>,
   options: RepoForgeOptions = {},
 ): Promise<Forge> => repoForge(await projectRepoPath(store), options);
+
+export const mergeForge = async (
+  store: Pick<Store, 'db' | 'projectId'>,
+  options: RepoForgeOptions = {},
+): Promise<Forge> => {
+  const repoPath = await projectRepoPath(store);
+  if (repoPath === null)
+    throw new Error(
+      'the project has no repo_path, so the merge gate cannot tell which forge it is on',
+    );
+  const rules: LoadRulesOptions = { repoDir: repoPath };
+  if (options.homeDir !== undefined) rules.homeDir = options.homeDir;
+  const repository = await originRepository(repoPath, options.run);
+  return repositoryForge(repository, rules);
+};

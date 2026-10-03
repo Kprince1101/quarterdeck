@@ -19,6 +19,7 @@ export {
 export {
   ForgeUnavailableError,
   forgeHost,
+  mergeForge,
   projectForge,
   repoForge,
   repositoryForge,

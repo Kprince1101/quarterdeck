@@ -4,13 +4,24 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { RulesError, UnknownForgeError } from '@quarterdeck/rules';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from 'vitest';
 import {
   ForgeUnavailableError,
   forgeHost,
+  mergeForge,
+  projectForge,
   repoForge,
   repositoryForge,
 } from '../../src/gate/index.js';
+import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
 
 const exec = promisify(execFile);
 
@@ -104,6 +115,63 @@ describe('project forge', () => {
     };
 
     expect(await repositoryForge(repository, { homeDir })).toBe('gitlab');
+  });
+});
+
+describe('merge forge', () => {
+  let store: Store;
+  let root = '';
+  let repo = '';
+
+  beforeAll(async () => {
+    store = await openStore({ project: 'deck', dataDir: IN_MEMORY });
+  });
+
+  afterAll(async () => {
+    await store.close();
+  });
+
+  beforeEach(async () => {
+    root = await mkdtemp(resolve(tmpdir(), 'quarterdeck-merge-forge-'));
+    repo = resolve(root, 'repo');
+    await exec('git', ['init', '-q', repo]);
+    await writeForges(root, { 'git.example.org': 'gitlab' });
+    await store.db.query('update projects set repo_path = $2 where id = $1', [
+      store.projectId,
+      repo,
+    ]);
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it('fails until the origin can be read, then finds the forge', async () => {
+    await expect(mergeForge(store, { homeDir: root })).rejects.toThrow(
+      'remote get-url origin failed',
+    );
+    expect(await projectForge(store, { homeDir: root })).toBe('github');
+
+    await exec('git', [
+      '-C',
+      repo,
+      'remote',
+      'add',
+      'origin',
+      'git@git.example.org:group/subgroup/deck.git',
+    ]);
+
+    expect(await mergeForge(store, { homeDir: root })).toBe('gitlab');
+  });
+
+  it('fails without a repo_path', async () => {
+    await store.db.query('update projects set repo_path = null where id = $1', [
+      store.projectId,
+    ]);
+
+    await expect(mergeForge(store, { homeDir: root })).rejects.toThrow(
+      'the project has no repo_path',
+    );
   });
 });
 

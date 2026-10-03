@@ -4,6 +4,7 @@ import { startArchiveControl } from '../archive/index.js';
 import type { BusHost } from '../bus/index.js';
 import {
   forgeHost,
+  mergeForge,
   startReviewGate,
   type ForgeHost,
   type ReviewGate,
@@ -148,7 +149,10 @@ const startServices = async (parts: CrewParts) => {
     const gateOptions: ReviewGateOptions = {
       store,
       rules: (await rules.load('lifecycle')).mergeGate,
-      forge: options.forge ?? (async () => forgeHost(await rules.forge())),
+      forge:
+        options.forge ??
+        (async () =>
+          forgeHost(await mergeForge(store, { homeDir: options.homeDir }))),
       reviewers,
       onError: report('gate'),
     };
