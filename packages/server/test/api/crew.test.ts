@@ -31,7 +31,7 @@ describe('crew intents are recorded or applied', { timeout: TIMEOUT }, () => {
   });
 
   it.each([
-    ['voyage.start', { goal: 'ship QD6' }],
+    ['project.kill', {}],
     ['planner.message', { text: 'split the API ticket' }],
   ])('%s is stored as a pending intent', async (name, body) => {
     const res = await t.send(name, { project, ...body });
@@ -89,27 +89,23 @@ describe('crew intents are recorded or applied', { timeout: TIMEOUT }, () => {
   });
 
   it.each([
-    ['voyage.end', 1],
-    ['voyage.kill', 2],
-  ])('%s checks the voyage exists and is still open', async (name, number) => {
-    const missing = await t.send(name, {
-      project,
-      voyageId: crypto.randomUUID(),
+    ['voyage.start', { goal: 'ship QD6' }],
+    ['voyage.end', { voyage: 1 }],
+    ['voyage.kill', { voyage: 1 }],
+  ])('%s needs the crew that quarterdeck up runs', async (name, body) => {
+    const res = await t.send(name, body);
+    expect(res).toMatchObject({
+      status: 503,
+      body: { error: 'voyages run under quarterdeck up' },
     });
-    expect(missing.status).toBe(404);
-    const { rows } = await store.db.query<{ id: string; status: string }>(
-      `insert into voyages (project_id, number, status)
-       values ($1, $2, 'ended'), ($1, $3, 'active') returning id, status`,
-      [store.projectId, number * 10, number * 10 + 1],
-    );
-    const [ended, open] = rows;
-    const refused = await t.send(name, { project, voyageId: ended?.id });
-    expect(refused.status).toBe(409);
-    const queued = await t.send(name, { project, voyageId: open?.id });
-    expect(queued).toMatchObject({
-      status: 202,
-      body: { intent: name, status: 'pending' },
-    });
+  });
+
+  it.each([
+    ['voyage.start', { project, goal: 'ship QD6' }],
+    ['voyage.end', { voyage: 0 }],
+    ['voyage.kill', { voyageId: crypto.randomUUID() }],
+  ])('%s takes no project and a voyage number', async (name, body) => {
+    expect((await t.send(name, body)).status).toBe(400);
   });
 
   it.each(['agent.end', 'agent.kill'])(

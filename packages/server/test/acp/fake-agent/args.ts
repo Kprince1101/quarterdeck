@@ -17,6 +17,7 @@ export const FAKE_AGENT_FLAGS: Record<FakeAgentFlag, string> = {
   plannerSkipsDesignTwice: '--planner-skips-design-twice',
   plannerSpreads: '--planner-spreads',
   plannerNamesUnknown: '--planner-names-unknown',
+  onGitlab: '--on-gitlab',
 };
 
 const FLAG_ENTRIES = Object.entries(FAKE_AGENT_FLAGS) as [

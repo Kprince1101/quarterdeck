@@ -11,6 +11,7 @@ export type ProposalDisplay = 'text' | 'diff' | 'retired';
 export interface ProposalView {
   id: string;
   project: string;
+  scope: string;
   op: ProposalOp;
   opLabel: string;
   display: ProposalDisplay;
@@ -26,6 +27,7 @@ export interface ProposalView {
 export interface EntryView {
   id: string;
   project: string;
+  scope: string;
   body: string;
   pinned: boolean;
 }
@@ -35,6 +37,8 @@ export interface NotebookModel {
   entries: EntryView[];
   showProject: boolean;
 }
+
+export const EVERY_PROJECT = 'every project';
 
 const OP_LABELS: Record<ProposalOp, string> = {
   add: 'Add',
@@ -48,6 +52,11 @@ const OP_DISPLAYS: Record<ProposalOp, ProposalDisplay> = {
   retire: 'retired',
 };
 
+interface Owner {
+  project: string;
+  scope: string;
+}
+
 const byCreatedAt = (
   a: { createdAt: string },
   b: { createdAt: string },
@@ -58,11 +67,11 @@ const pinnedFirst = (a: NotebookRow, b: NotebookRow): number =>
 
 const proposalView = (
   proposal: NotebookProposalRow,
-  project: string,
+  owner: Owner,
   entry: NotebookRow | undefined,
 ): ProposalView => ({
   id: proposal.id,
-  project,
+  ...owner,
   op: proposal.op,
   opLabel: OP_LABELS[proposal.op],
   display: OP_DISPLAYS[proposal.op],
@@ -75,6 +84,33 @@ const proposalView = (
   entryMissing: proposal.op !== 'add' && entry === undefined,
 });
 
+const scopeOf = (project: string, global: boolean): string => {
+  if (global) return EVERY_PROJECT;
+  return project;
+};
+
+const entryOwner = (
+  slugs: ReadonlyMap<string, string>,
+  projectId: string | null,
+): Owner | undefined => {
+  if (projectId !== null) {
+    const project = slugs.get(projectId);
+    if (project === undefined) return undefined;
+    return { project, scope: project };
+  }
+  const [project] = slugs.values();
+  if (project === undefined) return undefined;
+  return { project, scope: EVERY_PROJECT };
+};
+
+const proposalOwner = (
+  slugs: ReadonlyMap<string, string>,
+  proposal: NotebookProposalRow,
+): Owner => {
+  const project = slugs.get(proposal.projectId) ?? '';
+  return { project, scope: scopeOf(project, proposal.global) };
+};
+
 export const buildNotebook = (tables: SnapshotTables): NotebookModel => {
   const slugs = new Map(tables.projects.map(({ id, slug }) => [id, slug]));
   const entries = new Map(tables.notebook.map((entry) => [entry.id, entry]));
@@ -86,20 +122,26 @@ export const buildNotebook = (tables: SnapshotTables): NotebookModel => {
     .map((proposal) =>
       proposalView(
         proposal,
-        slugs.get(proposal.projectId) ?? '',
+        proposalOwner(slugs, proposal),
         entries.get(proposal.entryId ?? ''),
       ),
     );
   const active = tables.notebook
-    .filter(
-      ({ retiredAt, projectId }) => retiredAt === null && slugs.has(projectId),
-    )
+    .filter(({ retiredAt }) => retiredAt === null)
     .toSorted(pinnedFirst)
-    .map((entry) => ({
-      id: entry.id,
-      project: slugs.get(entry.projectId) ?? '',
-      body: entry.body,
-      pinned: entry.pinned,
-    }));
-  return { proposals, entries: active, showProject: slugs.size > 1 };
+    .flatMap((entry) => {
+      const owner = entryOwner(slugs, entry.projectId);
+      if (owner === undefined) return [];
+      return [
+        { id: entry.id, ...owner, body: entry.body, pinned: entry.pinned },
+      ];
+    });
+  const hasGlobal = [...active, ...proposals].some(
+    ({ scope }) => scope === EVERY_PROJECT,
+  );
+  return {
+    proposals,
+    entries: active,
+    showProject: slugs.size > 1 || hasGlobal,
+  };
 };

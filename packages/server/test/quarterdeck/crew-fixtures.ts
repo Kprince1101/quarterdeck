@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import {
   defineRuntimeAdapter,
   launchSite,
+  parseMergeRequestUrl,
   parsePullRequestUrl,
   type AcpClient,
   type AcpClientOptions,
@@ -59,14 +60,24 @@ export interface FakeGitHub extends ForgeHost {
   merges: { url: string; head: string }[];
 }
 
-export const fakeGitHub = (): FakeGitHub => {
+const FAKE_FORGES = {
+  github: { hostname: 'github.com', parse: parsePullRequestUrl },
+  gitlab: { hostname: 'gitlab.com', parse: parseMergeRequestUrl },
+} as const;
+
+export const fakeGitLab = (): FakeGitHub => fakeGitHub('gitlab');
+
+export const fakeGitHub = (
+  forge: keyof typeof FAKE_FORGES = 'github',
+): FakeGitHub => {
+  const { hostname, parse } = FAKE_FORGES[forge];
   const merges: { url: string; head: string }[] = [];
   const stateOf = (url: string): PullRequest['state'] => {
     if (merges.some((merge) => merge.url === url)) return 'merged';
     return 'open';
   };
   const pullRequest = async (url: string): Promise<PullRequest> => ({
-    repository: { hostname: 'github.com', owner: 'example', name: 'example' },
+    repository: { hostname, owner: 'example', name: 'example' },
     base: 'main',
     defaultBranch: 'main',
     state: stateOf(url),
@@ -77,8 +88,8 @@ export const fakeGitHub = (): FakeGitHub => {
     botReview: { reviewers: [], openThreads: [] },
   });
   return {
-    forge: 'github',
-    pullRequestRef: parsePullRequestUrl,
+    forge,
+    pullRequestRef: parse,
     merges,
     pullRequest,
     listOpen: async () => [],

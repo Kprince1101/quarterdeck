@@ -56,6 +56,7 @@ export const voyage = (
   number,
   status: 'active',
   goal: 'Ship the project widget',
+  projects: ['deck'],
   startedAt: AT,
   endedAt: null,
   ...overrides,

@@ -8,10 +8,20 @@ import type {
 import type { OpenRequests } from './open-requests.js';
 import type { ProjectStores } from './project-stores.js';
 
+export type DeskReply =
+  { ok: true; result: IntentResult } | { ok: false; error: string };
+
+export interface ApiVoyages {
+  start: (goal: string) => Promise<DeskReply>;
+  end: (voyage: number) => Promise<DeskReply>;
+  kill: (voyage: number) => Promise<DeskReply>;
+}
+
 export interface ApiContext {
   stores: ProjectStores;
   homeDir: string;
   openRequests?: OpenRequests | undefined;
+  voyages?: ApiVoyages | undefined;
 }
 
 export type IntentHandler<N extends IntentName> = (

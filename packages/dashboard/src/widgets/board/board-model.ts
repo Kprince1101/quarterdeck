@@ -33,6 +33,7 @@ export interface ProjectLiveness {
   name: string;
   isPaused: boolean;
   isArchived: boolean;
+  inVoyage: boolean;
   hasAgents: boolean;
   agents: AgentLiveness[];
   agentsLabel: string;
@@ -99,6 +100,7 @@ export const projectLiveness = (
   projects: readonly ProjectRow[],
   shownIds: readonly string[],
   agents: readonly AgentRow[],
+  voyageSlugs: ReadonlySet<string> = new Set(),
 ): ProjectLiveness[] =>
   shownIds.flatMap((id) => {
     const project = projects.find((row) => row.id === id);
@@ -110,6 +112,7 @@ export const projectLiveness = (
         name: project.name,
         isPaused: project.pausedAt !== null,
         isArchived: isArchived(project),
+        inVoyage: voyageSlugs.has(project.slug),
         hasAgents: live.length > 0,
         agents: live,
         agentsLabel: `${project.name} agents`,

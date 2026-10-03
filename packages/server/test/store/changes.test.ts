@@ -176,6 +176,28 @@ describe.each(TEST_BACKENDS)('store table changes on $name', (backend) => {
     expect(changes[0]).toMatchObject({ table: 'agents', op: 'insert' });
   });
 
+  it('delivers and reads notebook entries for every project alongside its own', async () => {
+    const changes = await collect();
+    const {
+      rows: [shared],
+    } = await store.db.query<{ id: string }>(
+      `insert into notebook (project_id, body) values (null, 'tests ship') returning id`,
+    );
+
+    await vi.waitFor(() => expect(changes).toHaveLength(1));
+    expect(changes[0]).toMatchObject({
+      table: 'notebook',
+      op: 'insert',
+      row: { id: shared?.id, projectId: null },
+    });
+    expect(
+      (await readRows(store.db, store.projectId, 'notebook')).map(
+        (row) => row['id'],
+      ),
+    ).toContain(shared?.id);
+    await store.db.query('delete from notebook where id = $1', [shared?.id]);
+  });
+
   it('sends an agent delete, not its cascaded turn deletes', async () => {
     const changes = await collect();
     const agentId = await insertAgent();

@@ -1,48 +1,102 @@
-import type { Runtime } from '@quarterdeck/rules';
-import { findAgent, type AgentLifecycle } from '../agents/index.js';
-import { liveReviewer } from '../bus/review.js';
+import type { ForgeTerms } from '@quarterdeck/rules';
+import {
+  AGENT_RETIRED_EVENT,
+  FINISHED_AGENT_STATUSES,
+  type AgentStatus,
+} from '../agents/index.js';
+import { projectBusName } from '../bus/index.js';
 import { runPrompt, type TurnTarget } from '../driver/index.js';
 import {
   reviewPrompt,
   type ReviewerHost,
   type ReviewRequest,
 } from '../gate/index.js';
-import type { Store } from '../store/index.js';
-import type { CrewFailureReporter } from './failures.js';
-import { AgentNotLiveError, type CrewSessionHost } from './sessions.js';
+import { AgentExitedError, type FailureTarget } from './failures.js';
+import {
+  retireSeats,
+  type Seat,
+  type SeatSite,
+  type SeatedAgent,
+} from './seats.js';
+import { AgentNotLiveError } from './sessions.js';
 
 export interface ReviewerDeskOptions {
-  store: Store;
-  sessions: Pick<CrewSessionHost, 'client'>;
-  lifecycle: Pick<AgentLifecycle, 'birth'>;
-  turnsDir: string;
-  brief: () => Promise<string>;
-  runtime: () => Promise<Runtime>;
-  report: CrewFailureReporter;
+  sites: () => Promise<readonly SeatSite[]>;
+  birth: (sites: readonly SeatSite[]) => Promise<SeatedAgent>;
+  turnsDir: (project: string) => string;
+  brief: (project: string) => Promise<string>;
+  report: (targets: readonly FailureTarget[]) => (err: unknown) => void;
 }
 
 export interface ReviewerDesk extends ReviewerHost {
   ensure: () => Promise<void>;
+  exited: () => void;
   close: () => Promise<void>;
 }
 
 export const reviewerInput = (brief: string, request: ReviewRequest): string =>
   `${brief.trim()}\n\n# Review\n\n${reviewPrompt(request)}`;
 
+const projectLine = (seat: Seat, terms: ForgeTerms): string =>
+  `This ${terms.long} belongs to project ${seat.project}: use the tools of the bus \`${projectBusName(seat.project)}\` for it.`;
+
+const isLiveSeat = async (seat: Seat | undefined): Promise<boolean> => {
+  if (seat === undefined) return false;
+  const { rows } = await seat.store.db.query<{ status: AgentStatus }>(
+    'select status from agents where id = $1',
+    [seat.agent.id],
+  );
+  const status = rows[0]?.status;
+  return status !== undefined && !FINISHED_AGENT_STATUSES.includes(status);
+};
+
+const seatsCover = async (
+  reviewer: SeatedAgent,
+  sites: readonly SeatSite[],
+): Promise<boolean> => {
+  const live = await Promise.all(
+    sites.map((site) =>
+      isLiveSeat(
+        reviewer.seats.find(
+          (seat) => seat.agent.projectId === site.store.projectId,
+        ),
+      ),
+    ),
+  );
+  return live.every(Boolean);
+};
+
 export const createReviewerDesk = (
   options: ReviewerDeskOptions,
 ): ReviewerDesk => {
-  const { store } = options;
-  const queues = new Map<string, Promise<unknown>>();
+  let current: SeatedAgent | undefined;
   let ensuring: Promise<void> | undefined;
+  let queue: Promise<unknown> = Promise.resolve();
+  let closed = false;
+
+  const retire = async (reviewer: SeatedAgent): Promise<void> => {
+    if (current === reviewer) current = undefined;
+    await reviewer.sessions.closeAll();
+    await retireSeats(reviewer.seats, AGENT_RETIRED_EVENT);
+  };
+
+  const retireAfterReviews = async (reviewer: SeatedAgent): Promise<void> => {
+    current = undefined;
+    await queue.catch(() => undefined);
+    await retire(reviewer);
+  };
 
   const birthIfMissing = async (): Promise<void> => {
-    if (await liveReviewer(store.db, store.projectId)) return;
-    await options.lifecycle.birth({
-      store,
-      role: 'reviewer',
-      runtime: await options.runtime(),
-    });
+    const sites = await options.sites();
+    if (closed || sites.length === 0) return;
+    if (current !== undefined && (await seatsCover(current, sites))) return;
+    if (current !== undefined) await retireAfterReviews(current);
+    const born = await options.birth(sites);
+    if (closed) {
+      await retire(born);
+      return;
+    }
+    current = born;
   };
 
   const ensure = (): Promise<void> => {
@@ -52,41 +106,64 @@ export const createReviewerDesk = (
     return ensuring;
   };
 
-  const reviewTarget = async (request: ReviewRequest): Promise<TurnTarget> => {
-    const reviewer = await findAgent(store, request.reviewer.id);
-    const { sessionId } = reviewer;
-    if (sessionId === null) throw new AgentNotLiveError(reviewer.id);
-    const client = options.sessions.client(sessionId);
-    if (client === undefined) throw new AgentNotLiveError(reviewer.id);
+  const reviewTarget = (
+    request: ReviewRequest,
+  ): TurnTarget & { seat: Seat } => {
+    const seat = current?.seats.find(
+      (each) => each.agent.id === request.reviewer.id,
+    );
+    if (current === undefined || seat === undefined)
+      throw new AgentNotLiveError(request.reviewer.id);
+    const client = current.sessions.client(current.sessionId);
+    if (client === undefined) throw new AgentNotLiveError(request.reviewer.id);
     return {
-      store,
+      seat,
+      store: seat.store,
       client,
-      agent: reviewer,
-      sessionId,
-      turnsDir: options.turnsDir,
+      agent: seat.agent,
+      sessionId: current.sessionId,
+      turnsDir: options.turnsDir(seat.project),
       ticketId: request.ticket.id,
     };
   };
 
   const requestReview = async (request: ReviewRequest): Promise<void> => {
-    const target = await reviewTarget(request);
-    const input = reviewerInput(await options.brief(), request);
-    const previous = queues.get(target.agent.id) ?? Promise.resolve();
-    const turn = previous
+    const target = reviewTarget(request);
+    const input = `${reviewerInput(await options.brief(target.seat.project), request)}\n\n${projectLine(target.seat, request.terms)}`;
+    const turn = queue
       .catch(() => undefined)
       .then(() => runPrompt(target, input));
-    queues.set(target.agent.id, turn);
+    queue = turn;
     turn.catch(
-      options.report('reviewer', {
-        agentId: target.agent.id,
-        ticketId: request.ticket.id,
-      }),
+      options.report([
+        {
+          store: target.store,
+          links: { agentId: target.agent.id, ticketId: request.ticket.id },
+        },
+      ]),
     );
   };
 
-  const close = async (): Promise<void> => {
-    await ensuring?.catch(() => undefined);
+  const exited = (): void => {
+    const reviewer = current;
+    if (reviewer === undefined) return;
+    current = undefined;
+    const report = options.report(
+      reviewer.seats.map((seat) => ({
+        store: seat.store,
+        links: { agentId: seat.agent.id },
+      })),
+    );
+    report(new AgentExitedError(reviewer.lead.agent));
+    retireSeats(reviewer.seats, AGENT_RETIRED_EVENT).catch(report);
   };
 
-  return { requestReview, ensure, close };
+  const close = async (): Promise<void> => {
+    closed = true;
+    await ensuring?.catch(() => undefined);
+    await current?.sessions.closeAll();
+    current = undefined;
+  };
+
+  return { requestReview, ensure, exited, close };
 };

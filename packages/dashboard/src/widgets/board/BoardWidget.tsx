@@ -4,6 +4,7 @@ import type { AgentLiveness, ProjectLiveness } from './board-model.js';
 import { useBoardWidget, type StreamLiveness } from './use-board-widget.js';
 import type { PauseAllView } from './use-pause-all.js';
 import type { ProjectOption, ProjectPickerView } from './use-project-picker.js';
+import { VoyageControl } from './VoyageControl.js';
 import './board.css';
 
 const PauseControls = ({ pause }: { pause: PauseAllView }) => (
@@ -94,6 +95,7 @@ const ProjectStrip = ({ project }: { project: ProjectLiveness }) => (
   <li className="qd-board-project" data-project={project.id}>
     <div className="qd-board-project-head">
       <h3>{project.name}</h3>
+      {project.inVoyage && <span className="qd-board-tag">voyage</span>}
       {project.isPaused && <span className="qd-board-tag">paused</span>}
       {project.isArchived && <span className="qd-board-tag">archived</span>}
     </div>
@@ -122,6 +124,7 @@ export const BoardWidget = (): JSX.Element => {
   const view = useBoardWidget();
   return (
     <div className="qd-board">
+      <VoyageControl />
       <section className="qd-board-liveness" aria-label="Liveness">
         <StreamLine stream={view.stream} />
         {!view.hasShownProjects && (

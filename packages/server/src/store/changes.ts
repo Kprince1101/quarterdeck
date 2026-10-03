@@ -67,13 +67,21 @@ const ORDER: Record<WatchedTable, string> = {
   layouts: 'name',
 };
 
+const SHARED_TABLES: ReadonlySet<string> = new Set(['notebook']);
+
 export const tableScope = (table: StoreTable): string => {
   if (table === 'projects') return 'id = $1';
   if (table === 'turns') {
     return 'agent_id in (select id from agents where project_id = $1)';
   }
+  if (SHARED_TABLES.has(table))
+    return '(project_id = $1 or project_id is null)';
   return 'project_id = $1';
 };
+
+const reachesProject = (notice: Notice, projectId: string): boolean =>
+  notice.project_id === projectId ||
+  (notice.project_id === null && SHARED_TABLES.has(notice.table));
 
 const isWatched = (table: string): table is WatchedTable =>
   (WATCHED_TABLES as readonly string[]).includes(table);
@@ -152,8 +160,10 @@ export const watchChanges = async (
   let closed = false;
 
   const deliver = async (payload: string): Promise<void> => {
-    const { table, op, id, project_id: owner } = JSON.parse(payload) as Notice;
-    if (closed || !isWatched(table) || owner !== projectId) return;
+    const notice = JSON.parse(payload) as Notice;
+    const { table, op, id } = notice;
+    if (closed || !isWatched(table) || !reachesProject(notice, projectId))
+      return;
     let row: Row | null = null;
     if (op !== 'delete') row = await readRow(db, projectId, table, id);
     if (closed) return;

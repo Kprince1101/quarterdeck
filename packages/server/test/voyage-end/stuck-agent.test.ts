@@ -38,13 +38,12 @@ describe('auto-end with a stuck agent', { timeout: TIMEOUT }, () => {
       voyageId,
     });
     const auto: AutoEnd = await startAutoEnd({
-      store,
-      voyageId,
+      legs: [{ store, voyageId }],
       settleSeconds: SETTLE_SECONDS,
       schedule: scheduler.schedule,
       home: HOME,
-      end: async (id) => {
-        ended.push(id);
+      end: async () => {
+        ended.push(voyageId);
       },
       onError: (err) => {
         errors.push(err);

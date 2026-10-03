@@ -36,14 +36,14 @@ src/widgets/registry.ts      defineWidget, WidgetDefinition, createRegistry
 src/widgets/widgets.ts       WIDGETS: every src/widgets/**/*Widget.tsx, found at build time
 src/widgets/WidgetMount.tsx  WidgetMount: the grid over WIDGETS
 src/widgets/starter/         the Tables starter widget
-src/widgets/board/           Board: liveness strip, Pause all / Resume all, capped project picker, archived toggle
+src/widgets/board/           Board: the voyage (Start/End/Kill all, per-project Kill), liveness strip, Pause all / Resume all, capped project picker, archived toggle
 src/widgets/events/          Events: the feed, filtered by project and kind
 src/widgets/data/            Data: table counts, rows a page at a time, paths on disk, Wipe project / Wipe everything typed to confirm
 src/widgets/driver/          the Driver widget: voyage picker, turns, turn detail, replay command
 src/widgets/planner/         Planner: the conversation, proposals to approve, edit or reject
 src/widgets/rules/           Rules: edit rules.local.* with validation, a diff and provenance
 src/lib/use-forge-terms.ts   useForgeTerms(project, enabled?): the project's forge terms from forge.read ({ short, long, cli, name }); GitHub's until read
-src/widgets/project/         Project: voyage Start/End/Kill, pause, AI review and auto-merge (machine lifecycle layer), reviewer, retired count, Refresh agents, archive
+src/widgets/project/         Project: pause, AI review and auto-merge (machine lifecycle layer), reviewer, retired count, Refresh agents, archive
 src/widgets/usage/           Usage: this project's tokens in the budget window and the share of budget.window.capTokens
 src/widgets/agents/          Agents: state, since, tickets, held work; Pause/Poke/Kill/Retire/Reset
 src/widgets/requests/        Requests: open pull/merge requests across projects, in each forge's terms, with ticket and agent links
@@ -122,11 +122,12 @@ Nothing is kept: a reload starts the demo over.
 
 ## The Board widget
 
-The Board shows whether things are alive across projects:
+The Board runs the voyage and shows whether things are alive across projects:
 
+- **The voyage** is one for every project. While none is open, a goal field and _Start voyage_ send `voyage.start { goal }`. While one is open (the newest `voyages` row not `ended`, from any project the stream carries), it shows `Voyage <n> · <status>`, the goal and each project in it (the row's `projects`), each with a _Kill_ button that sends `project.kill` for that project: its builders are killed and the voyage carries on. _End voyage_ sends `voyage.end { voyage }`; _Kill all_ asks first, with the number of tickets it will reopen (the active tickets held by the voyage's builders, killed or retired ones included), and sends `voyage.kill { voyage }` once confirmed. A refusal shows in the control.
 - **Projects** are sorted by name. The first `BOARD_PROJECT_CAP` (4) are shown until the user picks; after that only picked projects are shown, and unpicked boxes are disabled while the cap is full. Picks hidden by the archived toggle are kept, but a pick made at the cap drops them rather than save more than 4.
 - **Archived projects** (`archivedAt` set) stay out of the picker and the strip unless _Show archived_ is on.
-- **The liveness strip** gives the stream status, then each shown project with its live agents (not ended, killed or retired) by role then name, tagged paused or archived.
+- **The liveness strip** gives the stream status, then each shown project with its live agents (not ended, killed or retired) by role then name, tagged voyage (in the open voyage), paused or archived.
 - **Pause all / Resume all** send `pause.all`, report how many projects were reached and name any that were not (`failed`). The machine-wide pause is read from `stream.machine.pausedAt`: while it is set the Board says _Paused everywhere_ and offers only Resume all.
 
 ## The Agents widget

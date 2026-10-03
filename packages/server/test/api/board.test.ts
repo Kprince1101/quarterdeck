@@ -151,6 +151,32 @@ describe('board intents', { timeout: TIMEOUT }, () => {
       const res = await t.send('notebook.add', { project, body: '   ' });
       expect(res.status).toBe(400);
     });
+
+    it('adds an entry for every project, which pins and removes the same way', async () => {
+      const added = await t.send('notebook.add', {
+        project,
+        body: 'every repo ships with tests',
+        global: true,
+      });
+      const { entryId } = added.body.result as { entryId: string };
+      expect(added.body.result).toEqual({ entryId, global: true });
+      const projectOf = async () => {
+        const { rows } = await store.db.query<{ projectId: string | null }>(
+          'select project_id as "projectId" from notebook where id = $1',
+          [entryId],
+        );
+        return rows[0]?.projectId;
+      };
+      expect(await projectOf()).toBeNull();
+      expect(
+        (await t.send('notebook.pin', { project, entryId, pinned: true }))
+          .status,
+      ).toBe(200);
+      expect(
+        (await t.send('notebook.remove', { project, entryId })).status,
+      ).toBe(200);
+      expect(await projectOf()).toBeUndefined();
+    });
   });
 
   describe('tickets', () => {
@@ -432,6 +458,22 @@ describe('board intents', { timeout: TIMEOUT }, () => {
         kind: 'notebook.decide',
         status: 'applied',
       });
+    });
+
+    it('accepts a global add as an entry for every project', async () => {
+      const { rows } = await store.db.query<{ id: string }>(
+        `insert into notebook_proposals (project_id, op, body, global)
+         values ($1, 'add', 'Run both suites.', true) returning id`,
+        [store.projectId],
+      );
+      const res = await decide(rows[0]?.id ?? '', 'accepted');
+      const { entryId } = res.body.result as { entryId: string };
+      const { rows: entries } = await store.db.query<{
+        projectId: string | null;
+      }>('select project_id as "projectId" from notebook where id = $1', [
+        entryId,
+      ]);
+      expect(entries).toEqual([{ projectId: null }]);
     });
 
     it('accepts an update and a retire against the entry', async () => {

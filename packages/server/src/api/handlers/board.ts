@@ -15,7 +15,7 @@ import {
 } from '../record.js';
 import { requireRepoPath } from '../repo-path.js';
 import { stageRuleWrite } from '../rule-files.js';
-import { decideNotebook } from './notebook-proposals.js';
+import { IN_PROJECT_OR_GLOBAL, decideNotebook } from './notebook-proposals.js';
 import { TICKET_HANDLERS } from './tickets.js';
 
 type CardIntentName = 'card.answer' | 'card.decline';
@@ -118,19 +118,20 @@ export const BOARD_HANDLERS: IntentHandlers<BoardIntentName> = {
       const entry = await findRow<{ id: string }>(
         tx,
         `insert into notebook (project_id, body, pinned)
-         values ($1, $2, $3) returning id`,
-        [projectId, input.body, input.pinned],
+         values (case when $4::boolean then null else $1::uuid end, $2, $3)
+         returning id`,
+        [projectId, input.body, input.pinned, input.global],
         'notebook entry was not created',
       );
-      return { entryId: entry.id };
+      return { entryId: entry.id, global: input.global };
     }),
   'notebook.pin': (ctx, input, name) =>
     applyInProject(ctx, name, input, async (tx, projectId) => {
       await findRow(
         tx,
         `update notebook set pinned = $3
-         where id = $1 and project_id = $2 returning id`,
-        [input.entryId, projectId, input.pinned],
+         where id = $2 and ${IN_PROJECT_OR_GLOBAL} returning id`,
+        [projectId, input.entryId, input.pinned],
         `notebook entry ${input.entryId} not found`,
       );
       return { entryId: input.entryId, pinned: input.pinned };
@@ -139,8 +140,9 @@ export const BOARD_HANDLERS: IntentHandlers<BoardIntentName> = {
     applyInProject(ctx, name, input, async (tx, projectId) => {
       await findRow(
         tx,
-        'delete from notebook where id = $1 and project_id = $2 returning id',
-        [input.entryId, projectId],
+        `delete from notebook where id = $2 and ${IN_PROJECT_OR_GLOBAL}
+         returning id`,
+        [projectId, input.entryId],
         `notebook entry ${input.entryId} not found`,
       );
       return { entryId: input.entryId };

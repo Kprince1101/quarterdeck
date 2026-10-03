@@ -1,5 +1,5 @@
 import {
-  readActiveNotebook,
+  readNotebooks,
   type DriverVoyage,
   type NotebookEntry,
   type TurnOutcome,
@@ -27,10 +27,18 @@ export const WRAP_UP_EVENTS = {
 
 export const NO_DRIVER_SESSION = 'the voyage has no live Driver session';
 
+export interface WrapUpLeg {
+  project: string;
+  store: Store;
+  voyageId: string;
+  agentId: string | null;
+}
+
 export interface WrapUpOptions {
   store: Store;
   voyage: Pick<DriverVoyage, 'agent' | 'voyage' | 'turnAs'>;
   charter: string;
+  legs?: readonly WrapUpLeg[];
 }
 
 export type WrapUp =
@@ -42,17 +50,48 @@ export type WrapUp =
     }
   | { status: 'missed'; reason: string };
 
-interface ProposalSource {
-  projectId: string;
-  voyageId: string;
-  agentId: string;
-}
-
 interface ProposalColumns {
   entryId: string | null;
   body: string | null;
   pinned: boolean;
 }
+
+interface PlacedProposal {
+  leg: WrapUpLeg;
+  proposal: NotebookProposal;
+  global: boolean;
+}
+
+interface LegNotebook {
+  entries: NotebookEntry[];
+  owners: Map<string, WrapUpLeg>;
+}
+
+const SINGLE_LEGS = new WeakMap<WrapUpOptions, readonly WrapUpLeg[]>();
+
+const singleLeg = (options: WrapUpOptions): readonly WrapUpLeg[] => {
+  const cached = SINGLE_LEGS.get(options);
+  if (cached !== undefined) return cached;
+  const legs = [
+    {
+      project: '',
+      store: options.store,
+      voyageId: options.voyage.voyage.id,
+      agentId: options.voyage.agent.id,
+    },
+  ];
+  SINGLE_LEGS.set(options, legs);
+  return legs;
+};
+
+const legsOf = (options: WrapUpOptions): readonly WrapUpLeg[] =>
+  options.legs ?? singleLeg(options);
+
+const leadOf = (legs: readonly WrapUpLeg[]): WrapUpLeg => {
+  const [lead] = legs;
+  if (lead === undefined) throw new Error('a voyage has at least one project');
+  return lead;
+};
 
 const proposalColumns = (proposal: NotebookProposal): ProposalColumns => {
   if (proposal.op === 'add')
@@ -64,24 +103,26 @@ const proposalColumns = (proposal: NotebookProposal): ProposalColumns => {
 
 const insertNotebookProposal = async (
   tx: Queryable,
-  source: ProposalSource,
-  proposal: NotebookProposal,
+  placed: PlacedProposal,
 ): Promise<string> => {
+  const { leg, proposal } = placed;
   const { entryId, body, pinned } = proposalColumns(proposal);
   const { rows } = await tx.query<{ id: string }>(
     `insert into notebook_proposals
-       (project_id, voyage_id, agent_id, op, entry_id, body, pinned, rationale)
-     values ($1, $2, $3, $4, $5, $6, $7, $8)
+       (project_id, voyage_id, agent_id, op, entry_id, body, pinned, rationale,
+        global)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      returning id`,
     [
-      source.projectId,
-      source.voyageId,
-      source.agentId,
+      leg.store.projectId,
+      leg.voyageId,
+      leg.agentId,
       proposal.op,
       entryId,
       body,
       pinned,
       proposal.rationale,
+      placed.global,
     ],
   );
   const [row] = rows;
@@ -91,7 +132,7 @@ const insertNotebookProposal = async (
 
 const insertCharterProposal = async (
   tx: Queryable,
-  source: ProposalSource,
+  leg: WrapUpLeg,
   proposal: CharterProposal,
 ): Promise<string> => {
   const { rows } = await tx.query<{ id: string }>(
@@ -99,9 +140,9 @@ const insertCharterProposal = async (
      values ($1, $2, $3, $4, $5)
      returning id`,
     [
-      source.projectId,
-      source.voyageId,
-      source.agentId,
+      leg.store.projectId,
+      leg.voyageId,
+      leg.agentId,
       proposal.body,
       proposal.rationale,
     ],
@@ -129,49 +170,88 @@ const changedCharter = (
   return result.charter;
 };
 
-const saveProposals = (
+const placeProposal = (
+  options: WrapUpOptions,
+  notebook: LegNotebook,
+  proposal: NotebookProposal,
+): PlacedProposal => {
+  const legs = legsOf(options);
+  const lead = leadOf(legs);
+  if (proposal.op !== 'add')
+    return {
+      leg: notebook.owners.get(proposal.entry) ?? lead,
+      proposal,
+      global: false,
+    };
+  const named = legs.find((leg) => leg.project === proposal.project);
+  if (named !== undefined) return { leg: named, proposal, global: false };
+  return { leg: lead, proposal, global: options.legs !== undefined };
+};
+
+interface LegProposals {
+  notebook: string[];
+  charter: string | null;
+}
+
+const saveLeg = (
+  options: WrapUpOptions,
+  leg: WrapUpLeg,
+  placed: readonly PlacedProposal[],
+  result: WrapUpResult,
+  charter: CharterProposal | undefined,
+): Promise<LegProposals> =>
+  leg.store.db.transaction(async (tx) => {
+    const notebook: string[] = [];
+    for (const proposal of placed.filter((each) => each.leg === leg))
+      notebook.push(await insertNotebookProposal(tx, proposal));
+    let charterId: string | null = null;
+    if (charter !== undefined)
+      charterId = await insertCharterProposal(tx, leg, charter);
+    const event: PublishInput = {
+      kind: WRAP_UP_EVENTS.proposed,
+      payload: {
+        voyageId: leg.voyageId,
+        voyage: options.voyage.voyage.number,
+        summary: result.summary,
+        notebookProposals: notebook,
+        charterProposal: charterId,
+      },
+    };
+    if (leg.agentId !== null) event.agentId = leg.agentId;
+    await publishEvent(tx, leg.store.projectId, event);
+    return { notebook, charter: charterId };
+  });
+
+const saveProposals = async (
   options: WrapUpOptions,
   result: WrapUpResult,
-  notebook: readonly NotebookEntry[],
+  notebook: LegNotebook,
 ): Promise<WrapUp> => {
-  const { store, voyage } = options;
-  const source: ProposalSource = {
-    projectId: store.projectId,
-    voyageId: voyage.voyage.id,
-    agentId: voyage.agent.id,
-  };
-  const changes = result.notebook.filter((proposal) =>
-    changesSomething(proposal, notebook),
-  );
+  const legs = legsOf(options);
+  const lead = leadOf(legs);
+  const placed = result.notebook
+    .filter((proposal) => changesSomething(proposal, notebook.entries))
+    .map((proposal) => placeProposal(options, notebook, proposal));
   const charter = changedCharter(result, options.charter);
-  return store.db.transaction(async (tx) => {
-    const notebookProposalIds: string[] = [];
-    for (const proposal of changes) {
-      notebookProposalIds.push(
-        await insertNotebookProposal(tx, source, proposal),
-      );
-    }
-    let charterProposalId: string | null = null;
-    if (charter !== undefined)
-      charterProposalId = await insertCharterProposal(tx, source, charter);
-    await publishEvent(tx, store.projectId, {
-      kind: WRAP_UP_EVENTS.proposed,
-      agentId: voyage.agent.id,
-      payload: {
-        voyageId: voyage.voyage.id,
-        voyage: voyage.voyage.number,
-        summary: result.summary,
-        notebookProposals: notebookProposalIds,
-        charterProposal: charterProposalId,
-      },
-    });
-    return {
-      status: 'proposed',
-      summary: result.summary,
-      notebookProposalIds,
-      charterProposalId,
-    };
-  });
+  const notebookProposalIds: string[] = [];
+  let charterProposalId: string | null = null;
+  for (const leg of legs) {
+    const saved = await saveLeg(
+      options,
+      leg,
+      placed,
+      result,
+      (leg === lead && charter) || undefined,
+    );
+    notebookProposalIds.push(...saved.notebook);
+    charterProposalId ??= saved.charter;
+  }
+  return {
+    status: 'proposed',
+    summary: result.summary,
+    notebookProposalIds,
+    charterProposalId,
+  };
 };
 
 type MissedOutcome = Exclude<TurnOutcome<WrapUpResult>, { status: 'result' }>;
@@ -196,13 +276,20 @@ const publishMiss = async (
   return { status: 'missed', reason };
 };
 
-const recordMiss = (options: WrapUpOptions, reason: string): Promise<WrapUp> =>
-  publishMiss(
-    options.store,
-    options.voyage.voyage,
-    options.voyage.agent.id,
-    reason,
-  );
+const recordMiss = async (
+  options: WrapUpOptions,
+  reason: string,
+): Promise<WrapUp> => {
+  const { number } = options.voyage.voyage;
+  for (const leg of legsOf(options))
+    await publishMiss(
+      leg.store,
+      { id: leg.voyageId, number },
+      leg.agentId,
+      reason,
+    );
+  return { status: 'missed', reason };
+};
 
 export const missWrapUp = async (
   store: Store,
@@ -211,6 +298,13 @@ export const missWrapUp = async (
 ): Promise<WrapUp> => {
   const number = await readVoyageNumber(store.db, store.projectId, voyageId);
   return publishMiss(store, { id: voyageId, number }, null, reason);
+};
+
+const voyageProjects = (
+  options: WrapUpOptions,
+): ReadonlySet<string> | undefined => {
+  if (options.legs === undefined) return undefined;
+  return new Set(options.legs.map((leg) => leg.project));
 };
 
 const runWrapUpTurn = async (
@@ -223,16 +317,18 @@ const runWrapUpTurn = async (
     notebook,
   });
   try {
-    return await options.voyage.turnAs(prompt, wrapUpFormat(notebook));
+    return await options.voyage.turnAs(
+      prompt,
+      wrapUpFormat(notebook, voyageProjects(options)),
+    );
   } catch (err) {
     return `the wrap-up turn failed: ${getErrorMessage(err)}`;
   }
 };
 
 export const wrapUpVoyage = async (options: WrapUpOptions): Promise<WrapUp> => {
-  const { store } = options;
-  const notebook = await readActiveNotebook(store.db, store.projectId);
-  const outcome = await runWrapUpTurn(options, notebook);
+  const notebook: LegNotebook = await readNotebooks(legsOf(options));
+  const outcome = await runWrapUpTurn(options, notebook.entries);
   if (typeof outcome === 'string') return recordMiss(options, outcome);
   if (outcome.status !== 'result')
     return recordMiss(options, missReason(outcome));

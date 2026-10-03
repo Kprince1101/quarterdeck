@@ -21,6 +21,9 @@ const GLOBAL_INTENTS = new Set([
   'rules.reset',
   'wipe.all',
   'pause.all',
+  'voyage.start',
+  'voyage.end',
+  'voyage.kill',
 ]);
 
 const importsOf = (source: string): string[] =>
@@ -61,7 +64,7 @@ describe('intent registry', () => {
     expect(ruleNameSchema.options).toEqual(RULE_NAMES);
   });
 
-  it('scopes every intent but machine rules, wipe.all and pause.all to a project', () => {
+  it('scopes every intent but machine rules, wipe.all, pause.all and the voyage to a project', () => {
     const unscoped = INTENT_NAMES.filter((name) =>
       INTENTS[name]
         .safeParse({})
@@ -114,6 +117,7 @@ describe('intent schemas', () => {
       project,
       body: 'x',
       pinned: false,
+      global: false,
     });
   });
 

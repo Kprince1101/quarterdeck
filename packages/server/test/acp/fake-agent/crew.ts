@@ -5,15 +5,32 @@ import { FAKE_CRASH_EXIT_CODE, FAKE_PERMISSION_OPTIONS } from './constants.ts';
 import type { FakeAgentOptions, FakeTurn } from './types.ts';
 
 export const FAKE_PR_URL = 'https://github.com/example/example/pull/7';
+export const FAKE_MR_URL =
+  'https://gitlab.com/example/example/-/merge_requests/7';
+
+const reportedChange = (
+  options: FakeAgentOptions,
+): { pr: string; notes: string } => {
+  if (options.onGitlab)
+    return {
+      pr: FAKE_MR_URL,
+      notes: 'Opened the merge request; the tests pass.',
+    };
+  return { pr: FAKE_PR_URL, notes: 'Opened the pull request; the tests pass.' };
+};
 export const FAKE_PR_HEAD = 'c0ffee0000000000000000000000000000c0ffee';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
-const DRIVER_BIRTH = /^You are .+, the Driver of this project for voyage \d+\./;
+const DRIVER_BIRTH =
+  /^You are .+, the Driver of (?:this project|every project) for voyage \d+\./;
 const WRAP_UP = /^Voyage \d+ has settled/;
 const ASSIGNMENT = new RegExp(`^# Ticket (${UUID}):`, 'm');
 const REVIEW = new RegExp(`Review ticket (${UUID}):`);
-const APPROVED_LINE = /^- (Ticket approved|Approved tickets waiting)/;
+const APPROVED_LINE =
+  /^- (?:\[[^\]]+\] )?(Ticket approved|Approved tickets waiting)/;
+const WAITING_LINE = /^- "/;
 const TICKET_IDS = new RegExp(`\\(ticket (${UUID})\\)`, 'g');
+const NAMED_BUS = /use the tools of the bus `([^`]+)`/;
 
 const PLANNER_OPENING = /^# Planner brief\n/;
 const PLANNER_REPROMPT = /^\[Quarterdeck\] These proposals were refused/;
@@ -74,8 +91,10 @@ const say = async (turn: FakeTurn, text: string): Promise<StopReason> => {
   return 'end_turn';
 };
 
-const busServer = (servers: readonly McpServer[]) => {
-  const [server] = servers;
+const busServer = (servers: readonly McpServer[], text: string) => {
+  const named = NAMED_BUS.exec(text)?.[1];
+  const server =
+    servers.find((candidate) => candidate.name === named) ?? servers[0];
   if (!server || !('command' in server))
     throw new Error('the session has no bus server');
   return server;
@@ -103,7 +122,7 @@ const connectBus = (server: ReturnType<typeof busServer>): BusConnection => {
 };
 
 const reusedSessionBus = (turn: FakeTurn): BusConnection => {
-  const server = busServer(turn.setup.mcpServers);
+  const server = busServer(turn.setup.mcpServers, turn.text);
   const key = JSON.stringify(server.env);
   const known = busConnections.get(key);
   if (known) return known;
@@ -236,11 +255,14 @@ const pushAllowed = (
 const firstId = (pattern: RegExp, text: string): string =>
   pattern.exec(text)?.[1] ?? '';
 
-const approvedTickets = (text: string): string[] =>
+const ticketsOn = (text: string, pattern: RegExp): string[] =>
   text
     .split('\n')
-    .filter((line) => APPROVED_LINE.test(line))
+    .filter((line) => pattern.test(line))
     .flatMap((line) => [...line.matchAll(TICKET_IDS)].map((m) => m[1] ?? ''));
+
+const assignAll = (tickets: readonly string[]) =>
+  tickets.map((ticket) => ({ kind: 'assign', ticket }));
 
 const HANDLERS: Record<
   CrewRole,
@@ -248,7 +270,13 @@ const HANDLERS: Record<
 > = {
   birth: async (turn, options) => {
     if (options.crashDriver) turn.exitProcess(FAKE_CRASH_EXIT_CODE);
-    return say(turn, fenced({ summary: 'Born.', actions: [] }));
+    return say(
+      turn,
+      fenced({
+        summary: 'Born.',
+        actions: assignAll(ticketsOn(turn.text, WAITING_LINE)),
+      }),
+    );
   },
   planner: (turn, options) => propose(turn, options, false),
   'planner-reprompt': (turn, options) => propose(turn, options, true),
@@ -259,10 +287,7 @@ const HANDLERS: Record<
       turn,
       fenced({
         summary: 'Assigned what was approved.',
-        actions: approvedTickets(turn.text).map((ticket) => ({
-          kind: 'assign',
-          ticket,
-        })),
+        actions: assignAll(ticketsOn(turn.text, APPROVED_LINE)),
       }),
     ),
   builder: async (turn, options) => {
@@ -270,9 +295,8 @@ const HANDLERS: Record<
       return say(turn, 'Quarterdeck refused my push.');
     const reply = await callBus(turn, 'report', {
       ticket: firstId(ASSIGNMENT, turn.text),
-      pr: FAKE_PR_URL,
+      ...reportedChange(options),
       head: FAKE_PR_HEAD,
-      notes: 'Opened the pull request; the tests pass.',
     });
     return say(turn, reply);
   },

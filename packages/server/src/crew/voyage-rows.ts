@@ -1,16 +1,15 @@
 import { publishEvent, type Store, type StoreEvent } from '../store/index.js';
-import { settleIntent } from '../planner/rows.js';
 
 export const VOYAGE_OPENED_EVENT = 'voyage.started';
 
-export interface OpenedVoyage {
-  id: string;
-  number: number;
-  goal: string;
+export interface VoyageLegSite {
+  project: string;
+  store: Store;
 }
 
-export type VoyageOpening =
-  { opened: true; voyage: OpenedVoyage } | { opened: false; error: string };
+export interface OpenedLeg extends VoyageLegSite {
+  voyageId: string;
+}
 
 export const voyageStillOpen = (number: number): string =>
   `voyage ${number} is still open; end it first`;
@@ -45,38 +44,52 @@ export const voyageIdOf = (event: StoreEvent): string | undefined => {
   return voyageId;
 };
 
-export const openVoyage = (
+const lastVoyageNumber = async (
   store: Pick<Store, 'db' | 'projectId'>,
-  intentId: string,
-  goal: string,
-): Promise<VoyageOpening> =>
-  store.db.transaction(async (tx) => {
-    await tx.query('select id from projects where id = $1 for update', [
-      store.projectId,
-    ]);
-    const { rows: open } = await tx.query<{ number: number }>(
-      `select number from voyages where project_id = $1 and status <> 'ended'
-       order by number limit 1`,
-      [store.projectId],
+): Promise<number> => {
+  const { rows } = await store.db.query<{ number: number }>(
+    `select coalesce(max(number), 0)::int as number from voyages
+     where project_id = $1`,
+    [store.projectId],
+  );
+  return rows[0]?.number ?? 0;
+};
+
+export const nextVoyageNumber = async (
+  stores: readonly Pick<Store, 'db' | 'projectId'>[],
+): Promise<number> => {
+  const numbers = await Promise.all(stores.map(lastVoyageNumber));
+  return Math.max(0, ...numbers) + 1;
+};
+
+export interface VoyageOpening {
+  number: number;
+  goal: string;
+  projects: readonly string[];
+}
+
+export const openVoyageLeg = (
+  site: VoyageLegSite,
+  opening: VoyageOpening,
+): Promise<OpenedLeg> =>
+  site.store.db.transaction(async (tx) => {
+    const { store } = site;
+    const { rows } = await tx.query<{ id: string }>(
+      `insert into voyages (project_id, number, status, goal, projects)
+       values ($1, $2, 'active', $3, $4)
+       returning id`,
+      [store.projectId, opening.number, opening.goal, opening.projects],
     );
-    const [still] = open;
-    if (still) return { opened: false, error: voyageStillOpen(still.number) };
-    const { rows } = await tx.query<OpenedVoyage>(
-      `insert into voyages (project_id, number, status, goal)
-       select $1, coalesce(max(number), 0) + 1, 'active', $2
-       from voyages where project_id = $1
-       returning id, number, goal`,
-      [store.projectId, goal],
-    );
-    const [voyage] = rows;
-    if (!voyage) throw new Error('the voyage was not created');
-    await settleIntent(tx, intentId, 'applied', {
-      voyageId: voyage.id,
-      voyage: voyage.number,
-    });
+    const [row] = rows;
+    if (!row) throw new Error('the voyage was not created');
     await publishEvent(tx, store.projectId, {
       kind: VOYAGE_OPENED_EVENT,
-      payload: { intentId, voyageId: voyage.id, voyage: voyage.number, goal },
+      payload: {
+        voyageId: row.id,
+        voyage: opening.number,
+        goal: opening.goal,
+        projects: opening.projects,
+      },
     });
-    return { opened: true, voyage };
+    return { ...site, voyageId: row.id };
   });

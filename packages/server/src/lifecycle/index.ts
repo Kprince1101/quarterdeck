@@ -28,6 +28,7 @@ export {
   AGENT_RESET,
   AGENT_RETIRE,
   LIFECYCLE_INTENT_KINDS,
+  PROJECT_KILL,
   type LifecycleIntent,
   type LifecycleIntentKind,
 } from './rows.js';

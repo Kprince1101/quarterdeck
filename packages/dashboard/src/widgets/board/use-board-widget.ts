@@ -4,6 +4,7 @@ import { useDeck } from '../../deck/DeckProvider.js';
 import { STATUS_LABELS } from '../../shell/Shell.js';
 import { projectLiveness, type ProjectLiveness } from './board-model.js';
 import { usePauseAll, type PauseAllView } from './use-pause-all.js';
+import { globalVoyage } from './voyage-model.js';
 import {
   useProjectPicker,
   type ProjectPickerView,
@@ -33,8 +34,9 @@ export const useBoardWidget = (): BoardWidgetView => {
         stream.tables.projects,
         picker.shownIds,
         stream.tables.agents,
+        new Set(globalVoyage(stream.tables)?.projects),
       ),
-    [stream.tables.projects, stream.tables.agents, picker.shownIds],
+    [stream.tables, picker.shownIds],
   );
 
   return {

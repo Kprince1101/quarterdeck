@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import type { NotebookEntry, Voyage, TurnFormat } from '../driver/index.js';
+import {
+  entryTags,
+  type NotebookEntry,
+  type Voyage,
+  type TurnFormat,
+} from '../driver/index.js';
 
 export const MAX_NOTEBOOK_PROPOSALS = 50;
 
@@ -14,12 +19,25 @@ const entryIdSchema = (active: ReadonlySet<string>) =>
       'entry must be the id of an active notebook entry',
     );
 
-const notebookProposalSchema = (active: ReadonlySet<string>) =>
+const projectSchema = (projects: ReadonlySet<string> | undefined) =>
+  z
+    .string()
+    .refine(
+      (project) => projects === undefined || projects.has(project),
+      'project must be one of the voyage’s projects',
+    )
+    .optional();
+
+const notebookProposalSchema = (
+  active: ReadonlySet<string>,
+  projects?: ReadonlySet<string>,
+) =>
   z.discriminatedUnion('op', [
     z.object({
       op: z.literal('add'),
       body: bodySchema,
       pinned: z.boolean().default(false),
+      project: projectSchema(projects),
       rationale: rationaleSchema,
     }),
     z.object({
@@ -51,6 +69,7 @@ const touchesEachEntryOnce = (
 
 export const wrapUpResultSchema = (
   active: ReadonlySet<string>,
+  projects?: ReadonlySet<string>,
 ): z.ZodObject<{
   summary: z.ZodString;
   notebook: z.ZodArray<ReturnType<typeof notebookProposalSchema>>;
@@ -66,7 +85,7 @@ export const wrapUpResultSchema = (
   z.object({
     summary: z.string().trim().min(1),
     notebook: z
-      .array(notebookProposalSchema(active))
+      .array(notebookProposalSchema(active, projects))
       .max(MAX_NOTEBOOK_PROPOSALS)
       .refine(touchesEachEntryOnce, 'propose at most one change per entry'),
     charter: z
@@ -94,14 +113,15 @@ export const WRAP_UP_INSTRUCTIONS = `End your reply with your wrap-up result: on
 \`\`\`
 
 - \`summary\`: one or two sentences on what this voyage did.
-- \`notebook\`: changes to the notebook, or \`[]\`. \`add\` writes a new entry (\`pinned\` keeps it first); \`update\` replaces an entry's text; \`retire\` takes an entry out of the notebook. \`entry\` is an id from the notebook above. At most one change per entry, and at most ${MAX_NOTEBOOK_PROPOSALS} changes.
+- \`notebook\`: changes to the notebook, or \`[]\`. \`add\` writes a new entry (\`pinned\` keeps it first; on a voyage across several projects, \`"project": "<slug>"\` files it under one project, and leaving it out makes it an entry for every project); \`update\` replaces an entry's text; \`retire\` takes an entry out of the notebook. \`entry\` is an id from the notebook above. At most one change per entry, and at most ${MAX_NOTEBOOK_PROPOSALS} changes.
 - \`charter\`: \`null\`, or \`{ "body": "...", "rationale": "..." }\` where \`body\` is the whole charter as you would have it, not a diff.
 
 Every change is a proposal. Nothing changes until the human approves it, and the next Driver is born with what they approve.`;
 
 const entryTitle = (entry: NotebookEntry): string => {
-  if (entry.pinned) return `### ${entry.id} (pinned)`;
-  return `### ${entry.id}`;
+  const tags = entryTags(entry);
+  if (tags.length === 0) return `### ${entry.id}`;
+  return `### ${entry.id} (${tags.join(', ')})`;
 };
 
 const entrySection = (entry: NotebookEntry): string =>
@@ -133,7 +153,11 @@ export const buildWrapUpPrompt = (parts: WrapUpPromptParts): string =>
 
 export const wrapUpFormat = (
   notebook: readonly NotebookEntry[],
+  projects?: ReadonlySet<string>,
 ): TurnFormat<WrapUpResult> => ({
-  schema: wrapUpResultSchema(new Set(notebook.map((entry) => entry.id))),
+  schema: wrapUpResultSchema(
+    new Set(notebook.map((entry) => entry.id)),
+    projects,
+  ),
   instructions: WRAP_UP_INSTRUCTIONS,
 });

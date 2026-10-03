@@ -65,13 +65,12 @@ describe('auto-end', { timeout: TIMEOUT }, () => {
 
   const start = async (): Promise<AutoEnd> => {
     auto = await startAutoEnd({
-      store,
-      voyageId,
+      legs: [{ store, voyageId }],
       settleSeconds: SETTLE_SECONDS,
       schedule: scheduler.schedule,
       home: HOME,
-      end: async (id) => {
-        ended.push(id);
+      end: async () => {
+        ended.push(voyageId);
       },
       onError: (err) => {
         errors.push(err);

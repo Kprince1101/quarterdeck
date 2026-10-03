@@ -28,11 +28,20 @@ const next = await voyage.turn('heron reported QD12: <report>');
 
 1. Checks the budget (`assertLaunchBudget` with the Driver's id; see [budget](../budget/README.md)). A held launch throws `BudgetHeldError` before the bus or a session starts.
 2. Launches the bus for the Driver (`bus.launch(agentId)`) and opens one ACP session with `client.newSession({ cwd, mcpServers: [bus] })`. Every turn of the voyage goes to that session; nothing else opens one. If the runtime needs sign-in, a sign-in card waits for the person and the session opens after, with a fresh bus launch (see [../signin/README.md](../signin/README.md)).
-3. Reads the active notebook: every `notebook` row of the project that is not retired (`retired_at` null), pinned entries first, then oldest first.
+3. Reads the active notebook: every `notebook` row of the project, or with no project (an entry for every project), that is not retired (`retired_at` null), pinned entries first, then oldest first.
 4. Stores the session on the agent (`session_id`, `voyage_id`; a `starting` agent becomes `idle`) and records `driver.voyage_started` with `{ voyageId, voyage, sessionId, notebook }`, where `notebook` lists the entry ids the Driver was born with.
 5. Queues the birth turn and returns. `voyage.birth` settles with its outcome; await it.
 
 The birth input (`buildBirthInput`) is the Driver's name and voyage number, the charter, the voyage's goal, the notebook entries and the turn result format. The next voyage gets a new session and a new birth input, carrying the notebook as it is then.
+
+### Every project
+
+The [coordinator](../crew/README.md#voyages) opens one voyage across every project, so it passes two more options:
+
+- `seats`: the Driver's seat in each project, `{ project, store, bus, agentId, voyageId }`, the lead (`store`, `agentId`, `voyageId`) among them. The session gets one MCP server per seat instead of one bus: that project's bus launched for its seat and named `bus-<project>` (`projectBusName`). Every seat is attached to the session and records `driver.voyage_started` with its own `voyageId`. The notebook is every seat's active notebook, each entry tagged with its project, or `every project` for an entry with no project (`readNotebooks`). Stuck flags come from every project, each line starting with `[<project>]`, and are marked surfaced in their own project.
+- `projects`: a `ProjectBrief` per project, `{ project, repoPath, bus, terms, waiting, builders }`, which the birth input lists under `# Projects`: the repository, the bus, the forge in its own terms (`Forge: GitLab (merge requests, MR).`), the approved tickets waiting for a builder and the live builders with their tickets. The first line then reads `You are <name>, the Driver of every project for voyage <n>.`
+
+Turns run on the lead seat, in the lead's store and under its turns folder.
 
 `voyage.turn(input)` queues one more turn in the voyage's session. Turns run one at a time, in the order they were asked for, the birth turn first. A turn that rejects does not stop the ones queued after it. `voyage.turnAs(input, format)` queues a turn in the same line that expects another `TurnFormat`; the [wrap-up](../voyage-end/README.md#wrap-up) uses it.
 
@@ -137,13 +146,13 @@ npx quarterdeck replay 3 7
 npx quarterdeck replay 3 7 --project example
 ```
 
-Voyage numbers start at 1 in every project, so pass `project` when the machine may have more than one; without it the CLI picks the only project that has the voyage. `through` counts Driver turns within the voyage, not `seq`: the turn with `seq` s in a session born at `seq` b is turn s - b + 1.
+Voyages are numbered across every project, and a voyage's Driver turns are saved under its lead project only, so the CLI finds a voyage without `project`. Voyages from before then were numbered from 1 in each project; for one of those two projects share, pass `project`. `through` counts Driver turns within the voyage, not `seq`: the turn with `seq` s in a session born at `seq` b is turn s - b + 1.
 
 It refuses a voyage or `n` that is not a positive integer and a project that is not a slug, so the line is always safe to paste. It lives in `replay-command.ts`, which imports nothing from Node, and the dashboard imports it as `@quarterdeck/server/replay-command`. `readTurnChain` checks `agentId` is a uuid, since it names a folder under `turnsDir`.
 
 ### Finding a voyage's Driver
 
-`findVoyageSessions(turnsDir, voyage)` finds a voyage's Driver sessions from the turn files alone, so it works while `quarterdeck up` has the store open. It reads each agent folder's first input; a Driver's is a birth input (`readBirth` gives the Driver's name and voyage from its first line; a birth input saved before voyages were renamed, which says `for round <n>`, reads the same way, so older turn files still replay). Each birth starts a session that runs through the turns after it, up to the next birth. It resolves to the sessions of `voyage`, oldest birth first (by `input.md`'s modification time), each with `agentId`, `driverName`, `firstSeq`, `lastSeq` and `bornAt`. A voyage has more than one when its Driver session was opened again or another Driver took the voyage over.
+`findVoyageSessions(turnsDir, voyage)` finds a voyage's Driver sessions from the turn files alone, so it works while `quarterdeck up` has the store open. It reads each agent folder's first input; a Driver's is a birth input (`readBirth` gives the Driver's name and voyage from its first line; a birth input saved before voyages were renamed, which says `for round <n>`, reads the same way, and so does a voyage across every project's, which says `the Driver of every project`, so older turn files still replay). Each birth starts a session that runs through the turns after it, up to the next birth. It resolves to the sessions of `voyage`, oldest birth first (by `input.md`'s modification time), each with `agentId`, `driverName`, `firstSeq`, `lastSeq` and `bornAt`. A voyage has more than one when its Driver session was opened again or another Driver took the voyage over.
 
 `findTurnSession(turnsDir, agentId, seq, voyageAgents)` places one turn: the session of `agentId` that holds `seq`, its `n` (`seq - firstSeq + 1`) and whether it is the voyage's latest session, the one the CLI replays. It returns `null` for a turn outside a Driver session. For `latest` it reads only the sessions of `agentId` and of the agents `voyageAgents(voyage)` names, not every agent folder; `turn.read` passes the agents with a `driver.voyage_started` event for that voyage.
 

@@ -19,6 +19,7 @@ export interface StuckFlag {
   ticketId: string | null;
   ticketTitle: string | null;
   head: string;
+  project?: string;
 }
 
 const run = promisify(execFile);
@@ -134,8 +135,13 @@ export const markStuckFlagsSurfaced = async (
   });
 };
 
+const flagProject = (flag: StuckFlag): string => {
+  if (flag.project === undefined) return '';
+  return `[${flag.project}] `;
+};
+
 const flagLine = (flag: StuckFlag): string => {
-  const builder = `${flag.name} (${flag.builderId})`;
+  const builder = `${flagProject(flag)}${flag.name} (${flag.builderId})`;
   if (flag.ticketId === null)
     return `- ${builder}, holding no ticket, at ${flag.head}.`;
   const ticket = `ticket ${flag.ticketId} "${flag.ticketTitle ?? ''}"`;

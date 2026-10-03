@@ -102,6 +102,69 @@
   font-family: var(--qd-mono);
 }
 
+.qd-board-voyage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qd-space-2);
+  padding: var(--qd-space-2);
+  border: 1px solid var(--qd-line);
+  border-radius: var(--qd-radius);
+}
+
+.qd-board-voyage-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--qd-space-2);
+  margin: 0;
+}
+
+.qd-board-voyage-label {
+  color: var(--qd-accent);
+  font-family: var(--qd-mono);
+}
+
+.qd-board-voyage-goal {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.qd-board-voyage-projects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--qd-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.qd-board-voyage-project {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--qd-space-1);
+  font-family: var(--qd-mono);
+}
+
+.qd-board-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--qd-space-2);
+}
+
+.qd-board-input {
+  flex: 1;
+  min-width: 8rem;
+  font: inherit;
+  color: var(--qd-fg);
+  background: var(--qd-surface-raised);
+  border: 1px solid var(--qd-line);
+  border-radius: var(--qd-radius);
+  padding: var(--qd-space-1) var(--qd-space-2);
+}
+
+.qd-board-danger {
+  color: var(--qd-danger);
+}
+
 .qd-board-pause {
   display: flex;
   flex-wrap: wrap;

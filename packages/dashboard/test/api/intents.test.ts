@@ -129,12 +129,9 @@ describe('intent client', () => {
     });
 
     it('returns the pending reply', async () => {
-      const reply = await deck.client.voyage.start({
-        project: deck.project,
-        goal: 'ship QD6c',
-      });
+      const reply = await deck.client.project.kill({ project: deck.project });
       expect(reply).toMatchObject({
-        intent: 'voyage.start',
+        intent: 'project.kill',
         status: 'pending',
         id: expect.any(String),
       });

@@ -2,7 +2,7 @@ import { mkdir, readdir, readFile, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 import { RequestError } from '@agentclientprotocol/sdk';
-import type { Runtime } from '@quarterdeck/rules';
+import { forgeTerms, type Runtime } from '@quarterdeck/rules';
 import {
   DRIVER_TURN_INSTRUCTIONS,
   REPLAY_PERMISSIONS,
@@ -281,6 +281,49 @@ describe('quarterdeck replay', () => {
     );
     expect(code).toBe(0);
     expect(connections[0]?.launch.project).toBe('fleet');
+  });
+
+  it('finds a voyage across every project without --project', async () => {
+    await saveVoyages('deck');
+    await save(
+      'fleet',
+      DRIVER,
+      1,
+      buildBirthInput({
+        agent: { name: 'lark' },
+        voyage: { number: 4, goal: 'Ship both.' },
+        charter: '# Driver charter',
+        notebook: [],
+        projects: [
+          {
+            project: 'deck',
+            repoPath: '/repos/deck',
+            bus: 'bus-deck',
+            terms: forgeTerms('github'),
+            waiting: [],
+            builders: [],
+          },
+          {
+            project: 'fleet',
+            repoPath: '/repos/fleet',
+            bus: 'bus-fleet',
+            terms: forgeTerms('github'),
+            waiting: [],
+            builders: [],
+          },
+        ],
+        instructions: DRIVER_TURN_INSTRUCTIONS,
+      }),
+    );
+    await save('deck', BUILDER, 2, 'Work on QD4.');
+    const { adapters } = fakeAdapters();
+
+    expect(
+      await replayVoyage(['4', '--runtime', 'kiro'], io, { adapters }),
+    ).toBe(0);
+    expect(io.lines[0]).toBe(
+      `Replaying voyage 4 of fleet: Driver lark (${DRIVER}), turns 1 to 1 of 1, on kiro.`,
+    );
   });
 
   it('runs the command the Driver widget prints', async () => {

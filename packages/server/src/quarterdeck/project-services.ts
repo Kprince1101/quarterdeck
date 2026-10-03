@@ -1,5 +1,5 @@
 import { startBusHost, type BusHost } from '../bus/host.js';
-import { startCrew, type Crew } from '../crew/index.js';
+import { startCrew, type Coordinator, type Crew } from '../crew/index.js';
 import { crewFailedEvent } from '../crew/failures.js';
 import { projectForge, type ForgeHost } from '../gate/index.js';
 import type { PlannerAdapters } from '../planner/sessions.js';
@@ -13,6 +13,7 @@ export interface ProjectServicesContext {
   allowedOrigins?: readonly string[] | undefined;
   onError?: ((err: unknown) => void) | undefined;
   openStores: () => readonly Store[];
+  coordinator: Coordinator;
   adapters?: PlannerAdapters | undefined;
   forge?: ForgeHost | undefined;
   gatePollMs?: number | undefined;
@@ -60,6 +61,7 @@ const startProjectCrew = async (
       home: context.home,
       homeDir: context.homeDir,
       openStores: context.openStores,
+      coordinator: context.coordinator,
       adapters: context.adapters,
       forge: context.forge,
       gatePollMs: context.gatePollMs,

@@ -64,6 +64,12 @@ export const crewRules = (
   };
 };
 
+export type MachineRules = Pick<CrewRules, 'load'>;
+
+export const machineRules = (homeDir: string): MachineRules => ({
+  load: (name) => loadRule(name, { homeDir }),
+});
+
 export const baseRef = async (
   repoPath: string,
   base: string | undefined,

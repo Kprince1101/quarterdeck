@@ -339,10 +339,10 @@ describe('demo server', () => {
     const { intents } = parts(server);
     const voyage = openVoyage(server);
     await expect(
-      intents.voyage.start({ project, goal: 'Too soon' }),
+      intents.voyage.start({ goal: 'Too soon' }),
     ).rejects.toMatchObject({ status: 409 });
 
-    await intents.voyage.end({ project, voyageId: voyage.id });
+    await intents.voyage.end({ voyage: voyage.number });
     expect(server.store.find('voyages', voyage.id)?.status).toBe('ended');
     expect(
       server.store
@@ -351,10 +351,10 @@ describe('demo server', () => {
         .some((ticket) => ticket.status === 'open'),
     ).toBe(true);
     await expect(
-      intents.voyage.kill({ project, voyageId: voyage.id }),
+      intents.voyage.kill({ voyage: voyage.number }),
     ).rejects.toMatchObject({ status: 409 });
 
-    await intents.voyage.start({ project, goal: 'Tidy the berth list' });
+    await intents.voyage.start({ goal: 'Tidy the berth list' });
     const next = openVoyage(server);
     expect(next).toMatchObject({ number: 3, goal: 'Tidy the berth list' });
     server.step();
@@ -390,7 +390,7 @@ describe('demo server', () => {
     await expect(
       intents.ticket.reject({ project, ticketId }),
     ).rejects.toBeInstanceOf(IntentError);
-    await intents.voyage.end({ project, voyageId: openVoyage(server).id });
+    await intents.voyage.end({ voyage: openVoyage(server).number });
     stepUntil(server, () => store.find('tickets', ticketId)?.status !== 'open');
     expect(store.find('tickets', ticketId)?.voyageId).toBe(
       openVoyage(server).id,

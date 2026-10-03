@@ -83,7 +83,7 @@ describe('demo build', () => {
       expect(textOf('#root [role="status"]')).toBe('Live');
     });
     await vi.waitFor(() => {
-      expect(textOf('#root [aria-label="Project"]')).toContain('Voyage 2');
+      expect(textOf('#root [aria-label="Board"]')).toContain('Voyage 2');
     });
     expect(network).not.toHaveBeenCalled();
   });

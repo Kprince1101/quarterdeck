@@ -65,6 +65,7 @@ export interface PauseGate extends PauseGuard {
 export interface PauseGateOptions {
   store: Pick<Store, 'db' | 'projectId' | 'publish' | 'subscribe'>;
   home?: string;
+  global?: boolean;
   onError?: (err: unknown) => void;
 }
 
@@ -113,8 +114,18 @@ export const startPauseGate = async (
   let running: Promise<void> | undefined;
   let again = false;
 
-  const scopesOf = (subject: PauseSubject) =>
-    pausedScopes(store.db, store.projectId, home, subject.agentId);
+  const projectScoped = options.global !== true;
+
+  const scopesOf = async (subject: PauseSubject) => {
+    const scopes = await pausedScopes(
+      store.db,
+      store.projectId,
+      home,
+      subject.agentId,
+    );
+    if (projectScoped) return scopes;
+    return scopes.filter((scope) => scope !== 'project');
+  };
 
   const isFinished = async ({ agentId }: PauseSubject): Promise<boolean> => {
     if (agentId === undefined) return false;
@@ -149,7 +160,8 @@ export const startPauseGate = async (
     return publishAbout(entry, PAUSE_EVENTS.dropped, { reason });
   };
 
-  const archived = () => isProjectArchived(store.db, store.projectId);
+  const archived = async (): Promise<boolean> =>
+    projectScoped && (await isProjectArchived(store.db, store.projectId));
 
   const dropAll = async (reason: DropReason): Promise<void> => {
     for (const entry of queue.splice(0)) {

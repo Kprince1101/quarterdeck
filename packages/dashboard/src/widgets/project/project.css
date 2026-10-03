@@ -45,23 +45,6 @@
   outline-offset: 1px;
 }
 
-.qd-project-voyage {
-  display: grid;
-  gap: var(--qd-space-1);
-  margin: 0;
-}
-
-.qd-project-voyage-label {
-  color: var(--qd-accent);
-  font-family: var(--qd-mono);
-  font-size: var(--qd-text-sm);
-}
-
-.qd-project-goal {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
 .qd-project-actions {
   display: flex;
   flex-wrap: wrap;

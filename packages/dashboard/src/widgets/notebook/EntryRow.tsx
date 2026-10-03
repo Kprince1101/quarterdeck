@@ -17,7 +17,7 @@ export const EntryRow = ({
   return (
     <li className="qd-notebook-entry" data-entry-id={entry.id}>
       <div className="qd-notebook-entry-head">
-        <ProjectTag project={entry.project} isShown={showProject} />
+        <ProjectTag project={entry.scope} isShown={showProject} />
         <button
           type="button"
           className="qd-notebook-pin"

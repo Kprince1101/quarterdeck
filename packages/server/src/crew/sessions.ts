@@ -5,6 +5,7 @@ import {
   connectAgentSession,
   type PlannerAdapters,
   type PlannerBus,
+  type PlannerSessionSite,
 } from '../planner/sessions.js';
 import type { Store } from '../store/index.js';
 import { CrewStoppedError } from './failures.js';
@@ -18,6 +19,7 @@ export interface CrewSessionSite {
   repoPath: () => Promise<string>;
   homeDir: string;
   passEnv: () => Promise<readonly string[]>;
+  servers?: PlannerSessionSite['servers'];
   onExit?: (agent: Agent) => void;
 }
 
@@ -89,22 +91,24 @@ export const createCrewSessions = (site: CrewSessionSite): CrewSessionHost => {
     agent: Agent,
   ): Promise<{ live: LiveAgent; sessionId: string }> => {
     const repoPath = await site.repoPath();
-    const session = await connectAgentSession(
-      {
+    const sessionSite: PlannerSessionSite = {
+      store: site.store,
+      slug: site.slug,
+      repoPath,
+      homeDir: site.homeDir,
+      bus: site.bus,
+      adapters: site.adapters,
+      passEnv: await site.passEnv(),
+      cardHuman: cardPermissions({
         store: site.store,
-        slug: site.slug,
-        repoPath,
-        homeDir: site.homeDir,
-        bus: site.bus,
-        adapters: site.adapters,
-        passEnv: await site.passEnv(),
-        cardHuman: cardPermissions({
-          store: site.store,
-          agent,
-          signal: stopping.signal,
-        }),
-        signInSignal: () => stopping.signal,
-      },
+        agent,
+        signal: stopping.signal,
+      }),
+      signInSignal: () => stopping.signal,
+    };
+    if (site.servers !== undefined) sessionSite.servers = site.servers;
+    const session = await connectAgentSession(
+      sessionSite,
       agent,
       agent.worktreePath ?? repoPath,
     );

@@ -14,18 +14,21 @@ import { startLifecycleIntents } from '../lifecycle/index.js';
 import { startPauseGate, type PauseGate } from '../pause/index.js';
 import { startPlanner, type Planner } from '../planner/index.js';
 import { PLANNER_ADAPTERS, type PlannerAdapters } from '../planner/sessions.js';
-import { projectTurnsDir, type Store } from '../store/index.js';
+import type { Store } from '../store/index.js';
+import type { Coordinator } from './coordinator.js';
 import {
+  AgentExitedError,
   crewFailureReporter,
   type CrewFailureReporter,
   type CrewService,
 } from './failures.js';
 import { crewLifecycle } from './lifecycle.js';
 import { cardPermissions } from './permission-card.js';
-import { createReviewerDesk, type ReviewerDesk } from './reviewer.js';
-import { startCrewVoyages, type CrewVoyages } from './voyages.js';
 import { crewRules, type CrewRules } from './rules.js';
 import { createCrewSessions, type CrewSessionHost } from './sessions.js';
+import type { CrewProject } from './voyage-legs.js';
+
+export { AgentExitedError };
 
 export interface CrewOptions {
   store: Store;
@@ -33,6 +36,7 @@ export interface CrewOptions {
   home: string;
   homeDir: string;
   bus: BusHost;
+  coordinator: Pick<Coordinator, 'join' | 'leave' | 'reviewers'>;
   openStores: () => readonly Store[];
   adapters?: PlannerAdapters | undefined;
   forge?: ForgeHost | undefined;
@@ -44,10 +48,8 @@ export interface Crew {
   pause: PauseGate;
   sessions: CrewSessionHost;
   lifecycle: AgentLifecycle;
-  reviewers: ReviewerDesk;
   planner: Planner | undefined;
   gate: ReviewGate | undefined;
-  voyages: CrewVoyages | undefined;
   close: () => Promise<void>;
 }
 
@@ -65,13 +67,6 @@ const SERVICE_OF_ROLE: Record<AgentRole, CrewService> = {
 const reportError = (err: unknown): void => {
   console.error(err);
 };
-
-export class AgentExitedError extends Error {
-  constructor(agent: Pick<Agent, 'name'>) {
-    super(`${agent.name}'s process exited`);
-    this.name = 'AgentExitedError';
-  }
-}
 
 const injectedForge = (
   host: ForgeHost | undefined,
@@ -116,14 +111,11 @@ interface CrewParts {
   report: CrewFailureReporter;
   rules: CrewRules;
   pause: PauseGate;
-  sessions: CrewSessionHost;
   lifecycle: AgentLifecycle;
-  reviewers: ReviewerDesk;
 }
 
 const startServices = async (parts: CrewParts) => {
-  const { options, report, rules, pause, sessions, lifecycle, reviewers } =
-    parts;
+  const { options, report, rules, pause, lifecycle } = parts;
   const { store } = options;
   await retireStaleReviewers(store, lifecycle).catch(report('reviewer'));
   const planner = await attempt(report, 'planner', () =>
@@ -153,28 +145,14 @@ const startServices = async (parts: CrewParts) => {
         options.forge ??
         (async () =>
           forgeHost(await mergeForge(store, { homeDir: options.homeDir }))),
-      reviewers,
+      reviewers: options.coordinator.reviewers,
       onError: report('gate'),
     };
     if (options.gatePollMs !== undefined)
       gateOptions.pollMs = options.gatePollMs;
     return startReviewGate(gateOptions);
   });
-  const voyages = await attempt(report, 'voyages', () =>
-    startCrewVoyages({
-      store,
-      project: options.project,
-      home: options.home,
-      sessions,
-      lifecycle,
-      pause,
-      bus: options.bus,
-      rules,
-      reviewers,
-      report,
-    }),
-  );
-  return { planner, intents, archive, gate, voyages };
+  return { planner, intents, archive, gate };
 };
 
 export const startCrew = async (options: CrewOptions): Promise<Crew> => {
@@ -195,7 +173,10 @@ export const startCrew = async (options: CrewOptions): Promise<Crew> => {
     homeDir: options.homeDir,
     passEnv: async () => (await rules.load('env')).pass,
     onExit: (agent) => {
-      exited(agent);
+      report(
+        SERVICE_OF_ROLE[agent.role],
+        exitLinks(agent),
+      )(new AgentExitedError(agent));
     },
   });
   const lifecycle = crewLifecycle({
@@ -203,34 +184,26 @@ export const startCrew = async (options: CrewOptions): Promise<Crew> => {
     sessions,
     openStores: options.openStores,
   });
-  const exited = (agent: Agent): void => {
-    const links = exitLinks(agent);
-    report(SERVICE_OF_ROLE[agent.role], links)(new AgentExitedError(agent));
-    if (agent.role === 'reviewer')
-      lifecycle.retire(store, agent.id).catch(report('reviewer', links));
-  };
-  const reviewers = createReviewerDesk({
-    store,
-    sessions,
-    lifecycle,
-    turnsDir: projectTurnsDir(options.project, options.home),
-    brief: () => rules.load('reviewer'),
-    runtime: async () => (await rules.load('models')).reviewer.runtime,
-    report,
-  });
   const services = await startServices({
     options,
     report,
     rules,
     pause,
+    lifecycle,
+  });
+  const project: CrewProject = {
+    project: options.project,
+    store,
+    bus: options.bus,
+    pause,
     sessions,
     lifecycle,
-    reviewers,
-  });
+    rules,
+  };
+  await options.coordinator.join(project).catch(report('voyages'));
 
   const close = async (): Promise<void> => {
-    const { voyages } = services;
-    await voyages?.close();
+    await options.coordinator.leave(options.project).catch(report('start'));
     const listeners: (Closable | undefined)[] = [
       services.gate,
       services.archive,
@@ -240,9 +213,7 @@ export const startCrew = async (options: CrewOptions): Promise<Crew> => {
     for (const listener of listeners)
       await listener?.close().catch(report('start'));
     await sessions.closeAll();
-    await reviewers.close();
     await pause.close();
-    await voyages?.idle();
   };
   let closing: Promise<void> | undefined;
 
@@ -250,10 +221,8 @@ export const startCrew = async (options: CrewOptions): Promise<Crew> => {
     pause,
     sessions,
     lifecycle,
-    reviewers,
     planner: services.planner,
     gate: services.gate,
-    voyages: services.voyages,
     close: () => {
       closing ??= close();
       return closing;

@@ -43,6 +43,13 @@ export const crewFailedEvent = (
   return event;
 };
 
+export class AgentExitedError extends Error {
+  constructor(agent: { name: string }) {
+    super(`${agent.name}'s process exited`);
+    this.name = 'AgentExitedError';
+  }
+}
+
 export class CrewStoppedError extends Error {
   constructor() {
     super("the project's crew is stopping");
@@ -61,3 +68,23 @@ export const crewFailureReporter =
     log(err);
     store.publish(crewFailedEvent(service, err, links)).catch(log);
   };
+
+export interface FailureTarget {
+  store: Pick<Store, 'publish'>;
+  links: CrewFailureLinks;
+}
+
+export const reportToEach = (
+  targets: readonly FailureTarget[],
+  service: CrewService,
+  log: (err: unknown) => void,
+): ((err: unknown) => void) => {
+  const reports = targets.map(({ store, links }) =>
+    crewFailureReporter(store, () => undefined)(service, links),
+  );
+  return (err) => {
+    if (err instanceof CrewStoppedError) return;
+    log(err);
+    for (const report of reports) report(err);
+  };
+};

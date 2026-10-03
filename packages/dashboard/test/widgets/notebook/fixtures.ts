@@ -65,6 +65,7 @@ export const proposal = (
   entryId: null,
   body: null,
   pinned: false,
+  global: false,
   rationale: '',
   status: 'open',
   createdAt: AT,

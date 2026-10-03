@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { openAcpClientCount } from '../../src/acp/client/index.js';
-import { CREW_FAILED_EVENT } from '../../src/crew/index.js';
+import { COORDINATOR_SITE, CREW_FAILED_EVENT } from '../../src/crew/index.js';
 import {
   startQuarterdeck,
   type Quarterdeck,
@@ -31,7 +31,7 @@ import {
 } from './crew-fixtures.ts';
 
 const PROJECT = 'example';
-const BROKEN = 'sample';
+const SAMPLE = 'sample';
 
 describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
   let homeDir = '';
@@ -60,10 +60,9 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
 
   const startVoyage = async (qd: Quarterdeck, project: string) => {
     const reply = await sendIntent(qd, 'voyage.start', {
-      project,
       goal: 'Ship the greeting',
     });
-    expect(reply.status).toBe(202);
+    expect(reply.status).toBe(200);
     const store = storeOf(qd, project);
     await vi.waitFor(async () => {
       expect(await eventsOf(store, 'driver.voyage_started')).toHaveLength(1);
@@ -319,9 +318,11 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
         ),
       ).toBe('killed');
     }, WAIT);
-    expect(await eventsOf(store, 'agent.killed')).toEqual([
-      expect.objectContaining({ agentId: driverId }),
-    ]);
+    await vi.waitFor(async () => {
+      expect(await eventsOf(store, 'agent.killed')).toEqual([
+        expect.objectContaining({ agentId: driverId }),
+      ]);
+    }, WAIT);
   });
 
   it('stops every agent on close and ends the voyage it left open at the next start', async () => {
@@ -353,18 +354,18 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
     ).toBe(0);
   });
 
-  it('keeps the API and other projects running when one project’s Driver dies', async () => {
-    const runtime = crewRuntime({ [BROKEN]: { crashDriver: true } });
+  it('keeps the API running when the Driver dies, and ends its voyage on request', async () => {
+    const runtime = crewRuntime({ [COORDINATOR_SITE]: { crashDriver: true } });
     const qd = await start({
       adapters: runtime.adapters,
       forge: fakeGitHub(),
     });
-    await openProject(qd, BROKEN);
+    await openProject(qd, SAMPLE);
     await openProject(qd, PROJECT);
 
-    const broken = await startVoyage(qd, BROKEN);
+    const sample = await startVoyage(qd, SAMPLE);
     await vi.waitFor(async () => {
-      expect(await eventsOf(broken, CREW_FAILED_EVENT)).toContainEqual(
+      expect(await eventsOf(sample, CREW_FAILED_EVENT)).toContainEqual(
         expect.objectContaining({
           payload: expect.objectContaining({ service: 'driver' }),
         }),
@@ -374,23 +375,23 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
     expect(
       (
         await sendIntent(qd, 'notebook.add', {
-          project: BROKEN,
+          project: SAMPLE,
           body: 'still answering',
         })
       ).status,
     ).toBe(200);
-
-    const store = await startVoyage(qd, PROJECT);
-    const ticketId = await proposeTicket(store, 'Add a greeting');
     expect(
-      (await sendIntent(qd, 'ticket.approve', { project: PROJECT, ticketId }))
-        .status,
-    ).toBe(200);
-    await vi.waitFor(async () => {
-      expect(await eventsOf(store, 'ticket.assigned')).toEqual([
-        expect.objectContaining({ ticketId }),
-      ]);
-    }, WAIT);
-    expect(await eventsOf(store, CREW_FAILED_EVENT)).toEqual([]);
+      (await sendIntent(qd, 'voyage.start', { goal: 'Another' })).status,
+    ).toBe(409);
+
+    expect((await sendIntent(qd, 'voyage.end', { voyage: 1 })).status).toBe(
+      202,
+    );
+    for (const project of [SAMPLE, PROJECT]) {
+      const store = storeOf(qd, project);
+      await vi.waitFor(async () => {
+        expect(await eventsOf(store, 'voyage.ended')).toHaveLength(1);
+      }, WAIT);
+    }
   });
 });

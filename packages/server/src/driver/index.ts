@@ -44,13 +44,21 @@ export {
   type BuilderTicket,
 } from './tickets.js';
 export {
+  briefTicketLabel,
   buildBirthInput,
+  entryTags,
   isBirthInput,
   readActiveNotebook,
   readBirth,
+  readNotebooks,
   type Birth,
   type BirthInputParts,
+  type BriefBuilder,
+  type BriefTicket,
   type NotebookEntry,
+  type NotebookRead,
+  type NotebookSource,
+  type ProjectBrief,
   type Voyage,
 } from './birth-input.js';
 export {
@@ -120,6 +128,7 @@ export {
   VOYAGE_STARTED_EVENT,
   openDriverVoyage,
   type DriverClient,
+  type DriverSeat,
   type DriverVoyage,
   type DriverVoyageOptions,
   type DriverTurnOutcome,
