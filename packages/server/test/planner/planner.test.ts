@@ -511,6 +511,26 @@ describe('Planner', { timeout: TIMEOUT }, () => {
       { id: ticketId, title: 'QD2a store', status: 'proposed' },
     ]);
     expect(await docketOf(p.store)).toEqual([]);
+
+    const failing = new Error('the source database went away');
+    const flaky = {
+      ...sample,
+      db: {
+        ...sample.db,
+        query: (sql: string, params?: unknown[]) => {
+          if (sql.includes("set status = 'rejected'"))
+            return Promise.reject(failing);
+          return sample.db.query(sql, params);
+        },
+      },
+    } as Store;
+    await expect(
+      moveProposal({ ticketId, from: flaky, to: p.store }),
+    ).rejects.toBe(failing);
+    expect(await docketOf(p.store)).toEqual([]);
+    expect(await docketOf(sample)).toEqual([
+      { id: ticketId, title: 'QD2a store', status: 'proposed' },
+    ]);
   });
 
   it('starts a new conversation after planner.new, ending the old session and its process', async () => {

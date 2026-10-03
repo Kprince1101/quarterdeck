@@ -89,8 +89,16 @@ export const moveProposal = async (
     title,
     move.body ?? ticket.body,
   );
-  if (!(await rejectProposed(move.from, move.ticketId))) {
-    await move.to.db.query('delete from tickets where id = $1', [ticketId]);
+  const dropCopy = () =>
+    move.to.db.query('delete from tickets where id = $1', [ticketId]);
+  const rejected = await rejectProposed(move.from, move.ticketId).catch(
+    async (err: unknown) => {
+      await dropCopy();
+      throw err;
+    },
+  );
+  if (!rejected) {
+    await dropCopy();
     throw new ProposalMoveError(
       `ticket ${move.ticketId} was decided while it was being moved`,
     );

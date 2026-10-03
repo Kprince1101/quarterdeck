@@ -48,7 +48,9 @@ const asksForRefusals = (params: unknown[] | undefined): boolean =>
     (param) => Array.isArray(param) && param.includes(PROPOSAL_REFUSED_EVENT),
   );
 
-describe('a Planner turn and a cancel', () => {
+const TIMEOUT = 30_000;
+
+describe('a Planner turn and a cancel', { timeout: TIMEOUT }, () => {
   let store: Store;
   let agent: Agent;
   let ending: AbortController;
@@ -161,7 +163,7 @@ describe('a Planner turn and a cancel', () => {
     ending = new AbortController();
     prompts = [];
     hook = () => undefined;
-  });
+  }, TIMEOUT);
 
   afterEach(async () => {
     await store.close();

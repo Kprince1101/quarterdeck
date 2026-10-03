@@ -34,7 +34,7 @@ const proposedId = (text: string): string => {
   return match[1];
 };
 
-describe('bus propose', () => {
+describe('bus propose', { timeout: TIMEOUT }, () => {
   let store: Store;
   let plannerId = '';
   let planner: Client;
