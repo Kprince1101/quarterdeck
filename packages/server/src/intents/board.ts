@@ -24,6 +24,7 @@ export const BOARD_INTENTS = {
   'notebook.add': inProject({
     body: textSchema,
     pinned: z.boolean().default(false),
+    global: z.boolean().default(false),
   }),
   'notebook.pin': inProject({ entryId: idSchema, pinned: z.boolean() }),
   'notebook.remove': inProject({ entryId: idSchema }),

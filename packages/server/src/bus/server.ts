@@ -8,6 +8,9 @@ import type { BusCall, BusContext, BusTool } from './tool.js';
 
 export const BUS_SERVER_NAME = 'bus';
 
+export const projectBusName = (project: string): string =>
+  `${BUS_SERVER_NAME}-${project}`;
+
 export const BUS_SERVER_INFO = { name: 'quarterdeck-bus', version: '0.0.0' };
 
 type ToolExtra = RequestHandlerExtra<ServerRequest, ServerNotification>;

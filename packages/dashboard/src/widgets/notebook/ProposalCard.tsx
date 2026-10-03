@@ -86,7 +86,7 @@ export const ProposalCard = ({
     >
       <div className="qd-notebook-proposal-head">
         <span className="qd-notebook-op">{proposal.opLabel}</span>
-        <ProjectTag project={proposal.project} isShown={showProject} />
+        <ProjectTag project={proposal.scope} isShown={showProject} />
         {proposal.pinned && <span className="qd-notebook-flag">pinned</span>}
       </div>
       {card.isEditing && (

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { forgeTerms, type Forge } from '@quarterdeck/rules/forges';
 import type { SnapshotTables } from '@quarterdeck/server/stream-schema';
-import type { HTMLInputElement as HappyInput, Window } from 'happy-dom';
+import type { HTMLInputElement as HappyInput } from 'happy-dom';
 import { act } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
@@ -23,11 +23,9 @@ import {
   IDLE_BUILDER_ID,
   IDLE_REVIEWER_ID,
   OLD_ID,
-  VOYAGE_ID,
   SITE_ID,
   BUSY_BUILDER_ID,
   projectTables,
-  voyage,
   ticket,
 } from './fixtures.js';
 
@@ -147,17 +145,6 @@ const names = (scope: PageElement): (string | null)[] =>
 const isDisabled = (element: PageElement): boolean =>
   element.getAttribute('disabled') !== null;
 
-const type = (scope: PageElement, text: string) => {
-  const input = find(scope, 'input[aria-label="Voyage goal"]');
-  const field = input as unknown as HappyInput;
-  const win = (globalThis as unknown as { window: Window }).window;
-  act(() => {
-    const prototype = Object.getPrototypeOf(field) as object;
-    Object.getOwnPropertyDescriptor(prototype, 'value')?.set?.call(field, text);
-    field.dispatchEvent(new win.Event('input', { bubbles: true }));
-  });
-};
-
 const pickProject = (scope: PageElement, id: string) => {
   choose(find(scope, '.qd-project-picker select'), id);
 };
@@ -200,101 +187,9 @@ describe('Project widget', () => {
     unmount();
   });
 
-  it('shows the open voyage and ends or kills it', async () => {
-    const { container, sent, unmount } = mount(projectTables());
-    const voyageSection = section(container, 'Voyage');
-    expect(textOf(voyageSection, '.qd-project-voyage-label')).toBe(
-      'Voyage 2 · active',
-    );
-    expect(textOf(voyageSection, '.qd-project-goal')).toBe(
-      'Ship the project widget',
-    );
-    expect(names(voyageSection)).toEqual(['End voyage', 'Kill voyage']);
-    click(button(voyageSection, 'End voyage'));
-    await settle();
-    expect(sentTo(sent)).toEqual([
-      ['voyage.end', { project: 'deck', voyageId: VOYAGE_ID }],
-    ]);
-    unmount();
-  });
-
-  it('sends nothing on one click of Kill voyage and asks with the reopen count', async () => {
-    const { container, sent, unmount } = mount(projectTables());
-    const voyageSection = () => section(container, 'Voyage');
-    click(button(voyageSection(), 'Kill voyage'));
-    await settle();
-    expect(sent).toEqual([]);
-    expect(names(voyageSection())).toEqual([
-      'Kill voyage? This reopens 3 tickets',
-      'Cancel',
-    ]);
-    click(button(voyageSection(), 'Cancel'));
-    expect(names(voyageSection())).toEqual(['End voyage', 'Kill voyage']);
-    expect(sent).toEqual([]);
-
-    click(button(voyageSection(), 'Kill voyage'));
-    click(button(voyageSection(), 'Kill voyage? This reopens 3 tickets'));
-    await settle();
-    expect(sentTo(sent)).toEqual([
-      ['voyage.kill', { project: 'deck', voyageId: VOYAGE_ID }],
-    ]);
-    expect(names(voyageSection())).toEqual(['End voyage', 'Kill voyage']);
-    unmount();
-  });
-
-  it('counts the reopened tickets from the stream', () => {
-    const tables = projectTables();
-    tables.tickets = tables.tickets.filter(
-      ({ assigneeId }) => assigneeId === BUSY_BUILDER_ID,
-    );
-    const { container, unmount } = mount(tables);
-    click(button(section(container, 'Voyage'), 'Kill voyage'));
-    expect(names(section(container, 'Voyage'))[0]).toBe(
-      'Kill voyage? This reopens 1 ticket',
-    );
-    unmount();
-  });
-
-  it('starts a voyage with a goal once there is one', async () => {
-    const { container, sent, unmount } = mount(projectTables());
-    pickProject(container, SITE_ID);
-    const voyageSection = () => section(container, 'Voyage');
-    expect(textOf(voyageSection(), '.qd-empty')).toBe('No voyage running.');
-    expect(isDisabled(button(voyageSection(), 'Start voyage'))).toBe(true);
-    type(voyageSection(), '   ');
-    expect(isDisabled(button(voyageSection(), 'Start voyage'))).toBe(true);
-    type(voyageSection(), 'Launch the site');
-    click(button(voyageSection(), 'Start voyage'));
-    await settle();
-    expect(sentTo(sent)).toEqual([
-      ['voyage.start', { project: 'site', goal: 'Launch the site' }],
-    ]);
-    expect(
-      (find(voyageSection(), 'input') as unknown as HappyInput).value,
-    ).toBe('');
-    unmount();
-  });
-
-  it('follows the stream when a voyage starts', () => {
+  it('leaves the voyage to the Board', () => {
     const { container, unmount } = mount(projectTables());
-    pickProject(container, SITE_ID);
-    act(() => {
-      FakeSocket.opened[0]?.deliver({
-        type: 'change',
-        table: 'voyages',
-        op: 'insert',
-        id: '00000000-0000-4000-8000-0000000000b9',
-        row: voyage('00000000-0000-4000-8000-0000000000b9', 1, {
-          projectId: SITE_ID,
-          status: 'planning',
-          goal: 'Launch',
-        }),
-      });
-    });
-    expect(names(section(container, 'Voyage'))).toEqual([
-      'End voyage',
-      'Kill voyage',
-    ]);
+    expect(container.querySelector('section[aria-label="Voyage"]')).toBeNull();
     unmount();
   });
 
@@ -593,22 +488,6 @@ describe('Project widget', () => {
       ['project.archive', { project: 'deck', archived: true }],
       ['project.archive', { project: 'old', archived: false }],
     ]);
-    unmount();
-  });
-
-  it('shows a refusal from the server where it happened', async () => {
-    const { container, unmount } = mount(projectTables(), 409, {
-      error: `voyage ${VOYAGE_ID} has already ended`,
-    });
-    click(button(section(container, 'Voyage'), 'End voyage'));
-    await settle();
-    expect(textOf(section(container, 'Voyage'), '[role="alert"]')).toBe(
-      `voyage ${VOYAGE_ID} has already ended`,
-    );
-    expect(container.querySelectorAll('[role="alert"]')).toHaveLength(1);
-    expect(isDisabled(button(section(container, 'Voyage'), 'End voyage'))).toBe(
-      false,
-    );
     unmount();
   });
 

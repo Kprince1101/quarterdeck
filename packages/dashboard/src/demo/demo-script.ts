@@ -131,6 +131,7 @@ const proposeLesson = (
     entryId: null,
     body: lesson,
     pinned: false,
+    global: false,
     rationale: `Learned in voyage ${voyage.number}.`,
     status: 'open',
     createdAt: store.now(),

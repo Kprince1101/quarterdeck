@@ -1,6 +1,6 @@
 # lifecycle
 
-Applies the dashboard's `agent.kill`, `agent.retire` and `agent.reset` intents, and recovers a project from the last run when the server opens it. Quarterdeck owns every process it starts; the human is never asked to kill one.
+Applies the dashboard's `agent.kill`, `agent.retire`, `agent.reset` and `project.kill` intents, and recovers a project from the last run when the server opens it. Quarterdeck owns every process it starts; the human is never asked to kill one.
 
 ## Intents
 
@@ -17,15 +17,16 @@ const intents = await startLifecycleIntents({
 await intents.close();
 ```
 
-`startLifecycleIntents({ store, lifecycle, onError? })` applies every pending intent of the three kinds, oldest first, when it starts and again on each new one. Each is applied through the [agent lifecycle](../agents/README.md) with the intent's id, and the ack is an event that carries `intentId`:
+`startLifecycleIntents({ store, lifecycle, onError? })` applies every pending intent of the four kinds, oldest first, when it starts and again on each new one. Each is applied through the [agent lifecycle](../agents/README.md) with the intent's id, and the ack is an event that carries `intentId`:
 
 | Intent         | Runs                                                                      | Ack                                                    | `intents.result` |
 | -------------- | ------------------------------------------------------------------------- | ------------------------------------------------------ | ---------------- |
 | `agent.kill`   | [`kill`](../agents/README.md#killing-and-resetting), blocking its tickets | `agent.killed { name, sessionId, sweep, closeError? }` | `{ status }`     |
 | `agent.reset`  | [`reset`](../agents/README.md#killing-and-resetting)                      | `agent.session_reset { … }`                            | `{ status }`     |
 | `agent.retire` | [`retire`](../agents/README.md#retiring), freeing the name                | `agent.retired { name }`                               | `{ status }`     |
+| `project.kill` | `kill` for every live builder of the project, oldest first                | `agent.killed { … }` for each                          | `{ killed }`     |
 
-A kill whose session would not close is still applied: the agent is `killed`, its group swept, and `agent.killed` names the error as `closeError`. An intent that cannot be applied (the agent ended since it was queued, a reset whose session would not close) is `rejected` with `{ error }` and acked with `agent.intent_failed { intentId, intent, error }`.
+`project.kill` is the Board's per-project Kill: the voyage goes on, and the Driver hears of each ticket the kills blocked. `killed` names the builders it killed; one that finished meanwhile is skipped. A kill whose session would not close is still applied: the agent is `killed`, its group swept, and `agent.killed` names the error as `closeError`. An intent that cannot be applied (the agent ended since it was queued, a reset whose session would not close) is `rejected` with `{ error }` and acked with `agent.intent_failed { intentId, intent, error }`.
 
 A retire whose worktree holds unsaved work waits for the human. A `worktree.discard` card is raised (`requestWorktreeDiscard`), its id is kept in the intent's `result` as `{ discardCardId }`, the intent stays `pending` and `agent.retire_held { intentId, discardCardId, path }` is recorded. On every `card.answer`, `card.decline` and `card.expired` the waiting retires are checked: a `yes` finishes the retire, forcing the removal; any other answer, a decline or an expiry rejects the intent with `DISCARD_REFUSED` and `discardCardId`, and the agent keeps its worktree.
 
@@ -60,12 +61,12 @@ It resolves to `{ killed, running }`: the names it killed, and the names whose `
 
 ## API
 
-| Export                                                                 | What it does                                                                 |
-| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `startLifecycleIntents(options)`                                       | See [Intents](#intents).                                                     |
-| `LIFECYCLE_EVENTS`, `DISCARD_REFUSED`                                  | `agent.retire_held`, `agent.intent_failed`.                                  |
-| `AGENT_KILL`, `AGENT_RETIRE`, `AGENT_RESET`, `LIFECYCLE_INTENT_KINDS`  | The intent kinds it applies.                                                 |
-| `recoverProject(store, options)`                                       | See [Recovery](#recovery).                                                   |
-| `reapAgentProcesses`, `expireOverdueCards` (bus), `dropOrphanedPauses` | The three recovery steps on their own.                                       |
-| `RESTART_REASON`                                                       | `restart`. The pause events are [`PAUSE_EVENTS`](../pause/README.md#events). |
-| `stopProjectAgents`, `noSessions`, `DEFAULT_STOP_HOSTS`, `WIPE_REASON` | See [Stopping before a wipe](#stopping-before-a-wipe).                       |
+| Export                                                                                | What it does                                                                 |
+| ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `startLifecycleIntents(options)`                                                      | See [Intents](#intents).                                                     |
+| `LIFECYCLE_EVENTS`, `DISCARD_REFUSED`                                                 | `agent.retire_held`, `agent.intent_failed`.                                  |
+| `AGENT_KILL`, `AGENT_RETIRE`, `AGENT_RESET`, `PROJECT_KILL`, `LIFECYCLE_INTENT_KINDS` | The intent kinds it applies.                                                 |
+| `recoverProject(store, options)`                                                      | See [Recovery](#recovery).                                                   |
+| `reapAgentProcesses`, `expireOverdueCards` (bus), `dropOrphanedPauses`                | The three recovery steps on their own.                                       |
+| `RESTART_REASON`                                                                      | `restart`. The pause events are [`PAUSE_EVENTS`](../pause/README.md#events). |
+| `stopProjectAgents`, `noSessions`, `DEFAULT_STOP_HOSTS`, `WIPE_REASON`                | See [Stopping before a wipe](#stopping-before-a-wipe).                       |

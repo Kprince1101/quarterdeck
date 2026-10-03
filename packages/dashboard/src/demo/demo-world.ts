@@ -5,6 +5,7 @@ import type {
   TicketRow,
   TurnRow,
 } from '@quarterdeck/server/stream-schema';
+import { DEMO_PROJECT } from './demo-seed.js';
 import type { DemoStore } from './demo-store.js';
 
 export type AgentRole = AgentRow['role'];
@@ -223,6 +224,7 @@ export const createDemoWorld = (store: DemoStore): DemoWorld => {
         number,
         status: 'planning',
         goal,
+        projects: [DEMO_PROJECT],
         startedAt: store.now(),
         endedAt: null,
       };

@@ -6,7 +6,7 @@ import { closeAllAcpClients } from '../acp/client/index.js';
 import type { StopHosts } from '../lifecycle/stop.js';
 import { quarterdeckHome } from '../store/index.js';
 import type { UpgradeHandler } from '../stream/socket.js';
-import type { ApiContext } from './context.js';
+import type { ApiContext, ApiVoyages } from './context.js';
 import {
   createOpenRequests,
   type OpenRequestsOptions,
@@ -34,6 +34,7 @@ export interface ApiServerOptions {
   stopHosts?: StopHosts;
   token?: string;
   projectHooks?: ProjectHooks;
+  voyages?: ApiVoyages;
   upgrade?: UpgradeHandler;
   openRequests?: Pick<OpenRequestsOptions, 'hosts' | 'refreshMs'>;
 }
@@ -64,7 +65,12 @@ export const startApiServer = async (
     stores,
     homeDir,
   });
-  const ctx: ApiContext = { stores, homeDir, openRequests };
+  const ctx: ApiContext = {
+    stores,
+    homeDir,
+    openRequests,
+    voyages: options.voyages,
+  };
   const token = options.token ?? createApiToken();
   let guard = localGuard(0, token);
   const server = createServer((req, res) => {

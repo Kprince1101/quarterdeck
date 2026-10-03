@@ -39,6 +39,7 @@ const voyage = (id: string, number: number, status: VoyageRow['status']) => ({
   number,
   status,
   goal: `Goal ${number}.`,
+  projects: ['deck'],
   startedAt: AT,
   endedAt: null,
 });

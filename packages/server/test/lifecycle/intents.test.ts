@@ -149,6 +149,30 @@ describe('lifecycle intents', { timeout: TIMEOUT }, () => {
     ]);
   });
 
+  it('kills every live builder of the project on project.kill and leaves the Driver', async () => {
+    await start();
+    const working = await insertAgent(store, {
+      name: 'wren',
+      status: 'working',
+      sessionId: 'session-wren',
+    });
+    const idle = await insertAgent(store, { name: 'heron' });
+    const gone = await insertAgent(store, { name: 'pike', status: 'retired' });
+    const driver = await insertAgent(store, { name: 'lark', role: 'driver' });
+
+    const intentId = await queue('project.kill', '');
+    await settled(intentId);
+
+    const row = await intentRow(intentId);
+    expect(row?.status).toBe('applied');
+    const killed = (row?.result?.['killed'] ?? []) as string[];
+    expect(killed.toSorted()).toEqual(['heron', 'wren']);
+    expect(await agentStatus(working)).toBe('killed');
+    expect(await agentStatus(idle)).toBe('killed');
+    expect(await agentStatus(gone)).toBe('retired');
+    expect(await agentStatus(driver)).toBe('idle');
+  });
+
   it('applies a kill whose session would not close, naming the error', async () => {
     await start();
     sessions.close = () => Promise.reject(new Error('connection stuck'));

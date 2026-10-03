@@ -106,6 +106,26 @@ describe('pause gate', () => {
     });
   };
 
+  it('runs a global gate’s work while its project is paused, and holds it while everything is', async () => {
+    const global = await startPauseGate({ store, home, global: true });
+    try {
+      await pauseProject(true);
+      expect(await global.hold(LAUNCH, () => Promise.resolve('ran'))).toBe(
+        'ran',
+      );
+      await setGlobalPause(home, true);
+      const held = global.hold(LAUNCH, () => Promise.resolve('later'));
+      await settle(() => {
+        expect(global.held()).toHaveLength(1);
+      });
+      await setGlobalPause(home, false);
+      await store.publish({ kind: 'pause.all' });
+      expect(await held).toBe('later');
+    } finally {
+      await global.close();
+    }
+  });
+
   it('runs work straight away when nothing is paused', async () => {
     const result = await gate.hold(LAUNCH, () => Promise.resolve('ran'));
 

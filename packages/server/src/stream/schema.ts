@@ -42,6 +42,7 @@ export const voyageRowSchema = z.object({
   number: z.int().positive(),
   status: z.enum(['planning', 'active', 'ended']),
   goal: z.string(),
+  projects: z.array(z.string()),
   startedAt: timestampSchema,
   endedAt: timestampSchema.nullable(),
 });
@@ -130,7 +131,7 @@ export const turnRowSchema = z.object({
 
 export const notebookRowSchema = z.object({
   id: idSchema,
-  projectId: idSchema,
+  projectId: idSchema.nullable(),
   voyageId: idSchema.nullable(),
   authorId: idSchema.nullable(),
   body: z.string(),
@@ -150,6 +151,7 @@ export const notebookProposalRowSchema = z.object({
   entryId: idSchema.nullable(),
   body: z.string().nullable(),
   pinned: z.boolean(),
+  global: z.boolean(),
   rationale: z.string(),
   status: proposalStatusSchema,
   createdAt: timestampSchema,

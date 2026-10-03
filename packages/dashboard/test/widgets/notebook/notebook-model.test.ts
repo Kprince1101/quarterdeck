@@ -72,14 +72,44 @@ describe('buildNotebook', () => {
   it('lists active entries pinned first, then oldest first', () => {
     const { entries } = buildNotebook(notebookTables());
     expect(entries).toEqual([
-      { id: PINNED_ID, project: 'deck', body: 'Never merge.', pinned: true },
+      {
+        id: PINNED_ID,
+        project: 'deck',
+        scope: 'deck',
+        body: 'Never merge.',
+        pinned: true,
+      },
       {
         id: ENTRY_ID,
         project: 'deck',
+        scope: 'deck',
         body: 'Run the tests.\nUse npm.',
         pinned: false,
       },
     ]);
+  });
+
+  it('lists entries for every project, sent through the streamed project', () => {
+    const tables = notebookTables();
+    tables.notebook = [entry(MISSING_ID, 'Ship tests.', { projectId: null })];
+    tables.notebook_proposals = [
+      proposal(ADD_ID, 'add', { body: 'Run both suites.', global: true }),
+    ];
+    const model = buildNotebook(tables);
+    expect(model.entries).toEqual([
+      {
+        id: MISSING_ID,
+        project: 'deck',
+        scope: 'every project',
+        body: 'Ship tests.',
+        pinned: false,
+      },
+    ]);
+    expect(model.proposals[0]).toMatchObject({
+      project: 'deck',
+      scope: 'every project',
+    });
+    expect(model.showProject).toBe(true);
   });
 
   it('skips rows whose project is not on the stream', () => {

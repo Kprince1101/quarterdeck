@@ -180,7 +180,7 @@ describe.each(TEST_BACKENDS)('0024_voyages on $name', (backend) => {
       await migrate(db, dir);
       const old = await seedOldStore(db);
 
-      expect(await migrate(db)).toEqual([VOYAGES_MIGRATION]);
+      expect((await migrate(db))[0]).toBe(VOYAGES_MIGRATION);
 
       await expectVoyages(db, old);
       const { rows } = await db.query<{ old: string | null }>(
@@ -216,7 +216,7 @@ describe('a store created before 0024_voyages', () => {
 
       const store = await openStore({ project: 'deck', dataDir });
       try {
-        expect(store.migrated).toEqual([VOYAGES_MIGRATION]);
+        expect(store.migrated[0]).toBe(VOYAGES_MIGRATION);
         expect(store.projectId).toBe(old.projectId);
         await expectVoyages(store.db, old);
       } finally {

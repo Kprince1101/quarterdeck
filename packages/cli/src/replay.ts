@@ -35,7 +35,9 @@ voyage (default: all of them), in one new session, and prints the replies.
 Nothing is written: the agent runs in a throwaway folder with no Quarterdeck
 tools, and every permission it asks for is refused.
 
-  --project <slug>     The voyage's project (default: the only one that has the voyage)
+  --project <slug>     The project that holds the voyage's Driver turns (default:
+                       the only one that does; voyages are numbered across
+                       every project, so only older voyages need it)
   --runtime <runtime>  ${RUNTIMES.join(', ')} (default: the Driver's runtime in ~/.quarterdeck)`;
 
 export interface ReplayAdapter {

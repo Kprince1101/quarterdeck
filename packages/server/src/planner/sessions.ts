@@ -1,4 +1,4 @@
-import type { AuthMethod } from '@agentclientprotocol/sdk';
+import type { AuthMethod, McpServer } from '@agentclientprotocol/sdk';
 import { loadPermissionLayers, type Runtime } from '@quarterdeck/rules';
 import {
   trackAgentProcess,
@@ -49,6 +49,7 @@ export interface PlannerSessionSite {
   signInSignal: () => AbortSignal;
   passEnv?: readonly string[];
   homeDir: string;
+  servers?: (agent: Agent) => Promise<McpServer[]>;
 }
 
 export interface PlannerHostSite extends Omit<PlannerSessionSite, 'cardHuman'> {
@@ -72,13 +73,21 @@ export const plannerSignInGate = (
   signal,
 });
 
+const sessionServers = async (
+  site: PlannerSessionSite,
+  agent: Agent,
+): Promise<McpServer[]> => {
+  if (site.servers !== undefined) return site.servers(agent);
+  return [await site.bus.launch(agent.id)];
+};
+
 const connectOnce = async (
   site: PlannerSessionSite,
   agent: Agent,
   cwd: string,
   connected: { client?: AcpClient },
 ): Promise<PlannerSession> => {
-  const bus = await site.bus.launch(agent.id);
+  const servers = await sessionServers(site, agent);
   const client = await site.adapters[agent.runtime].connect(
     {
       cwd,
@@ -87,7 +96,7 @@ const connectOnce = async (
       agentName: agent.name,
       role: agent.role,
       rules: { homeDir: site.homeDir, repoDir: site.repoPath },
-      mcpServers: [bus],
+      mcpServers: servers,
     },
     {
       clientName: PLANNER_CLIENT_NAME,
@@ -105,7 +114,7 @@ const connectOnce = async (
   try {
     const { sessionId } = await client.newSession({
       cwd,
-      mcpServers: [bus],
+      mcpServers: servers,
     });
     return { agentId: agent.id, sessionId, client };
   } catch (err) {

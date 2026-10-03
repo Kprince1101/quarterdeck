@@ -8,6 +8,7 @@ export {
 export {
   BIRTH_CANCELLED_EVENT,
   BirthCancelledError,
+  insertAgent,
   type BirthRequest,
 } from './birth.js';
 export {
@@ -49,7 +50,7 @@ export {
   type SweepOutcome,
   type SweepReason,
 } from './processes.js';
-export { findAgent } from './rows.js';
+export { findAgent, markRetired } from './rows.js';
 export {
   AGENT_RETIRED_EVENT,
   type RetireHosts,

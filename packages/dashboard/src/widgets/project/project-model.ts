@@ -1,7 +1,6 @@
 import type {
   AgentRow,
   ProjectRow,
-  VoyageRow,
   SnapshotTables,
   TicketRow,
 } from '@quarterdeck/server/stream-schema';
@@ -32,19 +31,11 @@ export interface ProjectOption {
   label: string;
 }
 
-export interface VoyageView {
-  id: string;
-  label: string;
-  goal: string;
-  reopenCount: number;
-}
-
 export interface ProjectPanel {
   id: string;
   slug: string;
   name: string;
   isArchived: boolean;
-  voyage: VoyageView | null;
   reviewer: string;
   retiredCount: number;
   idleAgentIds: string[];
@@ -70,40 +61,6 @@ const activeTickets = (tickets: readonly TicketRow[]): TicketRow[] =>
     ({ status, assigneeId }) =>
       assigneeId !== null && ACTIVE_TICKET_STATUSES.has(status),
   );
-
-const reopenCountOf = (
-  voyageId: string,
-  agents: readonly AgentRow[],
-  active: readonly TicketRow[],
-): number => {
-  const builders = new Set(
-    agents
-      .filter(
-        (agent) => agent.voyageId === voyageId && agent.role === 'builder',
-      )
-      .map(({ id }) => id),
-  );
-  return active.filter(({ assigneeId }) => builders.has(assigneeId ?? ''))
-    .length;
-};
-
-const openVoyage = (
-  voyages: readonly VoyageRow[],
-  projectId: string,
-  agents: readonly AgentRow[],
-  active: readonly TicketRow[],
-): VoyageView | null => {
-  const [voyage] = voyages
-    .filter((row) => row.projectId === projectId && row.status !== 'ended')
-    .toSorted((a, b) => b.number - a.number);
-  if (voyage === undefined) return null;
-  return {
-    id: voyage.id,
-    label: `Voyage ${voyage.number} · ${voyage.status}`,
-    goal: voyage.goal,
-    reopenCount: reopenCountOf(voyage.id, agents, active),
-  };
-};
 
 const isLive = ({ status }: AgentRow): boolean =>
   !FINISHED_STATUSES.has(status);
@@ -146,7 +103,6 @@ const projectPanel = (
     slug: project.slug,
     name: project.name,
     isArchived: project.archivedAt !== null,
-    voyage: openVoyage(tables.voyages, project.id, agents, active),
     reviewer: reviewerOf(agents),
     retiredCount: agents.filter(({ status }) => status === 'retired').length,
     idleAgentIds: idleWithoutTicket(agents, active),

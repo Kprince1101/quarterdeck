@@ -1,3 +1,4 @@
+export type { ApiVoyages } from './context.js';
 export { DASHBOARD_PLACEHOLDER } from './dashboard.js';
 export { INTENT_HANDLERS, dispatchIntent } from './dispatch.js';
 export { HttpError } from './http-error.js';

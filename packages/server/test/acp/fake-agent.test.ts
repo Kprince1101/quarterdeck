@@ -88,6 +88,7 @@ describe('fake agent arguments', () => {
       plannerSkipsDesignTwice: true,
       plannerSpreads: true,
       plannerNamesUnknown: true,
+      onGitlab: true,
     };
     expect(parseFakeAgentArgs(toFakeAgentArgs(options))).toEqual(options);
     expect(toFakeAgentArgs(options)).toEqual(Object.values(FAKE_AGENT_FLAGS));

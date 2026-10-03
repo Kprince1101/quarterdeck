@@ -13,7 +13,18 @@ interface NotebookProposalRow {
   pinned: boolean;
   voyageId: string | null;
   agentId: string | null;
+  global: boolean;
 }
+
+export const IN_PROJECT_OR_GLOBAL = '(project_id = $1 or project_id is null)';
+
+const entryOwner = (
+  projectId: string,
+  proposal: NotebookProposalRow,
+): string | null => {
+  if (proposal.global) return null;
+  return projectId;
+};
 
 type ApplyProposal = (
   tx: Queryable,
@@ -29,7 +40,7 @@ const lockProposal = async (
   const proposal = await findRow<NotebookProposalRow>(
     tx,
     `select status, op, entry_id as "entryId", body, pinned,
-            voyage_id as "voyageId", agent_id as "agentId"
+            voyage_id as "voyageId", agent_id as "agentId", global
      from notebook_proposals
      where id = $1 and project_id = $2 for update`,
     [proposalId, projectId],
@@ -63,7 +74,7 @@ const APPLY: Record<NotebookOp, ApplyProposal> = {
       `insert into notebook (project_id, voyage_id, author_id, body, pinned)
        values ($1, $2, $3, $4, $5) returning id`,
       [
-        projectId,
+        entryOwner(projectId, proposal),
         proposal.voyageId,
         proposal.agentId,
         proposal.body,
@@ -78,7 +89,7 @@ const APPLY: Record<NotebookOp, ApplyProposal> = {
       tx,
       projectId,
       `update notebook set body = $3
-       where project_id = $1 and id = $2 and retired_at is null
+       where ${IN_PROJECT_OR_GLOBAL} and id = $2 and retired_at is null
        returning id`,
       [proposal.entryId, proposal.body],
     ),
@@ -87,7 +98,7 @@ const APPLY: Record<NotebookOp, ApplyProposal> = {
       tx,
       projectId,
       `update notebook set retired_at = now()
-       where project_id = $1 and id = $2 and retired_at is null
+       where ${IN_PROJECT_OR_GLOBAL} and id = $2 and retired_at is null
        returning id`,
       [proposal.entryId],
     ),

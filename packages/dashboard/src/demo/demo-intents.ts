@@ -77,13 +77,18 @@ export const createDemoIntents = (
     if (row === undefined) return refuse(NOT_FOUND, `${what} not found`);
     return row;
   };
-  const openVoyage = (voyageId: string): VoyageRow => {
-    const voyage = found(store.find('voyages', voyageId), `voyage ${voyageId}`);
-    if (voyage.status === 'ended') {
-      refuse(CONFLICT, `Voyage ${voyage.number} has already ended`);
+  const openVoyage = (number: number): VoyageRow => {
+    const voyage = world.openVoyage();
+    if (voyage?.number !== number) {
+      refuse(CONFLICT, `voyage ${number} is not running`);
     }
-    return voyage;
+    return found(voyage, `voyage ${number}`);
   };
+  const killBuilders = () =>
+    store
+      .rows('agents')
+      .filter((agent) => agent.role === 'builder' && !world.isGone(agent))
+      .map((agent) => world.killAgent(agent).name);
   const openCard = (cardId: string) => {
     const card = found(store.find('cards', cardId), `card ${cardId}`);
     if (card.status !== 'open')
@@ -183,16 +188,22 @@ export const createDemoIntents = (
         refuse(CONFLICT, `Voyage ${open.number} is still open; end it first`);
       }
       const voyage = ctx.startVoyage(input.goal);
-      return reply('applied', { voyageId: voyage.id, voyage: voyage.number });
+      return reply('applied', {
+        voyage: voyage.number,
+        goal: voyage.goal,
+        projects: voyage.projects,
+      });
     },
     'voyage.end': (input, reply) => {
-      world.endVoyage(openVoyage(input.voyageId), 'ended');
-      return reply('applied', { voyageId: input.voyageId, ended: true });
+      world.endVoyage(openVoyage(input.voyage), 'ended');
+      return reply('pending', { voyage: input.voyage, ending: true });
     },
     'voyage.kill': (input, reply) => {
-      world.endVoyage(openVoyage(input.voyageId), 'killed');
-      return reply('applied', { voyageId: input.voyageId, ended: true });
+      world.endVoyage(openVoyage(input.voyage), 'killed');
+      return reply('applied', { voyage: input.voyage, reason: 'killed' });
     },
+    'project.kill': (_input, reply) =>
+      reply('applied', { killed: killBuilders() }),
     'pause.set': (input, reply) => reply('applied', setPaused(input.paused)),
     'pause.all': (input, reply) =>
       reply('applied', setPausedEverywhere(input.paused)),

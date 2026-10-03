@@ -16,11 +16,15 @@ export const AUTO_END_EVENTS = {
 
 export type Scheduler = (ms: number, fire: () => void) => () => void;
 
-export interface AutoEndOptions {
+export interface AutoEndLeg {
   store: Store;
   voyageId: string;
+}
+
+export interface AutoEndOptions {
+  legs: readonly AutoEndLeg[];
   settleSeconds: number;
-  end: (voyageId: string) => Promise<void>;
+  end: () => Promise<void>;
   schedule?: Scheduler;
   home?: string;
   onError?: (err: unknown) => void;
@@ -55,7 +59,7 @@ const reportAutoEndError = (err: unknown): void => {
 export const startAutoEnd = async (
   options: AutoEndOptions,
 ): Promise<AutoEnd> => {
-  const { store, voyageId, settleSeconds } = options;
+  const { legs, settleSeconds } = options;
   const schedule = options.schedule ?? timerScheduler;
   const report = options.onError ?? reportAutoEndError;
   let disarm: (() => void) | undefined;
@@ -77,34 +81,42 @@ export const startAutoEnd = async (
     disarm = undefined;
   };
 
-  const settled = async (): Promise<boolean> =>
+  const legSettled = async ({ store, voyageId }: AutoEndLeg) =>
     isSettled(
       await readSettleState(store.db, store.projectId, voyageId, options.home),
     );
+
+  const settled = async (): Promise<boolean> => {
+    if (legs.length === 0) return false;
+    const each = await Promise.all(legs.map(legSettled));
+    return each.every(Boolean);
+  };
+
+  const publishAll = async (
+    kind: string,
+    payload: Record<string, unknown>,
+  ): Promise<void> => {
+    for (const { store, voyageId } of legs)
+      await store.publish({ kind, payload: { voyageId, ...payload } });
+  };
 
   const fire = async (): Promise<boolean> => {
     disarm = undefined;
     if (closed || ending || !(await settled())) return false;
     ending = true;
-    await store.publish({
-      kind: AUTO_END_EVENTS.settled,
-      payload: { voyageId, settleSeconds },
-    });
+    await publishAll(AUTO_END_EVENTS.settled, { settleSeconds });
     return true;
   };
 
   const endIfDue = async (due: boolean): Promise<void> => {
-    if (due) await options.end(voyageId);
+    if (due) await options.end();
   };
 
   const arm = async (rearmed: boolean): Promise<void> => {
     disarm = schedule(settleSeconds * 1000, () => {
       serial(fire).then(endIfDue).catch(report);
     });
-    await store.publish({
-      kind: AUTO_END_EVENTS.settling,
-      payload: { voyageId, settleSeconds, rearmed },
-    });
+    await publishAll(AUTO_END_EVENTS.settling, { settleSeconds, rearmed });
   };
 
   const evaluate = async (rearm: boolean): Promise<void> => {
@@ -130,14 +142,16 @@ export const startAutoEnd = async (
     if (SETTLE_TABLES.has(change.table)) check().catch(report);
   };
 
-  const subscription: Subscription = await store.subscribe(onEvent, {
-    onError: report,
-  });
-  let watcher: Watcher;
+  const feeds: (Subscription | Watcher)[] = [];
+  const closeFeeds = () =>
+    Promise.allSettled(feeds.splice(0).map((feed) => feed.close()));
   try {
-    watcher = await store.watch(onChange, { onError: report });
+    for (const { store } of legs) {
+      feeds.push(await store.subscribe(onEvent, { onError: report }));
+      feeds.push(await store.watch(onChange, { onError: report }));
+    }
   } catch (err) {
-    await subscription.close();
+    await closeFeeds();
     throw err;
   }
   check().catch(report);
@@ -146,7 +160,7 @@ export const startAutoEnd = async (
   const shutdown = async (): Promise<void> => {
     closed = true;
     cancelTimer();
-    await Promise.allSettled([subscription.close(), watcher.close()]);
+    await closeFeeds();
     await tail;
   };
   const close = (): Promise<void> => {

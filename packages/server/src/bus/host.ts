@@ -40,7 +40,7 @@ export interface BusHostOptions {
 export interface BusHost {
   socketPath: string;
   tools: readonly BusTool[];
-  launch: (agentId: string) => Promise<McpServerStdio>;
+  launch: (agentId: string, name?: string) => Promise<McpServerStdio>;
   revoke: (agentId: string) => void;
   close: () => Promise<void>;
 }
@@ -155,7 +155,10 @@ export const startBusHost = async (
     return token;
   };
 
-  const launch = async (agentId: string): Promise<McpServerStdio> => {
+  const launch = async (
+    agentId: string,
+    name: string = BUS_SERVER_NAME,
+  ): Promise<McpServerStdio> => {
     const { rows } = await store.db.query<{ id: string }>(
       `select id from agents
        where id = $1 and project_id = $2 and status <> 'retired'`,
@@ -163,7 +166,7 @@ export const startBusHost = async (
     );
     if (rows.length === 0) throw new AgentNotFoundError(agentId);
     return {
-      name: BUS_SERVER_NAME,
+      name,
       command: process.execPath,
       args: [BUS_RELAY],
       env: [

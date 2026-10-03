@@ -21,10 +21,13 @@ const proposalMove = inProject({
   'planner.move needs two different projects',
 );
 
+const voyageTarget = z.strictObject({ voyage: z.int().positive() });
+
 export const CREW_INTENTS = {
-  'voyage.start': inProject({ goal: textSchema }),
-  'voyage.end': inProject({ voyageId: idSchema }),
-  'voyage.kill': inProject({ voyageId: idSchema }),
+  'voyage.start': z.strictObject({ goal: textSchema }),
+  'voyage.end': voyageTarget,
+  'voyage.kill': voyageTarget,
+  'project.kill': inProject({}),
   'pause.set': inProject({ paused: z.boolean() }),
   'pause.all': z.strictObject({ paused: z.boolean() }),
   'agent.pause': agentTarget,

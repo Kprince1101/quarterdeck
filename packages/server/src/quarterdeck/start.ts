@@ -2,6 +2,7 @@ import { homedir } from 'node:os';
 import type { ProjectHooks } from '../api/project-stores.js';
 import { startApiServer, type ApiServer } from '../api/server.js';
 import { createApiToken } from '../api/token.js';
+import { startCoordinator, type Coordinator } from '../crew/index.js';
 import type { ForgeHost } from '../gate/index.js';
 import type { PlannerAdapters } from '../planner/sessions.js';
 import { quarterdeckHome } from '../store/index.js';
@@ -32,6 +33,7 @@ export interface Quarterdeck {
   location: string;
   api: ApiServer;
   projects: ReadonlyMap<string, ProjectServices>;
+  coordinator: Coordinator;
   close: () => Promise<void>;
 }
 
@@ -40,13 +42,22 @@ export const startQuarterdeck = async (
 ): Promise<Quarterdeck> => {
   const homeDir = options.homeDir ?? homedir();
   const running = new Map<string, RunningProject>();
+  const openStores = () => [...running.values()].map(({ store }) => store);
+  const coordinator = startCoordinator({
+    home: quarterdeckHome(homeDir),
+    homeDir,
+    openStores,
+    adapters: options.adapters,
+    onError: options.onError,
+  });
   const context: ProjectServicesContext = {
     home: quarterdeckHome(homeDir),
     homeDir,
     token: createApiToken(),
     allowedOrigins: options.allowedOrigins,
     onError: options.onError,
-    openStores: () => [...running.values()].map(({ store }) => store),
+    openStores,
+    coordinator,
     adapters: options.adapters,
     forge: options.forge,
     gatePollMs: options.gatePollMs,
@@ -79,6 +90,7 @@ export const startQuarterdeck = async (
     openProjects: true,
     token: context.token,
     projectHooks,
+    voyages: coordinator.desk,
     upgrade: routeStreams({
       token: context.token,
       allowedOrigins: options.allowedOrigins,
@@ -88,6 +100,7 @@ export const startQuarterdeck = async (
 
   const shutdown = async (): Promise<void> => {
     stopping = true;
+    await coordinator.close();
     const projects = [...running.values()];
     running.clear();
     await Promise.all(projects.map((services) => services.close()));
@@ -102,6 +115,7 @@ export const startQuarterdeck = async (
     location: api.stores.location,
     api,
     projects: running,
+    coordinator,
     close: () => {
       closing ??= shutdown();
       return closing;

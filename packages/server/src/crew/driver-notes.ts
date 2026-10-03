@@ -174,13 +174,6 @@ export const humanNote = (text: string): DriverNote => ({
   wake: 'event',
 });
 
-export const waitingTicketsNote = (
-  tickets: readonly Pick<NoteTicket, 'id' | 'title'>[],
-): DriverNote => ({
-  text: `Approved tickets waiting for a builder: ${tickets.map(ticketLabel).join(', ')}.`,
-  wake: 'event',
-});
-
 export const readWaitingTickets = async (
   store: Pick<Store, 'db' | 'projectId'>,
 ): Promise<Pick<NoteTicket, 'id' | 'title'>[]> => {
@@ -192,6 +185,18 @@ export const readWaitingTickets = async (
   );
   return rows;
 };
+
+export const waitingTicketsNote = (
+  tickets: readonly Pick<NoteTicket, 'id' | 'title'>[],
+): DriverNote => ({
+  text: `Approved tickets waiting for a builder: ${tickets.map(ticketLabel).join(', ')}.`,
+  wake: 'event',
+});
+
+export const projectNote = (project: string, note: DriverNote): DriverNote => ({
+  ...note,
+  text: `[${project}] ${note.text}`,
+});
 
 export const composeTurnInput = (notes: readonly DriverNote[]): string =>
   [

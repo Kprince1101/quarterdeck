@@ -3,6 +3,7 @@ export {
   startAutoEnd,
   timerScheduler,
   type AutoEnd,
+  type AutoEndLeg,
   type AutoEndOptions,
   type Scheduler,
 } from './auto-end.js';
@@ -20,13 +21,6 @@ export {
   type VoyageRelease,
 } from './cleanup.js';
 export {
-  VOYAGE_INTENTS,
-  startVoyageControl,
-  type VoyageControl,
-  type VoyageControlOptions,
-  type VoyageDriver,
-} from './control.js';
-export {
   ENDED_REASON,
   KILLED_REASON,
   SETTLED_REASON,
@@ -34,8 +28,10 @@ export {
   endVoyageWithoutDriver,
   killVoyage,
   startVoyageAutoEnd,
+  type EndLeg,
   type EndVoyageOptions,
   type EndedVoyage,
+  type LegCleanup,
   type VoyageAutoEndOptions,
   type VoyageStepOptions,
 } from './end.js';
@@ -52,6 +48,7 @@ export {
   missWrapUp,
   wrapUpVoyage,
   type WrapUp,
+  type WrapUpLeg,
   type WrapUpOptions,
 } from './wrap-up.js';
 export {

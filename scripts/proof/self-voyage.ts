@@ -214,10 +214,15 @@ const parseBody = (text: string): Row => {
   return JSON.parse(text) as Row;
 };
 
+const scopedBody = (body: Row, global: boolean): Row => {
+  if (global) return body;
+  return { project: PROJECT, ...body };
+};
+
 const intent = async (
   name: string,
   body: Row,
-  { quiet = false } = {},
+  { quiet = false, global = false } = {},
 ): Promise<IntentReply> => {
   if (api === undefined) throw new Error('up is not running');
   const res = await fetch(`${api.url}/api/intents/${name}`, {
@@ -226,7 +231,7 @@ const intent = async (
       'content-type': 'application/json',
       authorization: `Bearer ${api.token}`,
     },
-    body: JSON.stringify({ project: PROJECT, ...body }),
+    body: JSON.stringify(scopedBody(body, global)),
   });
   const parsed = parseBody(await res.text());
   if (!quiet) log(`intent ${name} -> ${res.status} ${JSON.stringify(parsed)}`);
@@ -360,8 +365,12 @@ const planTicket = async (): Promise<void> => {
 };
 
 const runVoyage = async (): Promise<void> => {
-  const start = await intent('voyage.start', { goal: VOYAGE_GOAL });
-  if (start.status !== 202) throw new Error('voyage.start was refused');
+  const start = await intent(
+    'voyage.start',
+    { goal: VOYAGE_GOAL },
+    { global: true },
+  );
+  if (start.status !== 200) throw new Error('voyage.start was refused');
   const begun = await waitFor('the voyage starts', eventOf('voyage.started'));
   const voyageId = (begun['payload'] as Row)['voyageId'];
   const ended = await waitFor(

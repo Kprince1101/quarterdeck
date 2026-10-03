@@ -1,5 +1,6 @@
 import { getErrorMessage } from '@quarterdeck/rules';
 import {
+  AgentFinishedError,
   DISCARD_APPROVED,
   WorktreeDirtyError,
   findAgent,
@@ -19,7 +20,9 @@ import {
   AGENT_RESET,
   AGENT_RETIRE,
   LIFECYCLE_INTENT_KINDS,
+  PROJECT_KILL,
   awaitDiscardCard,
+  liveBuilderIds,
   pendingLifecycleIntents,
   readDiscardCard,
   type LifecycleIntent,
@@ -85,17 +88,29 @@ export const startLifecycleIntents = async (
     intent: LifecycleIntent,
     error: string,
     extra: Record<string, unknown> = {},
-  ): Promise<void> =>
-    settle(
-      intent,
-      'rejected',
-      { error, ...extra },
-      {
-        kind: LIFECYCLE_EVENTS.failed,
-        agentId: intent.agentId,
-        payload: { intentId: intent.id, intent: intent.kind, error, ...extra },
-      },
-    );
+  ): Promise<void> => {
+    const notice: PublishInput = {
+      kind: LIFECYCLE_EVENTS.failed,
+      payload: { intentId: intent.id, intent: intent.kind, error, ...extra },
+    };
+    if (intent.agentId !== '') notice.agentId = intent.agentId;
+    return settle(intent, 'rejected', { error, ...extra }, notice);
+  };
+
+  const killBuilders = async (intent: LifecycleIntent): Promise<void> => {
+    const killed: string[] = [];
+    for (const agentId of await liveBuilderIds(store.db, store.projectId)) {
+      try {
+        const agent = await lifecycle.kill(store, agentId, {
+          intentId: intent.id,
+        });
+        killed.push(agent.name);
+      } catch (err) {
+        if (!(err instanceof AgentFinishedError)) throw err;
+      }
+    }
+    await settle(intent, 'applied', { killed });
+  };
 
   const holdRetire = async (
     intent: LifecycleIntent,
@@ -163,6 +178,7 @@ export const startLifecycleIntents = async (
         await lifecycle.reset(store, intent.agentId, { intentId: intent.id }),
       ),
     [AGENT_RETIRE]: retire,
+    [PROJECT_KILL]: killBuilders,
   };
 
   const handle = async (intent: LifecycleIntent): Promise<void> => {
