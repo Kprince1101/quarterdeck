@@ -64,6 +64,7 @@ describe('rules loader', () => {
       'naming.json',
       'permissions.json',
       'reviewer.md',
+      'services.json',
     ]);
   });
 

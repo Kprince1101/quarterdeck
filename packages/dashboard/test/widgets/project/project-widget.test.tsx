@@ -28,6 +28,7 @@ import {
   projectTables,
   ticket,
 } from './fixtures.js';
+import { servicesAnswer, servicesOnlyIntents } from './services-fixtures.js';
 
 const AI_REVIEW = 'AI review (all projects)';
 const AUTO_MERGE = 'Auto-merge (all projects)';
@@ -95,6 +96,8 @@ const mount = (
       forgeReads.push(body);
       return Promise.resolve(forgeAnswer(forge));
     }
+    if (String(url).endsWith('services.read'))
+      return Promise.resolve(servicesAnswer());
     sent.push({ url: String(url), body });
     if (String(url).endsWith('rules.write') && status < 300) rules.write(body);
     return Promise.resolve(new Response(JSON.stringify(reply), { status }));
@@ -493,7 +496,11 @@ describe('Project widget', () => {
 
   it('keeps one project per copy on the grid', () => {
     const { container, unmount } = render(
-      <DeckProvider stream={stream} rules={fakeRules({}).read}>
+      <DeckProvider
+        stream={stream}
+        intents={servicesOnlyIntents()}
+        rules={fakeRules({}).read}
+      >
         <section data-copy="1">
           <ProjectWidget />
         </section>

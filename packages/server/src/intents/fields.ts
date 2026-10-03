@@ -15,6 +15,14 @@ export const optionalTextSchema = z.string().max(MAX_TEXT_LENGTH);
 
 export const titleSchema = z.string().trim().min(1).max(MAX_TITLE_LENGTH);
 
+export const MAX_EXTERNAL_REF_LENGTH = 200;
+
+export const externalRefSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(MAX_EXTERNAL_REF_LENGTH);
+
 export const absolutePathSchema = z
   .string()
   .min(1)

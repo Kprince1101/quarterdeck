@@ -94,6 +94,8 @@ const SNAPSHOT: StreamMessage = {
         updatedAt: AT,
         archivedAt: null,
         pausedAt: null,
+        tracker: null,
+        publishes: null,
       },
     ],
     voyages: [voyage(VOYAGE_1, 1, 'ended'), voyage(VOYAGE_2, 2, 'active')],

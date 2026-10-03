@@ -8,6 +8,7 @@ import { BOARD_HANDLERS } from './handlers/board.js';
 import { CREW_HANDLERS } from './handlers/crew.js';
 import { DATA_HANDLERS } from './handlers/data.js';
 import { READ_HANDLERS } from './handlers/read.js';
+import { SERVICES_HANDLERS } from './handlers/services.js';
 import { WORKSPACE_HANDLERS } from './handlers/workspace.js';
 
 export const INTENT_HANDLERS: IntentHandlers<IntentName> = {
@@ -16,6 +17,7 @@ export const INTENT_HANDLERS: IntentHandlers<IntentName> = {
   ...WORKSPACE_HANDLERS,
   ...DATA_HANDLERS,
   ...READ_HANDLERS,
+  ...SERVICES_HANDLERS,
 };
 
 export const dispatchIntent = <N extends IntentName>(

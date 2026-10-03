@@ -36,6 +36,7 @@ export const SHIPPED_MIGRATIONS = [
   '0022_agent_pids',
   '0023_intent_order',
   '0024_voyages',
+  '0025_project_services',
   '0026_global_voyage',
 ];
 

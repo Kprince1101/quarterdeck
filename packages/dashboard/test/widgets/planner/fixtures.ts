@@ -105,6 +105,7 @@ export const ticket = (
   dependsOn: [],
   source: 'planner',
   externalId: null,
+  externalRef: null,
   prUrl: null,
   headSha: null,
   createdAt: ago(0),

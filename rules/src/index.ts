@@ -35,4 +35,5 @@ export {
   type PermissionLayers,
 } from './permission-layers.js';
 export * from './schemas.js';
+export * from './services.js';
 export { shellAllowWarnings } from './shell-warnings.js';

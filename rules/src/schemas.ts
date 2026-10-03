@@ -4,6 +4,9 @@ import { forgeSchema } from './forges.js';
 const AGENT_NAME = /^[a-z][a-z0-9-]*$/;
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const KIRO_AGENT_NAME = /^[a-z0-9][a-z0-9_-]*$/i;
+const PROJECT_SLUG = /^[a-z0-9][a-z0-9_-]{0,62}$/;
+const MAX_TRACKER_TEXT = 200;
+const MAX_TRACKER_NOTES = 2000;
 const HOSTNAME =
   /^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*$/;
 
@@ -143,6 +146,68 @@ export const forgesSchema = z.strictObject({
   forges: z.record(z.string().regex(HOSTNAME), forgeSchema),
 });
 
+export const NO_TRACKER = 'none';
+
+export const trackerHowSchema = z.enum(['cli', 'mcp']);
+
+const trackerTextSchema = z.string().trim().min(1).max(MAX_TRACKER_TEXT);
+
+const TRACKER_REACH: Record<
+  z.infer<typeof trackerHowSchema>,
+  { needs: 'command' | 'server'; refuses: 'command' | 'server' }
+> = {
+  cli: { needs: 'command', refuses: 'server' },
+  mcp: { needs: 'server', refuses: 'command' },
+};
+
+export const trackerSchema = z
+  .strictObject({
+    kind: trackerTextSchema,
+    how: trackerHowSchema.optional(),
+    command: trackerTextSchema.optional(),
+    server: trackerTextSchema.optional(),
+    notes: z.string().trim().max(MAX_TRACKER_NOTES).optional(),
+  })
+  .superRefine((tracker, ctx) => {
+    if (tracker.how === undefined) {
+      if (tracker.kind !== NO_TRACKER)
+        ctx.addIssue({
+          code: 'custom',
+          path: ['how'],
+          message: `a ${tracker.kind} tracker needs how: 'cli' or 'mcp'`,
+        });
+      if (tracker.command !== undefined || tracker.server !== undefined)
+        ctx.addIssue({
+          code: 'custom',
+          path: ['how'],
+          message: "a command or server needs how: 'cli' or 'mcp'",
+        });
+      return;
+    }
+    const { needs, refuses } = TRACKER_REACH[tracker.how];
+    if (tracker[needs] === undefined)
+      ctx.addIssue({
+        code: 'custom',
+        path: [needs],
+        message: `how: '${tracker.how}' needs a ${needs}`,
+      });
+    if (tracker[refuses] !== undefined)
+      ctx.addIssue({
+        code: 'custom',
+        path: [refuses],
+        message: `how: '${tracker.how}' takes a ${needs}, not a ${refuses}`,
+      });
+  });
+
+export const projectServicesSchema = z.strictObject({
+  tracker: trackerSchema.optional(),
+  publishes: z.boolean().optional(),
+});
+
+export const servicesSchema = z.strictObject({
+  projects: z.record(z.string().regex(PROJECT_SLUG), projectServicesSchema),
+});
+
 export const RULE_SCHEMAS = {
   charter: markdownSchema,
   reviewer: markdownSchema,
@@ -153,6 +218,7 @@ export const RULE_SCHEMAS = {
   env: envSchema,
   kiro: kiroSchema,
   forges: forgesSchema,
+  services: servicesSchema,
 };
 
 export type RuleName = keyof typeof RULE_SCHEMAS;
@@ -180,3 +246,7 @@ export type KiroRule = z.infer<typeof kiroSchema>;
 export type RepoKiroRule = z.infer<typeof repoKiroSchema>;
 export type KiroBaseRole = z.infer<typeof kiroBaseRoleSchema>;
 export type ForgesRule = z.infer<typeof forgesSchema>;
+export type TrackerHow = z.infer<typeof trackerHowSchema>;
+export type Tracker = z.infer<typeof trackerSchema>;
+export type ProjectServicesRule = z.infer<typeof projectServicesSchema>;
+export type ServicesRule = z.infer<typeof servicesSchema>;

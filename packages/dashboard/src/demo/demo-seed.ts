@@ -95,6 +95,8 @@ export const seedProject = (world: DemoWorld): void => {
     updatedAt: at,
     archivedAt: null,
     pausedAt: null,
+    tracker: null,
+    publishes: null,
   });
   store.emit('project.created', { payload: { slug: DEMO_PROJECT } });
   store.put('layouts', {

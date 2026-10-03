@@ -326,6 +326,7 @@ export const createDemoWorld = (store: DemoStore): DemoWorld => {
         dependsOn: [],
         source: 'local',
         externalId: null,
+        externalRef: null,
         prUrl: null,
         headSha: null,
         createdAt: at,

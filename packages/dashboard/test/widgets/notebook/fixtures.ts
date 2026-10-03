@@ -33,6 +33,8 @@ export const project = (
   updatedAt: AT,
   archivedAt: null,
   pausedAt: null,
+  tracker: null,
+  publishes: null,
   ...overrides,
 });
 

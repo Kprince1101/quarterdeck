@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   MAX_TEXT_LENGTH,
+  externalRefSchema,
   hasUniqueValues,
   idSchema,
   titleSchema,
@@ -75,6 +76,7 @@ interface Proposal {
   body: string;
   dependsOn: string[];
   project: string;
+  externalRef?: string | undefined;
 }
 
 const refuse = async (
@@ -103,9 +105,16 @@ const insertTicket = async (
 ): Promise<string> => {
   await assertDependencies(tx, projectId, proposal.dependsOn);
   const { rows } = await tx.query<{ id: string }>(
-    `insert into tickets (project_id, title, body, depends_on, status)
-     values ($1, $2, $3, $4::uuid[], 'proposed') returning id`,
-    [projectId, proposal.title, proposal.body, proposal.dependsOn],
+    `insert into tickets
+       (project_id, title, body, depends_on, external_ref, status)
+     values ($1, $2, $3, $4::uuid[], $5, 'proposed') returning id`,
+    [
+      projectId,
+      proposal.title,
+      proposal.body,
+      proposal.dependsOn,
+      proposal.externalRef ?? null,
+    ],
   );
   const ticketId = rows[0]?.id;
   if (ticketId === undefined)
@@ -187,6 +196,7 @@ export default defineBusTool({
     'A proposal that names no active project, or whose body does not follow the spec format, is refused and nothing is stored.',
     'The ticket is stored as proposed in its project. The human approves, edits or rejects it; only approved tickets reach the Driver.',
     'Returns the new ticket id, which later proposals in the same project can name in dependsOn.',
+    "When the work comes from the project's tracker, pass its id there (a Jira key, a story number) as externalRef; agents see it in their prompts.",
   ].join('\n'),
   input: {
     project: z.string().trim().max(MAX_PROJECT_LENGTH).default(''),
@@ -197,6 +207,7 @@ export default defineBusTool({
       .max(MAX_DEPENDENCIES)
       .refine(hasUniqueValues, 'dependsOn must not repeat a ticket')
       .default([]),
+    externalRef: externalRefSchema.optional(),
   },
   run: async ({ store, agentId, openStores }, proposal) => {
     const projects = await activeProjects([store, ...(openStores?.() ?? [])]);

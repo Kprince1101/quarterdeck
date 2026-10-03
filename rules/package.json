@@ -26,6 +26,11 @@
       "types": "./dist/forges.d.ts",
       "default": "./dist/forges.js"
     },
+    "./services": {
+      "@quarterdeck/source": "./src/services.ts",
+      "types": "./dist/services.d.ts",
+      "default": "./dist/services.js"
+    },
     "./shell-warnings": {
       "@quarterdeck/source": "./src/shell-warnings.ts",
       "types": "./dist/shell-warnings.d.ts",
@@ -42,7 +47,8 @@
     "models.json",
     "env.json",
     "kiro.json",
-    "forges.json"
+    "forges.json",
+    "services.json"
   ],
   "scripts": {
     "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc -p tsconfig.build.json"

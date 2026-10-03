@@ -86,20 +86,41 @@ export interface RepoForgeOptions {
   run?: GitRunner | undefined;
 }
 
-export const repoForge = async (
+export interface DetectedForge {
+  forge: Forge;
+  host: string | null;
+}
+
+const UNDETECTED: DetectedForge = { forge: DEFAULT_FORGE, host: null };
+
+export const detectRepoForge = async (
   repoPath: string | null,
   options: RepoForgeOptions = {},
-): Promise<Forge> => {
-  if (repoPath === null) return DEFAULT_FORGE;
+): Promise<DetectedForge> => {
+  if (repoPath === null) return UNDETECTED;
   const rules: LoadRulesOptions = { repoDir: repoPath };
   if (options.homeDir !== undefined) rules.homeDir = options.homeDir;
   const { forges } = await loadRule('forges', rules);
   const repository = await originRepository(repoPath, options.run).catch(
     () => undefined,
   );
-  if (repository === undefined) return DEFAULT_FORGE;
-  return forgeOfHost(repository.hostname, forges);
+  if (repository === undefined) return UNDETECTED;
+  return {
+    forge: forgeOfHost(repository.hostname, forges),
+    host: repository.hostname,
+  };
 };
+
+export const repoForge = async (
+  repoPath: string | null,
+  options: RepoForgeOptions = {},
+): Promise<Forge> => (await detectRepoForge(repoPath, options)).forge;
+
+export const detectProjectForge = async (
+  store: Pick<Store, 'db' | 'projectId'>,
+  options: RepoForgeOptions = {},
+): Promise<DetectedForge> =>
+  detectRepoForge(await projectRepoPath(store), options);
 
 export const projectForge = async (
   store: Pick<Store, 'db' | 'projectId'>,

@@ -21,6 +21,8 @@ export const project = (
   updatedAt: CREATED,
   archivedAt: null,
   pausedAt: null,
+  tracker: null,
+  publishes: null,
   ...overrides,
 });
 
