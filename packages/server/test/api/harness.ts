@@ -1,7 +1,11 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { startApiServer, type ApiServer } from '../../src/api/index.js';
+import {
+  startApiServer,
+  type ApiServer,
+  type ApiServerOptions,
+} from '../../src/api/index.js';
 import type { Store } from '../../src/store/index.js';
 
 export const TIMEOUT = 30_000;
@@ -38,9 +42,11 @@ export const readReply = async (res: Response): Promise<Reply> => ({
 export const startTestApi = async (
   allowedOrigins: string[] = [],
   databaseUrl?: string,
+  options: ApiServerOptions = {},
 ): Promise<TestApi> => {
   const homeDir = await mkdtemp(join(tmpdir(), 'qd-api-'));
   const api = await startApiServer({
+    ...options,
     port: 0,
     homeDir,
     allowedOrigins,

@@ -19,6 +19,7 @@ describe('widget registry', () => {
       'notebook',
       'planner',
       'project',
+      'requests',
       'rules',
       'tables',
       'usage',

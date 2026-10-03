@@ -13,6 +13,7 @@ import { originRepository, projectRepoPath } from './repository.js';
 export type PullRequestState = 'open' | 'merged' | 'closed';
 export type Mergeable = 'mergeable' | 'conflicting' | 'unknown';
 export type ChecksState = 'passing' | 'pending' | 'failing' | 'none';
+export type ReviewState = 'approved' | 'changes' | 'none';
 
 export interface RepositoryRef {
   hostname: string;
@@ -46,9 +47,13 @@ export interface OpenPullRequest {
   number: number;
   title: string;
   branch: string;
+  base: string;
   head: string;
   draft: boolean;
   author: string | null;
+  checks: ChecksState;
+  review: ReviewState;
+  createdAt: string;
 }
 
 export interface ForgeHost {

@@ -1,4 +1,7 @@
-import { wipeResultSchema } from '@quarterdeck/server/intents';
+import {
+  forgeRequestsResultSchema,
+  wipeResultSchema,
+} from '@quarterdeck/server/intents';
 import { parseGridLayout, presetLayout } from '@quarterdeck/server/layouts';
 import {
   streamMessageSchema,
@@ -14,6 +17,7 @@ import {
   createDemoServer,
   type DemoServer,
 } from '../../src/demo/demo-server.js';
+import { DEMO_GITLAB_PROJECT } from '../../src/demo/demo-requests.js';
 import { CARD_PATIENCE_BEATS } from '../../src/demo/demo-script.js';
 import { DEMO_LAYOUT, DEMO_PROJECT } from '../../src/demo/demo-seed.js';
 import {
@@ -489,6 +493,39 @@ describe('demo server', () => {
     const read = await intents.turn.read({ project, turnId: turn?.id ?? 0 });
     expect(read.result).toMatchObject({ voyage: 2, n: 1, latestSession: true });
     expect(read.result?.['input']).toContain('Voyage 2');
+  });
+
+  it('lists open requests for Harbor on GitHub and Lighthouse on GitLab', async () => {
+    const server = createDemoServer();
+    const { intents, store } = parts(server);
+    stepUntil(server, () =>
+      store.rows('tickets').some((ticket) => ticket.status === 'in_review'),
+    );
+
+    const reply = await intents.forge.requests({});
+    const { projects } = forgeRequestsResultSchema.parse(reply.result);
+
+    expect(reply.id).toBeNull();
+    expect(projects.map(({ project: slug, forge }) => [slug, forge])).toEqual([
+      [DEMO_PROJECT, 'github'],
+      [DEMO_GITLAB_PROJECT, 'gitlab'],
+    ]);
+    const reviewed = store
+      .rows('tickets')
+      .find((ticket) => ticket.status === 'in_review');
+    const linked = projects[0]?.requests.find(
+      (request) => request.ticket?.id === reviewed?.id,
+    );
+    expect(linked).toMatchObject({
+      url: reviewed?.prUrl,
+      title: reviewed?.title,
+      agent: { id: reviewed?.assigneeId },
+    });
+    expect(projects[1]?.requests.map(({ url }) => url)).toEqual(
+      expect.arrayContaining([
+        'https://gitlab.com/demo/lighthouse/-/merge_requests/18',
+      ]),
+    );
   });
 
   it('serves the shipped rules and keeps machine edits in the page', async () => {

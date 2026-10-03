@@ -9,6 +9,7 @@ import type {
   PullRequestRef,
   PullRequestState,
   RepositoryRef,
+  ReviewState,
 } from './forge.js';
 import { exec, execError } from './repository.js';
 
@@ -93,17 +94,34 @@ const openListSchema = z.array(
   z.object({
     web_url: z.string(),
     iid: z.int(),
+    project_id: z.int(),
     title: z.string(),
     source_branch: z.string(),
+    target_branch: z.string(),
     sha: z.string().nullable(),
     draft: z.boolean().optional(),
     work_in_progress: z.boolean().optional(),
     author,
+    created_at: z.string(),
+    detailed_merge_status: z.string().optional(),
+    head_pipeline: pipelineSchema.nullable().optional(),
+    pipeline: pipelineSchema.nullable().optional(),
   }),
 );
 
+const approvalsSchema = z.object({
+  approved: z.boolean().optional(),
+  approved_by: z.array(z.object({ user: author })).optional(),
+});
+
 type MergeRequestReply = z.infer<typeof mergeRequestSchema>;
 type Pipeline = z.infer<typeof pipelineSchema>;
+type ListedMergeRequest = z.infer<typeof openListSchema>[number];
+
+export interface OpenMergeRequestReplies {
+  mergeRequest: string | undefined;
+  approvals: string;
+}
 
 export interface DiscussionThread {
   author: string | null;
@@ -233,15 +251,57 @@ export const parseMergeRequest = (
   };
 };
 
-export const parseOpenMergeRequests = (json: string): OpenPullRequest[] =>
+const listedPipeline = (
+  mr: ListedMergeRequest,
+): Pipeline | null | undefined => {
+  if (mr.head_pipeline !== undefined) return mr.head_pipeline;
+  return mr.pipeline;
+};
+
+const openChecks = (
+  mr: ListedMergeRequest,
+  replies: OpenMergeRequestReplies | undefined,
+): ChecksState => {
+  const listed = listedPipeline(mr);
+  if (listed !== undefined || replies?.mergeRequest === undefined)
+    return pipelineState(listed);
+  return pipelineState(
+    parseMergeRequestReply(replies.mergeRequest).head_pipeline,
+  );
+};
+
+const isApproved = (json: string): boolean => {
+  const approvals = approvalsSchema.parse(JSON.parse(json));
+  return (
+    approvals.approved !== false && (approvals.approved_by?.length ?? 0) > 0
+  );
+};
+
+const openReview = (
+  mr: ListedMergeRequest,
+  replies: OpenMergeRequestReplies | undefined,
+): ReviewState => {
+  if (mr.detailed_merge_status === 'requested_changes') return 'changes';
+  if (replies !== undefined && isApproved(replies.approvals)) return 'approved';
+  return 'none';
+};
+
+export const parseOpenMergeRequests = (
+  json: string,
+  replies: ReadonlyMap<number, OpenMergeRequestReplies> = new Map(),
+): OpenPullRequest[] =>
   openListSchema.parse(JSON.parse(json)).map((mr) => ({
     url: mr.web_url,
     number: mr.iid,
     title: mr.title,
     branch: mr.source_branch,
+    base: mr.target_branch,
     head: mr.sha ?? '',
     draft: mr.draft ?? mr.work_in_progress ?? false,
     author: mr.author?.username ?? null,
+    checks: openChecks(mr, replies.get(mr.iid)),
+    review: openReview(mr, replies.get(mr.iid)),
+    createdAt: mr.created_at,
   }));
 
 export const runGlab: GlabRunner = async (args) => {
@@ -305,6 +365,66 @@ export const glabListOpenArgs = (repository: RepositoryRef): string[] =>
     `projects/${projectPath(repository)}/merge_requests?state=opened&per_page=${GITLAB_PAGE_SIZE}`,
   );
 
+export const GITLAB_OPEN_BATCH = 8;
+
+export const approvalsArgs = (
+  hostname: string,
+  projectId: number,
+  iid: number,
+): string[] =>
+  glabApi(hostname, `projects/${projectId}/merge_requests/${iid}/approvals`);
+
+export const listedMergeRequestArgs = (
+  hostname: string,
+  projectId: number,
+  iid: number,
+): string[] => glabApi(hostname, `projects/${projectId}/merge_requests/${iid}`);
+
+const inBatches = async <T, R>(
+  items: readonly T[],
+  size: number,
+  work: (item: T) => Promise<R>,
+): Promise<R[]> => {
+  const done: R[] = [];
+  for (let at = 0; at < items.length; at += size)
+    done.push(...(await Promise.all(items.slice(at, at + size).map(work))));
+  return done;
+};
+
+const readListedPipeline = async (
+  run: GlabRunner,
+  hostname: string,
+  mr: ListedMergeRequest,
+): Promise<string | undefined> => {
+  if (listedPipeline(mr) !== undefined) return undefined;
+  return run(listedMergeRequestArgs(hostname, mr.project_id, mr.iid));
+};
+
+const readOpenReplies = async (
+  run: GlabRunner,
+  hostname: string,
+  mr: ListedMergeRequest,
+): Promise<[number, OpenMergeRequestReplies]> => {
+  const [mergeRequest, approvals] = await Promise.all([
+    readListedPipeline(run, hostname, mr),
+    run(approvalsArgs(hostname, mr.project_id, mr.iid)),
+  ]);
+  return [mr.iid, { mergeRequest, approvals }];
+};
+
+const readOpenMergeRequests = async (
+  run: GlabRunner,
+  repository: RepositoryRef,
+): Promise<OpenPullRequest[]> => {
+  const list = await run(glabListOpenArgs(repository));
+  const replies = await inBatches(
+    openListSchema.parse(JSON.parse(list)),
+    GITLAB_OPEN_BATCH,
+    (mr) => readOpenReplies(run, repository.hostname, mr),
+  );
+  return parseOpenMergeRequests(list, new Map(replies));
+};
+
 const readJobs = async (
   run: GlabRunner,
   hostname: string,
@@ -339,6 +459,5 @@ export const glabCli = (run: GlabRunner = runGlab): ForgeHost => ({
   squashMerge: async (url, head) => {
     await run(glabSquashMergeArgs(url, head));
   },
-  listOpen: async (repository) =>
-    parseOpenMergeRequests(await run(glabListOpenArgs(repository))),
+  listOpen: (repository) => readOpenMergeRequests(run, repository),
 });

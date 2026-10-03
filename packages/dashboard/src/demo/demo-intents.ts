@@ -17,6 +17,7 @@ import { DemoRefusal } from './demo-fetch.js';
 import { DEMO_FORGE, DEMO_PROJECT } from './demo-seed.js';
 import type { DemoPlanner } from './demo-planner.js';
 import type { DemoReads } from './demo-reads.js';
+import { createDemoRequests } from './demo-requests.js';
 import type { DemoRules } from './demo-rules.js';
 import type { DemoWorld } from './demo-world.js';
 
@@ -51,6 +52,7 @@ const UNRECORDED: ReadonlySet<IntentName> = new Set([
   'turn.read',
   'usage.read',
   'forge.read',
+  'forge.requests',
   'rules.write',
   'rules.reset',
   'wipe.project',
@@ -69,6 +71,7 @@ export const createDemoIntents = (
 ): ((name: IntentName, input: unknown) => IntentReply) => {
   const { world, rules, planner, reads } = ctx;
   const { store } = world;
+  const openRequests = createDemoRequests(world);
 
   const found = <T>(row: T | undefined, what: string): T => {
     if (row === undefined) return refuse(NOT_FOUND, `${what} not found`);
@@ -415,6 +418,8 @@ export const createDemoIntents = (
     'usage.read': (_input, reply) => reply('applied', reads.usage()),
     'forge.read': (_input, reply) =>
       reply('applied', { forge: DEMO_FORGE, terms: forgeTerms(DEMO_FORGE) }),
+    'forge.requests': (_input, reply) =>
+      reply('applied', { projects: openRequests() }),
   };
 
   return (name, input) => {

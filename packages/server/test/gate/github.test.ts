@@ -13,6 +13,7 @@ import {
   ghCli,
   mergeStep,
   originRepository,
+  parseOpenPullRequests,
   parsePullRequest,
   parsePullRequestUrl,
   parseRemoteUrl,
@@ -298,18 +299,34 @@ describe('gh pull request host', () => {
           number: 23,
           title: 'Add the forge seam',
           headRefName: 'qd19',
+          baseRefName: 'main',
           headRefOid: HEAD,
           isDraft: false,
           author: { login: 'okapi' },
+          statusCheckRollup: [
+            {
+              __typename: 'CheckRun',
+              name: 'test',
+              status: 'COMPLETED',
+              conclusion: 'SUCCESS',
+            },
+            { __typename: 'StatusContext', context: 'lint', state: 'SUCCESS' },
+          ],
+          reviewDecision: 'APPROVED',
+          createdAt: '2026-10-01T09:00:00Z',
         },
         {
           url: 'https://github.com/example-org/quarterdeck/pull/24',
           number: 24,
           title: 'Draft',
           headRefName: 'wip',
+          baseRefName: 'release',
           headRefOid: HEAD,
           isDraft: true,
           author: null,
+          statusCheckRollup: [],
+          reviewDecision: '',
+          createdAt: '2026-10-02T09:00:00Z',
         },
       ]);
     };
@@ -340,19 +357,83 @@ describe('gh pull request host', () => {
         number: 23,
         title: 'Add the forge seam',
         branch: 'qd19',
+        base: 'main',
         head: HEAD,
         draft: false,
         author: 'okapi',
+        checks: 'passing',
+        review: 'approved',
+        createdAt: '2026-10-01T09:00:00Z',
       },
       {
         url: 'https://github.com/example-org/quarterdeck/pull/24',
         number: 24,
         title: 'Draft',
         branch: 'wip',
+        base: 'release',
         head: HEAD,
         draft: true,
         author: null,
+        checks: 'none',
+        review: 'none',
+        createdAt: '2026-10-02T09:00:00Z',
       },
+    ]);
+  });
+
+  it('rolls up each open pull request’s checks and review decision', () => {
+    const listed = (
+      statusCheckRollup: unknown,
+      reviewDecision: string | null,
+    ) => ({
+      url: PR,
+      number: 23,
+      title: 'Checks',
+      headRefName: 'qd22',
+      baseRefName: 'main',
+      headRefOid: HEAD,
+      isDraft: false,
+      author: { login: 'okapi' },
+      statusCheckRollup,
+      reviewDecision,
+      createdAt: '2026-10-01T09:00:00Z',
+    });
+    const run = { __typename: 'CheckRun', name: 'test' };
+    const open = parseOpenPullRequests(
+      JSON.stringify([
+        listed(
+          [
+            { ...run, status: 'COMPLETED', conclusion: 'SUCCESS' },
+            { ...run, status: 'COMPLETED', conclusion: 'FAILURE' },
+            { ...run, status: 'IN_PROGRESS', conclusion: null },
+          ],
+          'CHANGES_REQUESTED',
+        ),
+        listed(
+          [
+            { ...run, status: 'IN_PROGRESS', conclusion: null },
+            { __typename: 'StatusContext', context: 'ci', state: 'SUCCESS' },
+          ],
+          'REVIEW_REQUIRED',
+        ),
+        listed(
+          [{ __typename: 'StatusContext', context: 'ci', state: 'PENDING' }],
+          null,
+        ),
+        listed(
+          [{ __typename: 'StatusContext', context: 'ci', state: 'ERROR' }],
+          'APPROVED',
+        ),
+        listed(null, null),
+      ]),
+    );
+
+    expect(open.map(({ checks, review }) => [checks, review])).toEqual([
+      ['failing', 'changes'],
+      ['pending', 'none'],
+      ['pending', 'none'],
+      ['failing', 'approved'],
+      ['none', 'none'],
     ]);
   });
 });

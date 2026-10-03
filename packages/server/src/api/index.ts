@@ -2,6 +2,14 @@ export { DASHBOARD_PLACEHOLDER } from './dashboard.js';
 export { INTENT_HANDLERS, dispatchIntent } from './dispatch.js';
 export { HttpError } from './http-error.js';
 export {
+  OPEN_REQUESTS_REFRESH_MS,
+  createOpenRequests,
+  linkTicket,
+  type ForgeHosts,
+  type OpenRequests,
+  type OpenRequestsOptions,
+} from './open-requests.js';
+export {
   createProjectStores,
   type ProjectHooks,
   type ProjectStores,
