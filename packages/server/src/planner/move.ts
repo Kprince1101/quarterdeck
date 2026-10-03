@@ -89,16 +89,14 @@ export const moveProposal = async (
     title,
     move.body ?? ticket.body,
   );
-  const dropCopy = () =>
-    move.to.db.query('delete from tickets where id = $1', [ticketId]);
   const rejected = await rejectProposed(move.from, move.ticketId).catch(
     async (err: unknown) => {
-      await dropCopy();
+      await dropUndecided(move.to, ticketId);
       throw err;
     },
   );
   if (!rejected) {
-    await dropCopy();
+    await dropUndecided(move.to, ticketId);
     throw new ProposalMoveError(
       `ticket ${move.ticketId} was decided while it was being moved`,
     );
@@ -106,14 +104,24 @@ export const moveProposal = async (
   return { ticketId, title };
 };
 
+export const dropUndecided = async (
+  store: ProjectStore,
+  ticketId: string,
+): Promise<boolean> => {
+  const { rows } = await store.db.query(
+    `delete from tickets
+     where id = $1 and project_id = $2 and status = 'proposed'
+     returning id`,
+    [ticketId, store.projectId],
+  );
+  return rows.length > 0;
+};
+
 export const undoMove = async (
   move: ProposalMove,
   moved: MovedProposal,
 ): Promise<void> => {
-  await move.to.db.query(
-    `delete from tickets where id = $1 and project_id = $2`,
-    [moved.ticketId, move.to.projectId],
-  );
+  if (!(await dropUndecided(move.to, moved.ticketId))) return;
   await move.from.db.query(
     `update tickets set status = 'proposed'
      where id = $1 and project_id = $2 and status = 'rejected'`,

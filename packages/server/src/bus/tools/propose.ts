@@ -5,6 +5,7 @@ import {
   idSchema,
   titleSchema,
 } from '../../intents/fields.js';
+import { dropUndecided } from '../../planner/move.js';
 import { activeProjects, type OpenProject } from '../../planner/projects.js';
 import {
   TICKET_SPEC_FORMAT,
@@ -165,7 +166,7 @@ const proposeElsewhere = async (
       });
     });
   } catch (err) {
-    await target.db.query('delete from tickets where id = $1', [ticketId]);
+    await dropUndecided(target, ticketId);
     throw err;
   }
   return ticketId;

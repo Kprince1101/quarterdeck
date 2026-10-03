@@ -533,6 +533,59 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     ]);
   });
 
+  it('never deletes a moved ticket the human already approved', async () => {
+    const p = await open({ others: ['sample'] });
+    const [sample] = p.others;
+    if (!sample) throw new Error('no sample project');
+    const proposeInSample = async (title: string) => {
+      const { rows } = await sample.db.query<{ id: string }>(
+        `insert into tickets (project_id, title, status)
+         values ($1, $2, 'proposed') returning id`,
+        [sample.projectId, title],
+      );
+      return rows[0]?.id ?? '';
+    };
+    const approveHere = () =>
+      p.store.db.query(
+        `update tickets set status = 'open'
+         where project_id = $1 and status = 'proposed'`,
+        [p.store.projectId],
+      );
+
+    const first = await proposeInSample('Approved mid-move');
+    const failing = new Error('the source database went away');
+    const flaky = {
+      ...sample,
+      db: {
+        ...sample.db,
+        query: async (sql: string, params?: unknown[]) => {
+          if (!sql.includes("set status = 'rejected'"))
+            return sample.db.query(sql, params);
+          await approveHere();
+          throw failing;
+        },
+      },
+    } as Store;
+    await expect(
+      moveProposal({ ticketId: first, from: flaky, to: p.store }),
+    ).rejects.toBe(failing);
+    expect(await docketOf(p.store)).toEqual([
+      { id: expect.any(String), title: 'Approved mid-move', status: 'open' },
+    ]);
+
+    const second = await proposeInSample('Approved before undo');
+    const move = { ticketId: second, from: sample, to: p.store };
+    const moved = await moveProposal(move);
+    await approveHere();
+    await undoMove(move, moved);
+    expect(
+      (await docketOf(p.store)).find(({ id }) => id === moved.ticketId),
+    ).toMatchObject({ status: 'open' });
+    expect(
+      (await docketOf(sample)).find(({ id }) => id === second),
+    ).toMatchObject({ status: 'rejected' });
+  });
+
   it('starts a new conversation after planner.new, ending the old session and its process', async () => {
     const p = await open();
     await p.start();

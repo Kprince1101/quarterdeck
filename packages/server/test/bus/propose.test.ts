@@ -281,6 +281,47 @@ describe('bus propose', { timeout: TIMEOUT }, () => {
     }
   });
 
+  it('removes an unrecorded proposal elsewhere unless the human already approved it', async () => {
+    const other = await openTestStore('sample');
+    try {
+      const failing = (approve: boolean) =>
+        ({
+          ...store,
+          db: {
+            query: (sql: string, params?: unknown[]) =>
+              store.db.query(sql, params),
+            transaction: async () => {
+              if (approve)
+                await other.db.query(
+                  `update tickets set status = 'open' where status = 'proposed'`,
+                );
+              throw new Error('the event was not recorded');
+            },
+          },
+        }) as unknown as Store;
+      const proposeVia = async (home: Store, title: string) => {
+        const client = await connectClient(
+          home,
+          plannerId,
+          undefined,
+          undefined,
+          () => [store, other],
+        );
+        clients.push(client);
+        return propose(client, { title, project: 'sample' });
+      };
+
+      expect((await proposeVia(failing(false), 'Dropped')).isError).toBe(true);
+      expect((await proposeVia(failing(true), 'Approved')).isError).toBe(true);
+      const { rows } = await other.db.query(
+        'select title, status from tickets order by created_at',
+      );
+      expect(rows).toEqual([{ title: 'Approved', status: 'open' }]);
+    } finally {
+      await other.close();
+    }
+  });
+
   it('rejects a blank title', async () => {
     const reply = await propose(planner, { title: '   ' });
     expect(reply.isError).toBe(true);
