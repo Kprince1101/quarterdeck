@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import type { MergeGate } from '@quarterdeck/rules';
+import { forgeTerms, type MergeGate } from '@quarterdeck/rules';
 import {
   afterAll,
   afterEach,
@@ -19,9 +19,9 @@ import type { Store } from '../../src/store/index.js';
 import {
   GATE_EVENTS,
   MERGE_CARD,
-  WAITING,
   startReviewGate,
-  type GitHubHost,
+  waitingReasons,
+  type ForgeHost,
   type PullRequest,
   type ReviewGate,
 } from '../../src/gate/index.js';
@@ -42,6 +42,7 @@ const ORIGIN = 'git@github.com:example-org/example.git';
 const PR = 'https://github.com/example-org/example/pull/1';
 const HEAD = '0123456789abcdef0123456789abcdef01234567';
 const HOUR = 3_600_000;
+const WAITING = waitingReasons(forgeTerms('github'));
 
 const RULES: MergeGate = {
   requireReviewerApproval: true,
@@ -59,7 +60,7 @@ const ready = (): PullRequest => ({
   draft: false,
   mergeable: 'mergeable',
   checks: { state: 'passing', failing: [] },
-  copilot: { reviewed: false, openThreads: 0 },
+  botReview: { reviewed: false, openThreads: 0 },
 });
 
 describe('a merge answer does not bypass checks', { timeout: TIMEOUT }, () => {
@@ -73,7 +74,9 @@ describe('a merge answer does not bypass checks', { timeout: TIMEOUT }, () => {
   let errors: unknown[];
   let gate: ReviewGate | undefined;
 
-  const github: GitHubHost = {
+  const github: ForgeHost = {
+    forge: 'github',
+    listOpen: async () => [],
     pullRequest: async () => pr,
     squashMerge: async (url) => {
       merges.push(url);
@@ -155,7 +158,7 @@ describe('a merge answer does not bypass checks', { timeout: TIMEOUT }, () => {
     gate = await startReviewGate({
       store,
       rules: RULES,
-      github,
+      forge: github,
       reviewers: { requestReview: async () => undefined },
       pollMs: HOUR,
       onError: (err) => errors.push(err),

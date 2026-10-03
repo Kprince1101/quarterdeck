@@ -1,4 +1,5 @@
 export { RulesError, getErrorMessage } from './errors.js';
+export * from './forges.js';
 export {
   DEFAULT_RULES_DIR,
   LOCAL_RULES_DIR,

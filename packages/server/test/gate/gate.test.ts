@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import type { MergeGate } from '@quarterdeck/rules';
+import { forgeTerms, type MergeGate } from '@quarterdeck/rules';
 import {
   afterAll,
   afterEach,
@@ -19,10 +19,10 @@ import type { Store } from '../../src/store/index.js';
 import {
   GATE_EVENTS,
   MERGE_CARD,
-  WAITING,
   reviewPrompt,
   startReviewGate,
-  type GitHubHost,
+  waitingReasons,
+  type ForgeHost,
   type PullRequest,
   type ReviewGate,
   type ReviewRequest,
@@ -47,6 +47,7 @@ const PR = 'https://github.com/example-org/quarterdeck/pull/23';
 const HEAD = '0123456789abcdef0123456789abcdef01234567';
 const NEXT = 'fedcba9876543210fedcba9876543210fedcba98';
 const HOUR = 3_600_000;
+const WAITING = waitingReasons(forgeTerms('github'));
 
 const RULES: MergeGate = {
   requireReviewerApproval: true,
@@ -68,10 +69,10 @@ const ready = (): PullRequest => ({
   draft: false,
   mergeable: 'mergeable',
   checks: { state: 'passing', failing: [] },
-  copilot: { reviewed: false, openThreads: 0 },
+  botReview: { reviewed: false, openThreads: 0 },
 });
 
-interface FakeGitHub extends GitHubHost {
+interface FakeGitHub extends ForgeHost {
   pr: PullRequest;
   fetched: string[];
   merges: { url: string; head: string }[];
@@ -80,10 +81,12 @@ interface FakeGitHub extends GitHubHost {
 
 const fakeGitHub = (): FakeGitHub => {
   const github: FakeGitHub = {
+    forge: 'github',
     pr: ready(),
     fetched: [],
     merges: [],
     mergeError: undefined,
+    listOpen: async () => [],
     pullRequest: async (url) => {
       github.fetched.push(url);
       return github.pr;
@@ -130,7 +133,7 @@ describe('review gate', () => {
     gate = await startReviewGate({
       store,
       rules: { ...RULES, ...rules },
-      github,
+      forge: github,
       reviewers,
       pollMs: HOUR,
       onError: (err) => errors.push(err),
@@ -256,6 +259,7 @@ describe('review gate', () => {
         pr: PR,
         head: HEAD,
         notes: 'Reviewer gate and merge, with tests.',
+        terms: forgeTerms('github'),
       },
     ]);
     expect(await gateEvents(GATE_EVENTS.reviewRequested)).toEqual([
@@ -486,10 +490,10 @@ describe('review gate', () => {
 
     await gate.evaluate(ticketId);
     expect((await gateEvents(GATE_EVENTS.waiting))[0]?.payload).toMatchObject({
-      reason: WAITING.copilot,
+      reason: WAITING.botReview,
     });
 
-    github.pr = { ...ready(), copilot: { reviewed: true, openThreads: 1 } };
+    github.pr = { ...ready(), botReview: { reviewed: true, openThreads: 1 } };
     await gate.evaluate(ticketId);
 
     expect(github.merges).toEqual([]);
@@ -497,7 +501,7 @@ describe('review gate', () => {
   });
 
   it('merges once Copilot has reviewed and its threads are resolved', async () => {
-    github.pr = { ...ready(), copilot: { reviewed: true, openThreads: 0 } };
+    github.pr = { ...ready(), botReview: { reviewed: true, openThreads: 0 } };
     const ticketId = await approvedTicket();
     const gate = await start({ requireCopilotReview: true });
 
@@ -671,30 +675,43 @@ describe('review gate', () => {
 });
 
 describe('review prompt', () => {
-  it('names the ticket, pull request, head and notes', () => {
-    const prompt = reviewPrompt({
-      ticket: { id: 't1', title: 'QD5e reviewer gate', body: 'Gate it.' },
-      reviewer: { id: 'r1', name: 'heron' },
-      builder: { id: 'b1', name: 'okapi' },
-      pr: PR,
-      head: null,
-      notes: 'All tests pass.',
-    });
+  const request = (forge: 'github' | 'gitlab', pr: string): ReviewRequest => ({
+    ticket: { id: 't1', title: 'QD5e reviewer gate', body: 'Gate it.' },
+    reviewer: { id: 'r1', name: 'heron' },
+    builder: { id: 'b1', name: 'okapi' },
+    pr,
+    head: null,
+    notes: 'All tests pass.',
+    terms: forgeTerms(forge),
+  });
 
-    expect(prompt).toBe(
-      [
-        'Review ticket t1: QD5e reviewer gate',
-        '',
-        'Gate it.',
-        '',
-        `Pull request: ${PR}`,
-        'Head commit: not reported',
-        '',
-        'Notes from okapi:',
-        'All tests pass.',
-        '',
-        'Give your verdict on ticket t1 with the bus tool `verdict`.',
-      ].join('\n'),
+  const expected = (line: string): string =>
+    [
+      'Review ticket t1: QD5e reviewer gate',
+      '',
+      'Gate it.',
+      '',
+      line,
+      'Head commit: not reported',
+      '',
+      'Notes from okapi:',
+      'All tests pass.',
+      '',
+      'Give your verdict on ticket t1 with the bus tool `verdict`.',
+    ].join('\n');
+
+  it('names the ticket, pull request, head and notes', () => {
+    expect(reviewPrompt(request('github', PR))).toBe(
+      expected(`Pull request: ${PR}`),
     );
+  });
+
+  it('says merge request in a GitLab project', () => {
+    const mr =
+      'https://git.example.org/example-org/quarterdeck/-/merge_requests/23';
+    const prompt = reviewPrompt(request('gitlab', mr));
+
+    expect(prompt).toBe(expected(`Merge request: ${mr}`));
+    expect(prompt).not.toMatch(/pull request|\bPR\b/i);
   });
 });

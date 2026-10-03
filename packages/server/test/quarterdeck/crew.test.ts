@@ -87,7 +87,7 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
   it('assigns an approved ticket, reviews and merges its pull request, and ends the voyage', async () => {
     const runtime = crewRuntime({});
     const github = fakeGitHub();
-    const qd = await start({ adapters: runtime.adapters, github });
+    const qd = await start({ adapters: runtime.adapters, forge: github });
     await openProject(qd, PROJECT);
     const store = await startVoyage(qd, PROJECT);
     const ticketId = await proposeTicket(store, 'Add a greeting');
@@ -236,7 +236,7 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
     const runtime = crewRuntime({ [PROJECT]: { builderAsks: true } });
     const qd = await start({
       adapters: runtime.adapters,
-      github: fakeGitHub(),
+      forge: fakeGitHub(),
     });
     await openProject(qd, PROJECT);
     const store = await startVoyage(qd, PROJECT);
@@ -278,7 +278,7 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
     const runtime = crewRuntime({});
     const qd = await start({
       adapters: runtime.adapters,
-      github: fakeGitHub(),
+      forge: fakeGitHub(),
     });
     await openProject(qd, PROJECT);
     const store = await startVoyage(qd, PROJECT);
@@ -354,7 +354,7 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
     const runtime = crewRuntime({ [BROKEN]: { crashDriver: true } });
     const qd = await start({
       adapters: runtime.adapters,
-      github: fakeGitHub(),
+      forge: fakeGitHub(),
     });
     await openProject(qd, BROKEN);
     await openProject(qd, PROJECT);

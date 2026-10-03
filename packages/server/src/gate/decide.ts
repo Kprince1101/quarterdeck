@@ -1,13 +1,8 @@
-import type { MergeGate } from '@quarterdeck/rules';
+import type { ForgeTerms, MergeGate } from '@quarterdeck/rules';
 import type { MergeCardState, TicketFacts } from './facts.js';
-import {
-  parsePullRequestUrl,
-  repositoryName,
-  sameRepository,
-  type PullRequest,
-  type PullRequestRef,
-  type RepositoryRef,
-} from './github.js';
+import type { PullRequest, PullRequestRef, RepositoryRef } from './forge.js';
+import { parsePullRequestUrl } from './github.js';
+import { repositoryName, sameRepository } from './repository.js';
 
 export interface Approval {
   eventId: number;
@@ -32,15 +27,25 @@ export type MergeStep =
   | { kind: 'merge' }
   | { kind: 'ask' };
 
-export const WAITING = {
+export interface WaitingReasons {
+  reviewer: string;
+  human: string;
+  held: string;
+  draft: string;
+  checks: string;
+  mergeable: string;
+  botReview: string;
+}
+
+export const waitingReasons = (terms: ForgeTerms): WaitingReasons => ({
   reviewer: 'waiting for a live reviewer',
   human: 'waiting for a human to answer the merge card',
   held: 'held: the merge card was not answered merge',
-  draft: 'waiting: the pull request is a draft',
+  draft: `waiting: the ${terms.long} is a draft`,
   checks: 'waiting for checks to finish',
-  mergeable: 'waiting for GitHub to work out whether it merges cleanly',
-  copilot: 'waiting for a Copilot review',
-} as const;
+  mergeable: `waiting for ${terms.name} to work out whether it merges cleanly`,
+  botReview: 'waiting for a Copilot review',
+});
 
 const approvalOf = (
   facts: TicketFacts,
@@ -89,7 +94,17 @@ export const reviewStep = (
   };
 };
 
-const checksStep = (pr: PullRequest): MergeStep | undefined => {
+interface MergeContext {
+  rules: MergeGate;
+  project: RepositoryRef;
+  terms: ForgeTerms;
+  waiting: WaitingReasons;
+}
+
+const checksStep = (
+  pr: PullRequest,
+  ctx: MergeContext,
+): MergeStep | undefined => {
   if (pr.checks.state === 'failing') {
     let names = '';
     if (pr.checks.failing.length > 0)
@@ -100,67 +115,79 @@ const checksStep = (pr: PullRequest): MergeStep | undefined => {
     };
   }
   if (pr.checks.state === 'pending')
-    return { kind: 'wait', reason: WAITING.checks };
+    return { kind: 'wait', reason: ctx.waiting.checks };
   return undefined;
 };
 
-const copilotStep = (pr: PullRequest): MergeStep | undefined => {
-  if (pr.copilot.openThreads > 0)
+const botReviewStep = (
+  pr: PullRequest,
+  ctx: MergeContext,
+): MergeStep | undefined => {
+  if (pr.botReview.openThreads > 0)
     return {
       kind: 'bounce',
-      reason: `${pr.copilot.openThreads} Copilot review thread(s) are unresolved; answer and resolve each, then report again`,
+      reason: `${pr.botReview.openThreads} Copilot review thread(s) are unresolved; answer and resolve each, then report again`,
     };
-  if (!pr.copilot.reviewed) return { kind: 'wait', reason: WAITING.copilot };
+  if (!pr.botReview.reviewed)
+    return { kind: 'wait', reason: ctx.waiting.botReview };
   return undefined;
 };
 
 const readinessStep = (
   pr: PullRequest,
-  rules: MergeGate,
+  ctx: MergeContext,
 ): MergeStep | undefined => {
-  if (pr.draft) return { kind: 'wait', reason: WAITING.draft };
-  if (rules.requireChecksPassing) {
-    const step = checksStep(pr);
+  if (pr.draft) return { kind: 'wait', reason: ctx.waiting.draft };
+  if (ctx.rules.requireChecksPassing) {
+    const step = checksStep(pr, ctx);
     if (step) return step;
   }
   if (pr.mergeable === 'conflicting')
     return {
       kind: 'bounce',
-      reason:
-        'the pull request conflicts with its base; rebase, push and report again',
+      reason: `the ${ctx.terms.long} conflicts with its base; rebase, push and report again`,
     };
   if (pr.mergeable === 'unknown')
-    return { kind: 'wait', reason: WAITING.mergeable };
-  if (rules.requireCopilotReview) return copilotStep(pr);
+    return { kind: 'wait', reason: ctx.waiting.mergeable };
+  if (ctx.rules.requireCopilotReview) return botReviewStep(pr, ctx);
   return undefined;
 };
 
-const notInRepository = (url: string, project: RepositoryRef): string =>
-  `the pull request ${url} is not in this project's repository ${repositoryName(project)}; open it there and report again`;
+const notInRepository = (
+  url: string,
+  project: RepositoryRef,
+  terms: ForgeTerms,
+): string =>
+  `the ${terms.long} ${url} is not in this project's repository ${repositoryName(project)}; open it there and report again`;
 
 export const foreignPullRequest = (
   url: string,
   project: RepositoryRef,
+  terms: ForgeTerms,
 ): string | undefined => {
   let ref: PullRequestRef;
   try {
     ref = parsePullRequestUrl(url);
   } catch {
-    return `${url} is not a GitHub pull request URL; report the pull request's URL`;
+    return `${url} is not a ${terms.name} ${terms.long} URL; report the ${terms.long}'s URL`;
   }
-  if (!sameRepository(ref, project)) return notInRepository(url, project);
+  if (!sameRepository(ref, project))
+    return notInRepository(url, project, terms);
   return undefined;
 };
 
 const targetStep = (
   approval: Approval,
   pr: PullRequest,
-  project: RepositoryRef,
-  rules: MergeGate,
+  ctx: MergeContext,
 ): MergeStep | undefined => {
+  const { project, terms } = ctx;
   if (!sameRepository(pr.repository, project))
-    return { kind: 'bounce', reason: notInRepository(approval.pr, project) };
-  const base = rules.base ?? pr.defaultBranch;
+    return {
+      kind: 'bounce',
+      reason: notInRepository(approval.pr, project, terms),
+    };
+  const base = ctx.rules.base ?? pr.defaultBranch;
   if (base === null)
     return {
       kind: 'bounce',
@@ -169,7 +196,28 @@ const targetStep = (
   if (pr.base !== base)
     return {
       kind: 'bounce',
-      reason: `the pull request merges into ${pr.base}, not ${base}; retarget it to ${base} and report again`,
+      reason: `the ${terms.long} merges into ${pr.base}, not ${base}; retarget it to ${base} and report again`,
+    };
+  return undefined;
+};
+
+const settledStep = (
+  approval: Approval,
+  pr: PullRequest,
+  ctx: MergeContext,
+): MergeStep | undefined => {
+  const offTarget = targetStep(approval, pr, ctx);
+  if (offTarget) return offTarget;
+  if (pr.state === 'merged') return { kind: 'merged' };
+  if (pr.state === 'closed')
+    return {
+      kind: 'bounce',
+      reason: `the ${ctx.terms.long} was closed without merging; reopen it or open a new one and report again`,
+    };
+  if (pr.head !== approval.head)
+    return {
+      kind: 'bounce',
+      reason: `the ${ctx.terms.long} head is ${pr.head}, not the approved ${approval.head}; report the new head for review`,
     };
   return undefined;
 };
@@ -180,26 +228,16 @@ export const mergeStep = (
   card: MergeCardState,
   rules: MergeGate,
   project: RepositoryRef,
+  terms: ForgeTerms,
 ): MergeStep => {
-  const offTarget = targetStep(approval, pr, project, rules);
-  if (offTarget) return offTarget;
-  if (pr.state === 'merged') return { kind: 'merged' };
-  if (pr.state === 'closed')
-    return {
-      kind: 'bounce',
-      reason:
-        'the pull request was closed without merging; reopen it or open a new one and report again',
-    };
-  if (pr.head !== approval.head)
-    return {
-      kind: 'bounce',
-      reason: `the pull request head is ${pr.head}, not the approved ${approval.head}; report the new head for review`,
-    };
-  if (card === 'held') return { kind: 'wait', reason: WAITING.held };
-  const notReady = readinessStep(pr, rules);
+  const ctx = { rules, project, terms, waiting: waitingReasons(terms) };
+  const settled = settledStep(approval, pr, ctx);
+  if (settled) return settled;
+  if (card === 'held') return { kind: 'wait', reason: ctx.waiting.held };
+  const notReady = readinessStep(pr, ctx);
   if (notReady) return notReady;
   if (card === 'merge') return { kind: 'merge' };
-  if (card === 'open') return { kind: 'wait', reason: WAITING.human };
+  if (card === 'open') return { kind: 'wait', reason: ctx.waiting.human };
   if (rules.autoMerge) return { kind: 'merge' };
   return { kind: 'ask' };
 };

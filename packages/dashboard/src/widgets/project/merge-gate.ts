@@ -1,3 +1,4 @@
+import type { ForgeTerms } from '@quarterdeck/rules/forges';
 import { isJsonObject } from '@quarterdeck/rules/merge';
 import type { MergeGate } from '@quarterdeck/rules/schemas';
 import type { RuleView, RulesView } from '../../api/index.js';
@@ -29,8 +30,8 @@ const GATE_KEYS = Object.keys(GATE_LABELS) as GateKey[];
 
 const CONFIRMED_WHEN_ON: ReadonlySet<GateKey> = new Set(['autoMerge']);
 
-export const AUTO_MERGE_WARNING =
-  'Turn on auto-merge for every project on this machine? Approved pull requests will squash-merge to GitHub with no merge card.';
+export const autoMergeWarning = (terms: ForgeTerms): string =>
+  `Turn on auto-merge for every project on this machine? Approved ${terms.long}s will squash-merge to ${terms.name} with no merge card.`;
 
 export const needsConfirm = (key: GateKey, value: boolean): boolean =>
   value && CONFIRMED_WHEN_ON.has(key);

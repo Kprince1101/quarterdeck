@@ -1,10 +1,13 @@
 import {
+  forgeTerms,
+  forgeWording,
   loadRule,
+  type Forge,
   type LoadRulesOptions,
   type RuleName,
   type Rules,
 } from '@quarterdeck/rules';
-import { runGit, type GitRunner } from '../gate/index.js';
+import { projectForge, runGit, type GitRunner } from '../gate/index.js';
 import { projectSite } from '../planner/rows.js';
 import type { Store } from '../store/index.js';
 
@@ -23,11 +26,15 @@ export class NoRepoPathError extends Error {
 export interface CrewRules {
   load: <K extends RuleName>(name: K) => Promise<Rules[K]>;
   repoPath: () => Promise<string>;
+  forge: () => Promise<Forge>;
 }
+
+const WORDED_RULES: ReadonlySet<RuleName> = new Set(['charter', 'reviewer']);
 
 export const crewRules = (
   store: Pick<Store, 'db' | 'projectId'>,
   homeDir: string,
+  forgeOf?: () => Promise<Forge>,
 ): CrewRules => {
   const optionalRepoPath = async (): Promise<string | null> =>
     (await projectSite(store.db, store.projectId)).repoPath;
@@ -38,8 +45,17 @@ export const crewRules = (
     return { homeDir, repoDir: repoPath };
   };
 
+  const forge = forgeOf ?? (() => projectForge(store, { homeDir }));
+
+  const load = async <K extends RuleName>(name: K): Promise<Rules[K]> => {
+    const rule = await loadRule(name, await options());
+    if (!WORDED_RULES.has(name) || typeof rule !== 'string') return rule;
+    return forgeWording(rule, forgeTerms(await forge())) as Rules[K];
+  };
+
   return {
-    load: async (name) => loadRule(name, await options()),
+    load,
+    forge,
     repoPath: async () => {
       const repoPath = await optionalRepoPath();
       if (repoPath === null) throw new NoRepoPathError();

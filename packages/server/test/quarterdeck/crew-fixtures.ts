@@ -6,7 +6,7 @@ import {
   launchSite,
   type AcpClient,
   type AcpClientOptions,
-  type GitHubHost,
+  type ForgeHost,
   type PlannerAdapters,
   type PullRequest,
   type RuntimeLaunch,
@@ -54,7 +54,7 @@ export const crewRuntime = (
   };
 };
 
-export interface FakeGitHub extends GitHubHost {
+export interface FakeGitHub extends ForgeHost {
   merges: { url: string; head: string }[];
 }
 
@@ -73,11 +73,13 @@ export const fakeGitHub = (): FakeGitHub => {
     draft: false,
     mergeable: 'mergeable',
     checks: { state: 'passing', failing: [] },
-    copilot: { reviewed: false, openThreads: 0 },
+    botReview: { reviewed: false, openThreads: 0 },
   });
   return {
+    forge: 'github',
     merges,
     pullRequest,
+    listOpen: async () => [],
     squashMerge: async (url, head) => {
       merges.push({ url, head });
     },

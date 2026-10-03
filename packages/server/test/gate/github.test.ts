@@ -5,6 +5,8 @@ import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import {
+  OPEN_PULL_REQUEST_FIELDS,
+  OPEN_PULL_REQUEST_LIMIT,
   PULL_REQUEST_QUERY,
   ghCli,
   isCopilot,
@@ -132,7 +134,7 @@ describe('gh pull request host', () => {
       draft: false,
       mergeable: 'mergeable',
       checks: { state: 'passing', failing: [] },
-      copilot: { reviewed: false, openThreads: 0 },
+      botReview: { reviewed: false, openThreads: 0 },
     });
   });
 
@@ -223,7 +225,7 @@ describe('gh pull request host', () => {
       }),
     );
 
-    expect(pr.copilot).toEqual({ reviewed: true, openThreads: 1 });
+    expect(pr.botReview).toEqual({ reviewed: true, openThreads: 1 });
   });
 
   it('does not take a user whose login starts with copilot for Copilot', () => {
@@ -235,7 +237,7 @@ describe('gh pull request host', () => {
       }),
     );
 
-    expect(pr.copilot).toEqual({ reviewed: false, openThreads: 0 });
+    expect(pr.botReview).toEqual({ reviewed: false, openThreads: 0 });
   });
 
   it('knows Copilot by its exact bot logins', () => {
@@ -307,6 +309,78 @@ describe('gh pull request host', () => {
       ghCli(run).squashMerge('https://example.com/nope', HEAD),
     ).rejects.toThrow('is not a GitHub pull request URL');
   });
+
+  it('is the github forge', () => {
+    expect(ghCli(async () => '').forge).toBe('github');
+  });
+
+  it('lists the open pull requests of a repository', async () => {
+    const calls: string[][] = [];
+    const run: GhRunner = async (args) => {
+      calls.push(args);
+      return JSON.stringify([
+        {
+          url: PR,
+          number: 23,
+          title: 'Add the forge seam',
+          headRefName: 'qd19',
+          headRefOid: HEAD,
+          isDraft: false,
+          author: { login: 'okapi' },
+        },
+        {
+          url: 'https://github.com/example-org/quarterdeck/pull/24',
+          number: 24,
+          title: 'Draft',
+          headRefName: 'wip',
+          headRefOid: HEAD,
+          isDraft: true,
+          author: null,
+        },
+      ]);
+    };
+
+    const open = await ghCli(run).listOpen({
+      hostname: 'github.com',
+      owner: 'example-org',
+      name: 'quarterdeck',
+    });
+
+    expect(calls).toEqual([
+      [
+        'pr',
+        'list',
+        '--repo',
+        'github.com/example-org/quarterdeck',
+        '--state',
+        'open',
+        '--limit',
+        String(OPEN_PULL_REQUEST_LIMIT),
+        '--json',
+        OPEN_PULL_REQUEST_FIELDS,
+      ],
+    ]);
+    expect(open).toEqual([
+      {
+        url: PR,
+        number: 23,
+        title: 'Add the forge seam',
+        branch: 'qd19',
+        head: HEAD,
+        draft: false,
+        author: 'okapi',
+      },
+      {
+        url: 'https://github.com/example-org/quarterdeck/pull/24',
+        number: 24,
+        title: 'Draft',
+        branch: 'wip',
+        head: HEAD,
+        draft: true,
+        author: null,
+      },
+    ]);
+  });
 });
 
 describe('project repository', () => {
@@ -337,7 +411,7 @@ describe('project repository', () => {
       '',
     ])
       expect(() => parseRemoteUrl(remote)).toThrow(
-        'is not a GitHub repository remote',
+        'is not a repository remote with a host, owner and name',
       );
   });
 

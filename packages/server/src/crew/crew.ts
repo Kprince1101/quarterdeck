@@ -1,10 +1,11 @@
+import type { Forge } from '@quarterdeck/rules';
 import type { Agent, AgentLifecycle, AgentRole } from '../agents/index.js';
 import { startArchiveControl } from '../archive/index.js';
 import type { BusHost } from '../bus/index.js';
 import {
-  ghCli,
+  forgeHost,
   startReviewGate,
-  type GitHubHost,
+  type ForgeHost,
   type ReviewGate,
   type ReviewGateOptions,
 } from '../gate/index.js';
@@ -33,7 +34,7 @@ export interface CrewOptions {
   bus: BusHost;
   openStores: () => readonly Store[];
   adapters?: PlannerAdapters | undefined;
-  github?: GitHubHost | undefined;
+  forge?: ForgeHost | undefined;
   gatePollMs?: number | undefined;
   onError?: ((err: unknown) => void) | undefined;
 }
@@ -70,6 +71,13 @@ export class AgentExitedError extends Error {
     this.name = 'AgentExitedError';
   }
 }
+
+const injectedForge = (
+  host: ForgeHost | undefined,
+): (() => Promise<Forge>) | undefined => {
+  if (host === undefined) return undefined;
+  return () => Promise.resolve(host.forge);
+};
 
 const exitLinks = (agent: Agent) => {
   if (agent.voyageId === null) return { agentId: agent.id };
@@ -140,7 +148,7 @@ const startServices = async (parts: CrewParts) => {
     const gateOptions: ReviewGateOptions = {
       store,
       rules: (await rules.load('lifecycle')).mergeGate,
-      github: options.github ?? ghCli(),
+      forge: options.forge ?? (async () => forgeHost(await rules.forge())),
       reviewers,
       onError: report('gate'),
     };
@@ -168,7 +176,7 @@ const startServices = async (parts: CrewParts) => {
 export const startCrew = async (options: CrewOptions): Promise<Crew> => {
   const { store } = options;
   const report = crewFailureReporter(store, options.onError ?? reportError);
-  const rules = crewRules(store, options.homeDir);
+  const rules = crewRules(store, options.homeDir, injectedForge(options.forge));
   const pause = await startPauseGate({
     store,
     home: options.home,

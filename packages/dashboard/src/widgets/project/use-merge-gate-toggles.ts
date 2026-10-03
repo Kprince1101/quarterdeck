@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 import { useDeck } from '../../deck/DeckProvider.js';
 import { useIntentRequest } from '../use-intent-request.js';
+import { useForgeTerms } from '../../lib/use-forge-terms.js';
 import {
-  AUTO_MERGE_WARNING,
+  autoMergeWarning,
   gateLayer,
   gateToggles,
   needsConfirm,
@@ -34,6 +35,7 @@ export const useMergeGateToggles = (
   const { rule, loadError, read, show } = useLifecycleRule(panel.slug);
   const { isPending, error, run } = useIntentRequest();
   const autoMerge = useConfirm();
+  const forge = useForgeTerms(panel.slug, autoMerge.isConfirming);
   const shown = useMemo(() => rule && gateToggles(rule), [rule]);
 
   const write = (key: GateKey, value: boolean) => {
@@ -62,9 +64,9 @@ export const useMergeGateToggles = (
   }));
   return {
     toggles,
-    error: error ?? loadError ?? shown?.error ?? null,
+    error: error ?? loadError ?? shown?.error ?? forge.error,
     isConfirmingAutoMerge: autoMerge.isConfirming,
-    autoMergeWarning: AUTO_MERGE_WARNING,
+    autoMergeWarning: autoMergeWarning(forge.terms),
     handleConfirmAutoMerge: () => {
       autoMerge.settle();
       write('autoMerge', true);

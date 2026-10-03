@@ -81,4 +81,24 @@ describe('@quarterdeck/rules package entry', () => {
       'execute allow "*" permits any command.',
     ]);
   });
+
+  it('exposes the forge terms alone from plain Node', () => {
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '--eval',
+        "const { forgeTerms } = await import('@quarterdeck/rules/forges');\nprocess.stdout.write(JSON.stringify(forgeTerms('gitlab')));",
+      ],
+      { cwd: ROOT, encoding: 'utf8' },
+    );
+
+    expect(result.stderr).toBe('');
+    expect(JSON.parse(result.stdout)).toEqual({
+      short: 'MR',
+      long: 'merge request',
+      cli: 'glab',
+      name: 'GitLab',
+    });
+  });
 });

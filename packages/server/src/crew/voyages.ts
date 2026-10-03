@@ -1,3 +1,4 @@
+import { forgeTerms } from '@quarterdeck/rules';
 import { gitWorktrees, type AgentLifecycle } from '../agents/index.js';
 import type { BusHost } from '../bus/index.js';
 import {
@@ -129,10 +130,11 @@ export const startCrewVoyages = async (
   const builderContext = async (
     voyage: DriverVoyage,
   ): Promise<BuilderContext> => {
-    const [models, rules, repoPath] = await Promise.all([
+    const [models, rules, repoPath, forge] = await Promise.all([
       options.rules.load('models'),
       options.rules.load('lifecycle'),
       options.rules.repoPath(),
+      options.rules.forge(),
     ]);
     return {
       store,
@@ -142,6 +144,7 @@ export const startCrewVoyages = async (
       runtime: models.builder.runtime,
       repoPath,
       base: await baseRef(repoPath, rules.mergeGate.base),
+      terms: forgeTerms(forge),
       worktreesDir: projectWorktreesDir(options.project, options.home),
       turnsDir,
       budget: rules.budget.window,

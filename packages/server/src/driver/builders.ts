@@ -1,4 +1,4 @@
-import type { BudgetWindow, Runtime } from '@quarterdeck/rules';
+import type { BudgetWindow, ForgeTerms, Runtime } from '@quarterdeck/rules';
 import {
   AGENT_COLUMNS,
   findAgent,
@@ -30,6 +30,7 @@ export interface BuilderContext {
   runtime: Runtime;
   repoPath: string;
   base: string;
+  terms: ForgeTerms;
   worktreesDir: string;
   turnsDir: string;
   budget: BudgetWindow;

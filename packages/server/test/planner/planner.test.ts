@@ -1,5 +1,6 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { forgeTerms } from '@quarterdeck/rules';
 import {
   afterAll,
   afterEach,
@@ -12,7 +13,7 @@ import {
 import type { CardHuman } from '../../src/acp/permissions/index.js';
 import { repromptText } from '../../src/planner/brief.js';
 import {
-  PLANNER_BRIEF,
+  plannerBrief,
   PROJECT_ARCHIVED,
   parseTicketSpec,
 } from '../../src/planner/index.js';
@@ -38,6 +39,7 @@ import {
 } from './fixtures.ts';
 
 const CHARTER_HEADING = '# Driver charter';
+const PLANNER_BRIEF = plannerBrief(forgeTerms('github'));
 const settle = (check: () => unknown) => vi.waitFor(check, { timeout: 10_000 });
 
 describe('Planner', { timeout: TIMEOUT }, () => {
@@ -269,7 +271,9 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     expect(events[5]?.payload).toMatchObject({ seq: 2 });
     const prompts = await turnPrompts(p);
     expect(prompts.map(({ seq }) => seq)).toEqual([1, 2]);
-    expect(prompts[1]?.prompt).toBe(repromptText(refusal));
+    expect(prompts[1]?.prompt).toBe(
+      repromptText(refusal, forgeTerms('github')),
+    );
     expect(await docket(p)).toEqual([
       { title: FAKE_PROPOSAL_TITLE, body: FAKE_SPEC_BODY, status: 'proposed' },
     ]);

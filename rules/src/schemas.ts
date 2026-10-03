@@ -1,8 +1,11 @@
 import { z } from 'zod';
+import { forgeSchema } from './forges.js';
 
 const AGENT_NAME = /^[a-z][a-z0-9-]*$/;
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const KIRO_AGENT_NAME = /^[a-z0-9][a-z0-9_-]*$/i;
+const HOSTNAME =
+  /^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*$/;
 
 const hasUniqueValues = (values: string[]): boolean =>
   new Set(values).size === values.length;
@@ -126,6 +129,10 @@ export const repoKiroSchema = z.strictObject({
     .optional(),
 });
 
+export const forgesSchema = z.strictObject({
+  forges: z.record(z.string().regex(HOSTNAME), forgeSchema),
+});
+
 export const RULE_SCHEMAS = {
   charter: markdownSchema,
   reviewer: markdownSchema,
@@ -135,6 +142,7 @@ export const RULE_SCHEMAS = {
   models: modelsSchema,
   env: envSchema,
   kiro: kiroSchema,
+  forges: forgesSchema,
 };
 
 export type RuleName = keyof typeof RULE_SCHEMAS;
@@ -160,3 +168,4 @@ export type EnvRule = z.infer<typeof envSchema>;
 export type KiroRule = z.infer<typeof kiroSchema>;
 export type RepoKiroRule = z.infer<typeof repoKiroSchema>;
 export type KiroBaseRole = z.infer<typeof kiroBaseRoleSchema>;
+export type ForgesRule = z.infer<typeof forgesSchema>;

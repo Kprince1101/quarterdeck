@@ -14,7 +14,8 @@ import {
 import { INTENT_HANDLERS } from '../../src/api/index.js';
 
 const INTENTS_DIR = resolve(import.meta.dirname, '../../src/intents');
-const BROWSER_SAFE_IMPORT = /^(zod|@quarterdeck\/rules\/schemas|\.\.?\/)/;
+const BROWSER_SAFE_IMPORT =
+  /^(zod|@quarterdeck\/rules\/(schemas|forges)|\.\.?\/)/;
 const GLOBAL_INTENTS = new Set([
   'rules.write',
   'rules.reset',
@@ -34,6 +35,7 @@ describe('intent registry', () => {
         'card',
         'charter',
         'data',
+        'forge',
         'layout',
         'notebook',
         'pause',

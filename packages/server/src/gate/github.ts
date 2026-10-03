@@ -1,41 +1,17 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { z } from 'zod';
-
-export type PullRequestState = 'open' | 'merged' | 'closed';
-export type Mergeable = 'mergeable' | 'conflicting' | 'unknown';
-export type ChecksState = 'passing' | 'pending' | 'failing' | 'none';
-
-export interface RepositoryRef {
-  hostname: string;
-  owner: string;
-  name: string;
-}
-
-export interface PullRequestRef extends RepositoryRef {
-  number: number;
-}
-
-export interface PullRequest {
-  repository: RepositoryRef;
-  base: string;
-  defaultBranch: string | null;
-  state: PullRequestState;
-  head: string;
-  draft: boolean;
-  mergeable: Mergeable;
-  checks: { state: ChecksState; failing: string[] };
-  copilot: { reviewed: boolean; openThreads: number };
-}
-
-export interface GitHubHost {
-  pullRequest: (url: string) => Promise<PullRequest>;
-  squashMerge: (url: string, head: string) => Promise<void>;
-}
+import type {
+  ChecksState,
+  ForgeHost,
+  Mergeable,
+  OpenPullRequest,
+  PullRequest,
+  PullRequestRef,
+  PullRequestState,
+  RepositoryRef,
+} from './forge.js';
+import { exec, execError, repositoryName } from './repository.js';
 
 export type GhRunner = (args: string[]) => Promise<string>;
-
-export type GitRunner = (args: string[]) => Promise<string>;
 
 export const PULL_REQUEST_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
@@ -73,6 +49,11 @@ export const PULL_REQUEST_QUERY = `query($owner: String!, $name: String!, $numbe
   }
 }`;
 
+export const OPEN_PULL_REQUEST_FIELDS =
+  'url,number,title,headRefName,headRefOid,isDraft,author';
+
+export const OPEN_PULL_REQUEST_LIMIT = 100;
+
 const PULL_PATH = /^\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?$/;
 
 export const parsePullRequestUrl = (url: string): PullRequestRef => {
@@ -87,40 +68,6 @@ export const parsePullRequestUrl = (url: string): PullRequestRef => {
     number: Number(match[3]),
   };
 };
-
-const SCP_REMOTE = /^[^@/:]+@([^:/]+):\/?([^/]+)\/([^/]+?)(?:\.git)?\/?$/;
-const PATH_REMOTE = /^\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/;
-const REMOTE_PROTOCOLS: readonly string[] = ['https:', 'http:', 'ssh:'];
-
-const parseUrlRemote = (remote: string): RepositoryRef | undefined => {
-  const parsed = URL.parse(remote);
-  if (!parsed || !REMOTE_PROTOCOLS.includes(parsed.protocol)) return undefined;
-  const match = PATH_REMOTE.exec(parsed.pathname);
-  if (!match?.[1] || !match[2]) return undefined;
-  return {
-    hostname: parsed.hostname.toLowerCase(),
-    owner: match[1],
-    name: match[2],
-  };
-};
-
-export const parseRemoteUrl = (remote: string): RepositoryRef => {
-  const trimmed = remote.trim();
-  const scp = SCP_REMOTE.exec(trimmed);
-  if (scp?.[1] && scp[2] && scp[3])
-    return { hostname: scp[1].toLowerCase(), owner: scp[2], name: scp[3] };
-  const fromUrl = parseUrlRemote(trimmed);
-  if (fromUrl) return fromUrl;
-  throw new Error(`${trimmed} is not a GitHub repository remote`);
-};
-
-export const sameRepository = (a: RepositoryRef, b: RepositoryRef): boolean =>
-  a.hostname.toLowerCase() === b.hostname.toLowerCase() &&
-  a.owner.toLowerCase() === b.owner.toLowerCase() &&
-  a.name.toLowerCase() === b.name.toLowerCase();
-
-export const repositoryName = (repo: RepositoryRef): string =>
-  `${repo.hostname}/${repo.owner}/${repo.name}`;
 
 const author = z
   .object({ login: z.string(), __typename: z.string().optional() })
@@ -186,6 +133,18 @@ const replySchema = z.object({
   }),
 });
 
+const openListSchema = z.array(
+  z.object({
+    url: z.string(),
+    number: z.int(),
+    title: z.string(),
+    headRefName: z.string(),
+    headRefOid: z.string(),
+    isDraft: z.boolean(),
+    author: z.object({ login: z.string() }).nullable().optional(),
+  }),
+);
+
 type Reply = NonNullable<
   NonNullable<z.infer<typeof replySchema>['data']['repository']>['pullRequest']
 >;
@@ -246,7 +205,7 @@ export const isCopilot = (
   COPILOT_LOGINS.includes(who.login) &&
   who.__typename !== 'User';
 
-const readCopilot = (pr: Reply): PullRequest['copilot'] => ({
+const readBotReview = (pr: Reply): PullRequest['botReview'] => ({
   reviewed: pr.reviews.nodes.some((review) => isCopilot(review.author)),
   openThreads: pr.reviewThreads.nodes.filter(
     (thread) =>
@@ -278,20 +237,20 @@ export const parsePullRequest = (url: string, json: string): PullRequest => {
     draft: pr.isDraft,
     mergeable: MERGEABLE[pr.mergeable],
     checks: readChecks(rollup),
-    copilot: readCopilot(pr),
+    botReview: readBotReview(pr),
   };
 };
 
-const exec = promisify(execFile);
-
-const execError = (command: string, err: unknown): Error => {
-  const stderr = (err as { stderr?: unknown }).stderr;
-  let detail = String(err);
-  if (typeof stderr === 'string' && stderr.trim() !== '')
-    detail = stderr.trim();
-  else if (err instanceof Error) detail = err.message;
-  return new Error(`${command} failed: ${detail}`, { cause: err });
-};
+export const parseOpenPullRequests = (json: string): OpenPullRequest[] =>
+  openListSchema.parse(JSON.parse(json)).map((pr) => ({
+    url: pr.url,
+    number: pr.number,
+    title: pr.title,
+    branch: pr.headRefName,
+    head: pr.headRefOid,
+    draft: pr.isDraft,
+    author: pr.author?.login ?? null,
+  }));
 
 export const runGh: GhRunner = async (args) => {
   try {
@@ -301,21 +260,6 @@ export const runGh: GhRunner = async (args) => {
     throw execError(`gh ${args.slice(0, 2).join(' ')}`, err);
   }
 };
-
-export const runGit: GitRunner = async (args) => {
-  try {
-    const { stdout } = await exec('git', args);
-    return stdout;
-  } catch (err) {
-    throw execError(`git ${args.join(' ')}`, err);
-  }
-};
-
-export const originRepository = async (
-  repoPath: string,
-  run: GitRunner = runGit,
-): Promise<RepositoryRef> =>
-  parseRemoteUrl(await run(['-C', repoPath, 'remote', 'get-url', 'origin']));
 
 export const pullRequestArgs = (url: string): string[] => {
   const ref = parsePullRequestUrl(url);
@@ -340,10 +284,26 @@ export const squashMergeArgs = (url: string, head: string): string[] => {
   return ['pr', 'merge', url, '--squash', '--match-head-commit', head];
 };
 
-export const ghCli = (run: GhRunner = runGh): GitHubHost => ({
+export const listOpenArgs = (repository: RepositoryRef): string[] => [
+  'pr',
+  'list',
+  '--repo',
+  repositoryName(repository),
+  '--state',
+  'open',
+  '--limit',
+  String(OPEN_PULL_REQUEST_LIMIT),
+  '--json',
+  OPEN_PULL_REQUEST_FIELDS,
+];
+
+export const ghCli = (run: GhRunner = runGh): ForgeHost => ({
+  forge: 'github',
   pullRequest: async (url) =>
     parsePullRequest(url, await run(pullRequestArgs(url))),
   squashMerge: async (url, head) => {
     await run(squashMergeArgs(url, head));
   },
+  listOpen: async (repository) =>
+    parseOpenPullRequests(await run(listOpenArgs(repository))),
 });

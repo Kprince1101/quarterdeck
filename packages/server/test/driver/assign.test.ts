@@ -2,7 +2,7 @@ import { existsSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { BudgetWindow, Naming } from '@quarterdeck/rules';
+import { forgeTerms, type BudgetWindow, type Naming } from '@quarterdeck/rules';
 import {
   afterAll,
   afterEach,
@@ -128,6 +128,7 @@ describe('builder assignment and continue', () => {
       runtime: 'claude',
       repoPath: repo,
       base,
+      terms: forgeTerms('github'),
       worktreesDir: join(root, 'worktrees'),
       turnsDir: join(root, 'turns'),
       budget: NO_CAP,
