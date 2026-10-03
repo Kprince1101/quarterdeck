@@ -8,6 +8,7 @@ import type {
   PullRequestRef,
   PullRequestState,
   RepositoryRef,
+  ReviewState,
 } from './forge.js';
 import { exec, execError, repositoryName } from './repository.js';
 
@@ -50,7 +51,7 @@ export const PULL_REQUEST_QUERY = `query($owner: String!, $name: String!, $numbe
 }`;
 
 export const OPEN_PULL_REQUEST_FIELDS =
-  'url,number,title,headRefName,headRefOid,isDraft,author';
+  'url,number,title,headRefName,baseRefName,headRefOid,isDraft,author,statusCheckRollup,reviewDecision,createdAt';
 
 export const OPEN_PULL_REQUEST_LIMIT = 100;
 
@@ -133,15 +134,23 @@ const replySchema = z.object({
   }),
 });
 
+const listedCheckSchema = contextSchema.extend({
+  status: z.string().nullable().optional(),
+});
+
 const openListSchema = z.array(
   z.object({
     url: z.string(),
     number: z.int(),
     title: z.string(),
     headRefName: z.string(),
+    baseRefName: z.string(),
     headRefOid: z.string(),
     isDraft: z.boolean(),
     author: z.object({ login: z.string() }).nullable().optional(),
+    statusCheckRollup: z.array(listedCheckSchema).nullable().optional(),
+    reviewDecision: z.string().nullable().optional(),
+    createdAt: z.string(),
   }),
 );
 
@@ -150,6 +159,7 @@ type Reply = NonNullable<
 >;
 type Rollup = Reply['commits']['nodes'][number]['commit']['statusCheckRollup'];
 type CheckContext = z.infer<typeof contextSchema>;
+type ListedCheck = z.infer<typeof listedCheckSchema>;
 
 const FAILED_CONCLUSIONS: readonly string[] = [
   'FAILURE',
@@ -191,6 +201,31 @@ const readChecks = (rollup: Rollup): PullRequest['checks'] => {
     .filter((name) => name !== undefined);
   return { state: rollupState(rollup.state), failing };
 };
+
+const PENDING_STATES: readonly string[] = ['PENDING', 'EXPECTED'];
+
+const isPending = (check: ListedCheck): boolean => {
+  if (check.__typename === 'CheckRun') return check.status !== 'COMPLETED';
+  return PENDING_STATES.includes(check.state ?? '');
+};
+
+const listedChecks = (
+  checks: ListedCheck[] | null | undefined,
+): ChecksState => {
+  if (!checks?.length) return 'none';
+  if (checks.some((check) => failedContext(check) !== undefined))
+    return 'failing';
+  if (checks.some(isPending)) return 'pending';
+  return 'passing';
+};
+
+const REVIEW_DECISIONS: Record<string, ReviewState> = {
+  APPROVED: 'approved',
+  CHANGES_REQUESTED: 'changes',
+};
+
+const reviewDecision = (decision: string | null | undefined): ReviewState =>
+  REVIEW_DECISIONS[decision ?? ''] ?? 'none';
 
 type Author = z.infer<typeof author>;
 
@@ -248,9 +283,13 @@ export const parseOpenPullRequests = (json: string): OpenPullRequest[] =>
     number: pr.number,
     title: pr.title,
     branch: pr.headRefName,
+    base: pr.baseRefName,
     head: pr.headRefOid,
     draft: pr.isDraft,
     author: pr.author?.login ?? null,
+    checks: listedChecks(pr.statusCheckRollup),
+    review: reviewDecision(pr.reviewDecision),
+    createdAt: pr.createdAt,
   }));
 
 export const runGh: GhRunner = async (args) => {

@@ -107,17 +107,19 @@ describe('layout presets', () => {
     });
   });
 
-  it('lays out the default as Board beside tabbed Planner/Driver/Notebook, Events below', () => {
+  it('lays out the default as Board beside tabbed Planner/Driver/Notebook, Events and open requests below', () => {
     expect(visible('default')).toEqual([
       ['board', []],
       ['planner', ['driver', 'notebook']],
       ['events', []],
+      ['requests', []],
     ]);
-    const [board, tabs, events] = LAYOUT_PRESETS.default.items;
+    const [board, tabs, events, requests] = LAYOUT_PRESETS.default.items;
     expect(tabs?.x).toBe((board?.x ?? 0) + (board?.w ?? 0));
     expect(tabs?.y).toBe(board?.y);
     expect(events?.y).toBe((board?.y ?? 0) + (board?.h ?? 0));
-    expect(events?.w).toBe(GRID_COLUMNS);
+    expect(requests?.y).toBe(events?.y);
+    expect((events?.w ?? 0) + (requests?.w ?? 0)).toBe(GRID_COLUMNS);
   });
 
   it('keeps ops and minimal to watching and answering', () => {
@@ -126,6 +128,7 @@ describe('layout presets', () => {
       'agents',
       'cards',
       'events',
+      'requests',
       'usage',
     ]);
     expect(visible('minimal').map(([widget]) => widget)).toEqual([

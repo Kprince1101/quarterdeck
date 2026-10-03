@@ -46,6 +46,7 @@ src/lib/use-forge-terms.ts   useForgeTerms(project, enabled?): the project's for
 src/widgets/project/         Project: voyage Start/End/Kill, pause, AI review and auto-merge (machine lifecycle layer), reviewer, retired count, Refresh agents, archive
 src/widgets/usage/           Usage: this project's tokens in the budget window and the share of budget.window.capTokens
 src/widgets/agents/          Agents: state, since, tickets, held work; Pause/Poke/Kill/Retire/Reset
+src/widgets/requests/        Requests: open pull/merge requests across projects, in each forge's terms, with ticket and agent links
 src/grid/                    the grid: layout JSON, actions, drag, resize, keyboard, tray
 src/layouts/                 DeckLayout: the saved layout, the preset bar, writes to the server
 src/theme/tokens.css         dark theme tokens (--qd-*) and the page base
@@ -102,7 +103,7 @@ The grid draws the `Panel` (title, move, duplicate, hide, resize), so the compon
 `src/demo/main.tsx` is a second entry: the same `App`, labelled **Demo** in the header, on a fake server that lives in the page. The site builds it (`site/demo/index.html`, `npm run build --workspace site`) to `site/dist/demo/`. It never opens a socket and never sends a request:
 
 - **Stream.** `DeckProvider` gets `stream: { url, WebSocket: demoWebSocket(store) }`. The socket is an `EventTarget` that hands `openStream` the store's snapshot, the events after its cursor, then every change and event, as JSON, exactly as the real stream does.
-- **Intents and rules.** `intents` and `rules` are the real `createIntentClient` and `createRulesReader` with a `fetch` that answers in the page (`demoFetch`): it checks each intent against the same schema, applies it to the store and replies like the API, refusals included. Recorded intents publish their `<intent>` event; reads (`data.*`, `turn.read`, `usage.read`, `forge.read`, machine `rules.*`) do not. The demo project is on GitHub.
+- **Intents and rules.** `intents` and `rules` are the real `createIntentClient` and `createRulesReader` with a `fetch` that answers in the page (`demoFetch`): it checks each intent against the same schema, applies it to the store and replies like the API, refusals included. Recorded intents publish their `<intent>` event; reads (`data.*`, `turn.read`, `usage.read`, `forge.read`, `forge.requests`, machine `rules.*`) do not. The demo project is on GitHub. `forge.requests` (`demo-requests.ts`) lists Harbor's tickets in review or bounced as its pull requests, linked to their tickets and builders, plus a dependency bump, and a made-up GitLab project, `lighthouse`, with two merge requests, so the Requests widget shows both forges' terms.
 - **Scripted voyages.** Every 2.5 s the director plays one beat of the open voyage (`demo-script.ts`): the Driver plans and assigns three tickets, two builders work, one asks through a card, the reviewer passes or bounces each pull request, the gate merges, and the Driver proposes a notebook entry. A card waits up to 12 beats for an answer, then expires and the builder takes its recommendation. Four beats after a voyage ends the next one starts; the voyages come from `DEMO_VOYAGE_PLANS`, in order, then again. Pausing the project, or everything from the Board, holds the script, and so does archiving it. The script leaves a `blocked` ticket alone; the voyage's end reopens it.
 - **What a person can do.** Answer or decline cards, start, end and kill voyages, pause the project, an agent or everything (the store sends the `machine` message the Board reads), end, kill, retire or reset an agent (as on the server: a kill blocks the `assigned` and `in_progress` tickets it held, a reset clears the session and puts a running agent back to `idle`, a retired agent is refused with 409), archive the project (every agent retires, with `archive.retired`), talk to the Planner (it replies and proposes a ticket; an approved ticket goes into the next voyage), decide notebook proposals, edit the machine rules layer, move widgets and reset to a preset, browse the Data widget, poke an agent (`agent.message` is queued, as on the server), and wipe. A wipe touches nothing real: it answers `{ wiped: ['harbor'], stopped }` with the live agents, sends an empty snapshot and seeds the demo again, with event ids continuing so an open stream follows. Adding or editing a project is refused with a reason.
 - **Where it opens.** The project `harbor` with voyage 1 finished, voyage 2 under way, a Planner conversation with a proposed ticket, and a machine `lifecycle` layer that sets `budget.window.capTokens`, so Usage shows a share. The demo's budget window opens at the start of the voyage before the open one.
@@ -153,6 +154,14 @@ The Driver widget shows one voyage at a time: the active voyage, or the newest i
 `usage` starts in the tray. It shows the budget window that holds launches (`lifecycle.budget.window`, see [budget](../server/src/budget/README.md)): it sends `usage.read` for the stream's project and renders the reply, so the widget and the hold always read the same meter. The count is per project, so the readout says _this project_. It never sums the stream's `turns` table, which keeps only each agent's latest 20 turns.
 
 It reads on mount, every 15 seconds so old turns leave the window, and whenever a turn in the stream ends. With a cap it shows the percent of the cap, amber from 60% and red from 80%. Without one it shows the token total and _No cap set_. A failed read shows the error and keeps the last reading. It only displays usage: the hold is the budget module's.
+
+## The Requests widget
+
+`requests` lists the open pull and merge requests of every active project with a repository, from `forge.requests` (see [open requests](../server/src/api/README.md#open-requests)), one section per project under the project's name and forge. Each row has the number, linked to the request on its forge (`#7` on GitHub, `!3` on GitLab, labelled _Open PR #7 on GitHub_; a URL that is not http or https stays plain text), the title with a _Draft_ badge, the author, `branch → base`, the checks or pipeline state, the review state (_Approved_, _Changes requested_, _No review_), the Quarterdeck ticket and its agent when the branch or the reported URL matches one, and the age.
+
+Words come from each project's forge through `forgeTerms`: the column headings (`PR` and _Checks_ on GitHub, `MR` and _Pipeline_ on GitLab), the link labels and the empty states. The heading inside the panel is _Pull requests_ or _Merge requests_ when every project is on one forge, and the neutral _Pull and merge requests_ when they mix, which is also the panel's registered title. With nothing open it says _No open pull requests_ (or merge requests, or _pull or merge requests_ when mixed); a quiet project beside a busy one gets its own line.
+
+A project whose forge could not be read shows the error inside its own section; the others render as usual. It reads once the stream's snapshot names its project, then every 15 seconds and whenever a `ticket.*` event arrives on the stream; the server caches each project's list, so these reads are cheap. A failed read shows the error and keeps the last list.
 
 ## The grid
 
@@ -210,8 +219,8 @@ The schema lives in the server (`@quarterdeck/server/layouts`), so the dashboard
 
 The presets ship in the server (`LAYOUT_PRESETS` in `packages/server/src/layouts/presets.ts`) and name widgets by their registered `type`, so a preset slot for a widget that has not landed yet stays empty until it does:
 
-| Preset    | Layout                                                                                        |
-| --------- | --------------------------------------------------------------------------------------------- |
-| `default` | `board` (7×8) beside one slot of `planner` with `driver` and `notebook` (5×8); `events` below |
-| `ops`     | `board` and `agents` on top; `cards`, `events` and `usage` below                              |
-| `minimal` | `board` (8×12) and `cards` (4×12)                                                             |
+| Preset    | Layout                                                                                                       |
+| --------- | ------------------------------------------------------------------------------------------------------------ |
+| `default` | `board` (7×8) beside one slot of `planner` with `driver` and `notebook` (5×8); `events` and `requests` below |
+| `ops`     | `board` and `agents` on top; `cards`, `events`, `requests` and `usage` below                                 |
+| `minimal` | `board` (8×12) and `cards` (4×12)                                                                            |

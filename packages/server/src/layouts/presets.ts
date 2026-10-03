@@ -22,14 +22,16 @@ export const LAYOUT_PRESETS = {
   default: grid([
     at('board', 0, 0, 7, 8),
     { ...at('planner', 7, 0, 5, 8), tabs: ['driver', 'notebook'] },
-    at('events', 0, 8, 12, 4),
+    at('events', 0, 8, 6, 4),
+    at('requests', 6, 8, 6, 4),
   ]),
   ops: grid([
     at('board', 0, 0, 6, 6),
     at('agents', 6, 0, 6, 6),
-    at('cards', 0, 6, 4, 6),
-    at('events', 4, 6, 5, 6),
-    at('usage', 9, 6, 3, 6),
+    at('cards', 0, 6, 3, 6),
+    at('events', 3, 6, 3, 6),
+    at('requests', 6, 6, 4, 6),
+    at('usage', 10, 6, 2, 6),
   ]),
   minimal: grid([at('board', 0, 0, 8, 12), at('cards', 8, 0, 4, 12)]),
 } satisfies Record<string, GridLayout>;

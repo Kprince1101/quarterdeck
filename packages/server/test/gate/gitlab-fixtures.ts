@@ -318,6 +318,43 @@ export const gitlabOpenList = (
     })),
   );
 
+const RECORDED_APPROVALS = {
+  id: 84512,
+  iid: 23,
+  project_id: GITLAB_PROJECT_ID,
+  title: 'Add a GitLab forge on glab',
+  description: 'Reads merge requests through glab api.',
+  state: 'opened',
+  created_at: '2026-10-02T13:58:40.117Z',
+  updated_at: '2026-10-02T14:10:02.540Z',
+  merge_status: 'can_be_merged',
+  approved: true,
+  approvals_required: 0,
+  approvals_left: 0,
+  require_password_to_approve: false,
+  approved_by: [],
+  suggested_approvers: [],
+  approvers: [],
+  approver_groups: [],
+  user_has_approved: false,
+  user_can_approve: true,
+  approval_rules_left: [],
+  has_approval_rules: false,
+  merge_request_approvers_available: false,
+  multiple_approval_rules_available: false,
+  invalid_approvers_rules: [],
+};
+
+export const gitlabApprovals = (
+  approvedBy: GitlabPerson[] = [],
+  extra: Record<string, unknown> = {},
+): string =>
+  JSON.stringify({
+    ...RECORDED_APPROVALS,
+    approved_by: approvedBy.map((user) => ({ user })),
+    ...extra,
+  });
+
 const endpointOf = (args: string[]): string => {
   const endpoint = args.find((arg) => arg.startsWith('projects/'));
   if (endpoint === undefined)

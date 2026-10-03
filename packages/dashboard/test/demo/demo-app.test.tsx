@@ -46,6 +46,13 @@ describe('the dashboard on the demo server', () => {
     expect(textOf(container, '[aria-label="Planner"]')).toContain(PLANNER_ASK);
     expect(textOf(container, '[aria-label="Events"]')).toContain('turn.ended');
     expect(textOf(container, '[aria-label="Usage"]')).toMatch(/\d+%/);
+    const requests = textOf(
+      container,
+      '[aria-label="Pull and merge requests"]',
+    );
+    expect(requests).toContain('Harbor');
+    expect(requests).toContain('Lighthouse');
+    expect(requests).toContain('Bump the tide-table library');
 
     act(() => {
       server.step();

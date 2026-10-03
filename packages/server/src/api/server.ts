@@ -8,6 +8,10 @@ import { quarterdeckHome } from '../store/index.js';
 import type { UpgradeHandler } from '../stream/socket.js';
 import type { ApiContext } from './context.js';
 import {
+  createOpenRequests,
+  type OpenRequestsOptions,
+} from './open-requests.js';
+import {
   createProjectStores,
   type ProjectHooks,
   type ProjectStores,
@@ -31,6 +35,7 @@ export interface ApiServerOptions {
   token?: string;
   projectHooks?: ProjectHooks;
   upgrade?: UpgradeHandler;
+  openRequests?: Pick<OpenRequestsOptions, 'hosts' | 'refreshMs'>;
 }
 
 export interface ApiServer {
@@ -54,7 +59,12 @@ export const startApiServer = async (
     options.stopHosts,
     options.projectHooks,
   );
-  const ctx: ApiContext = { stores, homeDir };
+  const openRequests = createOpenRequests({
+    ...options.openRequests,
+    stores,
+    homeDir,
+  });
+  const ctx: ApiContext = { stores, homeDir, openRequests };
   const token = options.token ?? createApiToken();
   let guard = localGuard(0, token);
   const server = createServer((req, res) => {

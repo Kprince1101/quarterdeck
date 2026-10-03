@@ -5,11 +5,13 @@ import type {
   IntentReply,
   IntentResult,
 } from '../intents/index.js';
+import type { OpenRequests } from './open-requests.js';
 import type { ProjectStores } from './project-stores.js';
 
 export interface ApiContext {
   stores: ProjectStores;
   homeDir: string;
+  openRequests?: OpenRequests | undefined;
 }
 
 export type IntentHandler<N extends IntentName> = (

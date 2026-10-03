@@ -34,6 +34,7 @@ export {
   type PullRequestState,
   type RepoForgeOptions,
   type RepositoryRef,
+  type ReviewState,
 } from './forge.js';
 export {
   GATE_POLL_MS,
@@ -59,12 +60,15 @@ export {
   type GhRunner,
 } from './github.js';
 export {
+  GITLAB_OPEN_BATCH,
   GITLAB_PAGE_SIZE,
+  approvalsArgs,
   discussionsArgs,
   failedJobsArgs,
   glabCli,
   glabListOpenArgs,
   glabSquashMergeArgs,
+  listedMergeRequestArgs,
   mergeRequestArgs,
   parseMergeRequest,
   parseMergeRequestReply,
@@ -77,6 +81,7 @@ export {
   type DiscussionThread,
   type GlabRunner,
   type MergeRequestReplies,
+  type OpenMergeRequestReplies,
 } from './gitlab.js';
 export {
   originRepository,

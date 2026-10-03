@@ -1,8 +1,12 @@
 import { RulesError, UnknownForgeError, forgeTerms } from '@quarterdeck/rules';
 import { projectForge } from '../../gate/index.js';
-import type { ForgeReadResult } from '../../intents/index.js';
+import type {
+  ForgeReadResult,
+  ForgeRequestsResult,
+} from '../../intents/index.js';
 import type { IntentHandler } from '../context.js';
 import { conflict } from '../http-error.js';
+import { createOpenRequests } from '../open-requests.js';
 import { unrecorded } from '../record.js';
 
 const isForgeConfigError = (err: unknown): err is Error =>
@@ -22,4 +26,16 @@ export const readForge: IntentHandler<'forge.read'> = async (
     if (isForgeConfigError(err)) throw conflict(err.message);
     throw err;
   }
+};
+
+export const readOpenRequests: IntentHandler<'forge.requests'> = async (
+  ctx,
+  _input,
+  name,
+) => {
+  const openRequests =
+    ctx.openRequests ??
+    createOpenRequests({ stores: ctx.stores, homeDir: ctx.homeDir });
+  const read: ForgeRequestsResult = { projects: await openRequests.read() };
+  return unrecorded(name, read);
 };

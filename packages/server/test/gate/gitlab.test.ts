@@ -25,6 +25,7 @@ import {
   GITLAB_PIPELINE_ID,
   GITLAB_PROJECT_ID,
   OKAPI,
+  gitlabApprovals,
   gitlabDiscussions,
   gitlabJob,
   gitlabJobs,
@@ -465,33 +466,65 @@ describe('glab host', () => {
     expect(calls).toEqual([]);
   });
 
-  it('lists the open merge requests of a project', async () => {
-    const calls: string[][] = [];
-    const run: GlabRunner = async (args) => {
+  const DRAFT_MR =
+    'https://git.example.org/example-group/platform/quarterdeck/-/merge_requests/24';
+
+  interface OpenReplies {
+    list: Record<string, unknown>[];
+    details?: Record<number, GitlabShape>;
+    approvals?: Record<number, string>;
+  }
+
+  const openRunner =
+    (replies: OpenReplies, calls: string[][]): GlabRunner =>
+    async (args) => {
       calls.push(args);
-      return gitlabOpenList([
-        {},
-        {
-          iid: 24,
-          title: 'Draft: widget',
-          web_url:
-            'https://git.example.org/example-group/platform/quarterdeck/-/merge_requests/24',
-          source_branch: 'wip',
-          draft: true,
-          author: null,
-        },
-      ]);
+      const endpoint = args.at(-1) ?? '';
+      if (endpoint.includes('state=opened'))
+        return gitlabOpenList(replies.list);
+      const iid = Number(/merge_requests\/(\d+)/.exec(endpoint)?.[1]);
+      if (endpoint.endsWith('/approvals'))
+        return replies.approvals?.[iid] ?? gitlabApprovals();
+      return gitlabMergeRequest(replies.details?.[iid] ?? {});
     };
+
+  it('lists the open merge requests of a project, with each one’s pipeline and approvals', async () => {
+    const calls: string[][] = [];
+    const run = openRunner(
+      {
+        list: [
+          {},
+          {
+            iid: 24,
+            title: 'Draft: widget',
+            web_url: DRAFT_MR,
+            source_branch: 'wip',
+            target_branch: 'release',
+            created_at: '2026-10-02T15:20:00.000Z',
+            draft: true,
+            author: null,
+          },
+        ],
+        details: {
+          23: { pipeline: { status: 'success' } },
+          24: { pipeline: null, mergeRequest: { iid: 24 } },
+        },
+        approvals: { 23: gitlabApprovals([OKAPI]) },
+      },
+      calls,
+    );
 
     const open = await glabCli(run).listOpen(PROJECT);
 
+    const api = (endpoint: string) => ['api', '--hostname', HOST, endpoint];
     expect(calls).toEqual([
-      [
-        'api',
-        '--hostname',
-        HOST,
+      api(
         `projects/${ENCODED}/merge_requests?state=opened&per_page=${GITLAB_PAGE_SIZE}`,
-      ],
+      ),
+      api(`projects/${GITLAB_PROJECT_ID}/merge_requests/23`),
+      api(`projects/${GITLAB_PROJECT_ID}/merge_requests/23/approvals`),
+      api(`projects/${GITLAB_PROJECT_ID}/merge_requests/24`),
+      api(`projects/${GITLAB_PROJECT_ID}/merge_requests/24/approvals`),
     ]);
     expect(open).toEqual([
       {
@@ -499,19 +532,89 @@ describe('glab host', () => {
         number: 23,
         title: 'Add a GitLab forge on glab',
         branch: 'qd20-gitlab-forge',
+        base: 'main',
         head: HEAD,
         draft: false,
         author: 'finch',
+        checks: 'passing',
+        review: 'approved',
+        createdAt: '2026-10-02T13:58:40.117Z',
       },
       {
-        url: 'https://git.example.org/example-group/platform/quarterdeck/-/merge_requests/24',
+        url: DRAFT_MR,
         number: 24,
         title: 'Draft: widget',
         branch: 'wip',
+        base: 'release',
         head: HEAD,
         draft: true,
         author: null,
+        checks: 'none',
+        review: 'none',
+        createdAt: '2026-10-02T15:20:00.000Z',
       },
+    ]);
+  });
+
+  it('maps each open merge request’s pipeline through the same states as one merge request', async () => {
+    const statuses = ['success', 'skipped', 'failed', 'canceled', 'running'];
+    const run = openRunner(
+      {
+        list: statuses.map((_status, at) => ({ iid: 30 + at })),
+        details: Object.fromEntries(
+          statuses.map((status, at) => [
+            30 + at,
+            { pipeline: { status }, mergeRequest: { iid: 30 + at } },
+          ]),
+        ),
+      },
+      [],
+    );
+
+    const open = await glabCli(run).listOpen(PROJECT);
+
+    expect(open.map(({ checks }) => checks)).toEqual([
+      'passing',
+      'passing',
+      'failing',
+      'failing',
+      'pending',
+    ]);
+  });
+
+  it('uses a pipeline the list already carries, and reads changes requested from the merge status', async () => {
+    const calls: string[][] = [];
+    const run = openRunner(
+      {
+        list: [
+          {
+            head_pipeline: { id: GITLAB_PIPELINE_ID, status: 'running' },
+            detailed_merge_status: 'requested_changes',
+          },
+          {
+            iid: 24,
+            web_url: DRAFT_MR,
+            head_pipeline: null,
+            pipeline: { id: GITLAB_PIPELINE_ID, status: 'failed' },
+          },
+        ],
+        approvals: {
+          23: gitlabApprovals([OKAPI]),
+          24: gitlabApprovals([OKAPI], { approved: false, approvals_left: 1 }),
+        },
+      },
+      calls,
+    );
+
+    const open = await glabCli(run).listOpen(PROJECT);
+
+    expect(calls.map((args) => args.at(-1))).not.toContain(
+      `projects/${GITLAB_PROJECT_ID}/merge_requests/23`,
+    );
+    expect(calls).toHaveLength(3);
+    expect(open.map(({ checks, review }) => [checks, review])).toEqual([
+      ['pending', 'changes'],
+      ['none', 'none'],
     ]);
   });
 });

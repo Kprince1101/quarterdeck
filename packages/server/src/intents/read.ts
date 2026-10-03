@@ -10,6 +10,7 @@ export const READ_INTENTS = {
   'turn.read': inProject({ turnId: turnIdSchema }),
   'usage.read': inProject({}),
   'forge.read': inProject({}),
+  'forge.requests': z.strictObject({}),
 };
 
 export type ReadIntentName = keyof typeof READ_INTENTS;
@@ -48,3 +49,39 @@ export const forgeReadResultSchema = z.object({
 });
 
 export type ForgeReadResult = z.infer<typeof forgeReadResultSchema>;
+
+export const openRequestSchema = z.object({
+  url: z.string(),
+  number: positiveSchema,
+  title: z.string(),
+  author: z.string().nullable(),
+  branch: z.string(),
+  base: z.string(),
+  draft: z.boolean(),
+  checks: z.enum(['passing', 'pending', 'failing', 'none']),
+  review: z.enum(['approved', 'changes', 'none']),
+  createdAt: z.string(),
+  ticket: z
+    .object({ id: idSchema, title: z.string(), status: z.string() })
+    .nullable(),
+  agent: z.object({ id: idSchema, name: z.string() }).nullable(),
+});
+
+export type OpenRequest = z.infer<typeof openRequestSchema>;
+
+export const projectRequestsSchema = z.object({
+  project: z.string(),
+  name: z.string(),
+  forge: forgeSchema,
+  requests: z.array(openRequestSchema),
+  error: z.string().nullable(),
+  fetchedAt: z.string(),
+});
+
+export type ProjectRequests = z.infer<typeof projectRequestsSchema>;
+
+export const forgeRequestsResultSchema = z.object({
+  projects: z.array(projectRequestsSchema),
+});
+
+export type ForgeRequestsResult = z.infer<typeof forgeRequestsResultSchema>;
