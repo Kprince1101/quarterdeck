@@ -1,15 +1,24 @@
 import { stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { RulesError, loadRule, shellAllowWarnings } from '@quarterdeck/rules';
+import {
+  RulesError,
+  loadRule,
+  shellAllowWarnings,
+  type KiroBaseRole,
+  type LoadRulesOptions,
+} from '@quarterdeck/rules';
 import {
   CLAUDE_AGENT_ACP_PACKAGE,
   CLAUDE_AGENT_ACP_VERSION,
   GEMINI_COMMAND,
+  KIRO_BASE_ROLES,
   KIRO_COMMAND,
+  KiroConfigError,
   NPM_PUBLIC_REGISTRY,
   claudeCliCommand,
+  loadKiroBaseAgent,
   runCommand,
   type AgentCommand,
   type ChildEnvSpec,
@@ -23,8 +32,9 @@ export const DOCTOR_USAGE = `Usage: quarterdeck doctor
 
 Checks that kiro-cli, claude, gemini and gh are installed and signed in, and
 prints the command to run for each one that is not. Warns when gh is signed
-in only through GH_TOKEN or GITHUB_TOKEN, which agents do not get. Exits 1 if
-any needs attention.`;
+in only through GH_TOKEN or GITHUB_TOKEN, which agents do not get. Shows the
+Kiro base agent each role starts from (the builder's as the project in this
+folder sets it). Exits 1 if any needs attention.`;
 
 const CLAUDE_PINNED = `${CLAUDE_AGENT_ACP_PACKAGE}@${CLAUDE_AGENT_ACP_VERSION}`;
 
@@ -384,6 +394,44 @@ export const checkShellRules = async (io: CliIo): Promise<DoctorCheck[]> => {
   }
 };
 
+const NO_KIRO_BASE = 'none';
+
+const kiroBaseRules = (io: CliIo): LoadRulesOptions => {
+  if (resolve(io.cwd) === resolve(io.homeDir)) return { homeDir: io.homeDir };
+  return { homeDir: io.homeDir, repoDir: io.cwd };
+};
+
+const kiroBaseState = async (
+  role: KiroBaseRole,
+  io: CliIo,
+): Promise<string> => {
+  try {
+    const base = await loadKiroBaseAgent(role, {
+      agentsDir: join(io.homeDir, '.kiro', 'agents'),
+      rules: kiroBaseRules(io),
+    });
+    if (!base) return NO_KIRO_BASE;
+    return `${base.name} (${base.path})`;
+  } catch (err) {
+    if (!(err instanceof RulesError || err instanceof KiroConfigError)) {
+      throw err;
+    }
+    return err.message;
+  }
+};
+
+export const checkKiroBases = async (io: CliIo): Promise<DoctorCheck[]> => {
+  const checks = await Promise.all(
+    KIRO_BASE_ROLES.map(async (role) => ({
+      name: `kiro base for ${role}`,
+      state: await kiroBaseState(role, io),
+      fixes: [],
+    })),
+  );
+  if (checks.every(({ state }) => state === NO_KIRO_BASE)) return [];
+  return checks;
+};
+
 export const runDoctor: Command = async (args, io) => {
   const { values, positionals } = parseArgs({
     args,
@@ -397,6 +445,7 @@ export const runDoctor: Command = async (args, io) => {
   if (positionals.length > 0) throw new CliError('doctor takes no arguments');
   const checks = [
     ...(await runDoctorChecks(io)),
+    ...(await checkKiroBases(io)),
     ...(await checkShellRules(io)),
   ];
   const misses = checks.filter((check) => check.fixes.length > 0).length;

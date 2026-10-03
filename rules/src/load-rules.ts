@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { extname, resolve } from 'node:path';
 import { z } from 'zod';
 import { getErrorMessage, isMissingFile, RulesError } from './errors.js';
+import { mergeRepoKiro } from './kiro-layer.js';
 import { mergeRepoLifecycle } from './lifecycle-layer.js';
 import { mergeLayer } from './merge-layer.js';
 import { RULE_SCHEMAS, type RuleName, type Rules } from './schemas.js';
@@ -19,6 +20,7 @@ export const RULE_FILES: Record<RuleName, string> = {
   lifecycle: 'lifecycle.json',
   models: 'models.json',
   env: 'env.json',
+  kiro: 'kiro.json',
 };
 
 export const RULE_NAMES = Object.keys(RULE_FILES) as RuleName[];
@@ -104,6 +106,7 @@ type RepoLayerMerge = (
 
 const REPO_LAYER_MERGES: Partial<Record<RuleName, RepoLayerMerge>> = {
   lifecycle: mergeRepoLifecycle,
+  kiro: mergeRepoKiro,
 };
 
 const mergeLocal = (

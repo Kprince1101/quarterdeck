@@ -7,6 +7,19 @@ export {
 } from './adapter.js';
 export type { KiroAdapterOptions } from './adapter.js';
 export {
+  isKiroBaseRole,
+  KIRO_BASE_ROLES,
+  kiroBaseAgentName,
+  kiroBaseAgentPaths,
+  loadKiroBaseAgent,
+} from './base-agent.js';
+export type {
+  KiroBaseAgent,
+  KiroBaseConfig,
+  KiroBaseOptions,
+  KiroResource,
+} from './base-agent.js';
+export {
   assertNoWorkspaceShadow,
   buildKiroAgentConfig,
   defaultKiroAgentsDir,
@@ -20,7 +33,11 @@ export {
   KiroShadowConfigError,
   workspaceKiroAgentPaths,
 } from './config.js';
-export type { KiroAgentConfig, KiroMcpServer } from './config.js';
+export type {
+  KiroAgentConfig,
+  KiroConfigInputs,
+  KiroMcpServer,
+} from './config.js';
 export {
   KIRO_EXTENSION_NOTIFICATIONS,
   KIRO_EXTENSIONS,

@@ -62,6 +62,14 @@ gh: 2.81.0, signed in (example-org on github.com)
 | `gemini`   | `gemini --version`                                                                                                                 | `GEMINI_API_KEY`, `GOOGLE_GENAI_USE_VERTEXAI=true` with `GOOGLE_API_KEY` or `GOOGLE_CLOUD_PROJECT`, or `~/.gemini/oauth_creds.json` | `npm install -g @google/gemini-cli`                                                                  | `gemini`, then choose Login with Google (or set `GEMINI_API_KEY`)                    |
 | `gh`       | `gh --version`                                                                                                                     | `gh auth status` exits 0                                                                                                            | `brew install gh` (macOS), `winget install --id GitHub.cli` (Windows), otherwise the gh install docs | `gh auth login`                                                                      |
 
+When `kiro.json` names a Kiro base agent for any role, doctor adds a line per role with the base it resolves to, `none`, or the error naming the missing or broken file. The builder's comes from the repo layer of the folder doctor runs in. These lines are informational and do not change the exit code. See [Base agents](../server/src/acp/runtimes/README.md#base-agents).
+
+```
+kiro base for driver: everyday (/home/me/.kiro/agents/everyday.json)
+kiro base for reviewer: none
+kiro base for builder: library-builder (/work/library/.kiro/agents/library-builder.json)
+```
+
 Quarterdeck runs claude through npx, so a standalone `claude` is not needed and not checked; the claude commands work without one. The claude probes run offline, from a neutral folder, with `npm_config_registry` set to the public registry, as the agent does. If npx has not fetched the pinned package yet, doctor says so instead of starting the 240 MB download itself. Each probe gets 15 seconds.
 
 `test/doctor.test.ts` runs every check against fake binaries on `PATH`. kiro-cli is only faked signed out; the signed-in path needs a real, signed-in `kiro-cli`:
