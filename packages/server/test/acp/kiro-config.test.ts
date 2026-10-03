@@ -26,8 +26,9 @@ describe('kiro agent config prompt', () => {
     role: 'builder',
     name: 'everyday',
     path: '/home/example/.kiro/agents/everyday.json',
+    source: 'machine',
     config: { prompt: 'Base prompt.' },
-    ignoredHooks: false,
+    ignored: [],
   };
 
   it('puts the base prompt first, then Quarterdeck’s', () => {
@@ -50,6 +51,33 @@ describe('kiro agent config prompt', () => {
       'read',
       '@bus',
     ]);
+  });
+
+  it('refuses a base server named like one of Quarterdeck’s, whatever its transport', () => {
+    const events: McpServer = {
+      type: 'sse',
+      name: 'events',
+      url: 'https://events.example/sse',
+      headers: [],
+    };
+    const clashing = {
+      ...base,
+      config: { mcpServers: { events: { type: 'http', url: 'https://x' } } },
+    };
+    expect(() =>
+      buildKiroAgentConfig(NAME, [BUS, events], { base: clashing }),
+    ).toThrow(/named events/);
+  });
+
+  it('never lets a builder load mcp.json', () => {
+    const loads = { ...base, config: { includeMcpJson: true } };
+    expect(
+      buildKiroAgentConfig(NAME, [BUS], { base: loads }).includeMcpJson,
+    ).toBe(false);
+    expect(
+      buildKiroAgentConfig(NAME, [BUS], { base: { ...loads, role: 'driver' } })
+        .includeMcpJson,
+    ).toBe(true);
   });
 });
 

@@ -139,8 +139,10 @@ export const createKiroAdapter = ({
     const config = buildKiroAgentConfig(name, launch.mcpServers ?? [], {
       base,
     });
-    if (base?.ignoredHooks) {
-      warn(`Kiro base agent ${base.path} has hooks; Quarterdeck ignored them.`);
+    if (base && base.ignored.length > 0) {
+      warn(
+        `Kiro base agent ${base.path} sets ${base.ignored.join(', ')}; Quarterdeck ignored them.`,
+      );
     }
     await ensurePrivateDir(processDir);
     const path = await writeKiroAgentConfig(agentsDir, config);

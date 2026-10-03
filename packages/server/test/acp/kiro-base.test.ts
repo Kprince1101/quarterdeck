@@ -1,4 +1,11 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { McpServer } from '@agentclientprotocol/sdk';
@@ -176,9 +183,9 @@ describe('kiro base agents', () => {
       join(box.agentsDir, 'everyday.json'),
       BASE_AGENT,
     );
-    await kiroRule(box.home, { baseAgents: { builder: 'everyday' } });
+    await kiroRule(box.home, { baseAgents: { driver: 'everyday' } });
 
-    const config = JSON.parse(await writtenConfig('builder')) as unknown;
+    const config = JSON.parse(await writtenConfig('driver')) as unknown;
 
     expect(config).toEqual({
       name: GENERATED,
@@ -211,8 +218,132 @@ describe('kiro base agents', () => {
     });
     expect(config).not.toHaveProperty('hooks');
     expect(warnings).toEqual([
-      `Kiro base agent ${basePath} has hooks; Quarterdeck ignored them.`,
+      `Kiro base agent ${basePath} sets hooks; Quarterdeck ignored them.`,
     ]);
+  });
+
+  it('keeps a machine builder base but never lets it load mcp.json', async () => {
+    const basePath = await writeJson(
+      join(box.agentsDir, 'everyday.json'),
+      BASE_AGENT,
+    );
+    await kiroRule(box.home, { baseAgents: { builder: 'everyday' } });
+
+    const config = JSON.parse(await writtenConfig('builder')) as unknown;
+
+    expect(config).toMatchObject({
+      mcpServers: { tracker: TRACKER },
+      allowedTools: ['read', '@tracker/list_items'],
+      toolsSettings: { shell: { allowedCommands: ['ls'] } },
+      includeMcpJson: false,
+    });
+    expect(warnings).toEqual([
+      `Kiro base agent ${basePath} sets hooks, includeMcpJson; Quarterdeck ignored them.`,
+    ]);
+  });
+
+  it('takes only prompt, resources, tools and model from a repo base', async () => {
+    const steering = join(box.repo, '.kiro', 'steering');
+    await mkdir(steering, { recursive: true });
+    await writeFile(join(steering, 'prompt.md'), 'Prompt from the repo.');
+    const basePath = await writeJson(
+      join(box.repo, '.kiro', 'agents', 'library-builder.json'),
+      {
+        ...BASE_AGENT,
+        prompt: 'file://../steering/prompt.md',
+        resources: [
+          'file://../steering/**/*.md',
+          'skill://../skills/**/SKILL.md',
+          { type: 'knowledgeBase', source: 'file://../../docs' },
+        ],
+      },
+    );
+    await kiroRule(box.repo, { baseAgents: { builder: 'library-builder' } });
+
+    const config = JSON.parse(await writtenConfig('builder')) as unknown;
+
+    expect(config).toEqual({
+      name: GENERATED,
+      description:
+        'Quarterdeck agent. Written by Quarterdeck, removed on close.',
+      prompt: 'Prompt from the repo.',
+      mcpServers: {
+        bus: {
+          type: 'http',
+          url: 'http://127.0.0.1:4317/mcp',
+          headers: { Authorization: 'Bearer example-bus-token' },
+        },
+      },
+      tools: ['read', 'write', 'shell', '@tracker', '@bus'],
+      allowedTools: [],
+      resources: [
+        `file://${join(box.repo, '.kiro', 'steering/**/*.md')}`,
+        `skill://${join(box.repo, '.kiro', 'skills/**/SKILL.md')}`,
+        { type: 'knowledgeBase', source: `file://${join(box.repo, 'docs')}` },
+      ],
+      model: 'example-model',
+      includeMcpJson: false,
+    });
+    expect(warnings).toEqual([
+      `Kiro base agent ${basePath} sets hooks, mcpServers, allowedTools, toolsSettings, includeMcpJson; Quarterdeck ignored them.`,
+    ]);
+  });
+
+  it.each([
+    ['a ~/ prompt', { prompt: 'file://~/.quarterdeck/api.token' }],
+    ['an absolute prompt', { prompt: 'file:///etc/hosts' }],
+    ['a prompt above the repo', { prompt: 'file://../../../secret.md' }],
+    ['a ~/ resource', { resources: ['file://~/.ssh/**'] }],
+    ['an absolute resource', { resources: ['file:///etc/example/*.md'] }],
+    ['a skill above the repo', { resources: ['skill://../../../**/SKILL.md'] }],
+    [
+      'a knowledge base above the repo',
+      { resources: [{ type: 'knowledgeBase', source: 'file://../../..' }] },
+    ],
+  ])('refuses a repo base that reads %s', async (_what, fields) => {
+    const quarterdeckDir = join(box.home, '.quarterdeck');
+    await mkdir(quarterdeckDir, { recursive: true });
+    await writeFile(join(quarterdeckDir, 'api.token'), 'example-secret');
+    await writeFile(join(box.root, 'secret.md'), 'example-secret');
+    const basePath = await writeJson(
+      join(box.repo, '.kiro', 'agents', 'library-builder.json'),
+      fields,
+    );
+    await kiroRule(box.repo, { baseAgents: { builder: 'library-builder' } });
+
+    const error = await connectError('builder');
+
+    expect(error).toBeInstanceOf(KiroConfigError);
+    expect(String(error)).toContain(basePath);
+    expect(String(error)).not.toContain('example-secret');
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'refuses a repo prompt that links outside the repo',
+    async () => {
+      await writeFile(join(box.root, 'secret.md'), 'example-secret');
+      const agents = join(box.repo, '.kiro', 'agents');
+      await mkdir(agents, { recursive: true });
+      await symlink(join(box.root, 'secret.md'), join(agents, 'linked.md'));
+      await writeJson(join(agents, 'library-builder.json'), {
+        prompt: 'file://./linked.md',
+      });
+      await kiroRule(box.repo, { baseAgents: { builder: 'library-builder' } });
+
+      expect(await connectError('builder')).toBeInstanceOf(KiroConfigError);
+    },
+  );
+
+  it('lets a machine base read a ~/ prompt for a builder', async () => {
+    await writeFile(join(box.home, 'prompt.md'), 'Prompt from home.');
+    await writeJson(join(box.agentsDir, 'everyday.json'), {
+      prompt: 'file://~/prompt.md',
+    });
+    await kiroRule(box.repo, { baseAgents: { builder: 'everyday' } });
+
+    expect(JSON.parse(await writtenConfig('builder'))).toMatchObject({
+      prompt: 'Prompt from home.',
+    });
   });
 
   it('reads a file:// prompt relative to the base agent', async () => {
@@ -328,6 +459,10 @@ describe('kiro base agents', () => {
     [
       'an MCP server with no command or url',
       JSON.stringify({ mcpServers: { tracker: { args: [] } } }),
+    ],
+    [
+      'a resource with a source that is not a string',
+      JSON.stringify({ resources: [{ type: 'knowledgeBase', source: 123 }] }),
     ],
   ])('names the base when it is %s', async (_what, text) => {
     const path = join(box.agentsDir, 'broken.json');

@@ -499,9 +499,12 @@
         <code>&lt;repo&gt;/.kiro/agents/</code> first, then
         <code>~/.kiro/agents/</code>; the others only in
         <code>~/.kiro/agents/</code>. Quarterdeck always adds its own bus and
-        never copies the base's hooks. A repo layer may only set the builder.
-        This <code>~/.quarterdeck/rules.local.kiro.json</code> starts every
-        builder from <code>~/.kiro/agents/everyday.json</code>:
+        never copies the base's hooks, and a builder never loads
+        <code>mcp.json</code>. A base from the repo gives only its prompt,
+        resources, tools and model, and may only point at files inside the repo:
+        agents can write there. A repo layer may only set the builder. This
+        <code>~/.quarterdeck/rules.local.kiro.json</code> starts every builder
+        from <code>~/.kiro/agents/everyday.json</code>:
       </p>
       <pre><code>{ "baseAgents": { "builder": "everyday" } }</code></pre>
 

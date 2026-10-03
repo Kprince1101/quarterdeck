@@ -136,10 +136,11 @@ const DESCRIPTION =
 
 const assertNoNameClash = (
   base: KiroBaseAgent,
-  ours: Record<string, KiroMcpServer>,
+  ours: readonly McpServer[],
 ): void => {
+  const names = new Set(ours.map((server) => server.name));
   const clash = Object.keys(base.config.mcpServers ?? {}).find((server) =>
-    Object.hasOwn(ours, server),
+    names.has(server),
   );
   if (clash === undefined) return;
   throw new KiroConfigError(
@@ -190,7 +191,7 @@ export const buildKiroAgentConfig = (
       includeMcpJson: false,
     });
   }
-  assertNoNameClash(base, ours);
+  assertNoNameClash(base, mcpServers);
   const { config } = base;
   return withoutUndefined<KiroAgentConfig>({
     name,
@@ -202,7 +203,7 @@ export const buildKiroAgentConfig = (
     toolsSettings: config.toolsSettings,
     resources: config.resources,
     model: config.model,
-    includeMcpJson: config.includeMcpJson ?? false,
+    includeMcpJson: base.role !== 'builder' && (config.includeMcpJson ?? false),
   });
 };
 

@@ -6,7 +6,7 @@ The shipped defaults: `charter.md`, `reviewer.md`, `permissions.json`, `naming.j
 
 ## Kiro base agents
 
-`kiro.json` names, in `baseAgents`, the Kiro agent the `driver`, `reviewer` and `builder` start from. Each is `null` (no base) by default. The repo layer may set only `baseAgents.builder`, so one project (a component library, say) can give its builders a different agent; anything else there is an error naming the file. How a base is found and merged is in [the runtime adapters README](../packages/server/src/acp/runtimes/README.md#base-agents).
+`kiro.json` names, in `baseAgents`, the Kiro agent the `driver`, `reviewer` and `builder` start from. Each is `null` (no base) by default. The repo layer may set only `baseAgents.builder`, so one project (a component library, say) can give its builders a different agent; anything else there is an error naming the file. A base agent read from the repo's own `.kiro/agents/` gives only its prompt, resources, tools and model, never MCP servers or pre-approved tools, because agents can write to the repo. To give a project's builders more, name an agent in `~/.kiro/agents/`. How a base is found and merged is in [the runtime adapters README](../packages/server/src/acp/runtimes/README.md#base-agents).
 
 ## Shell permissions
 

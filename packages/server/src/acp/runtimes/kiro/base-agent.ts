@@ -1,6 +1,6 @@
-import { access, readFile } from 'node:fs/promises';
+import { access, readFile, realpath } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
   kiroBaseRoleSchema,
   loadRule,
@@ -28,12 +28,15 @@ export interface KiroBaseConfig {
   includeMcpJson?: boolean;
 }
 
+export type KiroBaseSource = 'workspace' | 'machine';
+
 export interface KiroBaseAgent {
   role: KiroBaseRole;
   name: string;
   path: string;
+  source: KiroBaseSource;
   config: KiroBaseConfig;
-  ignoredHooks: boolean;
+  ignored: string[];
 }
 
 export interface KiroBaseOptions {
@@ -61,13 +64,18 @@ const mcpServerSchema = z
     'an MCP server needs a command or a url',
   );
 
+const resourceSchema = z.union([
+  z.string(),
+  z.looseObject({ source: z.string().optional() }),
+]);
+
 const baseFileSchema = z.looseObject({
   prompt: optional(z.string()),
   mcpServers: optional(z.record(z.string(), mcpServerSchema)),
   tools: optional(z.array(z.string())),
   allowedTools: optional(z.array(z.string())),
   toolsSettings: optional(z.record(z.string(), z.unknown())),
-  resources: optional(z.array(z.union([z.string(), z.looseObject({})]))),
+  resources: optional(z.array(resourceSchema)),
   model: optional(z.string()),
   includeMcpJson: optional(z.boolean()),
   hooks: z.unknown().optional(),
@@ -75,74 +83,155 @@ const baseFileSchema = z.looseObject({
 
 type BaseFile = z.infer<typeof baseFileSchema>;
 
-const URI_SCHEMES = ['file://', 'skill://'];
+type DroppedField =
+  'hooks' | 'mcpServers' | 'allowedTools' | 'toolsSettings' | 'includeMcpJson';
+
+const droppedFields = (
+  role: KiroBaseRole,
+  source: KiroBaseSource,
+): ReadonlySet<DroppedField> => {
+  const fields: DroppedField[] = ['hooks'];
+  if (source === 'workspace') {
+    fields.push('mcpServers', 'allowedTools', 'toolsSettings');
+  }
+  if (role === 'builder') fields.push('includeMcpJson');
+  return new Set(fields);
+};
+
+const takesEffect = (value: unknown): boolean => {
+  if (value === undefined || value === null || value === false) return false;
+  if (typeof value !== 'object') return true;
+  return Object.keys(value).length > 0;
+};
+
+interface BaseScope {
+  path: string;
+  home: string;
+  repoDir?: string;
+}
+
+const FILE_SCHEME = 'file://';
+const URI_SCHEMES = [FILE_SCHEME, 'skill://'];
+const HOME_PATH = /^~(?=$|[\\/])/;
+
+const uriScheme = (uri: string): string | undefined =>
+  URI_SCHEMES.find((prefix) => uri.startsWith(prefix));
 
 const resolveUri = (uri: string, dir: string): string => {
-  const scheme = URI_SCHEMES.find((prefix) => uri.startsWith(prefix));
+  const scheme = uriScheme(uri);
   if (scheme === undefined) return uri;
   const path = uri.slice(scheme.length);
   if (isAbsolute(path) || path.startsWith('~')) return uri;
   return `${scheme}${resolve(dir, path)}`;
 };
 
-const resolveResource = (resource: KiroResource, dir: string): KiroResource => {
-  if (typeof resource === 'string') return resolveUri(resource, dir);
-  const { source } = resource;
-  if (typeof source !== 'string') return resource;
-  return { ...resource, source: resolveUri(source, dir) };
+const uriTarget = (uri: string, scheme: string, scope: BaseScope): string =>
+  resolve(
+    dirname(scope.path),
+    uri.slice(scheme.length).replace(HOME_PATH, scope.home),
+  );
+
+const isInside = (root: string, target: string): boolean => {
+  const rel = relative(root, target);
+  if (isAbsolute(rel)) return false;
+  return rel !== '..' && !rel.startsWith(`..${sep}`);
 };
 
-const FILE_SCHEME = 'file://';
+const assertInRepo = (scope: BaseScope, target: string, what: string): void => {
+  if (scope.repoDir === undefined || isInside(scope.repoDir, target)) return;
+  throw new KiroConfigError(
+    `${scope.path} names ${what} ${target}, outside ${scope.repoDir}. A base agent in the repo may only point inside the repo.`,
+  );
+};
 
-const HOME_PATH = /^~(?=$|[\\/])/;
+const resolveUriIn = (uri: string, scope: BaseScope): string => {
+  const scheme = uriScheme(uri);
+  if (scheme !== undefined) {
+    assertInRepo(scope, uriTarget(uri, scheme, scope), 'resource');
+  }
+  return resolveUri(uri, dirname(scope.path));
+};
 
-const promptFile = (prompt: string, path: string, home: string): string => {
-  const file = resolveUri(prompt, dirname(path)).slice(FILE_SCHEME.length);
-  return file.replace(HOME_PATH, home);
+const resolveResource = (
+  resource: KiroResource,
+  scope: BaseScope,
+): KiroResource => {
+  if (typeof resource === 'string') return resolveUriIn(resource, scope);
+  const { source } = resource;
+  if (typeof source !== 'string') return resource;
+  return { ...resource, source: resolveUriIn(source, scope) };
+};
+
+const unreadablePrompt = (
+  scope: BaseScope,
+  file: string,
+  err: unknown,
+): KiroConfigError =>
+  new KiroConfigError(
+    `${scope.path} names prompt ${file}, which Quarterdeck cannot read: ${getErrorMessage(err)}`,
+  );
+
+const assertPromptInRepo = async (
+  scope: BaseScope,
+  file: string,
+): Promise<void> => {
+  if (scope.repoDir === undefined) return;
+  assertInRepo(scope, file, 'prompt');
+  let real: string;
+  try {
+    real = await realpath(file);
+  } catch (err) {
+    throw unreadablePrompt(scope, file, err);
+  }
+  const repo = await realpath(scope.repoDir);
+  assertInRepo({ ...scope, repoDir: repo }, real, 'prompt');
 };
 
 const readPrompt = async (
   prompt: string | null | undefined,
-  path: string,
-  home: string,
+  scope: BaseScope,
 ): Promise<string | undefined> => {
   if (!prompt) return undefined;
   if (!prompt.startsWith(FILE_SCHEME)) return prompt;
-  const file = promptFile(prompt, path, home);
+  const file = uriTarget(prompt, FILE_SCHEME, scope);
+  await assertPromptInRepo(scope, file);
   try {
     return await readFile(file, 'utf8');
   } catch (err) {
-    throw new KiroConfigError(
-      `${path} names prompt ${file}, which Quarterdeck cannot read: ${getErrorMessage(err)}`,
-    );
+    throw unreadablePrompt(scope, file, err);
   }
 };
 
-const hasHooks = (hooks: unknown): boolean => {
-  if (hooks === undefined || hooks === null) return false;
-  if (typeof hooks !== 'object') return true;
-  return Object.keys(hooks).length > 0;
+const unlessDropped = <K extends DroppedField>(
+  dropped: ReadonlySet<DroppedField>,
+  field: K,
+  value: BaseFile[K],
+): NonNullable<BaseFile[K]> | undefined => {
+  if (dropped.has(field)) return undefined;
+  return value ?? undefined;
 };
 
 const toBaseConfig = async (
   file: BaseFile,
-  path: string,
-  home: string,
-): Promise<KiroBaseConfig> => {
-  const dir = dirname(path);
-  return withoutUndefined<KiroBaseConfig>({
-    prompt: await readPrompt(file.prompt, path, home),
-    mcpServers: file.mcpServers ?? undefined,
+  scope: BaseScope,
+  dropped: ReadonlySet<DroppedField>,
+): Promise<KiroBaseConfig> =>
+  withoutUndefined<KiroBaseConfig>({
+    prompt: await readPrompt(file.prompt, scope),
+    mcpServers: unlessDropped(dropped, 'mcpServers', file.mcpServers),
     tools: file.tools ?? undefined,
-    allowedTools: file.allowedTools ?? undefined,
-    toolsSettings: file.toolsSettings ?? undefined,
+    allowedTools: unlessDropped(dropped, 'allowedTools', file.allowedTools),
+    toolsSettings: unlessDropped(dropped, 'toolsSettings', file.toolsSettings),
     resources: file.resources?.map((resource) =>
-      resolveResource(resource, dir),
+      resolveResource(resource, scope),
     ),
     model: file.model ?? undefined,
-    includeMcpJson: file.includeMcpJson ?? undefined,
+    includeMcpJson: unlessDropped(
+      dropped,
+      'includeMcpJson',
+      file.includeMcpJson,
+    ),
   });
-};
 
 const exists = (path: string): Promise<boolean> =>
   access(path).then(
@@ -178,6 +267,9 @@ const readBaseFile = async (path: string): Promise<string> => {
   }
 };
 
+const workspaceBasePath = (repoDir: string, name: string): string =>
+  join(resolve(repoDir), '.kiro', 'agents', `${name}.json`);
+
 export const kiroBaseAgentPaths = (
   role: KiroBaseRole,
   name: string,
@@ -185,7 +277,7 @@ export const kiroBaseAgentPaths = (
 ): string[] => {
   const global = join(agentsDir, `${name}.json`);
   if (role !== 'builder' || rules.repoDir === undefined) return [global];
-  return [join(rules.repoDir, '.kiro', 'agents', `${name}.json`), global];
+  return [workspaceBasePath(rules.repoDir, name), global];
 };
 
 const ruleOptions = (
@@ -217,6 +309,24 @@ const findBaseFile = async (
   );
 };
 
+const baseScope = (
+  role: KiroBaseRole,
+  name: string,
+  path: string,
+  rules: LoadRulesOptions,
+): BaseScope => {
+  const home = rules.homeDir ?? homedir();
+  const { repoDir } = rules;
+  if (role !== 'builder' || repoDir === undefined) return { path, home };
+  if (path !== workspaceBasePath(repoDir, name)) return { path, home };
+  return { path, home, repoDir: resolve(repoDir) };
+};
+
+const scopeSource = (scope: BaseScope): KiroBaseSource => {
+  if (scope.repoDir === undefined) return 'machine';
+  return 'workspace';
+};
+
 export const loadKiroBaseAgent = async (
   role: KiroBaseRole,
   options: KiroBaseOptions,
@@ -231,13 +341,16 @@ export const loadKiroBaseAgent = async (
   }
   const path = await findBaseFile(role, paths);
   const file = parseBaseFile(path, await readBaseFile(path));
-  const home = options.rules.homeDir ?? homedir();
+  const scope = baseScope(role, name, path, options.rules);
+  const source = scopeSource(scope);
+  const dropped = droppedFields(role, source);
   return {
     role,
     name,
     path,
-    config: await toBaseConfig(file, path, home),
-    ignoredHooks: hasHooks(file.hooks),
+    source,
+    config: await toBaseConfig(file, scope, dropped),
+    ignored: [...dropped].filter((field) => takesEffect(file[field])),
   };
 };
 

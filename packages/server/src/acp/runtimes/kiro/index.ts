@@ -17,6 +17,7 @@ export type {
   KiroBaseAgent,
   KiroBaseConfig,
   KiroBaseOptions,
+  KiroBaseSource,
   KiroResource,
 } from './base-agent.js';
 export {
