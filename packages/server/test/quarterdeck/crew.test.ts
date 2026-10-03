@@ -201,7 +201,10 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
     await vi.waitFor(async () => {
       expect(await eventsOf(store, 'ticket.proposed')).toEqual([
         expect.objectContaining({
-          payload: { title: FAKE_PROPOSAL_TITLE },
+          payload: expect.objectContaining({
+            title: FAKE_PROPOSAL_TITLE,
+            project: PROJECT,
+          }),
         }),
       ]);
     }, WAIT);

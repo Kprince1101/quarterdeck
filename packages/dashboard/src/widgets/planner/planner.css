@@ -14,14 +14,7 @@
   font-size: var(--qd-text-sm);
 }
 
-.qd-planner-project {
-  display: flex;
-  align-items: center;
-  gap: var(--qd-space-1);
-  color: var(--qd-muted);
-}
-
-.qd-planner-project select,
+.qd-proposal-editor select,
 .qd-proposal-editor input,
 .qd-proposal-editor textarea {
   padding: var(--qd-space-1) var(--qd-space-2);
@@ -32,7 +25,7 @@
   font: inherit;
 }
 
-.qd-planner-project select {
+.qd-proposal-editor select {
   max-width: 14rem;
 }
 
@@ -131,6 +124,16 @@
 .qd-proposal-head h3 {
   margin: 0;
   font-size: var(--qd-text-md);
+}
+
+.qd-proposal-project {
+  margin-left: auto;
+  padding: 0 var(--qd-space-2);
+  border: 1px solid var(--qd-line);
+  border-radius: var(--qd-radius);
+  color: var(--qd-muted);
+  font-size: var(--qd-text-sm);
+  white-space: nowrap;
 }
 
 .qd-proposal-spec {

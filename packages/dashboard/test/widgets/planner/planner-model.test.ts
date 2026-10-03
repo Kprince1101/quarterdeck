@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   GONE_LABEL,
-  chosenProject,
   conversation,
   currentConversation,
+  homeProject,
   payloadText,
   projectChoices,
+  projectLabels,
   proposalOf,
   specPartViews,
   specParts,
@@ -19,12 +20,14 @@ import {
   DOCS,
   INTENT_1,
   INTENT_2,
+  LABELS,
   PROJECTS,
   SHIP,
   SITE,
   SPEC_BODY,
   cleared,
   human,
+  moved,
   plannerEvent,
   project,
   proposed,
@@ -33,6 +36,7 @@ import {
 } from './fixtures.js';
 
 const ARCHIVE = '00000000-0000-4000-8000-000000000009';
+const MOVED = '00000000-0000-4000-8000-0000000000b3';
 
 const summary = (entries: ConversationEntry[]): string[] =>
   entries.map(({ message, proposal }) => {
@@ -72,12 +76,23 @@ describe('project choices', () => {
     ]);
   });
 
-  it('falls back to the first project when nothing or a gone one is chosen', () => {
-    const choices = projectChoices(PROJECTS);
-    expect(chosenProject(choices, null)?.id).toBe(DECK);
-    expect(chosenProject(choices, SITE)?.id).toBe(SITE);
-    expect(chosenProject(choices, ARCHIVE)?.id).toBe(DECK);
-    expect(chosenProject([], null)).toBeNull();
+  it('holds the conversation in the first live project', () => {
+    expect(homeProject(projectChoices(PROJECTS))?.id).toBe(DECK);
+    expect(homeProject([])).toBeNull();
+  });
+
+  it('labels every project by name, archived ones too', () => {
+    const archived = {
+      ...project(ARCHIVE, 'Archive'),
+      archivedAt: '2026-09-02T00:00:00.000Z',
+    };
+    expect(projectLabels([...PROJECTS, archived])).toEqual(
+      new Map([
+        ['deck', 'Deck'],
+        ['site', 'Site'],
+        ['archive', 'Archive'],
+      ]),
+    );
   });
 });
 
@@ -100,22 +115,28 @@ describe('currentConversation', () => {
   });
 });
 
+const AT_HOME = { project: 'deck', projectLabel: 'Deck', isHome: true };
+const ON_SITE = { project: 'site', projectLabel: 'Site', isHome: false };
+
 describe('proposalOf', () => {
   it('describes a proposal from its ticket row', () => {
     const tickets = new Map([
       [SHIP, ticket(SHIP, 'Ship it', { body: 'all of it', dependsOn: [DOCS] })],
       [DOCS, ticket(DOCS, 'Write docs', { status: 'open' })],
     ]);
-    expect(proposalOf(SHIP, 'Ship', tickets)).toEqual({
+    expect(proposalOf(SHIP, 'Ship', tickets, AT_HOME)).toEqual({
       ticketId: SHIP,
+      project: 'deck',
+      projectLabel: 'Deck',
       title: 'Ship it',
       body: 'all of it',
       spec: null,
       statusLabel: 'Proposed',
       isDecidable: true,
+      isOnBoard: true,
       dependsOn: [{ id: DOCS, title: 'Write docs' }],
     });
-    expect(proposalOf(DOCS, 'Docs', tickets)).toMatchObject({
+    expect(proposalOf(DOCS, 'Docs', tickets, AT_HOME)).toMatchObject({
       statusLabel: 'Approved',
       isDecidable: false,
     });
@@ -125,7 +146,7 @@ describe('proposalOf', () => {
     const tickets = new Map([
       [SHIP, ticket(SHIP, 'Ship', { status: 'rejected', dependsOn: [DOCS] })],
     ]);
-    expect(proposalOf(SHIP, 'Ship', tickets)).toMatchObject({
+    expect(proposalOf(SHIP, 'Ship', tickets, AT_HOME)).toMatchObject({
       statusLabel: 'Rejected',
       isDecidable: false,
       dependsOn: [{ id: DOCS, title: DOCS }],
@@ -133,14 +154,27 @@ describe('proposalOf', () => {
   });
 
   it('keeps the proposed title when the ticket is gone', () => {
-    expect(proposalOf(SHIP, 'Ship', new Map())).toEqual({
+    expect(proposalOf(SHIP, 'Ship', new Map(), AT_HOME)).toEqual({
       ticketId: SHIP,
+      project: 'deck',
+      projectLabel: 'Deck',
       title: 'Ship',
       body: '',
       spec: null,
       statusLabel: GONE_LABEL,
       isDecidable: false,
+      isOnBoard: false,
       dependsOn: [],
+    });
+  });
+
+  it('keeps a proposal in another project decidable when its board is not streamed', () => {
+    expect(proposalOf(SHIP, 'Ship', new Map(), ON_SITE)).toMatchObject({
+      project: 'site',
+      projectLabel: 'Site',
+      statusLabel: 'On the Site board',
+      isDecidable: true,
+      isOnBoard: false,
     });
   });
 
@@ -148,7 +182,7 @@ describe('proposalOf', () => {
     const tickets = new Map([
       [SHIP, ticket(SHIP, 'Ship', { body: SPEC_BODY })],
     ]);
-    const { spec } = proposalOf(SHIP, 'Ship', tickets);
+    const { spec } = proposalOf(SHIP, 'Ship', tickets, AT_HOME);
     expect(spec).not.toBeNull();
     if (spec === null) return;
     expect(specPartViews(spec)).toEqual([
@@ -233,6 +267,8 @@ describe('conversation', () => {
       tickets: [ticket(SHIP, 'Ship it')],
       pending: [waiting('00000000-0000-4000-8000-0000000000c3', 'and docs')],
       projectId: DECK,
+      homeSlug: 'deck',
+      labels: LABELS,
     });
     expect(summary(entries)).toEqual([
       'human: build a site',
@@ -249,5 +285,40 @@ describe('conversation', () => {
       'pending-00000000-0000-4000-8000-0000000000c3',
     ]);
     expect(entries[0]?.message?.authorLabel).toBe('You');
+  });
+
+  it('names each proposal’s project and follows a proposal that moved', () => {
+    const entries = conversation({
+      events: [
+        proposed(1, SHIP, 'Ship', 'site'),
+        proposed(2, DOCS, 'Docs'),
+        moved(
+          3,
+          { project: 'deck', ticketId: DOCS },
+          { project: 'site', ticketId: MOVED },
+          'Docs, there',
+        ),
+      ],
+      tickets: [
+        ticket(SHIP, 'Ship it', { projectId: SITE }),
+        ticket(DOCS, 'Docs', { status: 'rejected' }),
+        ticket(MOVED, 'Docs, there', { projectId: SITE }),
+      ],
+      pending: [],
+      projectId: DECK,
+      homeSlug: 'deck',
+      labels: LABELS,
+    });
+    expect(
+      entries.map(({ proposal }) => [
+        proposal?.ticketId,
+        proposal?.projectLabel,
+        proposal?.title,
+        proposal?.statusLabel,
+      ]),
+    ).toEqual([
+      [SHIP, 'Site', 'Ship it', 'Proposed'],
+      [MOVED, 'Site', 'Docs, there', 'Proposed'],
+    ]);
   });
 });

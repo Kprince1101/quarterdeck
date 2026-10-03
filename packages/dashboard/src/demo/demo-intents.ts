@@ -239,6 +239,7 @@ export const createDemoIntents = (
       });
       return answer;
     },
+    'planner.move': notInDemo('Moving a proposal to another project'),
     'card.answer': (input, reply) => {
       const card = openCard(input.cardId);
       const options = (card.options as string[] | null) ?? [];

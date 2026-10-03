@@ -15,8 +15,65 @@ describe('ticket spec', () => {
   it('accepts a body with requirements, design, tasks and a Proven line', () => {
     expect(specProblems(SPEC_BODY)).toEqual([]);
     expect(
-      proposalProblems({ title: 'Greet', body: SPEC_BODY, dependsOn: [] }),
+      proposalProblems(
+        { title: 'Greet', body: SPEC_BODY, dependsOn: [], project: 'example' },
+        ['example', 'sample'],
+      ),
     ).toEqual([]);
+  });
+
+  it('wants the proposal to name an active project', () => {
+    const proposal = { title: 'Greet', body: SPEC_BODY, dependsOn: [] };
+    const projects = ['example', 'sample'];
+    expect(proposalProblems({ ...proposal, project: '' }, projects)).toEqual([
+      'it names no project; name one of `example`, `sample`',
+    ]);
+    expect(
+      proposalProblems({ ...proposal, project: 'nowhere' }, projects),
+    ).toEqual([
+      'it names `nowhere`, which is not an active project; name one of `example`, `sample`',
+    ]);
+    expect(
+      proposalProblems({ ...proposal, project: 'example', body: '' }, []),
+    ).toEqual([
+      'it names `example`, which is not an active project; there is no active project',
+      ...specProblems(''),
+    ]);
+  });
+
+  it('reads a `## ` line inside a fenced block as content, not a heading', () => {
+    const fenced = SPEC_BODY.replace(
+      'Edit README.md only.',
+      [
+        'Edit README.md only, so it reads:',
+        '',
+        '```markdown',
+        '## Requirements',
+        '',
+        '## Tasks',
+        '```',
+        '',
+        '~~~',
+        '## Design',
+        '~~~',
+      ].join('\n'),
+    );
+    expect(specProblems(fenced)).toEqual([]);
+    expect(parseTicketSpec(fenced)?.sections.Design).toBe(
+      [
+        'Edit README.md only, so it reads:',
+        '',
+        '```markdown',
+        '## Requirements',
+        '',
+        '## Tasks',
+        '```',
+        '',
+        '~~~',
+        '## Design',
+        '~~~',
+      ].join('\n'),
+    );
   });
 
   it('names every section a body is missing', () => {

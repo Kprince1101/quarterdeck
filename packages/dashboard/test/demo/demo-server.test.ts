@@ -397,7 +397,7 @@ describe('demo server', () => {
     vi.useFakeTimers();
     const server = createDemoServer();
     const { intents, store } = parts(server);
-    const reply = await intents.planner.new({ project });
+    const reply = await intents.planner.new({});
     vi.advanceTimersByTime(PLANNER_HEAR_MS);
     const cleared = store
       .events()

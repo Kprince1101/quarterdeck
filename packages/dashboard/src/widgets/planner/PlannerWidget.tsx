@@ -1,4 +1,4 @@
-import type { ChangeEvent, JSX } from 'react';
+import type { JSX } from 'react';
 import { ChatInput } from '../../primitives/index.js';
 import { defineWidget } from '../registry.js';
 import type {
@@ -9,25 +9,6 @@ import type {
 import './planner.css';
 import { ProposalCard } from './ProposalCard.js';
 import { usePlannerWidget } from './use-planner-widget.js';
-
-interface ProjectPickerProps {
-  value: string;
-  options: ProjectChoice[];
-  onChange: (event: ChangeEvent<HTMLSelectElement>) => void;
-}
-
-const ProjectPicker = ({ value, options, onChange }: ProjectPickerProps) => (
-  <label className="qd-planner-project">
-    <span>Project</span>
-    <select value={value} onChange={onChange}>
-      {options.map((option) => (
-        <option key={option.id} value={option.id}>
-          {option.label}
-        </option>
-      ))}
-    </select>
-  </label>
-);
 
 interface MessageItemProps {
   message: ChatMessage;
@@ -42,16 +23,21 @@ const MessageItem = ({ message }: MessageItemProps) => (
 
 interface ConversationLogProps {
   entries: ConversationEntry[];
-  project: string;
+  home: string;
+  projects: ProjectChoice[];
 }
 
-const ConversationLog = ({ entries, project }: ConversationLogProps) => (
+const ConversationLog = ({ entries, home, projects }: ConversationLogProps) => (
   <ol className="qd-planner-log" aria-label="Conversation">
     {entries.map((entry) => (
       <li key={entry.key}>
         {entry.message && <MessageItem message={entry.message} />}
         {entry.proposal && (
-          <ProposalCard proposal={entry.proposal} project={project} />
+          <ProposalCard
+            proposal={entry.proposal}
+            home={home}
+            projects={projects}
+          />
         )}
       </li>
     ))}
@@ -66,8 +52,7 @@ interface ConversationBodyProps extends ConversationLogProps {
 const ConversationBody = ({
   hasProject,
   isEmpty,
-  entries,
-  project,
+  ...log
 }: ConversationBodyProps) => {
   if (!hasProject) {
     return <p className="qd-empty">No project yet. Create one to plan.</p>;
@@ -79,7 +64,7 @@ const ConversationBody = ({
       </p>
     );
   }
-  return <ConversationLog entries={entries} project={project} />;
+  return <ConversationLog {...log} />;
 };
 
 export const PlannerWidget = (): JSX.Element => {
@@ -87,11 +72,6 @@ export const PlannerWidget = (): JSX.Element => {
   return (
     <div className="qd-planner">
       <div className="qd-planner-bar">
-        <ProjectPicker
-          value={view.projectValue}
-          options={view.projectOptions}
-          onChange={view.handleProjectChange}
-        />
         <button
           type="button"
           className="qd-planner-new"
@@ -110,7 +90,8 @@ export const PlannerWidget = (): JSX.Element => {
         hasProject={view.hasProject}
         isEmpty={view.isEmpty}
         entries={view.entries}
-        project={view.projectSlug}
+        home={view.homeSlug}
+        projects={view.projectOptions}
       />
       <ChatInput
         label="Message the Planner"

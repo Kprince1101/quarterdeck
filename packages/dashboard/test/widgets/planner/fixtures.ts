@@ -28,7 +28,7 @@ Proven: every page loads on the published site.`;
 interface EventInit {
   projectId?: string;
   ticketId?: string | null;
-  payload?: Record<string, string>;
+  payload?: StreamEvent['payload'];
 }
 
 export const plannerEvent = (
@@ -51,8 +51,38 @@ export const human = (id: number, text: string, intentId = INTENT_1) =>
 export const reply = (id: number, text: string) =>
   plannerEvent(id, 'planner.reply', { payload: { text, stopReason: 'end' } });
 
-export const proposed = (id: number, ticketId: string, title: string) =>
-  plannerEvent(id, 'ticket.proposed', { ticketId, payload: { title } });
+const HOME_SLUG = 'deck';
+
+const homeTicket = (project: string, ticketId: string): string | null => {
+  if (project !== HOME_SLUG) return null;
+  return ticketId;
+};
+
+export const proposed = (
+  id: number,
+  ticketId: string,
+  title: string,
+  project = HOME_SLUG,
+) =>
+  plannerEvent(id, 'ticket.proposed', {
+    ticketId: homeTicket(project, ticketId),
+    payload: { title, project, ticketId },
+  });
+
+export const moved = (
+  id: number,
+  from: { project: string; ticketId: string },
+  to: { project: string; ticketId: string },
+  title: string,
+) =>
+  plannerEvent(id, 'planner.proposal_moved', {
+    payload: { ...from, title, to },
+  });
+
+export const LABELS: ReadonlyMap<string, string> = new Map([
+  ['deck', 'Deck'],
+  ['site', 'Site'],
+]);
 
 export const cleared = (id: number, projectId = DECK) =>
   plannerEvent(id, 'planner.cleared', {

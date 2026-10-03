@@ -34,6 +34,7 @@ export interface BusHostOptions {
   tools?: readonly BusTool[];
   askExpiryMs?: number;
   forge?: () => Promise<Forge>;
+  openStores?: () => readonly BusStore[];
 }
 
 export interface BusHost {
@@ -113,7 +114,7 @@ export const startBusHost = async (
     if (rest.length > 0) socket.unshift(rest);
     const forge = (await options.forge?.()) ?? DEFAULT_FORGE;
     const server = createBusServer(
-      { store, agentId, askExpiryMs },
+      { store, agentId, askExpiryMs, openStores: options.openStores },
       wordedTools(tools, forgeTerms(forge)),
     );
     socket.once('close', () => void server.close());

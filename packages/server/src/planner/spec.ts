@@ -14,6 +14,7 @@ export interface ProposalDraft {
   title: string;
   body: string;
   dependsOn: readonly string[];
+  project: string;
 }
 
 export const TICKET_SPEC_FORMAT = `Write every ticket body as a spec: these parts, in this order, with nothing after the \`${PROVEN_PREFIX}\` line.
@@ -42,6 +43,7 @@ ${PROVEN_PREFIX} <one observable check that shows the ticket is done>
 - ${PROVEN_PREFIX} the last line, one check anyone can observe once the ticket is done.`;
 
 const HEADING = /^##[^\S\n]+(.+?)\s*$/;
+const FENCE = /^\s{0,3}(`{3,}|~{3,})/;
 const PROVEN_LINE = /^Proven:(.*)$/;
 const CRITERION = /\bSHALL\b/;
 const TASK_ITEM = /^\s*\d+[.)]\s+\S/m;
@@ -51,11 +53,29 @@ interface SpecScan {
   order: SpecSection[];
   content: Partial<Record<SpecSection, string[]>>;
   proven: string | null;
+  fence: string | null;
 }
 
 const sectionOf = (line: string): SpecSection | undefined => {
   const name = HEADING.exec(line)?.[1]?.toLowerCase();
   return SPEC_SECTIONS.find((section) => section.toLowerCase() === name);
+};
+
+const fenceAfter = (fence: string | null, line: string): string | null => {
+  const marker = FENCE.exec(line)?.[1];
+  if (marker === undefined) return fence;
+  if (fence === null) return marker;
+  const closes =
+    marker[0] === fence[0] &&
+    marker.length >= fence.length &&
+    line.trim() === marker;
+  if (closes) return null;
+  return fence;
+};
+
+const headingOf = (fenced: boolean, line: string): SpecSection | undefined => {
+  if (fenced) return undefined;
+  return sectionOf(line);
 };
 
 interface ProvenSplit {
@@ -73,9 +93,17 @@ const splitProven = (body: string): ProvenSplit => {
 
 const scanSpec = (body: string): SpecScan => {
   const { lines, proven } = splitProven(body);
-  const scan: SpecScan = { intro: [], order: [], content: {}, proven };
+  const scan: SpecScan = {
+    intro: [],
+    order: [],
+    content: {},
+    proven,
+    fence: null,
+  };
   lines.forEach((line) => {
-    const section = sectionOf(line);
+    const fenced = scan.fence !== null;
+    scan.fence = fenceAfter(scan.fence, line);
+    const section = headingOf(fenced, line);
     if (section) {
       scan.order.push(section);
       scan.content[section] ??= [];
@@ -141,11 +169,33 @@ export const specProblems = (body: string): string[] => {
   ];
 };
 
-export const proposalProblems = (proposal: ProposalDraft): string[] =>
-  specProblems(proposal.body);
+const projectList = (projects: readonly string[]): string => {
+  if (projects.length === 0) return 'there is no active project';
+  return `name one of ${projects.map((slug) => `\`${slug}\``).join(', ')}`;
+};
+
+export const projectProblems = (
+  project: string,
+  projects: readonly string[],
+): string[] => {
+  if (projects.includes(project)) return [];
+  if (project.trim() === '')
+    return [`it names no project; ${projectList(projects)}`];
+  return [
+    `it names \`${project}\`, which is not an active project; ${projectList(projects)}`,
+  ];
+};
+
+export const proposalProblems = (
+  proposal: ProposalDraft,
+  projects: readonly string[],
+): string[] => [
+  ...projectProblems(proposal.project, projects),
+  ...specProblems(proposal.body),
+];
 
 export const describeProblems = (problems: readonly string[]): string =>
-  `the ticket does not follow the spec format: ${problems.join('; ')}`;
+  `the proposal does not follow the proposal format: ${problems.join('; ')}`;
 
 export const parseTicketSpec = (body: string): TicketSpec | null => {
   if (specProblems(body).length > 0) return null;

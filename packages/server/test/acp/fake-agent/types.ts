@@ -27,7 +27,9 @@ export type FakeAgentFlag =
   | 'crashDriver'
   | 'builderAsks'
   | 'plannerSkipsDesign'
-  | 'plannerSkipsDesignTwice';
+  | 'plannerSkipsDesignTwice'
+  | 'plannerSpreads'
+  | 'plannerNamesUnknown';
 
 export interface FakeAgentOptions extends Partial<
   Record<FakeAgentFlag, boolean>

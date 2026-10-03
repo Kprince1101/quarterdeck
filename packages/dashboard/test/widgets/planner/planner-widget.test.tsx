@@ -27,7 +27,6 @@ import {
 } from '../../primitives/dom.js';
 import type { PageElement } from '../../shell/page.js';
 import {
-  DECK,
   DOCS,
   INTENT_1,
   PROJECTS,
@@ -36,6 +35,7 @@ import {
   SPEC_BODY,
   cleared,
   human,
+  moved,
   plannerEvent,
   proposed,
   reply,
@@ -139,13 +139,6 @@ const log = (scope: DomElement): string[] =>
     }`;
   });
 
-const pick = (scope: DomElement, projectId: string): void => {
-  choose(
-    find(scope, '.qd-planner-project select') as unknown as PageElement,
-    projectId,
-  );
-};
-
 describe('Planner widget', () => {
   beforeAll(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -167,23 +160,129 @@ describe('Planner widget', () => {
       'No project yet. Create one to plan.',
     );
     expect(find(container, 'textarea').hasAttribute('disabled')).toBe(true);
-    expect(button(container, 'New conversation').hasAttribute('disabled')).toBe(
-      true,
-    );
   });
 
-  it('picks the first project and invites a first message', () => {
+  it('has no project picker and invites a first message', () => {
     const { container } = mountPlanner();
     deliver(snapshot());
-    const select = find(container, '.qd-planner-project select');
-    expect(valueOf(select)).toBe(DECK);
-    expect(
-      findAll(select, 'option').map(({ textContent }) => textContent),
-    ).toEqual(['Deck', 'Site']);
+    expect(findAll(container, 'select')).toHaveLength(0);
     expect(find(container, '.qd-empty').textContent).toBe(
       'No conversation yet. Tell the Planner what to build.',
     );
     expect(find(container, 'textarea').hasAttribute('disabled')).toBe(false);
+  });
+
+  it('shows the project of each proposal on its card and decides it there', async () => {
+    const { container, sent } = mountPlanner();
+    deliver(
+      snapshot([
+        ticket(SHIP, 'Ship it'),
+        ticket(DOCS, 'Write docs', { projectId: SITE }),
+      ]),
+      ...arrive(
+        human(1, 'plan both'),
+        proposed(2, SHIP, 'Ship it'),
+        proposed(3, DOCS, 'Write docs', 'site'),
+        reply(4, 'One for each.'),
+      ),
+    );
+    expect(
+      findAll(container, '.qd-proposal').map((item) => [
+        item.querySelector('h3')?.textContent,
+        item.querySelector('.qd-proposal-project')?.textContent,
+      ]),
+    ).toEqual([
+      ['Ship it', 'Deck'],
+      ['Write docs', 'Site'],
+    ]);
+    await click(button(card(container, DOCS), 'Approve'));
+    await click(button(card(container, SHIP), 'Reject'));
+    await settle();
+    expect(sent).toEqual([
+      { intent: 'ticket.approve', body: { project: 'site', ticketId: DOCS } },
+      { intent: 'ticket.reject', body: { project: 'deck', ticketId: SHIP } },
+    ]);
+  });
+
+  it('decides a proposal whose project’s board it cannot see, without editing it', async () => {
+    const { container, sent } = mountPlanner();
+    deliver(snapshot(), ...arrive(proposed(1, DOCS, 'Write docs', 'site')));
+    const docs = card(container, DOCS);
+    expect(find(docs, '.qd-proposal-project').textContent).toBe('Site');
+    expect(find(docs, '.qd-proposal-status').textContent).toBe(
+      'On the Site board',
+    );
+    expect(labels(docs)).toEqual(['Approve', 'Reject']);
+    await click(button(docs, 'Approve'));
+    await settle();
+    expect(sent).toEqual([
+      { intent: 'ticket.approve', body: { project: 'site', ticketId: DOCS } },
+    ]);
+    expect(find(card(container, DOCS), '.qd-proposal-status').textContent).toBe(
+      'Approved',
+    );
+    expect(labels(card(container, DOCS))).toEqual([]);
+  });
+
+  it('moves a proposal to another project when the edit changes its project', async () => {
+    const { container, sent } = mountPlanner();
+    deliver(
+      snapshot([ticket(SHIP, 'Ship it', { body: 'old body' })]),
+      ...arrive(proposed(1, SHIP, 'Ship it')),
+    );
+    await click(button(card(container, SHIP), 'Edit'));
+    const select = find(card(container, SHIP), '.qd-proposal-editor select');
+    expect(valueOf(select)).toBe('deck');
+    expect(
+      findAll(select, 'option').map(({ textContent }) => textContent),
+    ).toEqual(['Deck', 'Site']);
+    choose(select as unknown as PageElement, 'site');
+    typeInto(
+      find(card(container, SHIP), '.qd-proposal-editor input'),
+      'Ship the site',
+    );
+    await click(button(card(container, SHIP), 'Save'));
+    await settle();
+    expect(sent).toEqual([
+      {
+        intent: 'planner.move',
+        body: {
+          project: 'deck',
+          ticketId: SHIP,
+          from: 'deck',
+          to: 'site',
+          title: 'Ship the site',
+          body: 'old body',
+        },
+      },
+    ]);
+    deliver(
+      changed(ticket(SHIP, 'Ship it', { status: 'rejected' })),
+      {
+        type: 'change',
+        table: 'tickets',
+        op: 'insert',
+        id: DOCS,
+        row: ticket(DOCS, 'Ship the site', {
+          projectId: SITE,
+          body: 'old body',
+        }),
+      },
+      ...arrive(
+        moved(
+          2,
+          { project: 'deck', ticketId: SHIP },
+          { project: 'site', ticketId: DOCS },
+          'Ship the site',
+        ),
+      ),
+    );
+    const now = card(container, DOCS);
+    expect(find(now, 'h3').textContent).toBe('Ship the site');
+    expect(find(now, '.qd-proposal-project').textContent).toBe('Site');
+    expect(
+      findAll(container, `article[data-ticket-id="${SHIP}"]`),
+    ).toHaveLength(0);
   });
 
   it('shows the conversation with proposed tickets inline', () => {
@@ -326,7 +425,14 @@ describe('Planner widget', () => {
       findAll(card(container, SHIP), '.qd-proposal-editor label span').map(
         ({ textContent }) => textContent,
       ),
-    ).toEqual(['Title', 'Requirements', 'Design', 'Tasks', 'Proven']);
+    ).toEqual([
+      'Project',
+      'Title',
+      'Requirements',
+      'Design',
+      'Tasks',
+      'Proven',
+    ]);
     expect(valueOf(field('Design'))).toBe(
       'Build with the site generator; touch nothing in the server.',
     );
@@ -405,14 +511,12 @@ describe('Planner widget', () => {
     expect(log(container)).toEqual(['You: plan the docs']);
   });
 
-  it('starts a new conversation with planner.new', async () => {
+  it('starts a new conversation everywhere with planner.new', async () => {
     const { container, sent } = mountPlanner();
     deliver(snapshot(), ...arrive(human(1, 'old idea'), reply(2, 'Sure.')));
     await click(button(container, 'New conversation'));
     await settle();
-    expect(sent).toEqual([
-      { intent: 'planner.new', body: { project: 'deck' } },
-    ]);
+    expect(sent).toEqual([{ intent: 'planner.new', body: {} }]);
     deliver(...arrive(plannerEvent(3, 'planner.new'), cleared(4)));
     expect(findAll(container, '.qd-planner-log')).toHaveLength(0);
     expect(find(container, '.qd-empty').textContent).toContain(
@@ -431,8 +535,8 @@ describe('Planner widget', () => {
     );
   });
 
-  it('switches project for the conversation and the intents', async () => {
-    const { container, sent } = mountPlanner();
+  it('shows the conversation held in the first project only', () => {
+    const { container } = mountPlanner();
     deliver(
       snapshot(),
       ...arrive(
@@ -444,12 +548,5 @@ describe('Planner widget', () => {
       ),
     );
     expect(log(container)).toEqual(['You: deck talk']);
-    pick(container, SITE);
-    expect(log(container)).toEqual(['Planner: site talk']);
-    await click(button(container, 'New conversation'));
-    await settle();
-    expect(sent).toEqual([
-      { intent: 'planner.new', body: { project: 'site' } },
-    ]);
   });
 });

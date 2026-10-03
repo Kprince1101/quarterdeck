@@ -151,21 +151,74 @@ const proposalBody = (skipDesign: boolean | undefined): string => {
   return FAKE_SPEC_BODY;
 };
 
-const propose = async (
+export const FAKE_UNKNOWN_PROJECT = 'nowhere';
+
+const PROJECT_LINE = /^- `([^`]+)` \(/gm;
+
+const knownProjects: string[] = [];
+
+const learnProjects = (text: string): void => {
+  const section = text.split('\n# Projects\n')[1]?.split('\n# The human\n')[0];
+  if (section === undefined) return;
+  knownProjects.splice(
+    0,
+    knownProjects.length,
+    ...[...section.matchAll(PROJECT_LINE)].map((match) => match[1] ?? ''),
+  );
+};
+
+interface FakeProposal {
+  project: string;
+  title: string;
+  body: string;
+}
+
+const proposalsFor = (
+  options: FakeAgentOptions,
+  reprompt: boolean,
+): FakeProposal[] => {
+  const [first = ''] = knownProjects;
+  if (reprompt) {
+    const body = proposalBody(options.plannerSkipsDesignTwice);
+    return [{ project: first, title: FAKE_PROPOSAL_TITLE, body }];
+  }
+  const body = proposalBody(options.plannerSkipsDesign);
+  if (options.plannerNamesUnknown)
+    return [
+      { project: FAKE_UNKNOWN_PROJECT, title: FAKE_PROPOSAL_TITLE, body },
+    ];
+  if (options.plannerSpreads)
+    return knownProjects.map((project) => ({
+      project,
+      title: `${FAKE_PROPOSAL_TITLE} in ${project}`,
+      body,
+    }));
+  return [{ project: first, title: FAKE_PROPOSAL_TITLE, body }];
+};
+
+const proposeOne = async (
   turn: FakeTurn,
-  skipDesign: boolean | undefined,
-): Promise<StopReason> => {
-  const proposal = {
-    title: FAKE_PROPOSAL_TITLE,
-    body: proposalBody(skipDesign),
-  };
+  proposal: FakeProposal,
+): Promise<string> => {
   const asked = await allowed(turn, {
     title: 'mcp__quarterdeck__propose',
     kind: 'other',
     rawInput: proposal,
   });
-  if (!asked) return say(turn, 'Quarterdeck refused my propose call.');
-  return say(turn, await callBus(turn, 'propose', proposal));
+  if (!asked) return 'Quarterdeck refused my propose call.';
+  return callBus(turn, 'propose', { ...proposal });
+};
+
+const propose = async (
+  turn: FakeTurn,
+  options: FakeAgentOptions,
+  reprompt: boolean,
+): Promise<StopReason> => {
+  if (!reprompt) learnProjects(turn.text);
+  const replies: string[] = [];
+  for (const proposal of proposalsFor(options, reprompt))
+    replies.push(await proposeOne(turn, proposal));
+  return say(turn, replies.join('\n'));
 };
 
 const pushAllowed = (
@@ -197,9 +250,8 @@ const HANDLERS: Record<
     if (options.crashDriver) turn.exitProcess(FAKE_CRASH_EXIT_CODE);
     return say(turn, fenced({ summary: 'Born.', actions: [] }));
   },
-  planner: (turn, options) => propose(turn, options.plannerSkipsDesign),
-  'planner-reprompt': (turn, options) =>
-    propose(turn, options.plannerSkipsDesignTwice),
+  planner: (turn, options) => propose(turn, options, false),
+  'planner-reprompt': (turn, options) => propose(turn, options, true),
   'wrap-up': (turn) =>
     say(turn, fenced({ summary: 'Voyage done.', notebook: [], charter: null })),
   driver: (turn) =>

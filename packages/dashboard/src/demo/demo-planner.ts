@@ -1,6 +1,7 @@
 import type { AgentRow } from '@quarterdeck/server/stream-schema';
 import { specBody } from '@quarterdeck/server/ticket-spec';
 import { DEMO_PLANNER_REPLY } from './demo-plans.js';
+import { DEMO_PROJECT } from './demo-seed.js';
 import { turnTokens } from './demo-script.js';
 import type { DemoWorld } from './demo-world.js';
 
@@ -80,7 +81,11 @@ export const createDemoPlanner = (world: DemoWorld): DemoPlanner => {
       store.emit('ticket.proposed', {
         agentId: planner.id,
         ticketId: ticket.id,
-        payload: { title: ticket.title },
+        payload: {
+          title: ticket.title,
+          project: DEMO_PROJECT,
+          ticketId: ticket.id,
+        },
       });
     },
     clear: (intentId) => {
