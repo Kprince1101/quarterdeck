@@ -17,7 +17,7 @@ export const REPO_ENV_IGNORED =
   'ignored. Only the machine layer can add names to env.json, since agents can write to the repo.';
 
 export const TIGHTEN_ONLY_NOTICE =
-  'A project’s repo layer can only tighten permissions, mergeGate, autoEndSettleSeconds and budget.window: its permissions may only deny or ask, its mergeGate flags can only turn a gate on, it can only lengthen the settle time, and its budget window takes the smaller cap, the lower hold fraction and the longer window. Everything else in the repo layer overrides the machine layer.';
+  'A project’s repo layer can only tighten permissions, mergeGate, autoEndSettleSeconds and budget.window: its permissions may only deny or ask, its mergeGate flags can only turn a gate on, it can only lengthen the settle time, and its budget window takes the smaller cap, the lower hold fraction and the longer window. env.json and forges.json are machine-only: a repo env.json is ignored and a repo forges.json is an error. Everything else in the repo layer overrides the machine layer.';
 
 export const REPO_NOT_MERGED_NOTICE =
   'It is not merged: it is decided on its own and the stricter answer wins.';

@@ -1,3 +1,4 @@
+import { forgeTerms } from '@quarterdeck/rules';
 import { describe, expect, it } from 'vitest';
 import { buildAssignmentPrompt } from '../../src/driver/assignment-prompt.js';
 import { FAKE_SPEC_BODY } from '../acp/fake-agent/index.ts';
@@ -17,6 +18,7 @@ describe('buildAssignmentPrompt', () => {
         worktreePath: '/work/crane',
         repoPath: '/repo',
         base: 'origin/main',
+        terms: forgeTerms('github'),
       }),
     ).toMatchInlineSnapshot(`
       "You are crane, a builder on this project.

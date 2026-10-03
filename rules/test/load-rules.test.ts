@@ -52,6 +52,7 @@ describe('rules loader', () => {
     expect(Object.values(RULE_FILES).toSorted()).toEqual([
       'charter.md',
       'env.json',
+      'forges.json',
       'kiro.json',
       'lifecycle.json',
       'models.json',

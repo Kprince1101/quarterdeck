@@ -1,3 +1,4 @@
+import type { Forge } from '@quarterdeck/rules/forges';
 import type { GridLayout } from '@quarterdeck/server/layouts';
 import type { LayoutRow } from '@quarterdeck/server/stream-schema';
 import { DASHBOARD_LAYOUT } from '../layouts/constants.js';
@@ -5,6 +6,8 @@ import { DEMO_REPO_PATH } from './demo-reads.js';
 import type { DemoWorld } from './demo-world.js';
 
 export const DEMO_PROJECT = 'harbor';
+
+export const DEMO_FORGE: Forge = 'github';
 
 export const DEMO_LAYOUT: GridLayout = {
   columns: 12,

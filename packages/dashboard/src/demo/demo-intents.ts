@@ -1,3 +1,4 @@
+import { forgeTerms } from '@quarterdeck/rules/forges';
 import type {
   IntentName,
   IntentPayload,
@@ -13,7 +14,7 @@ import type {
   VoyageRow,
 } from '@quarterdeck/server/stream-schema';
 import { DemoRefusal } from './demo-fetch.js';
-import { DEMO_PROJECT } from './demo-seed.js';
+import { DEMO_FORGE, DEMO_PROJECT } from './demo-seed.js';
 import type { DemoPlanner } from './demo-planner.js';
 import type { DemoReads } from './demo-reads.js';
 import type { DemoRules } from './demo-rules.js';
@@ -49,6 +50,7 @@ const UNRECORDED: ReadonlySet<IntentName> = new Set([
   'data.rows',
   'turn.read',
   'usage.read',
+  'forge.read',
   'rules.write',
   'rules.reset',
   'wipe.project',
@@ -410,6 +412,8 @@ export const createDemoIntents = (
       reply('applied', reads.page(input.table, input.offset, input.limit)),
     'turn.read': (input, reply) => reply('applied', reads.turn(input.turnId)),
     'usage.read': (_input, reply) => reply('applied', reads.usage()),
+    'forge.read': (_input, reply) =>
+      reply('applied', { forge: DEMO_FORGE, terms: forgeTerms(DEMO_FORGE) }),
   };
 
   return (name, input) => {

@@ -1,7 +1,7 @@
 import { startBusHost, type BusHost } from '../bus/host.js';
 import { startCrew, type Crew } from '../crew/index.js';
 import { crewFailedEvent } from '../crew/failures.js';
-import type { GitHubHost } from '../gate/index.js';
+import { projectForge, type ForgeHost } from '../gate/index.js';
 import type { PlannerAdapters } from '../planner/sessions.js';
 import type { Store } from '../store/index.js';
 import { createStream, type Stream } from '../stream/socket.js';
@@ -14,7 +14,7 @@ export interface ProjectServicesContext {
   onError?: ((err: unknown) => void) | undefined;
   openStores: () => readonly Store[];
   adapters?: PlannerAdapters | undefined;
-  github?: GitHubHost | undefined;
+  forge?: ForgeHost | undefined;
   gatePollMs?: number | undefined;
 }
 
@@ -61,7 +61,7 @@ const startProjectCrew = async (
       homeDir: context.homeDir,
       openStores: context.openStores,
       adapters: context.adapters,
-      github: context.github,
+      forge: context.forge,
       gatePollMs: context.gatePollMs,
       onError,
     });
@@ -81,7 +81,13 @@ export const startProjectServices = async (
   const closers: Closer[] = [];
   const close = () => closeInReverse(closers, onError);
   try {
-    const bus = await startBusHost({ store, home: context.home });
+    const bus = await startBusHost({
+      store,
+      home: context.home,
+      forge: async () =>
+        context.forge?.forge ??
+        projectForge(store, { homeDir: context.homeDir }),
+    });
     closers.push(() => bus.close());
     const stream = createStream({
       store,

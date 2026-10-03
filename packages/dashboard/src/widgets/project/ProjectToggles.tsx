@@ -47,6 +47,7 @@ const AutoMergeConfirm = ({ gates }: AutoMergeConfirmProps) => (
       <button
         type="button"
         className="qd-project-danger"
+        disabled={gates.isConfirmDisabled}
         onClick={gates.handleConfirmAutoMerge}
       >
         Turn on auto-merge

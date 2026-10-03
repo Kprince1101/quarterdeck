@@ -1,7 +1,8 @@
 export {
-  PLANNER_BRIEF,
   decisionsNote,
   openingPrompt,
+  plannerBrief,
+  ticketSpecFormat,
   type ProposalDecision,
 } from './brief.js';
 export {

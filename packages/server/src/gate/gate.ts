@@ -1,4 +1,8 @@
-import { getErrorMessage, type MergeGate } from '@quarterdeck/rules';
+import {
+  forgeTerms,
+  getErrorMessage,
+  type MergeGate,
+} from '@quarterdeck/rules';
 import { isGone, liveReviewer, type ReviewAgent } from '../bus/review.js';
 import type {
   Store,
@@ -21,7 +25,7 @@ import {
   foreignPullRequest,
   mergeStep,
   reviewStep,
-  WAITING,
+  waitingReasons,
   type Approval,
   type MergeStep,
 } from './decide.js';
@@ -32,20 +36,18 @@ import {
   readFacts,
   type TicketFacts,
 } from './facts.js';
-import {
-  originRepository,
-  type GitHubHost,
-  type GitRunner,
-  type RepositoryRef,
-} from './github.js';
+import type { ForgeHost, GitRunner, RepositoryRef } from './forge.js';
+import { originRepository, projectRepoPath } from './repository.js';
 import type { ReviewerHost } from './reviewers.js';
 
 export const GATE_POLL_MS = 60_000;
 
+export type ForgeSource = ForgeHost | (() => Promise<ForgeHost>);
+
 export interface ReviewGateOptions {
   store: Store;
   rules: MergeGate;
-  github: GitHubHost;
+  forge: ForgeSource;
   reviewers: ReviewerHost;
   repository?: () => Promise<RepositoryRef>;
   pollMs?: number;
@@ -61,7 +63,7 @@ export interface ReviewGate {
 interface GateContext {
   store: GateStore;
   rules: MergeGate;
-  github: GitHubHost;
+  forge: () => Promise<ForgeHost>;
   reviewers: ReviewerHost;
   repository: () => Promise<RepositoryRef>;
 }
@@ -76,16 +78,17 @@ export const projectRepository = async (
   store: GateStore,
   run?: GitRunner,
 ): Promise<RepositoryRef> => {
-  const { rows } = await store.db.query<{ repoPath: string | null }>(
-    'select repo_path as "repoPath" from projects where id = $1',
-    [store.projectId],
-  );
-  const repoPath = rows[0]?.repoPath;
+  const repoPath = await projectRepoPath(store);
   if (!repoPath)
     throw new Error(
-      'the project has no repo_path, so the merge gate cannot tell which repository its pull requests belong to',
+      'the project has no repo_path, so the merge gate cannot tell which repository it merges into',
     );
   return originRepository(repoPath, run);
+};
+
+const forgeResolver = (source: ForgeSource): (() => Promise<ForgeHost>) => {
+  if (typeof source === 'function') return source;
+  return () => Promise.resolve(source);
 };
 
 const once = <T>(resolve: () => Promise<T>): (() => Promise<T>) => {
@@ -146,9 +149,10 @@ const requestReview = async (
   const { report, ticket } = facts;
   if (report === undefined) return;
   const at = { pr: report.pr, head: report.head };
+  const terms = forgeTerms((await ctx.forge()).forge);
   const reviewer = await findReviewer(ctx.store, report.reviewerId);
   if (reviewer === undefined) {
-    await wait(ctx, facts, guard, WAITING.reviewer, at);
+    await wait(ctx, facts, guard, waitingReasons(terms).reviewer, at);
     return;
   }
   await ctx.reviewers.requestReview({
@@ -158,19 +162,26 @@ const requestReview = async (
     pr: report.pr,
     head: report.head,
     notes: report.notes,
+    terms,
   });
   await recordReviewRequested(ctx.store, guard, reviewer.id, at);
 };
 
+interface MergeTarget {
+  guard: Guard;
+  at: PullRequestAt & { head: string };
+  host: ForgeHost;
+}
+
 const squashMerge = async (
   ctx: GateContext,
-  guard: Guard,
-  at: PullRequestAt & { head: string },
+  { guard, at, host }: MergeTarget,
 ): Promise<void> => {
   try {
-    await ctx.github.squashMerge(at.pr, at.head);
+    await host.squashMerge(at.pr, at.head);
   } catch (err) {
-    await raiseMergeCard(ctx.store, guard, at, getErrorMessage(err));
+    const terms = forgeTerms(host.forge);
+    await raiseMergeCard(ctx.store, guard, at, terms, getErrorMessage(err));
     return;
   }
   await markMerged(ctx.store, guard.ticketId, at, 'gate');
@@ -179,14 +190,15 @@ const squashMerge = async (
 const applyMergeStep = async (
   ctx: GateContext,
   facts: TicketFacts,
-  guard: Guard,
   step: MergeStep,
-  at: PullRequestAt & { head: string },
+  target: MergeTarget,
 ): Promise<void> => {
+  const { guard, at, host } = target;
   if (step.kind === 'merged')
-    await markMerged(ctx.store, guard.ticketId, at, 'github');
-  else if (step.kind === 'merge') await squashMerge(ctx, guard, at);
-  else if (step.kind === 'ask') await raiseMergeCard(ctx.store, guard, at);
+    await markMerged(ctx.store, guard.ticketId, at, host.forge);
+  else if (step.kind === 'merge') await squashMerge(ctx, target);
+  else if (step.kind === 'ask')
+    await raiseMergeCard(ctx.store, guard, at, forgeTerms(host.forge));
   else if (step.kind === 'wait') await wait(ctx, facts, guard, step.reason, at);
   else if (step.kind === 'bounce')
     await bounce(ctx.store, guard, step.reason, at);
@@ -199,8 +211,15 @@ const runMergeGate = async (
 ): Promise<void> => {
   const guard = { ticketId: facts.ticket.id, reportId: approval.reportId };
   const at = { pr: approval.pr, head: approval.head };
+  const host = await ctx.forge();
+  const terms = forgeTerms(host.forge);
   const project = await ctx.repository();
-  const foreign = foreignPullRequest(approval.pr, project);
+  const foreign = foreignPullRequest(
+    approval.pr,
+    project,
+    terms,
+    host.pullRequestRef,
+  );
   if (foreign !== undefined) {
     await bounce(ctx.store, guard, foreign, at);
     return;
@@ -210,9 +229,9 @@ const runMergeGate = async (
     ctx.store.projectId,
     approval.cardId,
   );
-  const pr = await ctx.github.pullRequest(approval.pr);
-  const step = mergeStep(approval, pr, card, ctx.rules, project);
-  await applyMergeStep(ctx, facts, guard, step, at);
+  const pr = await host.pullRequest(approval.pr);
+  const step = mergeStep(approval, pr, card, ctx.rules, project, terms);
+  await applyMergeStep(ctx, facts, step, { guard, at, host });
 };
 
 const evaluateTicket = async (
@@ -258,7 +277,10 @@ export const startReviewGate = async (
   const { store } = options;
   const report = options.onError ?? reportGateError;
   const ctx: GateContext = {
-    ...options,
+    store,
+    rules: options.rules,
+    reviewers: options.reviewers,
+    forge: once(forgeResolver(options.forge)),
     repository: once(options.repository ?? (() => projectRepository(store))),
   };
   const chains = new Map<string, Promise<void>>();

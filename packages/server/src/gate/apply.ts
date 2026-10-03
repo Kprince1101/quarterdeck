@@ -1,3 +1,4 @@
+import type { Forge, ForgeTerms } from '@quarterdeck/rules';
 import { publishEvent, type Queryable, type Store } from '../store/index.js';
 import {
   GATE_EVENTS,
@@ -14,6 +15,8 @@ export interface Guard {
   ticketId: string;
   reportId: number;
 }
+
+export type MergedBy = 'gate' | Forge;
 
 export interface PullRequestAt {
   pr: string;
@@ -93,18 +96,21 @@ export const bounce = (
     });
   });
 
-const mergeQuestion = (
-  ticket: GateTicket,
+export const mergeQuestion = (
+  ticket: Pick<GateTicket, 'title'>,
   at: PullRequestAt,
+  terms: ForgeTerms,
   error: string | undefined,
 ): string => {
   const lines = [
     `Merge ${at.pr} for ticket "${ticket.title}" at ${at.head ?? 'its head'}?`,
   ];
   if (error !== undefined)
-    lines.push(`The gate tried to squash merge it and failed: ${error}`);
+    lines.push(
+      `The gate tried to squash merge the ${terms.short} and failed: ${error}`,
+    );
   lines.push(
-    `${MERGE_ANSWER} squash merges it; ${HOLD_ANSWER} leaves it in review for you to merge on GitHub.`,
+    `${MERGE_ANSWER} squash merges the ${terms.short}; ${HOLD_ANSWER} leaves it in review for you to merge on ${terms.name}.`,
   );
   return lines.join('\n');
 };
@@ -113,6 +119,7 @@ export const raiseMergeCard = (
   store: GateStore,
   guard: Guard,
   at: PullRequestAt,
+  terms: ForgeTerms,
   error?: string,
 ): Promise<boolean> =>
   guarded(store, guard, async (tx, ticket) => {
@@ -124,7 +131,7 @@ export const raiseMergeCard = (
         store.projectId,
         guard.ticketId,
         MERGE_CARD,
-        mergeQuestion(ticket, at, error),
+        mergeQuestion(ticket, at, terms, error),
         JSON.stringify([MERGE_ANSWER, HOLD_ANSWER]),
       ],
     );
@@ -141,7 +148,7 @@ export const markMerged = (
   store: GateStore,
   ticketId: string,
   at: PullRequestAt,
-  by: 'gate' | 'github',
+  by: MergedBy,
 ): Promise<boolean> =>
   store.db.transaction(async (tx) => {
     const ticket = await readTicket(tx, store.projectId, ticketId, true);

@@ -1,3 +1,4 @@
+import { forgeTerms } from '@quarterdeck/rules/forges';
 import type {
   AgentRow,
   CardRow,
@@ -9,6 +10,7 @@ import {
   type DemoQuestionPlan,
   type DemoVoyagePlan,
 } from './demo-plans.js';
+import { DEMO_FORGE } from './demo-seed.js';
 import type { DemoTurnText, DemoWorld, TurnTokens } from './demo-world.js';
 
 export type DemoBeat = () => boolean;
@@ -90,7 +92,7 @@ const builderText = (ticket: TicketRow, step: string): DemoTurnText => ({
 });
 
 const reviewerText = (ticket: TicketRow, verdict: string): DemoTurnText => ({
-  input: `Review ${ticket.prUrl ?? 'the pull request'} for "${ticket.title}".`,
+  input: `Review ${ticket.prUrl ?? `the ${forgeTerms(DEMO_FORGE).long}`} for "${ticket.title}".`,
   output: verdict,
 });
 

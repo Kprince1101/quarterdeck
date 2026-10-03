@@ -80,6 +80,24 @@ describe('checkDraft', () => {
     expect(check.repoError).toContain('Only the machine layer');
     expect(check.effective).toEqual({ pass: ['EXAMPLE_TOKEN'] });
   });
+
+  it('refuses a repo forges layer, keeping the machine mapping', () => {
+    const rule = ruleView(
+      'forges',
+      { repo: '{ "forges": { "git.example.org": "github" } }' },
+      REPO,
+    );
+    const check = checkDraft(
+      rule,
+      '{ "forges": { "git.example.org": "gitlab" } }',
+    );
+    expect(check.error).toBeNull();
+    expect(check.repoError).toContain(rule.repo?.path);
+    expect(check.repoError).toContain('the repo layer may not set forges');
+    expect(check.effective).toEqual({
+      forges: { 'git.example.org': 'gitlab' },
+    });
+  });
 });
 
 describe('initialDraft', () => {

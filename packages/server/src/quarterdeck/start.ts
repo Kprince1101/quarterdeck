@@ -2,7 +2,7 @@ import { homedir } from 'node:os';
 import type { ProjectHooks } from '../api/project-stores.js';
 import { startApiServer, type ApiServer } from '../api/server.js';
 import { createApiToken } from '../api/token.js';
-import type { GitHubHost } from '../gate/index.js';
+import type { ForgeHost } from '../gate/index.js';
 import type { PlannerAdapters } from '../planner/sessions.js';
 import { quarterdeckHome } from '../store/index.js';
 import { routeStreams, type Stream } from '../stream/socket.js';
@@ -21,7 +21,7 @@ export interface QuarterdeckOptions {
   allowedOrigins?: string[];
   onError?: (err: unknown) => void;
   adapters?: PlannerAdapters;
-  github?: GitHubHost;
+  forge?: ForgeHost;
   gatePollMs?: number;
 }
 
@@ -48,7 +48,7 @@ export const startQuarterdeck = async (
     onError: options.onError,
     openStores: () => [...running.values()].map(({ store }) => store),
     adapters: options.adapters,
-    github: options.github,
+    forge: options.forge,
     gatePollMs: options.gatePollMs,
   };
   let stopping = false;

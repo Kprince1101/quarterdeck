@@ -11,7 +11,7 @@ qd.projects.get('example')?.bus.launch(agentId);
 await qd.close();
 ```
 
-Options are the API server's: `port`, `homeDir`, `dashboardDir`, `databaseUrl`, `allowedOrigins`, `onError`, plus the crew's `adapters` (the runtime adapters agents start through; default the real ones), `github` (the merge gate's GitHub; default `ghCli()`) and `gatePollMs`. Tests pass a fake runtime and a fake GitHub there. It resolves to `{ url, port, token, location, api, projects, close }`. `projects` maps each open project's slug to its services, `{ project, store, bus, stream, crew }`.
+Options are the API server's: `port`, `homeDir`, `dashboardDir`, `databaseUrl`, `allowedOrigins`, `onError`, plus the crew's `adapters` (the runtime adapters agents start through; default the real ones), `forge` (the merge gate's `ForgeHost`; default the project's [forge](../gate/README.md#forges)) and `gatePollMs`. Tests pass a fake runtime and a fake forge there. Each project's bus describes its tools in the project's forge terms. It resolves to `{ url, port, token, location, api, projects, close }`. `projects` maps each open project's slug to its services, `{ project, store, bus, stream, crew }`.
 
 ## Startup
 

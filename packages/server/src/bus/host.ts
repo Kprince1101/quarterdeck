@@ -4,6 +4,7 @@ import { createServer, type Socket } from 'node:net';
 import { dirname, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { McpServerStdio } from '@agentclientprotocol/sdk';
+import { DEFAULT_FORGE, forgeTerms, type Forge } from '@quarterdeck/rules';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { AgentNotFoundError } from '../agents/agent.js';
 import { ASK_EXPIRY_MS, assertAskExpiry } from './cards.js';
@@ -15,6 +16,7 @@ import {
   preparePrivateDir,
 } from './socket.js';
 import type { BusStore, BusTool } from './tool.js';
+import { wordedTools } from './wording.js';
 
 export const BUS_SOCKET_ENV = 'QUARTERDECK_BUS_SOCKET';
 export const BUS_TOKEN_ENV = 'QUARTERDECK_BUS_TOKEN';
@@ -31,6 +33,7 @@ export interface BusHostOptions {
   home?: string;
   tools?: readonly BusTool[];
   askExpiryMs?: number;
+  forge?: () => Promise<Forge>;
 }
 
 export interface BusHost {
@@ -108,7 +111,11 @@ export const startBusHost = async (
   ): Promise<void> => {
     sockets.set(socket, agentId);
     if (rest.length > 0) socket.unshift(rest);
-    const server = createBusServer({ store, agentId, askExpiryMs }, tools);
+    const forge = (await options.forge?.()) ?? DEFAULT_FORGE;
+    const server = createBusServer(
+      { store, agentId, askExpiryMs },
+      wordedTools(tools, forgeTerms(forge)),
+    );
     socket.once('close', () => void server.close());
     socket.write('ok\n');
     await server.connect(new StdioServerTransport(socket, socket));

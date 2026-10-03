@@ -1,4 +1,10 @@
-import { getErrorMessage, loadRule } from '@quarterdeck/rules';
+import {
+  forgeTerms,
+  forgeWording,
+  getErrorMessage,
+  loadRule,
+  type ForgeTerms,
+} from '@quarterdeck/rules';
 import type { CardHuman } from '../acp/permissions/index.js';
 import {
   createAgentLifecycle,
@@ -8,6 +14,7 @@ import {
 } from '../agents/index.js';
 import type { StopReason } from '@agentclientprotocol/sdk';
 import { MAX_REPROMPTS } from '../driver/turns.js';
+import { repoForge } from '../gate/index.js';
 import { redactValue } from '../lib/redact.js';
 import { withSignIn } from '../signin/index.js';
 import {
@@ -55,6 +62,7 @@ export interface PlannerContext {
 export interface Conversation {
   agent: Agent;
   charter: string;
+  terms: ForgeTerms;
   host: PlannerSessionHost;
   lifecycle: AgentLifecycle;
   turns: number;
@@ -72,13 +80,16 @@ export const startConversation = async (
   site: ConversationSite,
 ): Promise<Conversation> => {
   const rules = { homeDir: ctx.homeDir, repoDir: site.repoPath };
-  const [naming, models, charter, lifecycleRule, env] = await Promise.all([
-    loadRule('naming', rules),
-    loadRule('models', rules),
-    loadRule('charter', rules),
-    loadRule('lifecycle', rules),
-    loadRule('env', rules),
-  ]);
+  const [naming, models, charter, lifecycleRule, env, forge] =
+    await Promise.all([
+      loadRule('naming', rules),
+      loadRule('models', rules),
+      loadRule('charter', rules),
+      loadRule('lifecycle', rules),
+      loadRule('env', rules),
+      repoForge(site.repoPath, { homeDir: ctx.homeDir }),
+    ]);
+  const terms = forgeTerms(forge);
   const host = createPlannerSessionHost({
     ...site,
     passEnv: env.pass,
@@ -103,7 +114,8 @@ export const startConversation = async (
   });
   return {
     agent,
-    charter,
+    charter: forgeWording(charter, terms),
+    terms,
     host,
     lifecycle,
     turns: 0,
@@ -259,7 +271,7 @@ export const runTurn = async (
       await recordMiss(ctx, conversation, ctx.store.db, miss);
       return;
     }
-    const text = repromptText(error);
+    const text = repromptText(error, conversation.terms);
     const next = await beginTurn(ctx, conversation, text, (tx) =>
       recordMiss(ctx, conversation, tx, miss),
     );

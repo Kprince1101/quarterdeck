@@ -1,10 +1,11 @@
-import type { MergeGate } from '@quarterdeck/rules';
+import { forgeTerms, type MergeGate } from '@quarterdeck/rules';
 import { describe, expect, it } from 'vitest';
 import {
-  WAITING,
-  foreignPullRequest,
+  foreignPullRequest as decideForeign,
   mergeStep as decideMerge,
+  parsePullRequestUrl,
   reviewStep,
+  waitingReasons,
   type Approval,
   type MergeCardState,
   type PullRequest,
@@ -17,6 +18,10 @@ const PROJECT: RepositoryRef = {
   owner: 'example-org',
   name: 'quarterdeck',
 };
+
+const GITHUB = forgeTerms('github');
+const GITLAB = forgeTerms('gitlab');
+const WAITING = waitingReasons(GITHUB);
 
 const PR = 'https://github.com/example-org/quarterdeck/pull/23';
 const HEAD = '0123456789abcdef0123456789abcdef01234567';
@@ -65,7 +70,13 @@ const mergeStep = (
   pr: PullRequest,
   card: MergeCardState,
   rules: MergeGate,
-) => decideMerge(approval, pr, card, rules, PROJECT);
+) => decideMerge(approval, pr, card, rules, PROJECT, GITHUB);
+
+const foreignPullRequest = (
+  url: string,
+  project: RepositoryRef,
+  terms: typeof GITHUB,
+) => decideForeign(url, project, terms, parsePullRequestUrl);
 
 const pull = (extra: Partial<PullRequest> = {}): PullRequest => ({
   repository: PROJECT,
@@ -76,7 +87,7 @@ const pull = (extra: Partial<PullRequest> = {}): PullRequest => ({
   draft: false,
   mergeable: 'mergeable',
   checks: { state: 'passing', failing: [] },
-  copilot: { reviewed: false, openThreads: 0 },
+  botReview: { reviewed: false, openThreads: 0 },
   ...extra,
 });
 
@@ -252,14 +263,14 @@ describe('merge step', () => {
     const copilot = { ...RULES, requireCopilotReview: true };
     expect(mergeStep(APPROVAL, pull(), 'none', copilot)).toEqual({
       kind: 'wait',
-      reason: WAITING.copilot,
+      reason: WAITING.botReview,
     });
-    const threads = pull({ copilot: { reviewed: true, openThreads: 2 } });
+    const threads = pull({ botReview: { reviewed: true, openThreads: 2 } });
     expect(mergeStep(APPROVAL, threads, 'none', copilot)).toMatchObject({
       kind: 'bounce',
       reason: expect.stringContaining('2 Copilot review thread(s)'),
     });
-    const resolved = pull({ copilot: { reviewed: true, openThreads: 0 } });
+    const resolved = pull({ botReview: { reviewed: true, openThreads: 0 } });
     expect(mergeStep(APPROVAL, resolved, 'none', copilot)).toEqual({
       kind: 'merge',
     });
@@ -341,11 +352,12 @@ describe('merge step', () => {
 
 describe('foreign pull request', () => {
   it('accepts a pull request URL in the project repository', () => {
-    expect(foreignPullRequest(PR, PROJECT)).toBeUndefined();
+    expect(foreignPullRequest(PR, PROJECT, GITHUB)).toBeUndefined();
     expect(
       foreignPullRequest(
         'https://GITHUB.com/Example-Org/Quarterdeck/pull/7',
         PROJECT,
+        GITHUB,
       ),
     ).toBeUndefined();
   });
@@ -356,14 +368,97 @@ describe('foreign pull request', () => {
       'https://github.com/example-org/example/pull/23',
       'https://ghe.example.com/example-org/quarterdeck/pull/23',
     ])
-      expect(foreignPullRequest(url, PROJECT)).toBe(
+      expect(foreignPullRequest(url, PROJECT, GITHUB)).toBe(
         `the pull request ${url} is not in this project's repository github.com/example-org/quarterdeck; open it there and report again`,
       );
   });
 
   it('names a URL that is not a pull request', () => {
     expect(
-      foreignPullRequest('https://github.com/example-org/quarterdeck', PROJECT),
+      foreignPullRequest(
+        'https://github.com/example-org/quarterdeck',
+        PROJECT,
+        GITHUB,
+      ),
     ).toContain('is not a GitHub pull request URL');
+  });
+
+  it('reads the URL with the forge host’s own parser', () => {
+    const mr = 'https://git.example.org/group/subgroup/deck/-/merge_requests/9';
+    const project = {
+      hostname: 'git.example.org',
+      owner: 'group/subgroup',
+      name: 'deck',
+    };
+    const parse = (url: string) => {
+      const match =
+        /^https:\/\/([^/]+)\/(.+)\/([^/]+)\/-\/merge_requests\/(\d+)$/.exec(
+          url,
+        );
+      if (!match?.[1] || !match[2] || !match[3]) throw new Error('not an MR');
+      return {
+        hostname: match[1],
+        owner: match[2],
+        name: match[3],
+        number: Number(match[4]),
+      };
+    };
+
+    expect(decideForeign(mr, project, GITLAB, parse)).toBeUndefined();
+    expect(decideForeign(PR, project, GITLAB, parse)).toBe(
+      `${PR} is not a GitLab merge request URL; report the merge request's URL`,
+    );
+  });
+});
+
+describe('gate reasons in a GitLab project', () => {
+  const GITLAB_PROJECT: RepositoryRef = {
+    hostname: 'git.example.org',
+    owner: 'example-org',
+    name: 'quarterdeck',
+  };
+  const gitlabStep = (pr: PullRequest, card: MergeCardState = 'none') =>
+    decideMerge(APPROVAL, pr, card, RULES, GITLAB_PROJECT, GITLAB);
+  const onGitlab = (extra: Partial<PullRequest> = {}) =>
+    pull({ repository: GITLAB_PROJECT, ...extra });
+  const reasons = (): string[] =>
+    [
+      gitlabStep(onGitlab({ state: 'closed' })),
+      gitlabStep(onGitlab({ head: OTHER })),
+      gitlabStep(onGitlab({ mergeable: 'conflicting' })),
+      gitlabStep(onGitlab({ base: 'release/1.0' })),
+      gitlabStep(onGitlab({ draft: true })),
+      gitlabStep(onGitlab({ mergeable: 'unknown' })),
+      gitlabStep(pull()),
+    ].map((step) => {
+      if (!('reason' in step)) throw new Error(`no reason in ${step.kind}`);
+      return step.reason;
+    });
+
+  it('says merge request, never pull request', () => {
+    expect(reasons()).toEqual([
+      'the merge request was closed without merging; reopen it or open a new one and report again',
+      `the merge request head is ${OTHER}, not the approved ${HEAD}; report the new head for review`,
+      'the merge request conflicts with its base; rebase, push and report again',
+      'the merge request merges into release/1.0, not main; retarget it to main and report again',
+      'waiting: the merge request is a draft',
+      'waiting for GitLab to work out whether it merges cleanly',
+      `the merge request ${PR} is not in this project's repository git.example.org/example-org/quarterdeck; open it there and report again`,
+    ]);
+    for (const reason of reasons()) {
+      expect(reason).not.toMatch(/pull request|\bPR\b|GitHub/);
+    }
+    expect(
+      foreignPullRequest('https://git.example.org/a/b', GITLAB_PROJECT, GITLAB),
+    ).toBe(
+      "https://git.example.org/a/b is not a GitLab merge request URL; report the merge request's URL",
+    );
+  });
+
+  it('keeps pull request wording for a GitHub project', () => {
+    expect(mergeStep(APPROVAL, pull({ draft: true }), 'none', RULES)).toEqual({
+      kind: 'wait',
+      reason: 'waiting: the pull request is a draft',
+    });
   });
 });

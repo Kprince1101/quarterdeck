@@ -1,3 +1,4 @@
+import { forgeSchema } from '@quarterdeck/rules/forges';
 import { z } from 'zod';
 import { idSchema, inProject } from './fields.js';
 
@@ -8,6 +9,7 @@ const positiveSchema = z.int().positive();
 export const READ_INTENTS = {
   'turn.read': inProject({ turnId: turnIdSchema }),
   'usage.read': inProject({}),
+  'forge.read': inProject({}),
 };
 
 export type ReadIntentName = keyof typeof READ_INTENTS;
@@ -34,3 +36,15 @@ export const usageReadResultSchema = z.object({
 });
 
 export type UsageReadResult = z.infer<typeof usageReadResultSchema>;
+
+export const forgeReadResultSchema = z.object({
+  forge: forgeSchema,
+  terms: z.object({
+    short: z.enum(['PR', 'MR']),
+    long: z.enum(['pull request', 'merge request']),
+    cli: z.enum(['gh', 'glab']),
+    name: z.enum(['GitHub', 'GitLab']),
+  }),
+});
+
+export type ForgeReadResult = z.infer<typeof forgeReadResultSchema>;

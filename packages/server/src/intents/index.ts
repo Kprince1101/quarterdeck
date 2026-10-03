@@ -27,8 +27,10 @@ export {
 } from './fields.js';
 export {
   READ_INTENTS,
+  forgeReadResultSchema,
   turnReadResultSchema,
   usageReadResultSchema,
+  type ForgeReadResult,
   type ReadIntentName,
   type TurnReadResult,
   type UsageReadResult,

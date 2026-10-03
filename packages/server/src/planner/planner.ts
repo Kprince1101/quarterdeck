@@ -186,7 +186,8 @@ export const startPlanner = async (
     active: Conversation,
     text: string,
   ): Promise<string> => {
-    if (active.turns === 0) return openingPrompt(active.charter, text);
+    if (active.turns === 0)
+      return openingPrompt(active.charter, text, active.terms);
     const decided = await decidedProposals(
       store.db,
       store.projectId,

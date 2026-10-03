@@ -1,3 +1,4 @@
+import type { ForgeTerms } from '@quarterdeck/rules';
 import type { Agent } from '../agents/index.js';
 import type { BuilderTicket } from './tickets.js';
 
@@ -7,16 +8,18 @@ export interface AssignmentPromptParts {
   worktreePath: string;
   repoPath: string;
   base: string;
+  terms: ForgeTerms;
 }
 
 const SPEC_INSTRUCTION =
   "Work the ticket's `## Tasks` list in order, one task at a time. Before you report, prove its `Proven:` line: run or show the check it names.";
 
-const openPullRequest = (ticket: AssignmentPromptParts['ticket']): string[] => {
+const openPullRequest = (parts: AssignmentPromptParts): string[] => {
+  const { ticket, terms } = parts;
   if (ticket.prUrl === null) return [];
   const head = ticket.headSha ?? 'unknown';
   return [
-    `A pull request for this ticket is already open: ${ticket.prUrl} (head ${head}). Its builder was retired; check out its branch and carry it on.`,
+    `A ${terms.long} for this ticket is already open: ${ticket.prUrl} (head ${head}). Its builder was retired; check out its branch and carry it on.`,
   ];
 };
 
@@ -27,8 +30,8 @@ export const buildAssignmentPrompt = (parts: AssignmentPromptParts): string =>
     parts.ticket.body.trim() || 'The ticket has no body.',
     SPEC_INSTRUCTION,
     '# Where to work',
-    `Work in ${parts.worktreePath}, your git worktree of ${parts.repoPath}, detached at ${parts.base}. Create a branch there, commit, push and open a pull request. Never touch ${parts.repoPath} itself.`,
-    ...openPullRequest(parts.ticket),
+    `Work in ${parts.worktreePath}, your git worktree of ${parts.repoPath}, detached at ${parts.base}. Create a branch there, commit, push and open a ${parts.terms.long}. Never touch ${parts.repoPath} itself.`,
+    ...openPullRequest(parts),
     '# When you are done',
-    `Call the bus tool \`report\` with ticket \`${parts.ticket.id}\`, the pull request URL, its head commit and what you tested. If you need a decision only a person can make, call \`ask\`. Use \`status\` for a one-line progress note.`,
+    `Call the bus tool \`report\` with ticket \`${parts.ticket.id}\`, the ${parts.terms.long} URL, its head commit and what you tested. If you need a decision only a person can make, call \`ask\`. Use \`status\` for a one-line progress note.`,
   ].join('\n\n');

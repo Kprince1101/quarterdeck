@@ -16,7 +16,7 @@ const crew = await startCrew({
 await crew.close();
 ```
 
-`adapters` (default: the runtime adapters), `github` (default: `ghCli()`), `gatePollMs` and `onError` are optional. Rules are read again whenever they are used, with the project's `repo_path` as the repo layer, so an edit in the Rules widget applies to the next birth, voyage or prompt. The merge gate reads `mergeGate` once, when the crew starts.
+`adapters` (default: the runtime adapters), `forge` (a `ForgeHost`; default: `forgeHost(mergeForge(...))` for the project's [forge](../gate/README.md#forges), resolved on the gate's first evaluation and retried until the origin can be read), `gatePollMs` and `onError` are optional. Rules are read again whenever they are used, with the project's `repo_path` as the repo layer, so an edit in the Rules widget applies to the next birth, voyage or prompt. The merge gate reads `mergeGate` once, when the crew starts. The charter and reviewer brief come back in the project's forge terms (`forgeWording`), and builders' assignment prompts use them too, so a GitLab crew reads merge requests throughout.
 
 ## What starts
 

@@ -79,6 +79,10 @@
             <td><code>kiro.json</code></td>
             <td>The Kiro agent each role starts from.</td>
           </tr>
+          <tr>
+            <td><code>forges.json</code></td>
+            <td>Which forge (GitHub or GitLab) a self-hosted git host is.</td>
+          </tr>
         </tbody>
       </table>
 
@@ -156,6 +160,11 @@
         <code>env.json</code> is machine-only: its repo layer is ignored, so a
         repository can never hand its agents more of your environment. See
         <a href="#env">env.json</a>.
+      </p>
+      <h3>Forges</h3>
+      <p>
+        <code>forges.json</code> is machine-only too, and a repo layer for it is
+        an error. See <a href="#forges">forges.json</a>.
       </p>
 
       <h2 id="permissions">permissions.json</h2>
@@ -508,11 +517,34 @@
       </p>
       <pre><code>{ "baseAgents": { "builder": "everyday" } }</code></pre>
 
+      <h2 id="forges">forges.json</h2>
+      <p>
+        Quarterdeck works out which forge a project is on from the host of its
+        <code>origin</code> remote: <code>github.com</code> is GitHub and
+        <code>gitlab.com</code> is GitLab. A self-hosted forge needs a line in
+        <code>forges</code>, mapping its host to <code>github</code> or
+        <code>gitlab</code>. The default is empty. A project whose host is in
+        neither place stops with an error naming the host and this file. This
+        <code>~/.quarterdeck/rules.local.forges.json</code> puts every project
+        on <code>git.example.org</code> on GitLab:
+      </p>
+      <pre><code>{ "forges": { "git.example.org": "gitlab" } }</code></pre>
+      <p>
+        Only the machine layer can map hosts: a
+        <code>&lt;repo&gt;/.quarterdeck/rules.local.forges.json</code> is an
+        error naming the file. The forge decides the words agents and the
+        dashboard use: pull requests and <code>gh</code> on GitHub, merge
+        requests and <code>glab</code> on GitLab.
+      </p>
+
       <h2 id="prompts">charter.md and reviewer.md</h2>
       <p>
         The Driver's charter and the reviewer's prompt, in plain Markdown. A
         <code>rules.local.charter.md</code> or
-        <code>rules.local.reviewer.md</code> replaces the default whole.
+        <code>rules.local.reviewer.md</code> replaces the default whole. In a
+        GitLab project, agents read them with every &ldquo;pull request&rdquo;
+        and &ldquo;PR&rdquo; turned into &ldquo;merge request&rdquo; and
+        &ldquo;MR&rdquo;.
       </p>
     </main>
 
