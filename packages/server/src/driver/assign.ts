@@ -94,7 +94,7 @@ const birthBuilder = async (
     ticketId: ticket.id,
     prepare,
   };
-  if (ctx.roundId !== undefined) request.roundId = ctx.roundId;
+  if (ctx.voyageId !== undefined) request.voyageId = ctx.voyageId;
   try {
     return { builder: await ctx.lifecycle.birth(request), born: true };
   } catch (err) {

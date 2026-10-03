@@ -43,7 +43,7 @@ export const entry = (
 ): NotebookRow => ({
   id,
   projectId: PROJECT_ID,
-  roundId: null,
+  voyageId: null,
   authorId: null,
   body,
   pinned: false,
@@ -59,7 +59,7 @@ export const proposal = (
 ): NotebookProposalRow => ({
   id,
   projectId: PROJECT_ID,
-  roundId: null,
+  voyageId: null,
   agentId: null,
   op,
   entryId: null,

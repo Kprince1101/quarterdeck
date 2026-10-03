@@ -1,6 +1,6 @@
 import {
   readActiveNotebook,
-  type DriverRound,
+  type DriverVoyage,
   type NotebookEntry,
   type TurnOutcome,
 } from '../driver/index.js';
@@ -11,7 +11,7 @@ import {
   type Queryable,
   type Store,
 } from '../store/index.js';
-import { readRoundNumber } from './cleanup.js';
+import { readVoyageNumber } from './cleanup.js';
 import {
   buildWrapUpPrompt,
   wrapUpFormat,
@@ -21,15 +21,15 @@ import {
 } from './wrap-up-format.js';
 
 export const WRAP_UP_EVENTS = {
-  proposed: 'round.wrapped_up',
-  missed: 'round.wrap_up_missed',
+  proposed: 'voyage.wrapped_up',
+  missed: 'voyage.wrap_up_missed',
 } as const;
 
-export const NO_DRIVER_SESSION = 'the round has no live Driver session';
+export const NO_DRIVER_SESSION = 'the voyage has no live Driver session';
 
 export interface WrapUpOptions {
   store: Store;
-  round: Pick<DriverRound, 'agent' | 'round' | 'turnAs'>;
+  voyage: Pick<DriverVoyage, 'agent' | 'voyage' | 'turnAs'>;
   charter: string;
 }
 
@@ -44,7 +44,7 @@ export type WrapUp =
 
 interface ProposalSource {
   projectId: string;
-  roundId: string;
+  voyageId: string;
   agentId: string;
 }
 
@@ -70,12 +70,12 @@ const insertNotebookProposal = async (
   const { entryId, body, pinned } = proposalColumns(proposal);
   const { rows } = await tx.query<{ id: string }>(
     `insert into notebook_proposals
-       (project_id, round_id, agent_id, op, entry_id, body, pinned, rationale)
+       (project_id, voyage_id, agent_id, op, entry_id, body, pinned, rationale)
      values ($1, $2, $3, $4, $5, $6, $7, $8)
      returning id`,
     [
       source.projectId,
-      source.roundId,
+      source.voyageId,
       source.agentId,
       proposal.op,
       entryId,
@@ -95,12 +95,12 @@ const insertCharterProposal = async (
   proposal: CharterProposal,
 ): Promise<string> => {
   const { rows } = await tx.query<{ id: string }>(
-    `insert into charter_proposals (project_id, round_id, agent_id, body, rationale)
+    `insert into charter_proposals (project_id, voyage_id, agent_id, body, rationale)
      values ($1, $2, $3, $4, $5)
      returning id`,
     [
       source.projectId,
-      source.roundId,
+      source.voyageId,
       source.agentId,
       proposal.body,
       proposal.rationale,
@@ -134,11 +134,11 @@ const saveProposals = (
   result: WrapUpResult,
   notebook: readonly NotebookEntry[],
 ): Promise<WrapUp> => {
-  const { store, round } = options;
+  const { store, voyage } = options;
   const source: ProposalSource = {
     projectId: store.projectId,
-    roundId: round.round.id,
-    agentId: round.agent.id,
+    voyageId: voyage.voyage.id,
+    agentId: voyage.agent.id,
   };
   const changes = result.notebook.filter((proposal) =>
     changesSomething(proposal, notebook),
@@ -156,10 +156,10 @@ const saveProposals = (
       charterProposalId = await insertCharterProposal(tx, source, charter);
     await publishEvent(tx, store.projectId, {
       kind: WRAP_UP_EVENTS.proposed,
-      agentId: round.agent.id,
+      agentId: voyage.agent.id,
       payload: {
-        roundId: round.round.id,
-        round: round.round.number,
+        voyageId: voyage.voyage.id,
+        voyage: voyage.voyage.number,
         summary: result.summary,
         notebookProposals: notebookProposalIds,
         charterProposal: charterProposalId,
@@ -183,13 +183,13 @@ const missReason = (outcome: MissedOutcome): string => {
 
 const publishMiss = async (
   store: Store,
-  round: { id: string; number: number },
+  voyage: { id: string; number: number },
   agentId: string | null,
   reason: string,
 ): Promise<WrapUp> => {
   const event: PublishInput = {
     kind: WRAP_UP_EVENTS.missed,
-    payload: { roundId: round.id, round: round.number, reason },
+    payload: { voyageId: voyage.id, voyage: voyage.number, reason },
   };
   if (agentId !== null) event.agentId = agentId;
   await store.publish(event);
@@ -199,18 +199,18 @@ const publishMiss = async (
 const recordMiss = (options: WrapUpOptions, reason: string): Promise<WrapUp> =>
   publishMiss(
     options.store,
-    options.round.round,
-    options.round.agent.id,
+    options.voyage.voyage,
+    options.voyage.agent.id,
     reason,
   );
 
 export const missWrapUp = async (
   store: Store,
-  roundId: string,
+  voyageId: string,
   reason: string,
 ): Promise<WrapUp> => {
-  const number = await readRoundNumber(store.db, store.projectId, roundId);
-  return publishMiss(store, { id: roundId, number }, null, reason);
+  const number = await readVoyageNumber(store.db, store.projectId, voyageId);
+  return publishMiss(store, { id: voyageId, number }, null, reason);
 };
 
 const runWrapUpTurn = async (
@@ -218,18 +218,18 @@ const runWrapUpTurn = async (
   notebook: readonly NotebookEntry[],
 ): Promise<TurnOutcome<WrapUpResult> | string> => {
   const prompt = buildWrapUpPrompt({
-    round: options.round.round,
+    voyage: options.voyage.voyage,
     charter: options.charter,
     notebook,
   });
   try {
-    return await options.round.turnAs(prompt, wrapUpFormat(notebook));
+    return await options.voyage.turnAs(prompt, wrapUpFormat(notebook));
   } catch (err) {
     return `the wrap-up turn failed: ${getErrorMessage(err)}`;
   }
 };
 
-export const wrapUpRound = async (options: WrapUpOptions): Promise<WrapUp> => {
+export const wrapUpVoyage = async (options: WrapUpOptions): Promise<WrapUp> => {
   const { store } = options;
   const notebook = await readActiveNotebook(store.db, store.projectId);
   const outcome = await runWrapUpTurn(options, notebook);

@@ -3,7 +3,7 @@ import { PROCESS_SWEPT_EVENT } from '../../src/agents/index.js';
 import { recoverProject } from '../../src/lifecycle/index.js';
 import type { Store } from '../../src/store/index.js';
 import { giveProcess, storedPid } from '../lifecycle/fixtures.js';
-import { eventPayloads, insertAgent } from '../round-end/fixtures.js';
+import { eventPayloads, insertAgent } from '../voyage-end/fixtures.js';
 import { TIMEOUT, openTestStore } from './fixtures.js';
 
 vi.mock('../../src/acp/client/process-start.js', async (importOriginal) => ({

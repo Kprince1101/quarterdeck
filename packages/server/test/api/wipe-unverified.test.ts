@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { startApiServer, type ApiServer } from '../../src/api/index.js';
 import { giveProcess } from '../lifecycle/fixtures.js';
-import { insertAgent, lenientSessions } from '../round-end/fixtures.js';
+import { insertAgent, lenientSessions } from '../voyage-end/fixtures.js';
 import { fakeWorktrees } from '../agents/fixtures.js';
 import { TIMEOUT, bearer } from './harness.js';
 

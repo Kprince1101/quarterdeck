@@ -15,7 +15,7 @@ Commands:
   up                  Start the server and dashboard and print the URL
   init [repo-path]    Create a project from a git repository
   doctor              Check kiro-cli, claude, gemini and gh are installed and signed in
-  replay <round> [n]  Replay a round's Driver turns 1 to n, writing nothing
+  replay <voyage> [n]  Replay a voyage's Driver turns 1 to n, writing nothing
   wipe <project>      Stop a project's agents and delete its data (--all for every project)
 
 Run quarterdeck <command> --help for a command's options.`;

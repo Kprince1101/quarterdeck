@@ -14,7 +14,7 @@ import {
   startSleeper,
   stopSleepers,
 } from '../lifecycle/fixtures.js';
-import { insertAgent, lenientSessions } from '../round-end/fixtures.js';
+import { insertAgent, lenientSessions } from '../voyage-end/fixtures.js';
 import { TIMEOUT, bearer } from './harness.js';
 
 describe('wipe stops the agents first', { timeout: TIMEOUT }, () => {

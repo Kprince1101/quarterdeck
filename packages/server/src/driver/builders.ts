@@ -34,7 +34,7 @@ export interface BuilderContext {
   turnsDir: string;
   budget: BudgetWindow;
   pause: PauseGuard;
-  roundId?: string;
+  voyageId?: string;
 }
 
 export interface ClaimedBuilder {

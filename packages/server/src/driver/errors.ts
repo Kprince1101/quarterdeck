@@ -1,23 +1,23 @@
 import type { Runtime } from '@quarterdeck/rules';
 import type { SignInCommand } from '../signin/commands.js';
 
-export class RoundNotFoundError extends Error {
-  readonly roundId: string;
+export class VoyageNotFoundError extends Error {
+  readonly voyageId: string;
 
-  constructor(roundId: string) {
-    super(`No round ${roundId} in this project`);
-    this.name = 'RoundNotFoundError';
-    this.roundId = roundId;
+  constructor(voyageId: string) {
+    super(`No voyage ${voyageId} in this project`);
+    this.name = 'VoyageNotFoundError';
+    this.voyageId = voyageId;
   }
 }
 
-export class RoundEndedError extends Error {
-  readonly roundId: string;
+export class VoyageEndedError extends Error {
+  readonly voyageId: string;
 
-  constructor(roundId: string, number: number) {
-    super(`Round ${number} has ended; a Driver session cannot start in it`);
-    this.name = 'RoundEndedError';
-    this.roundId = roundId;
+  constructor(voyageId: string, number: number) {
+    super(`Voyage ${number} has ended; a Driver session cannot start in it`);
+    this.name = 'VoyageEndedError';
+    this.voyageId = voyageId;
   }
 }
 
@@ -112,7 +112,7 @@ export class NotADriverError extends Error {
   readonly agentId: string;
 
   constructor(agentId: string, reason: string) {
-    super(`Agent ${agentId} cannot drive a round: ${reason}`);
+    super(`Agent ${agentId} cannot drive a voyage: ${reason}`);
     this.name = 'NotADriverError';
     this.agentId = agentId;
   }

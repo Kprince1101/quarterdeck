@@ -11,7 +11,7 @@ export const CLEAR_TABLES = [
   'layouts',
   'tickets',
   'agents',
-  'rounds',
+  'voyages',
 ]
   .map((table) => `delete from ${table};`)
   .join('\n');
@@ -30,22 +30,22 @@ const insert = async (
 
 export const seedEveryTable = async (store: Store): Promise<void> => {
   const project = store.projectId;
-  const roundId = await insert(
+  const voyageId = await insert(
     store,
-    `insert into rounds (project_id, number, goal) values ($1, 1, 'ship QD6b')`,
+    `insert into voyages (project_id, number, goal) values ($1, 1, 'ship QD6b')`,
     [project],
   );
   const agentId = await insert(
     store,
-    `insert into agents (project_id, round_id, name, role, status, worktree_path)
+    `insert into agents (project_id, voyage_id, name, role, status, worktree_path)
      values ($1, $2, 'pangolin', 'builder', 'working', '/tmp/pangolin')`,
-    [project, roundId],
+    [project, voyageId],
   );
   const ticketId = await insert(
     store,
-    `insert into tickets (project_id, round_id, assignee_id, title, depends_on, pr_url)
+    `insert into tickets (project_id, voyage_id, assignee_id, title, depends_on, pr_url)
      values ($1, $2, $3, 'QD6b', array[gen_random_uuid()], 'https://example.test/pr/1')`,
-    [project, roundId, agentId],
+    [project, voyageId, agentId],
   );
   await insert(
     store,
@@ -61,28 +61,28 @@ export const seedEveryTable = async (store: Store): Promise<void> => {
   );
   const entryId = await insert(
     store,
-    `insert into notebook (project_id, round_id, author_id, body, pinned)
+    `insert into notebook (project_id, voyage_id, author_id, body, pinned)
      values ($1, $2, $3, 'keep the socket read-only', true)`,
-    [project, roundId, agentId],
+    [project, voyageId, agentId],
   );
   await insert(
     store,
     `insert into notebook_proposals
-       (project_id, round_id, agent_id, op, entry_id, body, rationale)
+       (project_id, voyage_id, agent_id, op, entry_id, body, rationale)
      values ($1, $2, $3, 'update', $4, 'keep the socket strictly read-only', 'sharper')`,
-    [project, roundId, agentId, entryId],
+    [project, voyageId, agentId, entryId],
   );
   await insert(
     store,
-    `insert into charter_proposals (project_id, round_id, agent_id, body, rationale)
+    `insert into charter_proposals (project_id, voyage_id, agent_id, body, rationale)
      values ($1, $2, $3, 'be terse', 'less noise')`,
-    [project, roundId, agentId],
+    [project, voyageId, agentId],
   );
   await insert(
     store,
-    `insert into budget (project_id, round_id, limit_tokens, limit_usd, spent_usd)
+    `insert into budget (project_id, voyage_id, limit_tokens, limit_usd, spent_usd)
      values ($1, $2, 100000, 12.5, 0.75)`,
-    [project, roundId],
+    [project, voyageId],
   );
   await insert(
     store,

@@ -21,7 +21,7 @@ import {
 import { crewLifecycle } from './lifecycle.js';
 import { cardPermissions } from './permission-card.js';
 import { createReviewerDesk, type ReviewerDesk } from './reviewer.js';
-import { startCrewRounds, type CrewRounds } from './rounds.js';
+import { startCrewVoyages, type CrewVoyages } from './voyages.js';
 import { crewRules, type CrewRules } from './rules.js';
 import { createCrewSessions, type CrewSessionHost } from './sessions.js';
 
@@ -45,7 +45,7 @@ export interface Crew {
   reviewers: ReviewerDesk;
   planner: Planner | undefined;
   gate: ReviewGate | undefined;
-  rounds: CrewRounds | undefined;
+  voyages: CrewVoyages | undefined;
   close: () => Promise<void>;
 }
 
@@ -72,8 +72,8 @@ export class AgentExitedError extends Error {
 }
 
 const exitLinks = (agent: Agent) => {
-  if (agent.roundId === null) return { agentId: agent.id };
-  return { agentId: agent.id, roundId: agent.roundId };
+  if (agent.voyageId === null) return { agentId: agent.id };
+  return { agentId: agent.id, voyageId: agent.voyageId };
 };
 
 const retireStaleReviewers = async (
@@ -148,8 +148,8 @@ const startServices = async (parts: CrewParts) => {
       gateOptions.pollMs = options.gatePollMs;
     return startReviewGate(gateOptions);
   });
-  const rounds = await attempt(report, 'rounds', () =>
-    startCrewRounds({
+  const voyages = await attempt(report, 'voyages', () =>
+    startCrewVoyages({
       store,
       project: options.project,
       home: options.home,
@@ -162,7 +162,7 @@ const startServices = async (parts: CrewParts) => {
       report,
     }),
   );
-  return { planner, intents, archive, gate, rounds };
+  return { planner, intents, archive, gate, voyages };
 };
 
 export const startCrew = async (options: CrewOptions): Promise<Crew> => {
@@ -217,8 +217,8 @@ export const startCrew = async (options: CrewOptions): Promise<Crew> => {
   });
 
   const close = async (): Promise<void> => {
-    const { rounds } = services;
-    await rounds?.close();
+    const { voyages } = services;
+    await voyages?.close();
     const listeners: (Closable | undefined)[] = [
       services.gate,
       services.archive,
@@ -230,7 +230,7 @@ export const startCrew = async (options: CrewOptions): Promise<Crew> => {
     await sessions.closeAll();
     await reviewers.close();
     await pause.close();
-    await rounds?.idle();
+    await voyages?.idle();
   };
   let closing: Promise<void> | undefined;
 
@@ -241,7 +241,7 @@ export const startCrew = async (options: CrewOptions): Promise<Crew> => {
     reviewers,
     planner: services.planner,
     gate: services.gate,
-    rounds: services.rounds,
+    voyages: services.voyages,
     close: () => {
       closing ??= close();
       return closing;

@@ -10,7 +10,7 @@ import { presetLayout } from '@quarterdeck/server/layouts';
 import type {
   LayoutRow,
   NotebookProposalRow,
-  RoundRow,
+  VoyageRow,
 } from '@quarterdeck/server/stream-schema';
 import { DemoRefusal } from './demo-fetch.js';
 import { DEMO_PROJECT } from './demo-seed.js';
@@ -32,7 +32,7 @@ export interface DemoIntentContext {
   rules: DemoRules;
   planner: DemoPlanner;
   reads: DemoReads;
-  startRound: (goal: string) => RoundRow;
+  startVoyage: (goal: string) => VoyageRow;
   later: (ms: number, work: () => void) => void;
   wipe: () => WipeResult;
 }
@@ -72,12 +72,12 @@ export const createDemoIntents = (
     if (row === undefined) return refuse(NOT_FOUND, `${what} not found`);
     return row;
   };
-  const openRound = (roundId: string): RoundRow => {
-    const round = found(store.find('rounds', roundId), `round ${roundId}`);
-    if (round.status === 'ended') {
-      refuse(CONFLICT, `Round ${round.number} has already ended`);
+  const openVoyage = (voyageId: string): VoyageRow => {
+    const voyage = found(store.find('voyages', voyageId), `voyage ${voyageId}`);
+    if (voyage.status === 'ended') {
+      refuse(CONFLICT, `Voyage ${voyage.number} has already ended`);
     }
-    return round;
+    return voyage;
   };
   const openCard = (cardId: string) => {
     const card = found(store.find('cards', cardId), `card ${cardId}`);
@@ -139,7 +139,7 @@ export const createDemoIntents = (
       store.put('notebook', {
         id,
         projectId: store.projectId,
-        roundId: proposal.roundId,
+        voyageId: proposal.voyageId,
         authorId: proposal.agentId,
         body: body ?? '',
         pinned: proposal.pinned,
@@ -172,21 +172,21 @@ export const createDemoIntents = (
   };
 
   const handlers: Handlers = {
-    'round.start': (input, reply) => {
-      const open = world.openRound();
+    'voyage.start': (input, reply) => {
+      const open = world.openVoyage();
       if (open !== undefined) {
-        refuse(CONFLICT, `Round ${open.number} is still open; end it first`);
+        refuse(CONFLICT, `Voyage ${open.number} is still open; end it first`);
       }
-      const round = ctx.startRound(input.goal);
-      return reply('applied', { roundId: round.id, round: round.number });
+      const voyage = ctx.startVoyage(input.goal);
+      return reply('applied', { voyageId: voyage.id, voyage: voyage.number });
     },
-    'round.end': (input, reply) => {
-      world.endRound(openRound(input.roundId), 'ended');
-      return reply('applied', { roundId: input.roundId, ended: true });
+    'voyage.end': (input, reply) => {
+      world.endVoyage(openVoyage(input.voyageId), 'ended');
+      return reply('applied', { voyageId: input.voyageId, ended: true });
     },
-    'round.kill': (input, reply) => {
-      world.endRound(openRound(input.roundId), 'killed');
-      return reply('applied', { roundId: input.roundId, ended: true });
+    'voyage.kill': (input, reply) => {
+      world.endVoyage(openVoyage(input.voyageId), 'killed');
+      return reply('applied', { voyageId: input.voyageId, ended: true });
     },
     'pause.set': (input, reply) => reply('applied', setPaused(input.paused)),
     'pause.all': (input, reply) =>
@@ -255,7 +255,7 @@ export const createDemoIntents = (
       store.put('notebook', {
         id: entryId,
         projectId: store.projectId,
-        roundId: null,
+        voyageId: null,
         authorId: null,
         body: input.body,
         pinned: input.pinned,

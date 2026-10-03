@@ -40,7 +40,7 @@ const viewOf = (id: string, events: readonly StreamEvent[] = []) => {
 const waiting = heldEvent(1, PAUSED_ID, 'continue: fix lint');
 const replayed = heldEvent(2, PAUSED_ID, 'turn: replayed');
 const dropped = heldEvent(3, PAUSED_ID, 'assign: dropped');
-const elsewhere = heldEvent(4, DRIVER_ID, 'turn: plan round 2');
+const elsewhere = heldEvent(4, DRIVER_ID, 'turn: plan voyage 2');
 const later = heldEvent(5, PAUSED_ID, 'continue: rebase', [
   'global',
   'project',
@@ -149,9 +149,9 @@ describe('agents model', () => {
     expect(viewOf(DRIVER_ID, PAUSE_EVENTS).held).toEqual([
       {
         eventId: 4,
-        label: 'turn: plan round 2',
+        label: 'turn: plan voyage 2',
         scopes: ['agent'],
-        text: 'held: turn: plan round 2 (agent)',
+        text: 'held: turn: plan voyage 2 (agent)',
       },
     ]);
     expect(viewOf(BUILDER_ID, PAUSE_EVENTS).held).toEqual([]);

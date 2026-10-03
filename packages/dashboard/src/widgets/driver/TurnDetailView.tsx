@@ -29,16 +29,16 @@ const CopyCommand = ({ command }: { command: string }) => {
 
 interface ThroughCommandProps {
   project: string;
-  round: number;
+  voyage: number;
   last: number;
 }
 
-const ThroughCommand = ({ project, round, last }: ThroughCommandProps) => {
+const ThroughCommand = ({ project, voyage, last }: ThroughCommandProps) => {
   const { text, through, handleChange } = useThroughCommand(last);
   return (
     <div className="qd-driver-replay">
       <label className="qd-driver-through">
-        Replay round {round} through turn{' '}
+        Replay voyage {voyage} through turn{' '}
         <input
           type="number"
           min={1}
@@ -54,7 +54,7 @@ const ThroughCommand = ({ project, round, last }: ThroughCommandProps) => {
         </p>
       )}
       {through !== null && (
-        <CopyCommand command={replayCommand({ round, through, project })} />
+        <CopyCommand command={replayCommand({ voyage, through, project })} />
       )}
     </div>
   );
@@ -66,14 +66,14 @@ interface ReplayCommandProps {
 }
 
 const ReplayCommand = ({ project, read }: ReplayCommandProps) => {
-  if (read.round === null || read.n === null) {
-    return <p className="qd-empty">Not part of a Driver round; no replay.</p>;
+  if (read.voyage === null || read.n === null) {
+    return <p className="qd-empty">Not part of a Driver voyage; no replay.</p>;
   }
   if (!read.latestSession) {
     return (
       <p className="qd-empty">
-        Round {read.round} has a later Driver session, and replay runs only the
-        latest.
+        Voyage {read.voyage} has a later Driver session, and replay runs only
+        the latest.
       </p>
     );
   }
@@ -81,7 +81,7 @@ const ReplayCommand = ({ project, read }: ReplayCommandProps) => {
     <ThroughCommand
       key={read.turnId}
       project={project}
-      round={read.round}
+      voyage={read.voyage}
       last={read.n}
     />
   );

@@ -5,12 +5,12 @@ import type { McpServerStdio } from '@agentclientprotocol/sdk';
 import { loadRule, type BudgetWindow } from '@quarterdeck/rules';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createAgentLifecycle } from '../../src/agents/index.js';
-import { openDriverRound } from '../../src/driver/index.js';
+import { openDriverVoyage } from '../../src/driver/index.js';
 import {
-  ROUND_ENDED_EVENT,
-  startRoundAutoEnd,
-  type EndedRound,
-} from '../../src/round-end/index.js';
+  VOYAGE_ENDED_EVENT,
+  startVoyageAutoEnd,
+  type EndedVoyage,
+} from '../../src/voyage-end/index.js';
 import type { Store } from '../../src/store/index.js';
 import { fakeWorktrees } from '../agents/fixtures.js';
 import { startTestApi, type TestApi } from '../api/harness.js';
@@ -25,7 +25,7 @@ import {
   eventPayloads,
   fakeScheduler,
   insertAgent,
-  insertRound,
+  insertVoyage,
   lenientSessions,
 } from './fixtures.js';
 
@@ -40,7 +40,7 @@ const BUS: McpServerStdio = {
 const BIRTH = { summary: 'Nothing to assign.', actions: [] };
 const NO_CAP: BudgetWindow = { hours: 5, capTokens: null, holdAtFraction: 0.8 };
 
-describe('a settled round, end to end', { timeout: TIMEOUT }, () => {
+describe('a settled voyage, end to end', { timeout: TIMEOUT }, () => {
   let t: TestApi;
   let store: Store;
   let scripted: ScriptedAgent;
@@ -65,28 +65,28 @@ describe('a settled round, end to end', { timeout: TIMEOUT }, () => {
 
   const charter = () => loadRule('charter', { homeDir: t.homeDir, repoDir });
 
-  const openRound = async (number: number, name: string) => {
-    const roundId = await insertRound(store, number);
+  const openVoyage = async (number: number, name: string) => {
+    const voyageId = await insertVoyage(store, number);
     const agentId = await insertAgent(store, {
       name,
       role: 'driver',
-      roundId,
+      voyageId,
     });
     scripted.reply(say(resultText(BIRTH)));
-    const round = await openDriverRound({
+    const voyage = await openDriverVoyage({
       store,
       client: scripted.client,
       bus: { launch: async () => BUS },
       agentId,
-      roundId,
+      voyageId,
       cwd: repoDir,
       charter: await charter(),
       turnsDir,
       budget: NO_CAP,
       pause: { hold: (_subject, run) => run() },
     });
-    await round.birth;
-    return round;
+    await voyage.birth;
+    return voyage;
   };
 
   const decide = async (
@@ -104,18 +104,18 @@ describe('a settled round, end to end', { timeout: TIMEOUT }, () => {
     return reply.body.result as Record<string, unknown>;
   };
 
-  it('wraps up, ends the round, and the next Driver is born with what was approved', async () => {
+  it('wraps up, ends the voyage, and the next Driver is born with what was approved', async () => {
     const added = await t.send('notebook.add', {
       project,
       body: 'Deploy on Fridays.',
     });
     const staleId = (added.body.result as { entryId: string }).entryId;
-    const first = await openRound(1, 'lark');
+    const first = await openVoyage(1, 'lark');
     const scheduler = fakeScheduler();
-    const ended: EndedRound[] = [];
-    const auto = await startRoundAutoEnd({
+    const ended: EndedVoyage[] = [];
+    const auto = await startVoyageAutoEnd({
       store,
-      round: first,
+      voyage: first,
       charter: await charter(),
       lifecycle: createAgentLifecycle({
         naming: { theme: 'birds', names: ['lark', 'wren'] },
@@ -126,8 +126,8 @@ describe('a settled round, end to end', { timeout: TIMEOUT }, () => {
       }),
       settleSeconds: 120,
       schedule: scheduler.schedule,
-      onEnded: (round) => {
-        ended.push(round);
+      onEnded: (voyage) => {
+        ended.push(voyage);
       },
     });
     await auto.check();
@@ -136,7 +136,7 @@ describe('a settled round, end to end', { timeout: TIMEOUT }, () => {
     scripted.reply(
       say(
         resultText({
-          summary: 'Round 1 shipped nothing; the notebook was stale.',
+          summary: 'Voyage 1 shipped nothing; the notebook was stale.',
           notebook: [
             { op: 'add', body: 'Never deploy on Fridays.', pinned: true },
             { op: 'retire', entry: staleId, rationale: 'Wrong.' },
@@ -154,11 +154,11 @@ describe('a settled round, end to end', { timeout: TIMEOUT }, () => {
     const [result] = ended;
     if (result?.wrapUp.status !== 'proposed') throw new Error('no proposals');
     expect(result.cleanup).toMatchObject({
-      round: 1,
+      voyage: 1,
       ended: true,
       retired: [first.agent.id],
     });
-    expect(await eventPayloads(store, ROUND_ENDED_EVENT)).toHaveLength(1);
+    expect(await eventPayloads(store, VOYAGE_ENDED_EVENT)).toHaveLength(1);
     const [addId, retireId] = result.wrapUp.notebookProposalIds;
 
     const accepted = await decide('notebook.decide', addId ?? '', {
@@ -168,7 +168,7 @@ describe('a settled round, end to end', { timeout: TIMEOUT }, () => {
     await decide('notebook.decide', retireId ?? '');
     await decide('charter.decide', result.wrapUp.charterProposalId ?? '');
 
-    const second = await openRound(2, 'wren');
+    const second = await openVoyage(2, 'wren');
 
     expect(second.notebook.map((entry) => entry.body)).toEqual([
       'Never deploy on a Friday.',

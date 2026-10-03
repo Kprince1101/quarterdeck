@@ -14,11 +14,11 @@ import {
 import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
 import { fakeWorktrees, type FakeWorktrees } from '../agents/fixtures.js';
 import {
-  CLEAR_ROUND_TABLES,
+  CLEAR_VOYAGE_TABLES,
   eventPayloads,
   insertAgent,
   lenientSessions,
-} from '../round-end/fixtures.js';
+} from '../voyage-end/fixtures.js';
 import { GRACE_MS, TIMEOUT, noBudgetCap } from './fixtures.js';
 
 type CardReply = 'yes' | 'no' | 'decline';
@@ -50,7 +50,7 @@ describe('lifecycle intents', { timeout: TIMEOUT }, () => {
   afterEach(async () => {
     await intents?.close();
     intents = undefined;
-    await store.db.exec(`${CLEAR_ROUND_TABLES} delete from intents;`);
+    await store.db.exec(`${CLEAR_VOYAGE_TABLES} delete from intents;`);
   });
 
   const start = async () => {

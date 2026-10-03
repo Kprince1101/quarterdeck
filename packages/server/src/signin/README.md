@@ -18,7 +18,7 @@ const { sessionId } = await withSignIn(gate, 'session/new', async () =>
 
 Every session Quarterdeck opens and every prompt it sends goes through the gate:
 
-- `openDriverRound` wraps its `session/new`. It launches the bus inside the retried call, because a relay token is spent on its first connection.
+- `openDriverVoyage` wraps its `session/new`. It launches the bus inside the retried call, because a relay token is spent on its first connection.
 - `runPrompt` wraps every `session/prompt`, so every turn built on `runTurn` is covered.
 - The Planner wraps its whole connect and `session/new`. After a sign-in, a fresh process and a fresh bus launch replace the old ones, because Kiro writes the bus token into its agent config when it connects. The Planner also wraps every prompt of the conversation. A `planner.new`, or closing the Planner, stops any wait. The message being handled is then refused, and the card stays open.
 

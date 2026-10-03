@@ -7,7 +7,7 @@ export interface NotebookEntry {
   pinned: boolean;
 }
 
-export interface Round {
+export interface Voyage {
   id: string;
   number: number;
   status: 'planning' | 'active' | 'ended';
@@ -16,7 +16,7 @@ export interface Round {
 
 export interface BirthInputParts {
   agent: Pick<Agent, 'name'>;
-  round: Pick<Round, 'number' | 'goal'>;
+  voyage: Pick<Voyage, 'number' | 'goal'>;
   charter: string;
   notebook: readonly NotebookEntry[];
   instructions: string;
@@ -52,20 +52,20 @@ const notebookSection = (notebook: readonly NotebookEntry[]): string => {
 };
 
 const goalSection = (goal: string): string =>
-  goal.trim() || 'No goal is set for this round.';
+  goal.trim() || 'No goal is set for this voyage.';
 
 export interface Birth {
   name: string;
-  round: number;
+  voyage: number;
 }
 
 const BIRTH_LINE =
-  /^You are (.+), the Driver of this project for round (\d+)\.\n/;
+  /^You are (.+), the Driver of this project for (?:voyage|round) (\d+)\.\n/;
 
 export const readBirth = (input: string): Birth | undefined => {
   const match = BIRTH_LINE.exec(input);
   if (!match) return undefined;
-  return { name: match[1] ?? '', round: Number(match[2]) };
+  return { name: match[1] ?? '', voyage: Number(match[2]) };
 };
 
 export const isBirthInput = (input: string): boolean =>
@@ -73,10 +73,10 @@ export const isBirthInput = (input: string): boolean =>
 
 export const buildBirthInput = (parts: BirthInputParts): string =>
   [
-    `You are ${parts.agent.name}, the Driver of this project for round ${parts.round.number}.`,
+    `You are ${parts.agent.name}, the Driver of this project for voyage ${parts.voyage.number}.`,
     parts.charter.trim(),
-    `# Round ${parts.round.number}`,
-    goalSection(parts.round.goal),
+    `# Voyage ${parts.voyage.number}`,
+    goalSection(parts.voyage.goal),
     '# Notebook',
     notebookSection(parts.notebook),
     '# Turn result',

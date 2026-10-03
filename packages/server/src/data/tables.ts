@@ -13,7 +13,7 @@ export interface PageRequest {
 
 const PAGE_ORDER: Record<StoreTable, string> = {
   projects: 'created_at desc',
-  rounds: 'number desc',
+  voyages: 'number desc',
   agents: 'created_at desc',
   tickets: 'created_at desc',
   cards: 'created_at desc',

@@ -30,7 +30,7 @@ import { assertServerVersion } from './version.js';
 
 export const STORE_TABLES = [
   'projects',
-  'rounds',
+  'voyages',
   'agents',
   'tickets',
   'cards',

@@ -17,7 +17,7 @@ export const RUNNING_AGENT_STATUSES: readonly string[] = [
 ];
 
 export interface SettleState {
-  roundEnded: boolean;
+  voyageEnded: boolean;
   openTickets: number;
   runningAgents: number;
   openCards: number;
@@ -29,29 +29,29 @@ type CountedState = Omit<SettleState, 'paused'>;
 export const readSettleState = async (
   db: Queryable,
   projectId: string,
-  roundId: string,
+  voyageId: string,
   home: string = quarterdeckHome(),
 ): Promise<SettleState> => {
   const { rows } = await db.query<CountedState>(
     `select
-       coalesce((select status = 'ended' from rounds
-                 where id = $2 and project_id = $1), true) as "roundEnded",
+       coalesce((select status = 'ended' from voyages
+                 where id = $2 and project_id = $1), true) as "voyageEnded",
        (select count(*)::int from tickets
         where project_id = $1 and status = any($3::text[])) as "openTickets",
        (select count(*)::int from agents
         where project_id = $1 and status = any($4::text[])) as "runningAgents",
        (select count(*)::int from cards
         where project_id = $1 and status = 'open') as "openCards"`,
-    [projectId, roundId, OPEN_TICKET_STATUSES, RUNNING_AGENT_STATUSES],
+    [projectId, voyageId, OPEN_TICKET_STATUSES, RUNNING_AGENT_STATUSES],
   );
   const [state] = rows;
-  if (!state) throw new Error(`no settle state for round ${roundId}`);
+  if (!state) throw new Error(`no settle state for voyage ${voyageId}`);
   const paused = (await pausedScopes(db, projectId, home)).length > 0;
   return { ...state, paused };
 };
 
 export const isSettled = (state: SettleState): boolean =>
-  !state.roundEnded &&
+  !state.voyageEnded &&
   !state.paused &&
   state.openTickets === 0 &&
   state.runningAgents === 0 &&

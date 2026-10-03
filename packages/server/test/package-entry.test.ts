@@ -60,7 +60,7 @@ const SCHEMA_SCRIPT = [
 
 const REPLAY_COMMAND_SCRIPT = [
   "const { replayCommand } = await import('@quarterdeck/server/replay-command');",
-  "process.stdout.write(replayCommand({ round: 3, through: 7, project: 'deck' }));",
+  "process.stdout.write(replayCommand({ voyage: 3, through: 7, project: 'deck' }));",
 ].join('\n');
 
 describe('@quarterdeck/server package entry', () => {

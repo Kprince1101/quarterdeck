@@ -6,7 +6,7 @@ export const CHANGES_CHANNEL = 'quarterdeck_changes';
 
 export const WATCHED_TABLES = [
   'projects',
-  'rounds',
+  'voyages',
   'agents',
   'tickets',
   'cards',
@@ -55,7 +55,7 @@ const TURN_COLUMNS = `id, agent_id, ticket_id, seq, stop_reason, input_tokens,
 
 const ORDER: Record<WatchedTable, string> = {
   projects: 'created_at',
-  rounds: 'number',
+  voyages: 'number',
   agents: 'created_at',
   tickets: 'created_at',
   cards: 'created_at',
@@ -86,7 +86,7 @@ const camelRow = (row: Row): Row =>
     Object.entries(row).map(([key, value]) => [camelKey(key), value]),
   );
 
-const AGENT_COLUMNS = `id, project_id, round_id, name, role, runtime, status,
+const AGENT_COLUMNS = `id, project_id, voyage_id, name, role, runtime, status,
   session_id, worktree_path, created_at, updated_at, ended_at`;
 
 const columns = (table: WatchedTable): string => {

@@ -98,7 +98,7 @@ describe('agent lifecycle', () => {
     expect(agent).toEqual({
       id: expect.any(String),
       projectId: deck.projectId,
-      roundId: null,
+      voyageId: null,
       name: 'crane',
       role: 'reviewer',
       runtime: 'claude',

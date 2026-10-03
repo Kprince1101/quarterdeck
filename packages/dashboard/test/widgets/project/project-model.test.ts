@@ -9,13 +9,13 @@ import {
   IDLE_BUILDER_ID,
   IDLE_REVIEWER_ID,
   OLD_ID,
-  ROUND_ID,
+  VOYAGE_ID,
   SITE_ID,
   BUSY_BUILDER_ID,
   RETIRED_ID,
   agent,
   projectTables,
-  round,
+  voyage,
   ticket,
 } from './fixtures.js';
 
@@ -43,16 +43,16 @@ describe('project model', () => {
     expect(model.chosenId).toBe(DECK_ID);
   });
 
-  it('describes the open round, live reviewers, retired count and idle crew', () => {
+  it('describes the open voyage, live reviewers, retired count and idle crew', () => {
     const { panel } = buildProject(projectTables(), DECK_ID);
     expect(panel).toEqual({
       id: DECK_ID,
       slug: 'deck',
       name: 'Deck',
       isArchived: false,
-      round: {
-        id: ROUND_ID,
-        label: 'Round 2 · active',
+      voyage: {
+        id: VOYAGE_ID,
+        label: 'Voyage 2 · active',
         goal: 'Ship the project widget',
         reopenCount: 3,
       },
@@ -76,10 +76,10 @@ describe('project model', () => {
     expect(ids()).toEqual([BUSY_BUILDER_ID]);
   });
 
-  it('counts the tickets a kill would reopen: active ones held by the round builders, retired or not', () => {
+  it('counts the tickets a kill would reopen: active ones held by the voyage builders, retired or not', () => {
     const tables = projectTables();
     const reopen = () =>
-      buildProject(tables, DECK_ID).panel?.round?.reopenCount;
+      buildProject(tables, DECK_ID).panel?.voyage?.reopenCount;
     expect(reopen()).toBe(3);
     tables.tickets.push(ticket(7, IDLE_BUILDER_ID, 'assigned'));
     expect(reopen()).toBe(3);
@@ -89,23 +89,23 @@ describe('project model', () => {
     expect(reopen()).toBe(2);
   });
 
-  it('counts the tickets a kill would reopen, blocked ones held by killed round builders included', () => {
+  it('counts the tickets a kill would reopen, blocked ones held by killed voyage builders included', () => {
     const tables = projectTables();
     const killedId = '00000000-0000-4000-8000-0000000000c9';
     tables.agents.push(
-      agent(killedId, 'petrel', { roundId: ROUND_ID, status: 'killed' }),
+      agent(killedId, 'petrel', { voyageId: VOYAGE_ID, status: 'killed' }),
     );
     tables.tickets.push(ticket(7, killedId, 'blocked'));
-    expect(buildProject(tables, DECK_ID).panel?.round?.reopenCount).toBe(4);
+    expect(buildProject(tables, DECK_ID).panel?.voyage?.reopenCount).toBe(4);
   });
 
-  it('takes the newest unended round, planning included', () => {
+  it('takes the newest unended voyage, planning included', () => {
     const tables = projectTables();
-    tables.rounds.push(
-      round('00000000-0000-4000-8000-0000000000b3', 3, { status: 'planning' }),
+    tables.voyages.push(
+      voyage('00000000-0000-4000-8000-0000000000b3', 3, { status: 'planning' }),
     );
-    expect(buildProject(tables, DECK_ID).panel?.round?.label).toBe(
-      'Round 3 · planning',
+    expect(buildProject(tables, DECK_ID).panel?.voyage?.label).toBe(
+      'Voyage 3 · planning',
     );
   });
 
@@ -113,7 +113,7 @@ describe('project model', () => {
     const { panel } = buildProject(projectTables(), SITE_ID);
     expect(panel).toMatchObject({
       slug: 'site',
-      round: null,
+      voyage: null,
       reviewer: NO_REVIEWER,
       retiredCount: 1,
       idleAgentIds: [],

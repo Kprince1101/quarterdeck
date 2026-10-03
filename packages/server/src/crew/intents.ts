@@ -5,20 +5,20 @@ import { getErrorMessage } from '../lib/errors.js';
 import { settleIntent, type SettledStatus } from '../planner/rows.js';
 import { publishEvent, type Store, type StoreEvent } from '../store/index.js';
 import type { CrewFailureReporter } from './failures.js';
-import { openRound, type OpenedRound } from './round-rows.js';
-import type { RoundRun } from './round-run.js';
-import { NO_ROUND_REPO } from './rules.js';
+import { openVoyage, type OpenedVoyage } from './voyage-rows.js';
+import type { VoyageRun } from './voyage-run.js';
+import { NO_VOYAGE_REPO } from './rules.js';
 
-export const ROUND_START = 'round.start';
+export const VOYAGE_START = 'voyage.start';
 export const AGENT_MESSAGE = 'agent.message';
 
 export const CREW_INTENT_KINDS: readonly string[] = [
-  ROUND_START,
+  VOYAGE_START,
   AGENT_MESSAGE,
 ];
 
 export const NO_MESSAGES =
-  'only the Driver and builders of a live round take messages';
+  'only the Driver and builders of a live voyage take messages';
 
 export interface CrewIntent {
   id: string;
@@ -31,10 +31,10 @@ export interface CrewIntent {
 
 export interface CrewIntentsOptions {
   store: Store;
-  runs: () => RoundRun[];
+  runs: () => VoyageRun[];
   report: CrewFailureReporter;
-  start: (round: OpenedRound) => void;
-  launched: (roundId: string) => Promise<void>;
+  start: (voyage: OpenedVoyage) => void;
+  launched: (voyageId: string) => Promise<void>;
   track: (task: Promise<void>) => void;
 }
 
@@ -57,11 +57,11 @@ const pendingCrewIntents = async (store: Store): Promise<CrewIntent[]> => {
   return rows;
 };
 
-const runOf = (runs: RoundRun[], agent: Agent): RoundRun | undefined => {
+const runOf = (runs: VoyageRun[], agent: Agent): VoyageRun | undefined => {
   if (agent.role === 'driver')
-    return runs.find((run) => run.driver.round.agent.id === agent.id);
+    return runs.find((run) => run.driver.voyage.agent.id === agent.id);
   if (agent.role === 'builder')
-    return runs.find((run) => run.roundId === agent.roundId);
+    return runs.find((run) => run.voyageId === agent.voyageId);
   return undefined;
 };
 
@@ -89,22 +89,22 @@ export const startCrewIntents = async (
       });
     });
 
-  const startRound = async (intent: CrewIntent): Promise<void> => {
+  const startVoyage = async (intent: CrewIntent): Promise<void> => {
     if (intent.repoPath === null) {
-      await settle(intent, 'rejected', { error: NO_ROUND_REPO });
+      await settle(intent, 'rejected', { error: NO_VOYAGE_REPO });
       return;
     }
-    const opening = await openRound(store, intent.id, intent.goal ?? '');
+    const opening = await openVoyage(store, intent.id, intent.goal ?? '');
     if (!opening.opened) {
       await settle(intent, 'rejected', { error: opening.error });
       return;
     }
-    options.start(opening.round);
+    options.start(opening.voyage);
   };
 
   const deliver = async (intent: CrewIntent, agent: Agent): Promise<void> => {
     const text = intent.text ?? '';
-    if (agent.roundId !== null) await options.launched(agent.roundId);
+    if (agent.voyageId !== null) await options.launched(agent.voyageId);
     const run = runOf(options.runs(), agent);
     if (run === undefined) {
       await settle(intent, 'rejected', { error: NO_MESSAGES });
@@ -133,9 +133,9 @@ export const startCrewIntents = async (
 
   const handle = async (intent: CrewIntent): Promise<void> => {
     handled.add(intent.id);
-    if (intent.kind === ROUND_START) {
-      await startRound(intent).catch(async (err: unknown) => {
-        options.report('rounds')(err);
+    if (intent.kind === VOYAGE_START) {
+      await startVoyage(intent).catch(async (err: unknown) => {
+        options.report('voyages')(err);
         await settle(intent, 'rejected', { error: getErrorMessage(err) });
       });
       return;
@@ -169,13 +169,13 @@ export const startCrewIntents = async (
 
   const onEvent = (event: StoreEvent): void => {
     if (CREW_INTENT_KINDS.includes(event.kind))
-      drain().catch(options.report('rounds'));
+      drain().catch(options.report('voyages'));
   };
 
   const subscription = await store.subscribe(onEvent, {
-    onError: options.report('rounds'),
+    onError: options.report('voyages'),
   });
-  drain().catch(options.report('rounds'));
+  drain().catch(options.report('voyages'));
 
   return {
     drain,

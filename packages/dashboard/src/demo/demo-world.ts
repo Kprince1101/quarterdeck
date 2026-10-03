@@ -1,7 +1,7 @@
 import type {
   AgentRow,
   CardRow,
-  RoundRow,
+  VoyageRow,
   TicketRow,
   TurnRow,
 } from '@quarterdeck/server/stream-schema';
@@ -47,15 +47,15 @@ export interface DemoWorld {
   turnText: Map<number, DemoTurnText>;
   isGone: (agent: AgentRow) => boolean;
   isActiveTicket: (ticket: TicketRow) => boolean;
-  openRound: () => RoundRow | undefined;
-  livingAgents: (roundId: string) => AgentRow[];
-  startRound: (goal: string) => RoundRow;
-  activateRound: (round: RoundRow) => void;
-  endRound: (round: RoundRow, reason: 'ended' | 'killed') => void;
+  openVoyage: () => VoyageRow | undefined;
+  livingAgents: (voyageId: string) => AgentRow[];
+  startVoyage: (goal: string) => VoyageRow;
+  activateVoyage: (voyage: VoyageRow) => void;
+  endVoyage: (voyage: VoyageRow, reason: 'ended' | 'killed') => void;
   birth: (
     name: string,
     role: AgentRole,
-    roundId: string | null,
+    voyageId: string | null,
     runtime?: AgentRow['runtime'],
   ) => AgentRow;
   setAgent: (agent: AgentRow, status: AgentStatus) => AgentRow;
@@ -66,7 +66,7 @@ export interface DemoWorld {
     title: string,
     body: string,
     status: TicketStatus,
-    roundId: string | null,
+    voyageId: string | null,
   ) => TicketRow;
   moveTicket: (
     ticket: TicketRow,
@@ -204,19 +204,20 @@ export const createDemoWorld = (store: DemoStore): DemoWorld => {
     turnText,
     isGone,
     isActiveTicket,
-    openRound: () =>
+    openVoyage: () =>
       store
-        .rows('rounds')
-        .filter((round) => round.status !== 'ended')
+        .rows('voyages')
+        .filter((voyage) => voyage.status !== 'ended')
         .toSorted((a, b) => b.number - a.number)[0],
-    livingAgents: (roundId) =>
+    livingAgents: (voyageId) =>
       store
         .rows('agents')
-        .filter((agent) => agent.roundId === roundId && !isGone(agent)),
-    startRound: (goal) => {
+        .filter((agent) => agent.voyageId === voyageId && !isGone(agent)),
+    startVoyage: (goal) => {
       const number =
-        Math.max(0, ...store.rows('rounds').map((round) => round.number)) + 1;
-      const round: RoundRow = {
+        Math.max(0, ...store.rows('voyages').map((voyage) => voyage.number)) +
+        1;
+      const voyage: VoyageRow = {
         id: store.newId(),
         projectId: store.projectId,
         number,
@@ -225,19 +226,19 @@ export const createDemoWorld = (store: DemoStore): DemoWorld => {
         startedAt: store.now(),
         endedAt: null,
       };
-      store.put('rounds', round);
-      store.emit('round.started', {
-        payload: { roundId: round.id, round: number, goal },
+      store.put('voyages', voyage);
+      store.emit('voyage.started', {
+        payload: { voyageId: voyage.id, voyage: number, goal },
       });
-      return round;
+      return voyage;
     },
-    activateRound: (round) => {
-      store.patch('rounds', round.id, { status: 'active' });
+    activateVoyage: (voyage) => {
+      store.patch('voyages', voyage.id, { status: 'active' });
     },
-    endRound: (round, reason) => {
+    endVoyage: (voyage, reason) => {
       const crew = store
         .rows('agents')
-        .filter((agent) => agent.roundId === round.id);
+        .filter((agent) => agent.voyageId === voyage.id);
       const crewIds = new Set(crew.map((agent) => agent.id));
       const open = store
         .rows('cards')
@@ -247,10 +248,10 @@ export const createDemoWorld = (store: DemoStore): DemoWorld => {
             card.agentId !== null &&
             crewIds.has(card.agentId),
         );
-      open.forEach((card) => expireCard(card, `round ${reason}`));
+      open.forEach((card) => expireCard(card, `voyage ${reason}`));
       const reopened = store
         .rows('tickets')
-        .filter((ticket) => ticket.roundId === round.id)
+        .filter((ticket) => ticket.voyageId === voyage.id)
         .filter(isActiveTicket);
       reopened.forEach((ticket) => {
         store.patch('tickets', ticket.id, {
@@ -262,7 +263,7 @@ export const createDemoWorld = (store: DemoStore): DemoWorld => {
           ticketId: ticket.id,
           agentId: ticket.assigneeId,
           payload: {
-            roundId: round.id,
+            voyageId: voyage.id,
             previousStatus: ticket.status,
             previousAssigneeId: ticket.assigneeId,
           },
@@ -270,14 +271,14 @@ export const createDemoWorld = (store: DemoStore): DemoWorld => {
       });
       const retired = crew.filter((agent) => !isGone(agent));
       retired.forEach((agent) => setAgent(agent, 'retired'));
-      store.patch('rounds', round.id, {
+      store.patch('voyages', voyage.id, {
         status: 'ended',
         endedAt: store.now(),
       });
-      store.emit('round.ended', {
+      store.emit('voyage.ended', {
         payload: {
-          roundId: round.id,
-          round: round.number,
+          voyageId: voyage.id,
+          voyage: voyage.number,
           closedCards: open.length,
           retired: retired.length,
           reason,
@@ -285,12 +286,12 @@ export const createDemoWorld = (store: DemoStore): DemoWorld => {
         },
       });
     },
-    birth: (name, role, roundId, runtime = 'kiro') => {
+    birth: (name, role, voyageId, runtime = 'kiro') => {
       const at = store.now();
       const agent: AgentRow = {
         id: store.newId(),
         projectId: store.projectId,
-        roundId,
+        voyageId,
         name,
         role,
         runtime,
@@ -310,12 +311,12 @@ export const createDemoWorld = (store: DemoStore): DemoWorld => {
       return agent;
     },
     setAgent,
-    createTicket: (title, body, status, roundId) => {
+    createTicket: (title, body, status, voyageId) => {
       const at = store.now();
       const ticket: TicketRow = {
         id: store.newId(),
         projectId: store.projectId,
-        roundId,
+        voyageId,
         assigneeId: null,
         title,
         body,

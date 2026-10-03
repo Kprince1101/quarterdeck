@@ -17,7 +17,7 @@ export {
   REPLAY_CLIENT_NAME,
   REPLAY_CLIENT_VERSION,
   REPLAY_USAGE,
-  replayRound,
+  replayVoyage,
   runReplay,
   type ReplayAdapter,
   type ReplayAdapters,

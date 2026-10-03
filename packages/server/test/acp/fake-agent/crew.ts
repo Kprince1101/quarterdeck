@@ -8,8 +8,8 @@ export const FAKE_PR_URL = 'https://github.com/example/example/pull/7';
 export const FAKE_PR_HEAD = 'c0ffee0000000000000000000000000000c0ffee';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
-const DRIVER_BIRTH = /^You are .+, the Driver of this project for round \d+\./;
-const WRAP_UP = /^Round \d+ has settled/;
+const DRIVER_BIRTH = /^You are .+, the Driver of this project for voyage \d+\./;
+const WRAP_UP = /^Voyage \d+ has settled/;
 const ASSIGNMENT = new RegExp(`^# Ticket (${UUID}):`, 'm');
 const REVIEW = new RegExp(`Review ticket (${UUID}):`);
 const APPROVED_LINE = /^- (Ticket approved|Approved tickets waiting)/;
@@ -142,7 +142,7 @@ const HANDLERS: Record<
   },
   planner: propose,
   'wrap-up': (turn) =>
-    say(turn, fenced({ summary: 'Round done.', notebook: [], charter: null })),
+    say(turn, fenced({ summary: 'Voyage done.', notebook: [], charter: null })),
   driver: (turn) =>
     say(
       turn,

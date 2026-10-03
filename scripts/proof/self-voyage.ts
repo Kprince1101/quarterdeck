@@ -37,7 +37,7 @@ interface DataPage {
 }
 
 const PROJECT = 'quarterdeck';
-const ROUND_TIMEOUT_MS = 90 * 60_000;
+const VOYAGE_TIMEOUT_MS = 90 * 60_000;
 const STEP_TIMEOUT_MS = 15 * 60_000;
 const POLL_MS = 3000;
 const PAGE = 100;
@@ -47,7 +47,7 @@ const FAILURE_EVENTS = ['crew.failed', 'planner.failed', 'agent.intent_failed'];
 const SNAPSHOT_TABLES = [
   'tickets',
   'agents',
-  'rounds',
+  'voyages',
   'notebook',
   'notebook_proposals',
 ];
@@ -57,7 +57,7 @@ const PLANNER_MESSAGE = [
   'stale statement or an unclear sentence. One line in one file. Say which',
   'line and what it should say. Do not change code or tests.',
 ].join(' ');
-const ROUND_GOAL = 'Ship the one approved documentation ticket.';
+const VOYAGE_GOAL = 'Ship the one approved documentation ticket.';
 const RUNNING =
   /Quarterdeck is running at (http:\/\/127\.0\.0\.1:\d+)\/#token=([\w-]+)/;
 
@@ -359,21 +359,24 @@ const planTicket = async (): Promise<void> => {
     await intent('ticket.reject', { ticketId: other['id'] });
 };
 
-const runRound = async (): Promise<void> => {
-  const start = await intent('round.start', { goal: ROUND_GOAL });
-  if (start.status !== 202) throw new Error('round.start was refused');
-  const begun = await waitFor('the round starts', eventOf('round.started'));
-  const roundId = (begun['payload'] as Row)['roundId'];
+const runVoyage = async (): Promise<void> => {
+  const start = await intent('voyage.start', { goal: VOYAGE_GOAL });
+  if (start.status !== 202) throw new Error('voyage.start was refused');
+  const begun = await waitFor('the voyage starts', eventOf('voyage.started'));
+  const voyageId = (begun['payload'] as Row)['voyageId'];
   const ended = await waitFor(
-    'the round ends itself',
-    eventOf('round.ended', (e) => (e['payload'] as Row)['roundId'] === roundId),
-    ROUND_TIMEOUT_MS,
+    'the voyage ends itself',
+    eventOf(
+      'voyage.ended',
+      (e) => (e['payload'] as Row)['voyageId'] === voyageId,
+    ),
+    VOYAGE_TIMEOUT_MS,
   );
   const reason = (ended['payload'] as Row)['reason'];
   if (reason !== SETTLED_REASON)
-    throw new Error(`the round ended with reason ${String(reason)}`);
+    throw new Error(`the voyage ended with reason ${String(reason)}`);
   const merged = await eventOf('ticket.merged')();
-  if (merged === undefined) throw new Error('the round ended with no merge');
+  if (merged === undefined) throw new Error('the voyage ended with no merge');
 };
 
 const acceptNotebookAdd = async (): Promise<void> => {
@@ -435,7 +438,7 @@ const proof = async (): Promise<void> => {
   api = running;
   try {
     await planTicket();
-    await runRound();
+    await runVoyage();
     await acceptNotebookAdd();
     await showAndWipe();
   } finally {

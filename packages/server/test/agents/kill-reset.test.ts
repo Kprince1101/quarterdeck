@@ -20,12 +20,12 @@ import {
   storedPid,
 } from '../lifecycle/fixtures.js';
 import {
-  CLEAR_ROUND_TABLES,
+  CLEAR_VOYAGE_TABLES,
   eventPayloads,
   insertAgent,
   insertTicket,
   lenientSessions,
-} from '../round-end/fixtures.js';
+} from '../voyage-end/fixtures.js';
 import { TIMEOUT, fakeWorktrees, openTestStore } from './fixtures.js';
 
 describe('kill, reset and retire', { timeout: TIMEOUT }, () => {
@@ -43,7 +43,7 @@ describe('kill, reset and retire', { timeout: TIMEOUT }, () => {
 
   afterEach(async () => {
     stopSleepers();
-    await store.db.exec(CLEAR_ROUND_TABLES);
+    await store.db.exec(CLEAR_VOYAGE_TABLES);
   });
 
   const setUp = () => {

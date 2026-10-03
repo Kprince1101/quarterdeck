@@ -231,14 +231,14 @@
   font-size: var(--qd-text-sm);
 }
 
-.qd-driver-round {
+.qd-driver-voyage {
   display: flex;
   align-items: baseline;
   gap: var(--qd-space-3);
   min-width: 0;
 }
 
-.qd-driver-round select {
+.qd-driver-voyage select {
   font: inherit;
   color: var(--qd-fg);
   background: var(--qd-surface-raised);

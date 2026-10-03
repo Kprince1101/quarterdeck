@@ -15,7 +15,7 @@ export type AgentStatus =
 export interface Agent {
   id: string;
   projectId: string;
-  roundId: string | null;
+  voyageId: string | null;
   name: string;
   role: AgentRole;
   runtime: Runtime;
@@ -24,7 +24,7 @@ export interface Agent {
   worktreePath: string | null;
 }
 
-export const AGENT_COLUMNS = `id, project_id as "projectId", round_id as "roundId",
+export const AGENT_COLUMNS = `id, project_id as "projectId", voyage_id as "voyageId",
   name, role, runtime, status, session_id as "sessionId",
   worktree_path as "worktreePath"`;
 

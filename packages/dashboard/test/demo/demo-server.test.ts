@@ -7,9 +7,9 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { IntentError, openStream } from '../../src/api/index.js';
 import type { IntentClient, RulesReader } from '../../src/api/index.js';
-import { DEMO_ROUND_PLANS } from '../../src/demo/demo-plans.js';
+import { DEMO_VOYAGE_PLANS } from '../../src/demo/demo-plans.js';
 import {
-  BEATS_BETWEEN_ROUNDS,
+  BEATS_BETWEEN_VOYAGES,
   DEMO_STREAM_URL,
   createDemoServer,
   type DemoServer,
@@ -23,7 +23,7 @@ import {
 
 const project = DEMO_PROJECT;
 
-const ROUND_BEATS = 20 + CARD_PATIENCE_BEATS;
+const VOYAGE_BEATS = 20 + CARD_PATIENCE_BEATS;
 
 const parts = (server: DemoServer) => {
   const { intents, rules } = server.sources as {
@@ -33,10 +33,10 @@ const parts = (server: DemoServer) => {
   return { intents, rules, store: server.store, world: server.world };
 };
 
-const openRound = (server: DemoServer) => {
-  const round = server.world.openRound();
-  if (round === undefined) throw new Error('no open round');
-  return round;
+const openVoyage = (server: DemoServer) => {
+  const voyage = server.world.openVoyage();
+  if (voyage === undefined) throw new Error('no open voyage');
+  return voyage;
 };
 
 const openCard = (server: DemoServer) =>
@@ -58,21 +58,21 @@ describe('demo server', () => {
     vi.useRealTimers();
   });
 
-  it('opens on a finished round, a live one, a proposal and a notebook', () => {
+  it('opens on a finished voyage, a live one, a proposal and a notebook', () => {
     const server = createDemoServer();
     const { store } = parts(server);
-    const rounds = store.rows('rounds').map(({ number, status, goal }) => ({
+    const voyages = store.rows('voyages').map(({ number, status, goal }) => ({
       number,
       status,
       goal,
     }));
-    expect(rounds).toEqual([
-      { number: 1, status: 'ended', goal: DEMO_ROUND_PLANS[0]?.goal },
-      { number: 2, status: 'active', goal: DEMO_ROUND_PLANS[1]?.goal },
+    expect(voyages).toEqual([
+      { number: 1, status: 'ended', goal: DEMO_VOYAGE_PLANS[0]?.goal },
+      { number: 2, status: 'active', goal: DEMO_VOYAGE_PLANS[1]?.goal },
     ]);
     const live = store
       .rows('agents')
-      .filter((agent) => agent.roundId === openRound(server).id)
+      .filter((agent) => agent.voyageId === openVoyage(server).id)
       .map((agent) => agent.role)
       .toSorted();
     expect(live).toEqual(['builder', 'builder', 'driver', 'reviewer']);
@@ -84,7 +84,11 @@ describe('demo server', () => {
     ).toHaveLength(1);
     expect(store.rows('notebook').length).toBeGreaterThan(0);
     expect(kinds(server)).toEqual(
-      expect.arrayContaining(['planner.human', 'planner.reply', 'round.ended']),
+      expect.arrayContaining([
+        'planner.human',
+        'planner.reply',
+        'voyage.ended',
+      ]),
     );
   });
 
@@ -102,24 +106,24 @@ describe('demo server', () => {
     const server = createDemoServer();
     const messages: StreamMessage[] = [];
     server.store.connect(0, (message) => messages.push(message));
-    stepUntil(server, () => server.store.rows('rounds').length === 3);
+    stepUntil(server, () => server.store.rows('voyages').length === 3);
     expect(messages.length).toBeGreaterThan(100);
     messages.forEach((message) => {
       expect(streamMessageSchema.safeParse(message).success).toBe(true);
     });
   });
 
-  it('plays a round to its end and starts the next on its own', () => {
+  it('plays a voyage to its end and starts the next on its own', () => {
     const server = createDemoServer();
-    const round = openRound(server);
+    const voyage = openVoyage(server);
     stepUntil(
       server,
-      () => server.store.find('rounds', round.id)?.status === 'ended',
-      ROUND_BEATS,
+      () => server.store.find('voyages', voyage.id)?.status === 'ended',
+      VOYAGE_BEATS,
     );
     const tickets = server.store
       .rows('tickets')
-      .filter((ticket) => ticket.roundId === round.id);
+      .filter((ticket) => ticket.voyageId === voyage.id);
     expect(tickets.map((ticket) => ticket.status)).toEqual([
       'done',
       'done',
@@ -128,7 +132,7 @@ describe('demo server', () => {
     expect(
       server.store
         .rows('agents')
-        .filter((agent) => agent.roundId === round.id)
+        .filter((agent) => agent.voyageId === voyage.id)
         .every((agent) => agent.status === 'retired'),
     ).toBe(true);
     expect(kinds(server)).toEqual(
@@ -141,10 +145,10 @@ describe('demo server', () => {
 
     const waited = stepUntil(
       server,
-      () => server.world.openRound() !== undefined,
+      () => server.world.openVoyage() !== undefined,
     );
-    expect(waited).toBe(BEATS_BETWEEN_ROUNDS);
-    expect(openRound(server).goal).toBe(DEMO_ROUND_PLANS[2]?.goal);
+    expect(waited).toBe(BEATS_BETWEEN_VOYAGES);
+    expect(openVoyage(server).goal).toBe(DEMO_VOYAGE_PLANS[2]?.goal);
   });
 
   it('waits on a card until a person answers it', async () => {
@@ -237,7 +241,7 @@ describe('demo server', () => {
     const { intents, store } = parts(server);
     const crew = store
       .rows('agents')
-      .filter((agent) => agent.roundId === openRound(server).id);
+      .filter((agent) => agent.voyageId === openVoyage(server).id);
     const [working, paused] = crew.filter((agent) => agent.role === 'builder');
     const workingId = working?.id ?? '';
     const pausedId = paused?.id ?? '';
@@ -294,8 +298,11 @@ describe('demo server', () => {
       intents.agent.kill({ project, agentId }),
     ).rejects.toMatchObject({ status: 409 });
 
-    const round = openRound(server);
-    stepUntil(server, () => store.find('rounds', round.id)?.status === 'ended');
+    const voyage = openVoyage(server);
+    stepUntil(
+      server,
+      () => store.find('voyages', voyage.id)?.status === 'ended',
+    );
     expect(store.find('tickets', ticket?.id ?? '')).toMatchObject({
       status: 'open',
       assigneeId: null,
@@ -316,42 +323,42 @@ describe('demo server', () => {
 
     await intents.project.archive({ project, archived: false });
     expect(store.find('projects', store.projectId)?.archivedAt).toBeNull();
-    stepUntil(server, () => store.rows('rounds').length === 3);
+    stepUntil(server, () => store.rows('voyages').length === 3);
   });
 
   it('opens on a layout the grid accepts', () => {
     expect(parseGridLayout(DEMO_LAYOUT)).toEqual(DEMO_LAYOUT);
   });
 
-  it('ends a round on request and starts one with the asked goal', async () => {
+  it('ends a voyage on request and starts one with the asked goal', async () => {
     const server = createDemoServer();
     const { intents } = parts(server);
-    const round = openRound(server);
+    const voyage = openVoyage(server);
     await expect(
-      intents.round.start({ project, goal: 'Too soon' }),
+      intents.voyage.start({ project, goal: 'Too soon' }),
     ).rejects.toMatchObject({ status: 409 });
 
-    await intents.round.end({ project, roundId: round.id });
-    expect(server.store.find('rounds', round.id)?.status).toBe('ended');
+    await intents.voyage.end({ project, voyageId: voyage.id });
+    expect(server.store.find('voyages', voyage.id)?.status).toBe('ended');
     expect(
       server.store
         .rows('tickets')
-        .filter((ticket) => ticket.roundId === round.id)
+        .filter((ticket) => ticket.voyageId === voyage.id)
         .some((ticket) => ticket.status === 'open'),
     ).toBe(true);
     await expect(
-      intents.round.kill({ project, roundId: round.id }),
+      intents.voyage.kill({ project, voyageId: voyage.id }),
     ).rejects.toMatchObject({ status: 409 });
 
-    await intents.round.start({ project, goal: 'Tidy the berth list' });
-    const next = openRound(server);
+    await intents.voyage.start({ project, goal: 'Tidy the berth list' });
+    const next = openVoyage(server);
     expect(next).toMatchObject({ number: 3, goal: 'Tidy the berth list' });
     server.step();
     server.step();
-    expect(server.store.find('rounds', next.id)?.status).toBe('active');
+    expect(server.store.find('voyages', next.id)?.status).toBe('active');
   });
 
-  it('hands an approved Planner ticket to the next round', async () => {
+  it('hands an approved Planner ticket to the next voyage', async () => {
     vi.useFakeTimers();
     const server = createDemoServer();
     const { intents, store } = parts(server);
@@ -379,9 +386,11 @@ describe('demo server', () => {
     await expect(
       intents.ticket.reject({ project, ticketId }),
     ).rejects.toBeInstanceOf(IntentError);
-    await intents.round.end({ project, roundId: openRound(server).id });
+    await intents.voyage.end({ project, voyageId: openVoyage(server).id });
     stepUntil(server, () => store.find('tickets', ticketId)?.status !== 'open');
-    expect(store.find('tickets', ticketId)?.roundId).toBe(openRound(server).id);
+    expect(store.find('tickets', ticketId)?.voyageId).toBe(
+      openVoyage(server).id,
+    );
   });
 
   it('clears the Planner conversation on request', async () => {
@@ -474,12 +483,12 @@ describe('demo server', () => {
       .rows('agents')
       .find(
         (agent) =>
-          agent.role === 'driver' && agent.roundId === openRound(server).id,
+          agent.role === 'driver' && agent.voyageId === openVoyage(server).id,
       );
     const turn = store.rows('turns').find((row) => row.agentId === driver?.id);
     const read = await intents.turn.read({ project, turnId: turn?.id ?? 0 });
-    expect(read.result).toMatchObject({ round: 2, n: 1, latestSession: true });
-    expect(read.result?.['input']).toContain('Round 2');
+    expect(read.result).toMatchObject({ voyage: 2, n: 1, latestSession: true });
+    expect(read.result?.['input']).toContain('Voyage 2');
   });
 
   it('serves the shipped rules and keeps machine edits in the page', async () => {
@@ -552,7 +561,7 @@ describe('demo server', () => {
     await vi.waitFor(() => {
       expect(connection.state.status).toBe('live');
     });
-    stepUntil(server, () => store.rows('rounds').length === 3);
+    stepUntil(server, () => store.rows('voyages').length === 3);
     await intents.notebook.add({ project, body: 'Gone after the wipe' });
     const live = store
       .rows('agents')
@@ -566,7 +575,9 @@ describe('demo server', () => {
       wiped: [project],
       stopped: live,
     });
-    expect(store.rows('rounds').map((round) => round.number)).toEqual([1, 2]);
+    expect(store.rows('voyages').map((voyage) => voyage.number)).toEqual([
+      1, 2,
+    ]);
     expect(store.rows('notebook').map((entry) => entry.body)).not.toContain(
       'Gone after the wipe',
     );
