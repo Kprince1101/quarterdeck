@@ -10,12 +10,12 @@ export type CrewService =
   | 'archive'
   | 'gate'
   | 'reviewer'
-  | 'rounds'
+  | 'voyages'
   | 'driver'
   | 'builder';
 
 export interface CrewFailureLinks {
-  roundId?: string;
+  voyageId?: string;
   agentId?: string;
   ticketId?: string;
 }
@@ -35,7 +35,7 @@ export const crewFailedEvent = (
     payload: {
       service,
       error: getErrorMessage(err),
-      roundId: links.roundId ?? null,
+      voyageId: links.voyageId ?? null,
     },
   };
   if (links.agentId !== undefined) event.agentId = links.agentId;

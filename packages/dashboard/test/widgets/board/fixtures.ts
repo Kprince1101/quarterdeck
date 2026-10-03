@@ -31,7 +31,7 @@ export const agent = (
 ): AgentRow => ({
   id: agentId(n),
   projectId: projectId(project),
-  roundId: null,
+  voyageId: null,
   runtime: 'claude',
   sessionId: null,
   worktreePath: null,

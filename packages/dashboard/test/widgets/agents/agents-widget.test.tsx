@@ -211,7 +211,7 @@ describe('Agents widget', () => {
   it('shows held work on its agent until it is replayed or dropped', () => {
     const { container, unmount } = mount(agentsTables());
     const waiting = heldEvent(1, PAUSED_ID, 'continue: fix lint');
-    const turn = heldEvent(2, DRIVER_ID, 'turn: plan round 2', [
+    const turn = heldEvent(2, DRIVER_ID, 'turn: plan voyage 2', [
       'project',
       'agent',
     ]);
@@ -228,7 +228,7 @@ describe('Agents widget', () => {
       'held: assign: QD8c Agents widget (agent)',
     ]);
     expect(held(driver())).toEqual([
-      'held: turn: plan round 2 (project, agent)',
+      'held: turn: plan voyage 2 (project, agent)',
     ]);
     expect(held(card(container, BUILDER_ID))).toEqual([]);
 

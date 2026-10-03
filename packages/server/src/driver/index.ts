@@ -51,7 +51,7 @@ export {
   type Birth,
   type BirthInputParts,
   type NotebookEntry,
-  type Round,
+  type Voyage,
 } from './birth-input.js';
 export {
   AgentNotRetiredError,
@@ -60,8 +60,8 @@ export {
   NoBirthTurnError,
   NotADriverError,
   ReplaySignInError,
-  RoundEndedError,
-  RoundNotFoundError,
+  VoyageEndedError,
+  VoyageNotFoundError,
   TicketNotAssignableError,
   TurnInputMissingError,
 } from './errors.js';
@@ -110,20 +110,20 @@ export {
   type SavedTurn,
 } from './replay.js';
 export {
-  findRoundSessions,
+  findVoyageSessions,
   findTurnSession,
-  type RoundSession,
-  type RoundAgents,
+  type VoyageSession,
+  type VoyageAgents,
   type TurnSession,
-} from './replay-round.js';
+} from './replay-voyage.js';
 export {
-  ROUND_STARTED_EVENT,
-  openDriverRound,
+  VOYAGE_STARTED_EVENT,
+  openDriverVoyage,
   type DriverClient,
-  type DriverRound,
-  type DriverRoundOptions,
+  type DriverVoyage,
+  type DriverVoyageOptions,
   type DriverTurnOutcome,
-} from './round.js';
+} from './voyage.js';
 export {
   MAX_REPROMPTS,
   TURN_EVENTS,

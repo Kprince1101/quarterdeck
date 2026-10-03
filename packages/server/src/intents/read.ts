@@ -19,7 +19,7 @@ export const turnReadResultSchema = z.object({
   input: z.string(),
   output: z.string().nullable(),
   result: z.json().nullable(),
-  round: positiveSchema.nullable(),
+  voyage: positiveSchema.nullable(),
   n: positiveSchema.nullable(),
   latestSession: z.boolean(),
 });

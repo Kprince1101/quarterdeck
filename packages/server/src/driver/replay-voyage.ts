@@ -8,10 +8,10 @@ const AGENT_DIR =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SEQ_DIR = /^\d+$/;
 
-export interface RoundSession {
+export interface VoyageSession {
   agentId: string;
   driverName: string;
-  round: number;
+  voyage: number;
   firstSeq: number;
   lastSeq: number;
   bornAt: Date;
@@ -52,9 +52,9 @@ const turnSeqs = async (turnsDir: string, agentId: string) =>
 const agentSessions = async (
   turnsDir: string,
   agentId: string,
-): Promise<RoundSession[]> => {
-  const sessions: RoundSession[] = [];
-  let current: RoundSession | undefined;
+): Promise<VoyageSession[]> => {
+  const sessions: VoyageSession[] = [];
+  let current: VoyageSession | undefined;
   for (const seq of await turnSeqs(turnsDir, agentId)) {
     const path = turnFile(turnDir(turnsDir, agentId, seq), 'input');
     const input = await readInput(path);
@@ -63,7 +63,7 @@ const agentSessions = async (
       current = {
         agentId,
         driverName: birth.name,
-        round: birth.round,
+        voyage: birth.voyage,
         firstSeq: seq,
         lastSeq: seq,
         bornAt: input.mtime,
@@ -78,11 +78,11 @@ const agentSessions = async (
   return sessions;
 };
 
-const roundSessionsOf = async (
+const voyageSessionsOf = async (
   turnsDir: string,
   agentIds: readonly string[],
-  round: number,
-): Promise<RoundSession[]> => {
+  voyage: number,
+): Promise<VoyageSession[]> => {
   const sessions = await Promise.all(
     agentIds
       .filter((agentId) => AGENT_DIR.test(agentId))
@@ -90,45 +90,49 @@ const roundSessionsOf = async (
   );
   return sessions
     .flat()
-    .filter((session) => session.round === round)
+    .filter((session) => session.voyage === voyage)
     .toSorted(
       (a, b) =>
         a.bornAt.getTime() - b.bornAt.getTime() || a.firstSeq - b.firstSeq,
     );
 };
 
-export const findRoundSessions = async (
+export const findVoyageSessions = async (
   turnsDir: string,
-  round: number,
-): Promise<RoundSession[]> =>
-  roundSessionsOf(turnsDir, await subdirs(turnsDir), round);
+  voyage: number,
+): Promise<VoyageSession[]> =>
+  voyageSessionsOf(turnsDir, await subdirs(turnsDir), voyage);
 
 export interface TurnSession {
-  session: RoundSession;
+  session: VoyageSession;
   n: number;
   latest: boolean;
 }
 
-export type RoundAgents = (round: number) => Promise<readonly string[]>;
+export type VoyageAgents = (voyage: number) => Promise<readonly string[]>;
 
-const sameSession = (a: RoundSession, b: RoundSession | undefined): boolean =>
+const sameSession = (a: VoyageSession, b: VoyageSession | undefined): boolean =>
   b !== undefined && a.agentId === b.agentId && a.firstSeq === b.firstSeq;
 
 export const findTurnSession = async (
   turnsDir: string,
   agentId: string,
   seq: number,
-  roundAgents: RoundAgents,
+  voyageAgents: VoyageAgents,
 ): Promise<TurnSession | null> => {
   const session = (await agentSessions(turnsDir, agentId)).find(
     (candidate) => candidate.firstSeq <= seq && seq <= candidate.lastSeq,
   );
   if (session === undefined) return null;
-  const agentIds = new Set([agentId, ...(await roundAgents(session.round))]);
-  const round = await roundSessionsOf(turnsDir, [...agentIds], session.round);
+  const agentIds = new Set([agentId, ...(await voyageAgents(session.voyage))]);
+  const voyage = await voyageSessionsOf(
+    turnsDir,
+    [...agentIds],
+    session.voyage,
+  );
   return {
     session,
     n: seq - session.firstSeq + 1,
-    latest: sameSession(session, round.at(-1)),
+    latest: sameSession(session, voyage.at(-1)),
   };
 };

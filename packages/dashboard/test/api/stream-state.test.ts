@@ -25,7 +25,7 @@ const LIMITS: StreamLimits = { events: 3, turnsPerAgent: 2 };
 const agent = (id: string): AgentRow => ({
   id,
   projectId: PROJECT,
-  roundId: null,
+  voyageId: null,
   name: 'ibis',
   role: 'builder',
   runtime: 'claude',
@@ -53,7 +53,7 @@ const turn = (id: number, agentId: string, seq: number): TurnRow => ({
 const note = (body: string): NotebookRow => ({
   id: NOTE,
   projectId: PROJECT,
-  roundId: null,
+  voyageId: null,
   authorId: null,
   body,
   pinned: false,

@@ -1,13 +1,13 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { startAutoEnd, type AutoEnd } from '../../src/round-end/index.js';
+import { startAutoEnd, type AutoEnd } from '../../src/voyage-end/index.js';
 import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
 import {
   TIMEOUT,
   fakeScheduler,
   insertAgent,
-  insertRound,
+  insertVoyage,
   insertTicket,
 } from './fixtures.js';
 
@@ -25,21 +25,21 @@ describe('auto-end with a stuck agent', { timeout: TIMEOUT }, () => {
     await store.close();
   });
 
-  it('never ends the round while an agent is stuck, and settles once it is not', async () => {
+  it('never ends the voyage while an agent is stuck, and settles once it is not', async () => {
     const scheduler = fakeScheduler();
     const ended: string[] = [];
     const errors: unknown[] = [];
-    const roundId = await insertRound(store, 1);
+    const voyageId = await insertVoyage(store, 1);
     await insertTicket(store, 'done');
-    await insertAgent(store, { name: 'driver-1', role: 'driver', roundId });
+    await insertAgent(store, { name: 'driver-1', role: 'driver', voyageId });
     const stuckId = await insertAgent(store, {
       name: 'builder-1',
       status: 'stuck',
-      roundId,
+      voyageId,
     });
     const auto: AutoEnd = await startAutoEnd({
       store,
-      roundId,
+      voyageId,
       settleSeconds: SETTLE_SECONDS,
       schedule: scheduler.schedule,
       home: HOME,

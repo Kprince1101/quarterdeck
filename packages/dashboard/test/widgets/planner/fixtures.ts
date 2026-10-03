@@ -51,7 +51,7 @@ export const ticket = (
 ): TicketRow => ({
   id,
   projectId: DECK,
-  roundId: null,
+  voyageId: null,
   assigneeId: null,
   title,
   body: '',

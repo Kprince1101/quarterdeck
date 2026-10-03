@@ -14,7 +14,7 @@ Starts the server on `127.0.0.1` (port 4317 by default, `0` picks a free one), c
 
 The port also serves the WebSocket stream at `/ws` (`?project=<slug>` picks the project when more than one is open), and each open project gets its bus host, the socket its agents' MCP relay connects to (see [bus](../server/src/bus/README.md)). A socket file left by a crash is removed at start.
 
-Each open project also gets its crew (see [crew](../server/src/crew/README.md)): the Planner answers the Planner widget, Start Round births a Driver that assigns approved tickets to builders, the reviewer and merge gate take each reported pull request to a merge under the project's rules, and a settled round ends itself. A project created while `up` runs gets its crew at once; a wiped one stops its crew first. A round still open from a run that stopped is ended at start with reason `restart` and its tickets reopened, since its agents went with that run. One project's crew failing is recorded as a `crew.failed` event on the dashboard and stops nothing else.
+Each open project also gets its crew (see [crew](../server/src/crew/README.md)): the Planner answers the Planner widget, Start Voyage births a Driver that assigns approved tickets to builders, the reviewer and merge gate take each reported pull request to a merge under the project's rules, and a settled voyage ends itself. A project created while `up` runs gets its crew at once; a wiped one stops its crew first. A voyage still open from a run that stopped is ended at start with reason `restart` and its tickets reopened, since its agents went with that run. One project's crew failing is recorded as a `crew.failed` event on the dashboard and stops nothing else.
 
 On stop, each project's agents stop first, then its stream and bus host (removing the socket file), then everything above. All of it is [`startQuarterdeck`](../server/src/quarterdeck/README.md).
 
@@ -73,13 +73,13 @@ QUARTERDECK_LIVE=1 npx vitest run packages/cli/test/doctor-live.test.ts
 ## replay
 
 ```sh
-quarterdeck replay <round> [n] [--project <slug>] [--runtime kiro|claude|gemini]
+quarterdeck replay <voyage> [n] [--project <slug>] [--runtime kiro|claude|gemini]
 ```
 
-Sends a round's saved Driver prompts again, turns 1 to `n` of the round (1 is the birth; all of them by default), in one new session, and prints each reply as it arrives. This is the command the Driver widget prints (`replayCommand`). It is for seeing how the Driver reads a turn now, for example after changing the charter or the runtime.
+Sends a voyage's saved Driver prompts again, turns 1 to `n` of the voyage (1 is the birth; all of them by default), in one new session, and prints each reply as it arrives. This is the command the Driver widget prints (`replayCommand`). It is for seeing how the Driver reads a turn now, for example after changing the charter or the runtime.
 
 ```
-Replaying round 3 of example: Driver driver-1 (7d0f3a4e-2b1c-4c5d-9e8f-0a1b2c3d4e5f), turns 1 to 2 of 5, on kiro.
+Replaying voyage 3 of example: Driver driver-1 (7d0f3a4e-2b1c-4c5d-9e8f-0a1b2c3d4e5f), turns 1 to 2 of 5, on kiro.
 Nothing is saved. The agent has no Quarterdeck tools and every permission is refused.
 
 --- Turn 1 of 2 ---
@@ -91,7 +91,7 @@ Nothing is saved. The agent has no Quarterdeck tools and every permission is ref
 Replayed 2 turns.
 ```
 
-The round is found from the turn files under `~/.quarterdeck/<project>/turns/`, never the store, so replay runs while `quarterdeck up` has the project open and writes no row. Without `--project`, the round must be in exactly one project; otherwise replay names the projects and asks for `--project`. If the round's Driver session was opened more than once, the latest is replayed. An `n` past the round's last turn is an error that says how many turns the round has. The runtime is `--runtime`, or else the Driver's runtime in `~/.quarterdeck/rules.local.models.json` (a project's `.quarterdeck/` folder is not read, since replay doesn't know the repository).
+The voyage is found from the turn files under `~/.quarterdeck/<project>/turns/`, never the store, so replay runs while `quarterdeck up` has the project open and writes no row. Without `--project`, the voyage must be in exactly one project; otherwise replay names the projects and asks for `--project`. If the voyage's Driver session was opened more than once, the latest is replayed. An `n` past the voyage's last turn is an error that says how many turns the voyage has. The runtime is `--runtime`, or else the Driver's runtime in `~/.quarterdeck/rules.local.models.json` (a project's `.quarterdeck/` folder is not read, since replay doesn't know the repository).
 
 Replay writes nothing: it uses `replayDriverChain` (see [the driver README](../server/src/driver/README.md#replay)), so the agent runs in a throwaway folder that is removed afterwards, gets no MCP servers, and every permission request is refused. Kiro's adapter writes its launch config for an agent named `replay-<seq>` while the replay runs and removes it after.
 

@@ -97,7 +97,7 @@ export const seedProject = (world: DemoWorld): void => {
     store.put('notebook', {
       id: store.newId(),
       projectId: store.projectId,
-      roundId: null,
+      voyageId: null,
       authorId: null,
       body: note.body,
       pinned: note.pinned,

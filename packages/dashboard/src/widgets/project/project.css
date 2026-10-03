@@ -45,13 +45,13 @@
   outline-offset: 1px;
 }
 
-.qd-project-round {
+.qd-project-voyage {
   display: grid;
   gap: var(--qd-space-1);
   margin: 0;
 }
 
-.qd-project-round-label {
+.qd-project-voyage-label {
   color: var(--qd-accent);
   font-family: var(--qd-mono);
   font-size: var(--qd-text-sm);

@@ -19,12 +19,12 @@ import {
   buildBirthInput,
   readActiveNotebook,
   type NotebookEntry,
-  type Round,
+  type Voyage,
 } from './birth-input.js';
 import {
   NotADriverError,
-  RoundEndedError,
-  RoundNotFoundError,
+  VoyageEndedError,
+  VoyageNotFoundError,
 } from './errors.js';
 import {
   DRIVER_TURN_FORMAT,
@@ -38,7 +38,7 @@ import {
 } from './stuck.js';
 import { runTurn, type TurnOutcome, type TurnTarget } from './turns.js';
 
-export const ROUND_STARTED_EVENT = 'driver.round_started';
+export const VOYAGE_STARTED_EVENT = 'driver.voyage_started';
 
 const ENDED: ReadonlySet<AgentStatus> = new Set(['ended', 'killed', 'retired']);
 
@@ -47,12 +47,12 @@ export type DriverClient = Pick<
   'agent' | 'newSession' | 'prompt' | 'subscribe'
 >;
 
-export interface DriverRoundOptions {
+export interface DriverVoyageOptions {
   store: Store;
   client: DriverClient;
   bus: Pick<BusHost, 'launch'>;
   agentId: string;
-  roundId: string;
+  voyageId: string;
   cwd: string;
   charter: string;
   turnsDir: string;
@@ -62,9 +62,9 @@ export interface DriverRoundOptions {
 
 export type DriverTurnOutcome = TurnOutcome<DriverTurnResult>;
 
-export interface DriverRound {
+export interface DriverVoyage {
   agent: Agent;
-  round: Round;
+  voyage: Voyage;
   sessionId: string;
   notebook: readonly NotebookEntry[];
   birth: Promise<DriverTurnOutcome>;
@@ -72,17 +72,17 @@ export interface DriverRound {
   turnAs: <T>(input: string, format: TurnFormat<T>) => Promise<TurnOutcome<T>>;
 }
 
-const findRound = async (store: Store, roundId: string): Promise<Round> => {
-  const { rows } = await store.db.query<Round>(
-    `select id, number, status, goal from rounds
+const findVoyage = async (store: Store, voyageId: string): Promise<Voyage> => {
+  const { rows } = await store.db.query<Voyage>(
+    `select id, number, status, goal from voyages
      where id = $1 and project_id = $2`,
-    [roundId, store.projectId],
+    [voyageId, store.projectId],
   );
-  const [round] = rows;
-  if (!round) throw new RoundNotFoundError(roundId);
-  if (round.status === 'ended')
-    throw new RoundEndedError(round.id, round.number);
-  return round;
+  const [voyage] = rows;
+  if (!voyage) throw new VoyageNotFoundError(voyageId);
+  if (voyage.status === 'ended')
+    throw new VoyageEndedError(voyage.id, voyage.number);
+  return voyage;
 };
 
 const findDriver = async (store: Store, agentId: string): Promise<Agent> => {
@@ -96,26 +96,26 @@ const findDriver = async (store: Store, agentId: string): Promise<Agent> => {
   return agent;
 };
 
-const attachRoundSession = (
+const attachVoyageSession = (
   store: Store,
   agent: Agent,
-  round: Round,
+  voyage: Voyage,
   sessionId: string,
   notebook: readonly NotebookEntry[],
 ): Promise<Agent> =>
   store.db.transaction(async (tx) => {
     const { rows } = await tx.query<Agent>(
       `update agents
-       set session_id = $2, round_id = $3,
+       set session_id = $2, voyage_id = $3,
            status = case when status = 'starting' then 'idle' else status end
        where id = $1
        returning ${AGENT_COLUMNS}`,
-      [agent.id, sessionId, round.id],
+      [agent.id, sessionId, voyage.id],
     );
     const attached = firstRow(rows, agent.id);
-    await recordEvent(tx, attached, ROUND_STARTED_EVENT, {
-      roundId: round.id,
-      round: round.number,
+    await recordEvent(tx, attached, VOYAGE_STARTED_EVENT, {
+      voyageId: voyage.id,
+      voyage: voyage.number,
       sessionId,
       notebook: notebook.map((entry) => entry.id),
     });
@@ -131,11 +131,11 @@ const serialize = () => {
   };
 };
 
-const launchRound = async (
-  options: DriverRoundOptions,
-): Promise<DriverRound> => {
+const launchVoyage = async (
+  options: DriverVoyageOptions,
+): Promise<DriverVoyage> => {
   const { store, client } = options;
-  const round = await findRound(store, options.roundId);
+  const voyage = await findVoyage(store, options.voyageId);
   const driver = await findDriver(store, options.agentId);
   await assertLaunchBudget(store, options.budget, { agentId: driver.id });
   const gate = {
@@ -151,10 +151,10 @@ const launchRound = async (
     }),
   );
   const notebook = await readActiveNotebook(store.db, store.projectId);
-  const agent = await attachRoundSession(
+  const agent = await attachVoyageSession(
     store,
     driver,
-    round,
+    voyage,
     sessionId,
     notebook,
   );
@@ -190,25 +190,25 @@ const launchRound = async (
   const turn = (input: string) => flaggedTurn(pauseLabel('turn', input), input);
   const birthInput = buildBirthInput({
     agent,
-    round,
+    voyage,
     charter: options.charter,
     notebook,
     instructions: DRIVER_TURN_FORMAT.instructions,
   });
-  const birth = flaggedTurn(`birth turn, round ${round.number}`, birthInput);
+  const birth = flaggedTurn(`birth turn, voyage ${voyage.number}`, birthInput);
   birth.catch(() => undefined);
-  return { agent, round, sessionId, notebook, birth, turn, turnAs };
+  return { agent, voyage, sessionId, notebook, birth, turn, turnAs };
 };
 
-export const openDriverRound = async (
-  options: DriverRoundOptions,
-): Promise<DriverRound> => {
-  const round = await findRound(options.store, options.roundId);
+export const openDriverVoyage = async (
+  options: DriverVoyageOptions,
+): Promise<DriverVoyage> => {
+  const voyage = await findVoyage(options.store, options.voyageId);
   const driver = await findDriver(options.store, options.agentId);
   const subject: PauseSubject = {
     operation: 'launch',
-    label: `${driver.name}, round ${round.number}`,
+    label: `${driver.name}, voyage ${voyage.number}`,
     agentId: driver.id,
   };
-  return options.pause.hold(subject, () => launchRound(options));
+  return options.pause.hold(subject, () => launchVoyage(options));
 };

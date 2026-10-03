@@ -1,42 +1,42 @@
 # driver
 
-The Driver's turn loop: one ACP session per round, a structured turn result parsed from every reply, and every turn saved as files.
+The Driver's turn loop: one ACP session per voyage, a structured turn result parsed from every reply, and every turn saved as files.
 
-## A round
+## A voyage
 
 ```ts
 import { loadRule } from '@quarterdeck/rules';
-import { openDriverRound, projectTurnsDir } from '@quarterdeck/server';
+import { openDriverVoyage, projectTurnsDir } from '@quarterdeck/server';
 
-const round = await openDriverRound({
+const voyage = await openDriverVoyage({
   store,
   client, // the Driver's AcpClient, from its runtime adapter
   bus, // the project's BusHost
   agentId: driver.id,
-  roundId,
+  voyageId,
   cwd: repoPath,
   charter: await loadRule('charter', { repoDir: repoPath }),
   turnsDir: projectTurnsDir('example'),
   budget: (await loadRule('lifecycle', { repoDir: repoPath })).budget.window,
   pause, // the project's PauseGate
 });
-const birth = await round.birth;
-const next = await round.turn('heron reported QD12: <report>');
+const birth = await voyage.birth;
+const next = await voyage.turn('heron reported QD12: <report>');
 ```
 
-`openDriverRound` checks the round (`RoundNotFoundError` for one outside the project, `RoundEndedError` once it has ended) and the agent (`NotADriverError` unless it is a `driver` that is not `ended`, `killed` or `retired`). It then:
+`openDriverVoyage` checks the voyage (`VoyageNotFoundError` for one outside the project, `VoyageEndedError` once it has ended) and the agent (`NotADriverError` unless it is a `driver` that is not `ended`, `killed` or `retired`). It then:
 
 1. Checks the budget (`assertLaunchBudget` with the Driver's id; see [budget](../budget/README.md)). A held launch throws `BudgetHeldError` before the bus or a session starts.
-2. Launches the bus for the Driver (`bus.launch(agentId)`) and opens one ACP session with `client.newSession({ cwd, mcpServers: [bus] })`. Every turn of the round goes to that session; nothing else opens one. If the runtime needs sign-in, a sign-in card waits for the person and the session opens after, with a fresh bus launch (see [../signin/README.md](../signin/README.md)).
+2. Launches the bus for the Driver (`bus.launch(agentId)`) and opens one ACP session with `client.newSession({ cwd, mcpServers: [bus] })`. Every turn of the voyage goes to that session; nothing else opens one. If the runtime needs sign-in, a sign-in card waits for the person and the session opens after, with a fresh bus launch (see [../signin/README.md](../signin/README.md)).
 3. Reads the active notebook: every `notebook` row of the project that is not retired (`retired_at` null), pinned entries first, then oldest first.
-4. Stores the session on the agent (`session_id`, `round_id`; a `starting` agent becomes `idle`) and records `driver.round_started` with `{ roundId, round, sessionId, notebook }`, where `notebook` lists the entry ids the Driver was born with.
-5. Queues the birth turn and returns. `round.birth` settles with its outcome; await it.
+4. Stores the session on the agent (`session_id`, `voyage_id`; a `starting` agent becomes `idle`) and records `driver.voyage_started` with `{ voyageId, voyage, sessionId, notebook }`, where `notebook` lists the entry ids the Driver was born with.
+5. Queues the birth turn and returns. `voyage.birth` settles with its outcome; await it.
 
-The birth input (`buildBirthInput`) is the Driver's name and round number, the charter, the round's goal, the notebook entries and the turn result format. The next round gets a new session and a new birth input, carrying the notebook as it is then.
+The birth input (`buildBirthInput`) is the Driver's name and voyage number, the charter, the voyage's goal, the notebook entries and the turn result format. The next voyage gets a new session and a new birth input, carrying the notebook as it is then.
 
-`round.turn(input)` queues one more turn in the round's session. Turns run one at a time, in the order they were asked for, the birth turn first. A turn that rejects does not stop the ones queued after it. `round.turnAs(input, format)` queues a turn in the same line that expects another `TurnFormat`; the [wrap-up](../round-end/README.md#wrap-up) uses it.
+`voyage.turn(input)` queues one more turn in the voyage's session. Turns run one at a time, in the order they were asked for, the birth turn first. A turn that rejects does not stop the ones queued after it. `voyage.turnAs(input, format)` queues a turn in the same line that expects another `TurnFormat`; the [wrap-up](../voyage-end/README.md#wrap-up) uses it.
 
-Both steps go through the [pause](../pause/README.md) guard (`pause`). The launch (steps 1 to 4) is held as `launch` while the Driver, the project or everything is paused, and opens on unpause after checking the round and the Driver again. Each turn, the birth turn included, is held as `driver.turn` when it reaches the front of the queue; the turns behind it wait in order.
+Both steps go through the [pause](../pause/README.md) guard (`pause`). The launch (steps 1 to 4) is held as `launch` while the Driver, the project or everything is paused, and opens on unpause after checking the voyage and the Driver again. Each turn, the birth turn included, is held as `driver.turn` when it reaches the front of the queue; the turns behind it wait in order.
 
 ## Turn results
 
@@ -112,7 +112,7 @@ Kiro, the default runtime, needs a `project` and an `agentName`. Give it a throw
 
 `replayDriverChain` sends a Driver's saved prompts again, in order, in one new ACP session: each turn's `input.md`, re-prompts included, exactly as it was sent.
 
-The replay mirrors one round's session: the one turn `n` was part of. Each `driver.round_started` opens a new session whose first prompt is the birth input (`isBirthInput`), so the chain runs from the latest birth at or before `n` through `n`, never across a round boundary. `readTurnChain` reads the inputs from `n` back to that birth before anything connects. A missing `input.md` rejects with `TurnInputMissingError` (its `seq` and `path`), and a chain with no birth input at or before `n` (not a Driver's) with `NoBirthTurnError`.
+The replay mirrors one voyage's session: the one turn `n` was part of. Each `driver.voyage_started` opens a new session whose first prompt is the birth input (`isBirthInput`), so the chain runs from the latest birth at or before `n` through `n`, never across a voyage boundary. `readTurnChain` reads the inputs from `n` back to that birth before anything connects. A missing `input.md` rejects with `TurnInputMissingError` (its `seq` and `path`), and a chain with no birth input at or before `n` (not a Driver's) with `NoBirthTurnError`.
 
 ### Replay writes nothing
 
@@ -130,32 +130,32 @@ Each `ReplayTurn` holds the `seq`, the `input` sent, the `savedOutput` from `out
 
 ### The dashboard's command
 
-`replayCommand({ round, through?, project? })` is the command the Driver widget shows to replay a round up to its `through`th Driver turn (1 is the birth), or the whole round without `through`. It runs [`quarterdeck replay`](../../../cli/README.md#replay):
+`replayCommand({ voyage, through?, project? })` is the command the Driver widget shows to replay a voyage up to its `through`th Driver turn (1 is the birth), or the whole voyage without `through`. It runs [`quarterdeck replay`](../../../cli/README.md#replay):
 
 ```sh
 npx quarterdeck replay 3 7
 npx quarterdeck replay 3 7 --project example
 ```
 
-Round numbers start at 1 in every project, so pass `project` when the machine may have more than one; without it the CLI picks the only project that has the round. `through` counts Driver turns within the round, not `seq`: the turn with `seq` s in a session born at `seq` b is turn s - b + 1.
+Voyage numbers start at 1 in every project, so pass `project` when the machine may have more than one; without it the CLI picks the only project that has the voyage. `through` counts Driver turns within the voyage, not `seq`: the turn with `seq` s in a session born at `seq` b is turn s - b + 1.
 
-It refuses a round or `n` that is not a positive integer and a project that is not a slug, so the line is always safe to paste. It lives in `replay-command.ts`, which imports nothing from Node, and the dashboard imports it as `@quarterdeck/server/replay-command`. `readTurnChain` checks `agentId` is a uuid, since it names a folder under `turnsDir`.
+It refuses a voyage or `n` that is not a positive integer and a project that is not a slug, so the line is always safe to paste. It lives in `replay-command.ts`, which imports nothing from Node, and the dashboard imports it as `@quarterdeck/server/replay-command`. `readTurnChain` checks `agentId` is a uuid, since it names a folder under `turnsDir`.
 
-### Finding a round's Driver
+### Finding a voyage's Driver
 
-`findRoundSessions(turnsDir, round)` finds a round's Driver sessions from the turn files alone, so it works while `quarterdeck up` has the store open. It reads each agent folder's first input; a Driver's is a birth input (`readBirth` gives the Driver's name and round from its first line). Each birth starts a session that runs through the turns after it, up to the next birth. It resolves to the sessions of `round`, oldest birth first (by `input.md`'s modification time), each with `agentId`, `driverName`, `firstSeq`, `lastSeq` and `bornAt`. A round has more than one when its Driver session was opened again or another Driver took the round over.
+`findVoyageSessions(turnsDir, voyage)` finds a voyage's Driver sessions from the turn files alone, so it works while `quarterdeck up` has the store open. It reads each agent folder's first input; a Driver's is a birth input (`readBirth` gives the Driver's name and voyage from its first line; a birth input saved before voyages were renamed, which says `for round <n>`, reads the same way, so older turn files still replay). Each birth starts a session that runs through the turns after it, up to the next birth. It resolves to the sessions of `voyage`, oldest birth first (by `input.md`'s modification time), each with `agentId`, `driverName`, `firstSeq`, `lastSeq` and `bornAt`. A voyage has more than one when its Driver session was opened again or another Driver took the voyage over.
 
-`findTurnSession(turnsDir, agentId, seq, roundAgents)` places one turn: the session of `agentId` that holds `seq`, its `n` (`seq - firstSeq + 1`) and whether it is the round's latest session, the one the CLI replays. It returns `null` for a turn outside a Driver session. For `latest` it reads only the sessions of `agentId` and of the agents `roundAgents(round)` names, not every agent folder; `turn.read` passes the agents with a `driver.round_started` event for that round.
+`findTurnSession(turnsDir, agentId, seq, voyageAgents)` places one turn: the session of `agentId` that holds `seq`, its `n` (`seq - firstSeq + 1`) and whether it is the voyage's latest session, the one the CLI replays. It returns `null` for a turn outside a Driver session. For `latest` it reads only the sessions of `agentId` and of the agents `voyageAgents(voyage)` names, not every agent folder; `turn.read` passes the agents with a `driver.voyage_started` event for that voyage.
 
 ## Events
 
-| `kind`                 | Payload                                   |
-| ---------------------- | ----------------------------------------- |
-| `driver.round_started` | `{ roundId, round, sessionId, notebook }` |
-| `turn.result`          | `{ seq, result }`                         |
-| `turn.missed`          | `{ seq, error, reprompt }`                |
-| `turn.stopped`         | `{ seq, stopReason }`                     |
-| `turn.failed`          | `{ seq, error }`                          |
+| `kind`                  | Payload                                     |
+| ----------------------- | ------------------------------------------- |
+| `driver.voyage_started` | `{ voyageId, voyage, sessionId, notebook }` |
+| `turn.result`           | `{ seq, result }`                           |
+| `turn.missed`           | `{ seq, error, reprompt }`                  |
+| `turn.stopped`          | `{ seq, stopReason }`                       |
+| `turn.failed`           | `{ seq, error }`                            |
 
 `seq` is the `turns.seq` of the prompt the event is about; every event carries the agent's id.
 
@@ -211,7 +211,7 @@ Every assign and continue is a launch, so it checks `ctx.budget` first (see [bud
 
 Every builder works a ticket in its own worktree, `builderWorktreePath(worktreesDir, name, ticketId)`: `<worktreesDir>/<name>-<first 8 of the ticket id>`, detached at `base`. The builder branches there itself.
 
-- Without `builderId`, a new builder is born (`role: 'builder'`, `runtime`, `roundId` if set). Its worktree is added before its session opens, so the session starts in it. If the worktree or the session fails, the builder is retired (`agent.birth_failed`) and a worktree already added is removed.
+- Without `builderId`, a new builder is born (`role: 'builder'`, `runtime`, `voyageId` if set). Its worktree is added before its session opens, so the session starts in it. If the worktree or the session fails, the builder is retired (`agent.birth_failed`) and a worktree already added is removed.
 - With `builderId`, the builder must be an `idle` builder holding no ticket (`BuilderNotAvailableError` otherwise). It is marked `working`, its old worktree is removed, the new one added, and its session closed and reopened in the new worktree. Each step is saved as it completes. A dirty old worktree throws `WorktreeDirtyError` (raise the discard card as for a retire); the builder goes back to `idle` with its work in place.
 
 The ticket then becomes `assigned` to the builder, the builder `working`, and `ticket.assigned` is recorded with `{ name, worktreePath, born, previousAssigneeId }`, all in one transaction that fails with `TicketNotAssignableError` if the ticket changed meanwhile. Finally the assignment prompt (`buildAssignmentPrompt`: the ticket, where to work, and to `report` when the pull request is open) goes to the builder's session as one turn filed under the ticket.
@@ -226,7 +226,7 @@ The ticket then becomes `assigned` to the builder, the builder `working`, and `t
 
 A builder is stuck when `STUCK_AFTER_CONTINUES` (3) continue turns in a row on the same ticket ran without moving its worktree's head: its last four continues, the one being sent included, all found the same head, so the three before it each ran in full and made no commit. `continueBuilder` checks after recording each continue (`flagIfStuck`) and records `builder.stuck` with `{ name, head, continues }`, once per builder, ticket and head. A new commit starts the count again; a later stall at the new head is flagged again. The flag changes nothing about the builder: it stays `idle` and can still be continued.
 
-The Driver sees each flag once. Every `round.turn`, the birth included (not `round.turnAs`, so the wrap-up leaves them for the next round), appends a `# Stuck builders` section to its input listing the `builder.stuck` events it has not seen yet (`unsurfacedStuckFlags`), each with the builder's name and id, the ticket and the head. Once the turn has run, `driver.stuck_surfaced` records `{ flags }`, the event ids it carried; the next lookup leaves out every id an earlier `driver.stuck_surfaced` lists, so a flag whose event commits out of id order is never skipped. A turn that throws or ends `stopped` records nothing, so its flags go out again with the next one. The record is per project, so flags raised between rounds reach the next Driver's birth.
+The Driver sees each flag once. Every `voyage.turn`, the birth included (not `voyage.turnAs`, so the wrap-up leaves them for the next voyage), appends a `# Stuck builders` section to its input listing the `builder.stuck` events it has not seen yet (`unsurfacedStuckFlags`), each with the builder's name and id, the ticket and the head. Once the turn has run, `driver.stuck_surfaced` records `{ flags }`, the event ids it carried; the next lookup leaves out every id an earlier `driver.stuck_surfaced` lists, so a flag whose event commits out of id order is never skipped. A turn that throws or ends `stopped` records nothing, so its flags go out again with the next one. The record is per project, so flags raised between voyages reach the next Driver's birth.
 
 ### Re-assigning on retire
 

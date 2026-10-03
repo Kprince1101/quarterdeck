@@ -1,28 +1,28 @@
-# Proof: a self-round over claude (QD14a)
+# Proof: a self-voyage over claude (QD14a)
 
-Quarterdeck ran one round on its own repository, end to end, over the claude runtime, on 2026-10-02:
+Quarterdeck ran one voyage on its own repository, end to end, over the claude runtime, on 2026-10-02:
 
 1. `quarterdeck init` created the project; `quarterdeck up` started its crew.
 2. The Planner read the repository and proposed one tiny ticket.
-3. The ticket was approved and a round started. The Driver birthed a claude builder that opened a pull request and reported it.
+3. The ticket was approved and a voyage started. The Driver birthed a claude builder that opened a pull request and reported it.
 4. The reviewer approved. The merge gate waited for CI, then squash-merged [pull request #72](https://github.com/<owner>/quarterdeck/pull/72) into `main`.
-5. The round settled and ended itself. The Driver's wrap-up proposed three notebook entries, and one was accepted.
+5. The voyage settled and ended itself. The Driver's wrap-up proposed three notebook entries, and one was accepted.
 6. The Data widget's reads showed the project's rows. Wipe removed the project and its folder.
 
-Every agent (Planner, Driver, builder, reviewer) ran on claude through `@agentclientprotocol/claude-agent-acp`. The whole round took 6 minutes 22 seconds, most of it CI.
+Every agent (Planner, Driver, builder, reviewer) ran on claude through `@agentclientprotocol/claude-agent-acp`. The whole voyage took 6 minutes 22 seconds, most of it CI.
 
 ## How it was run
 
-[`scripts/proof/self-round.ts`](../scripts/proof/self-round.ts) drives the round the way a person at the dashboard would. It runs the CLI's own `init` and `up` in process, with `homeDir` pointing at a fresh `/tmp/qdp-*`, so nothing touches `~/.quarterdeck`. It then sends the dashboard's intents over HTTP with the printed token.
+[`scripts/proof/self-voyage.ts`](../scripts/proof/self-voyage.ts) drives the voyage the way a person at the dashboard would. It runs the CLI's own `init` and `up` in process, with `homeDir` pointing at a fresh `/tmp/qdp-*`, so nothing touches `~/.quarterdeck`. It then sends the dashboard's intents over HTTP with the printed token.
 
 ```sh
 npm run build
-node scripts/proof/self-round.ts .
+node scripts/proof/self-voyage.ts .
 ```
 
-It needs a signed-in claude and gh (`quarterdeck doctor`). The round's pull request merges into the real default branch. It refuses to start while `DATABASE_URL` is set, since the store would then live in that database instead of the temp home. It fails, rather than reporting success, if:
+It needs a signed-in claude and gh (`quarterdeck doctor`). The voyage's pull request merges into the real default branch. It refuses to start while `DATABASE_URL` is set, since the store would then live in that database instead of the temp home. It fails, rather than reporting success, if:
 
-- the round ends for any reason but `settled`;
+- the voyage ends for any reason but `settled`;
 - nothing merged;
 - the wipe does not name the project;
 - `data.summary` still answers, or the project folder is still there.
@@ -120,14 +120,14 @@ planner.reply    {"seq":1,"text":"I've proposed one ticket, `ab684187-…`. It's
 ticket.approve   {"status":"applied"}
 ```
 
-### The round starts; the Driver births a claude builder
+### The voyage starts; the Driver births a claude builder
 
 ```text
-round.start            {"status":"pending"}
-round.started          {"goal":"Ship the one approved documentation ticket.","round":1}
+voyage.start            {"status":"pending"}
+voyage.started          {"goal":"Ship the one approved documentation ticket.","voyage":1}
 agent.born             {"name":"gecko","role":"reviewer","runtime":"claude"}
 agent.born             {"name":"ferret","role":"driver","runtime":"claude"}
-driver.round_started   {"round":1,"notebook":[]}
+driver.voyage_started   {"voyage":1,"notebook":[]}
 turn.result            {"seq":1,"result":{"actions":[{"kind":"assign","ticket":"ab684187-…"}],
                         "summary":"Read the board: one open docs ticket (the rules/README `think` fix) with no dependencies, no builders yet and no cards. Assigning it to a new builder."}}
 agent.born             {"name":"heron","role":"builder","runtime":"claude"}
@@ -164,30 +164,30 @@ GitHub shows #72 as `MERGED` at 2026-10-02T21:12:00Z, as merge commit `c3de075` 
 ### Auto-end and wrap-up
 
 ```text
-round.settling     {"rearmed":false,"settleSeconds":60}
-round.settling     {"rearmed":true,"settleSeconds":60}
-agent.status       {"text":"Round 1 goal shipped: PR #72 (rules/README `think`) merged. Nothing else open."}
-round.settled      {"settleSeconds":60}
+voyage.settling     {"rearmed":false,"settleSeconds":60}
+voyage.settling     {"rearmed":true,"settleSeconds":60}
+agent.status       {"text":"Voyage 1 goal shipped: PR #72 (rules/README `think`) merged. Nothing else open."}
+voyage.settled      {"settleSeconds":60}
 agent.worktree_removed {"name":"heron","discarded":false}
 agent.retired      {"name":"heron"}
 turn.result        {"seq":7,"result":{"charter":null,
-                    "summary":"Shipped the round's one ticket: PR #72 adds `think` to the hardened-layer list in rules/README.md. It was reviewed and merged with no rework and no cards.",
+                    "summary":"Shipped the voyage's one ticket: PR #72 adds `think` to the hardened-layer list in rules/README.md. It was reviewed and merged with no rework and no cards.",
                     "notebook":[
                       {"op":"add","body":"Turn-result actions are only `assign` and `continue`; there is no `end`. Quarterdeck ends a builder itself once its PR merges, so don't look for an end action.", …},
-                      {"op":"add","body":"PR checks are three CI jobs: validate, clean-machine and store-postgres. Builders run `prettier --check` on the whole repo and `npm test` (round 1 baseline: 1956 passed, 17 skipped).", …},
+                      {"op":"add","body":"PR checks are three CI jobs: validate, clean-machine and store-postgres. Builders run `prettier --check` on the whole repo and `npm test` (voyage 1 baseline: 1956 passed, 17 skipped).", …},
                       {"op":"add","body":"A docs-only ticket counts as tested when the ticket says no new tests are needed and Prettier and the existing suite still pass. …", …}]}}
-round.wrapped_up   {"round":1,"charterProposal":null,"notebookProposals":["ec2fe282-…","13930db1-…","bda06fdc-…"]}
+voyage.wrapped_up   {"voyage":1,"charterProposal":null,"notebookProposals":["ec2fe282-…","13930db1-…","bda06fdc-…"]}
 agent.retired      {"name":"ferret"}
-round.ended        {"round":1,"reason":"settled","reopened":[],"closedCards":[],"discardCards":[]}
+voyage.ended        {"voyage":1,"reason":"settled","reopened":[],"closedCards":[],"discardCards":[]}
 notebook.decide    {"status":"applied"}   → proposal 13930db1 accepted as notebook entry 6cf7552f
 ```
 
 ### The Data widget shows rows
 
-`data.summary` for the project, right after the round. These are the counts the Data widget lists:
+`data.summary` for the project, right after the voyage. These are the counts the Data widget lists:
 
 ```text
-projects 1   rounds 1   agents 4   tickets 1   cards 7   turns 10   events 55
+projects 1   voyages 1   agents 4   tickets 1   cards 7   turns 10   events 55
 notebook 1   notebook_proposals 3   charter_proposals 0   budget 0   layouts 0   intents 12
 ```
 
@@ -201,11 +201,11 @@ after wipe: $QD_HOME/.quarterdeck/quarterdeck exists = false
 cli: Stopped.
 ```
 
-The wipe stopped the two agents still live (the Planner and the reviewer, which outlive a round). Then it deleted the project's rows and folder.
+The wipe stopped the two agents still live (the Planner and the reviewer, which outlive a voyage). Then it deleted the project's rows and folder.
 
 ## Seen along the way, not fixed here
 
-- **No `end` action for the Driver.** The charter tells the Driver to end a builder once its PR merges, but its actions are only `assign` and `continue`. The Driver noticed and proposed a notebook entry about it. The builder was retired by the round's cleanup.
+- **No `end` action for the Driver.** The charter tells the Driver to end a builder once its PR merges, but its actions are only `assign` and `continue`. The Driver noticed and proposed a notebook entry about it. The builder was retired by the voyage's cleanup.
 - **Seven cards for a one-line change.** The hardened layer allows plain `git status`-style commands, but claude chains commands with `cd … && …`. A command with `&&`, `|` or `>` is never pinned to the repo, so each chain becomes a card.
 - **claude.ai connectors reach the agents.** The Planner's reply ended with a note that the account's Gmail, Calendar and Drive connectors were not authorized. `settingSources: []` keeps local settings out, but not the account's connectors.
 - **The claude runtime folder ignores `homeDir`.** `CLAUDE_ADAPTER` is built when the module loads, with `~/.quarterdeck/runtimes/claude` as its process folder, so this run used that folder rather than the temp home's. Wipe does not touch runtime folders either way.

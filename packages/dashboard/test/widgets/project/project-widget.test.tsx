@@ -22,11 +22,11 @@ import {
   IDLE_BUILDER_ID,
   IDLE_REVIEWER_ID,
   OLD_ID,
-  ROUND_ID,
+  VOYAGE_ID,
   SITE_ID,
   BUSY_BUILDER_ID,
   projectTables,
-  round,
+  voyage,
   ticket,
 } from './fixtures.js';
 
@@ -127,7 +127,7 @@ const isDisabled = (element: PageElement): boolean =>
   element.getAttribute('disabled') !== null;
 
 const type = (scope: PageElement, text: string) => {
-  const input = find(scope, 'input[aria-label="Round goal"]');
+  const input = find(scope, 'input[aria-label="Voyage goal"]');
   const field = input as unknown as HappyInput;
   const win = (globalThis as unknown as { window: Window }).window;
   act(() => {
@@ -179,45 +179,45 @@ describe('Project widget', () => {
     unmount();
   });
 
-  it('shows the open round and ends or kills it', async () => {
+  it('shows the open voyage and ends or kills it', async () => {
     const { container, sent, unmount } = mount(projectTables());
-    const roundSection = section(container, 'Round');
-    expect(textOf(roundSection, '.qd-project-round-label')).toBe(
-      'Round 2 · active',
+    const voyageSection = section(container, 'Voyage');
+    expect(textOf(voyageSection, '.qd-project-voyage-label')).toBe(
+      'Voyage 2 · active',
     );
-    expect(textOf(roundSection, '.qd-project-goal')).toBe(
+    expect(textOf(voyageSection, '.qd-project-goal')).toBe(
       'Ship the project widget',
     );
-    expect(names(roundSection)).toEqual(['End round', 'Kill round']);
-    click(button(roundSection, 'End round'));
+    expect(names(voyageSection)).toEqual(['End voyage', 'Kill voyage']);
+    click(button(voyageSection, 'End voyage'));
     await settle();
     expect(sentTo(sent)).toEqual([
-      ['round.end', { project: 'deck', roundId: ROUND_ID }],
+      ['voyage.end', { project: 'deck', voyageId: VOYAGE_ID }],
     ]);
     unmount();
   });
 
-  it('sends nothing on one click of Kill round and asks with the reopen count', async () => {
+  it('sends nothing on one click of Kill voyage and asks with the reopen count', async () => {
     const { container, sent, unmount } = mount(projectTables());
-    const roundSection = () => section(container, 'Round');
-    click(button(roundSection(), 'Kill round'));
+    const voyageSection = () => section(container, 'Voyage');
+    click(button(voyageSection(), 'Kill voyage'));
     await settle();
     expect(sent).toEqual([]);
-    expect(names(roundSection())).toEqual([
-      'Kill round? This reopens 3 tickets',
+    expect(names(voyageSection())).toEqual([
+      'Kill voyage? This reopens 3 tickets',
       'Cancel',
     ]);
-    click(button(roundSection(), 'Cancel'));
-    expect(names(roundSection())).toEqual(['End round', 'Kill round']);
+    click(button(voyageSection(), 'Cancel'));
+    expect(names(voyageSection())).toEqual(['End voyage', 'Kill voyage']);
     expect(sent).toEqual([]);
 
-    click(button(roundSection(), 'Kill round'));
-    click(button(roundSection(), 'Kill round? This reopens 3 tickets'));
+    click(button(voyageSection(), 'Kill voyage'));
+    click(button(voyageSection(), 'Kill voyage? This reopens 3 tickets'));
     await settle();
     expect(sentTo(sent)).toEqual([
-      ['round.kill', { project: 'deck', roundId: ROUND_ID }],
+      ['voyage.kill', { project: 'deck', voyageId: VOYAGE_ID }],
     ]);
-    expect(names(roundSection())).toEqual(['End round', 'Kill round']);
+    expect(names(voyageSection())).toEqual(['End voyage', 'Kill voyage']);
     unmount();
   });
 
@@ -227,52 +227,52 @@ describe('Project widget', () => {
       ({ assigneeId }) => assigneeId === BUSY_BUILDER_ID,
     );
     const { container, unmount } = mount(tables);
-    click(button(section(container, 'Round'), 'Kill round'));
-    expect(names(section(container, 'Round'))[0]).toBe(
-      'Kill round? This reopens 1 ticket',
+    click(button(section(container, 'Voyage'), 'Kill voyage'));
+    expect(names(section(container, 'Voyage'))[0]).toBe(
+      'Kill voyage? This reopens 1 ticket',
     );
     unmount();
   });
 
-  it('starts a round with a goal once there is one', async () => {
+  it('starts a voyage with a goal once there is one', async () => {
     const { container, sent, unmount } = mount(projectTables());
     pickProject(container, SITE_ID);
-    const roundSection = () => section(container, 'Round');
-    expect(textOf(roundSection(), '.qd-empty')).toBe('No round running.');
-    expect(isDisabled(button(roundSection(), 'Start round'))).toBe(true);
-    type(roundSection(), '   ');
-    expect(isDisabled(button(roundSection(), 'Start round'))).toBe(true);
-    type(roundSection(), 'Launch the site');
-    click(button(roundSection(), 'Start round'));
+    const voyageSection = () => section(container, 'Voyage');
+    expect(textOf(voyageSection(), '.qd-empty')).toBe('No voyage running.');
+    expect(isDisabled(button(voyageSection(), 'Start voyage'))).toBe(true);
+    type(voyageSection(), '   ');
+    expect(isDisabled(button(voyageSection(), 'Start voyage'))).toBe(true);
+    type(voyageSection(), 'Launch the site');
+    click(button(voyageSection(), 'Start voyage'));
     await settle();
     expect(sentTo(sent)).toEqual([
-      ['round.start', { project: 'site', goal: 'Launch the site' }],
+      ['voyage.start', { project: 'site', goal: 'Launch the site' }],
     ]);
-    expect((find(roundSection(), 'input') as unknown as HappyInput).value).toBe(
-      '',
-    );
+    expect(
+      (find(voyageSection(), 'input') as unknown as HappyInput).value,
+    ).toBe('');
     unmount();
   });
 
-  it('follows the stream when a round starts', () => {
+  it('follows the stream when a voyage starts', () => {
     const { container, unmount } = mount(projectTables());
     pickProject(container, SITE_ID);
     act(() => {
       FakeSocket.opened[0]?.deliver({
         type: 'change',
-        table: 'rounds',
+        table: 'voyages',
         op: 'insert',
         id: '00000000-0000-4000-8000-0000000000b9',
-        row: round('00000000-0000-4000-8000-0000000000b9', 1, {
+        row: voyage('00000000-0000-4000-8000-0000000000b9', 1, {
           projectId: SITE_ID,
           status: 'planning',
           goal: 'Launch',
         }),
       });
     });
-    expect(names(section(container, 'Round'))).toEqual([
-      'End round',
-      'Kill round',
+    expect(names(section(container, 'Voyage'))).toEqual([
+      'End voyage',
+      'Kill voyage',
     ]);
     unmount();
   });
@@ -519,15 +519,15 @@ describe('Project widget', () => {
 
   it('shows a refusal from the server where it happened', async () => {
     const { container, unmount } = mount(projectTables(), 409, {
-      error: `round ${ROUND_ID} has already ended`,
+      error: `voyage ${VOYAGE_ID} has already ended`,
     });
-    click(button(section(container, 'Round'), 'End round'));
+    click(button(section(container, 'Voyage'), 'End voyage'));
     await settle();
-    expect(textOf(section(container, 'Round'), '[role="alert"]')).toBe(
-      `round ${ROUND_ID} has already ended`,
+    expect(textOf(section(container, 'Voyage'), '[role="alert"]')).toBe(
+      `voyage ${VOYAGE_ID} has already ended`,
     );
     expect(container.querySelectorAll('[role="alert"]')).toHaveLength(1);
-    expect(isDisabled(button(section(container, 'Round'), 'End round'))).toBe(
+    expect(isDisabled(button(section(container, 'Voyage'), 'End voyage'))).toBe(
       false,
     );
     unmount();

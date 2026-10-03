@@ -36,12 +36,12 @@ export const seedProject = async (
   await db.query(
     `
     with p as (select $1::uuid as id),
-    round as (
-      insert into rounds (project_id, number) select id, 1 from p returning id
+    voyage as (
+      insert into voyages (project_id, number) select id, 1 from p returning id
     ),
     agent as (
-      insert into agents (project_id, round_id, name, role)
-      select p.id, round.id, 'pangolin', 'builder' from p, round returning id
+      insert into agents (project_id, voyage_id, name, role)
+      select p.id, voyage.id, 'pangolin', 'builder' from p, voyage returning id
     ),
     ticket as (
       insert into tickets (project_id, title, assignee_id)
@@ -73,8 +73,8 @@ export const seedProject = async (
       select id, 'add', 'remember' from p returning id
     ),
     spend as (
-      insert into budget (project_id, round_id, limit_tokens)
-      select p.id, round.id, 10 from p, round returning id
+      insert into budget (project_id, voyage_id, limit_tokens)
+      select p.id, voyage.id, 10 from p, voyage returning id
     ),
     layout as (
       insert into layouts (project_id, name, spec)

@@ -22,7 +22,7 @@ import {
   REPLAY_USAGE,
   USAGE,
   main,
-  replayRound,
+  replayVoyage,
   type ReplayAdapters,
 } from '../src/index.js';
 import { sandbox, testIo, type Sandbox, type TestIo } from './harness.js';
@@ -32,10 +32,10 @@ const OLD_DRIVER = '0b1c2d3e-4f50-4617-8899-aabbccddeeff';
 const BUILDER = '11111111-2222-4333-8444-555555555555';
 const RESULT = '```json\n{ "summary": "Nothing to do.", "actions": [] }\n```';
 
-const birthInput = (round: number, name = 'driver-1'): string =>
+const birthInput = (voyage: number, name = 'driver-1'): string =>
   buildBirthInput({
     agent: { name },
-    round: { number: round, goal: `Goal ${round}.` },
+    voyage: { number: voyage, goal: `Goal ${voyage}.` },
     charter: '# Driver charter',
     notebook: [],
     instructions: DRIVER_TURN_INSTRUCTIONS,
@@ -156,22 +156,22 @@ describe('quarterdeck replay', () => {
     return turnFile(dir, 'input');
   };
 
-  const saveRounds = async (project = 'deck') => {
+  const saveVoyages = async (project = 'deck') => {
     await save(project, DRIVER, 1, birthInput(1), RESULT);
     await save(project, DRIVER, 2, 'heron reported QD1.', RESULT);
     await save(project, DRIVER, 3, birthInput(2), RESULT);
     await save(project, DRIVER, 4, 'heron reported QD2.', 'Old reply.');
-    await save(project, DRIVER, 5, 'Round goal changed.');
+    await save(project, DRIVER, 5, 'Voyage goal changed.');
     await save(project, DRIVER, 6, birthInput(3));
     await save(project, BUILDER, 1, 'Work on QD2.');
   };
 
-  it("replays a round's Driver turns from its birth in one session, writing nothing", async () => {
-    await saveRounds();
+  it("replays a voyage's Driver turns from its birth in one session, writing nothing", async () => {
+    await saveVoyages();
     const before = await snapshot(home);
     const { adapters, connections } = fakeAdapters(RESULT, 'No JSON.');
 
-    const code = await replayRound(['2', '--runtime', 'claude'], io, {
+    const code = await replayVoyage(['2', '--runtime', 'claude'], io, {
       adapters,
     });
 
@@ -193,13 +193,13 @@ describe('quarterdeck replay', () => {
     expect(connection?.prompts).toEqual([
       birthInput(2),
       'heron reported QD2.',
-      'Round goal changed.',
+      'Voyage goal changed.',
     ]);
     expect(connection?.closed).toBe(true);
     expect(connection?.launch.cwd).not.toContain(box.home);
     expect(await snapshot(home)).toEqual(before);
     expect(io.lines).toEqual([
-      `Replaying round 2 of deck: Driver driver-1 (${DRIVER}), turns 1 to 3 of 3, on claude.`,
+      `Replaying voyage 2 of deck: Driver driver-1 (${DRIVER}), turns 1 to 3 of 3, on claude.`,
       'Nothing is saved. The agent has no Quarterdeck tools and every permission is refused.',
       '',
       '--- Turn 1 of 3 ---',
@@ -218,11 +218,11 @@ describe('quarterdeck replay', () => {
     ]);
   });
 
-  it('stops at turn n of the round', async () => {
-    await saveRounds();
+  it('stops at turn n of the voyage', async () => {
+    await saveVoyages();
     const { adapters, connections } = fakeAdapters();
 
-    const code = await replayRound(['2', '2', '--runtime', 'kiro'], io, {
+    const code = await replayVoyage(['2', '2', '--runtime', 'kiro'], io, {
       adapters,
     });
 
@@ -236,45 +236,45 @@ describe('quarterdeck replay', () => {
   });
 
   it("uses the Driver's runtime from the machine's models rule by default", async () => {
-    await saveRounds();
+    await saveVoyages();
     await writeFile(
       join(home, 'rules.local.models.json'),
       JSON.stringify({ driver: { runtime: 'gemini' } }),
     );
     const { adapters, connections } = fakeAdapters();
 
-    expect(await replayRound(['1'], io, { adapters })).toBe(0);
+    expect(await replayVoyage(['1'], io, { adapters })).toBe(0);
     expect(connections[0]?.runtime).toBe('gemini');
   });
 
-  it('replays the latest Driver session when a round had more than one', async () => {
+  it('replays the latest Driver session when a voyage had more than one', async () => {
     const earlier = await save('deck', OLD_DRIVER, 1, birthInput(1, 'lark'));
     await utimes(earlier, new Date('2026-01-01'), new Date('2026-01-01'));
     await save('deck', DRIVER, 1, birthInput(1));
     const { adapters } = fakeAdapters();
 
     expect(
-      await replayRound(['1', '--runtime', 'kiro'], io, { adapters }),
+      await replayVoyage(['1', '--runtime', 'kiro'], io, { adapters }),
     ).toBe(0);
     expect(io.lines.slice(0, 2)).toEqual([
-      `Replaying round 1 of deck: Driver driver-1 (${DRIVER}), turns 1 to 1 of 1, on kiro.`,
-      'Round 1 had 2 Driver sessions; this is the latest.',
+      `Replaying voyage 1 of deck: Driver driver-1 (${DRIVER}), turns 1 to 1 of 1, on kiro.`,
+      'Voyage 1 had 2 Driver sessions; this is the latest.',
     ]);
   });
 
-  it('asks for --project when the round is in more than one project', async () => {
-    await saveRounds('deck');
-    await saveRounds('fleet');
+  it('asks for --project when the voyage is in more than one project', async () => {
+    await saveVoyages('deck');
+    await saveVoyages('fleet');
     const { adapters, connections } = fakeAdapters();
 
     await expect(
-      replayRound(['1', '--runtime', 'kiro'], io, { adapters }),
+      replayVoyage(['1', '--runtime', 'kiro'], io, { adapters }),
     ).rejects.toThrow(
-      'Round 1 is in more than one project (deck, fleet). Pass --project <slug>.',
+      'Voyage 1 is in more than one project (deck, fleet). Pass --project <slug>.',
     );
     expect(connections).toEqual([]);
 
-    const code = await replayRound(
+    const code = await replayVoyage(
       ['1', '--runtime', 'kiro', '--project', 'fleet'],
       io,
       { adapters },
@@ -284,16 +284,16 @@ describe('quarterdeck replay', () => {
   });
 
   it('runs the command the Driver widget prints', async () => {
-    await saveRounds();
+    await saveVoyages();
     const { adapters, connections } = fakeAdapters();
     const [, , ...args] = replayCommand({
-      round: 2,
+      voyage: 2,
       through: 1,
       project: 'deck',
     }).split(' ');
 
     expect(args).toEqual(['replay', '2', '1', '--project', 'deck']);
-    const code = await replayRound(
+    const code = await replayVoyage(
       [...args.slice(1), '--runtime', 'kiro'],
       io,
       { adapters },
@@ -303,10 +303,10 @@ describe('quarterdeck replay', () => {
   });
 
   it('exits 1 with the sign-in command when the runtime needs sign-in', async () => {
-    await saveRounds();
+    await saveVoyages();
     const { adapters, connections } = fakeAdapters(RequestError.authRequired());
 
-    const code = await replayRound(['1', '--runtime', 'claude'], io, {
+    const code = await replayVoyage(['1', '--runtime', 'claude'], io, {
       adapters,
     });
 
@@ -321,7 +321,7 @@ describe('quarterdeck replay', () => {
   });
 
   it('closes the agent and cancels when stopped mid-replay', async () => {
-    await saveRounds();
+    await saveVoyages();
     let closedWhileRunning = false;
     const { adapters, connections } = fakeAdapters(async (connection) => {
       io.stop();
@@ -331,7 +331,7 @@ describe('quarterdeck replay', () => {
     });
 
     await expect(
-      replayRound(['2', '--runtime', 'kiro'], io, { adapters }),
+      replayVoyage(['2', '--runtime', 'kiro'], io, { adapters }),
     ).rejects.toMatchObject({ name: 'AbortError' });
     expect(closedWhileRunning).toBe(true);
     expect(connections[0]?.prompts).toHaveLength(1);
@@ -339,41 +339,41 @@ describe('quarterdeck replay', () => {
   });
 
   it.each([
-    [['0'], 'round must be a positive whole number, not 0'],
+    [['0'], 'voyage must be a positive whole number, not 0'],
     [['1', 'x'], 'n must be a positive whole number, not x'],
-    [['1', '2', '3'], 'replay takes a round and n'],
+    [['1', '2', '3'], 'replay takes a voyage and n'],
     [['1', '--project', '../x'], '--project "../x" is not a project slug'],
     [
       ['1', '--runtime', 'vim'],
       '--runtime must be one of kiro, claude, gemini',
     ],
   ])('refuses %j', async (args, message) => {
-    await saveRounds();
+    await saveVoyages();
     const { adapters, connections } = fakeAdapters();
 
-    await expect(replayRound(args, io, { adapters })).rejects.toThrow(message);
+    await expect(replayVoyage(args, io, { adapters })).rejects.toThrow(message);
     expect(connections).toEqual([]);
   });
 
-  it('refuses n past the end of the round, and a round with no Driver turns', async () => {
-    await saveRounds();
+  it('refuses n past the end of the voyage, and a voyage with no Driver turns', async () => {
+    await saveVoyages();
     const { adapters, connections } = fakeAdapters();
 
     await expect(
-      replayRound(['2', '4', '--runtime', 'kiro'], io, { adapters }),
+      replayVoyage(['2', '4', '--runtime', 'kiro'], io, { adapters }),
     ).rejects.toThrow(
-      'Round 2 of deck has 3 Driver turns; n must be from 1 to 3',
+      'Voyage 2 of deck has 3 Driver turns; n must be from 1 to 3',
     );
     await expect(
-      replayRound(['9', '--runtime', 'kiro'], io, { adapters }),
+      replayVoyage(['9', '--runtime', 'kiro'], io, { adapters }),
     ).rejects.toThrow(
-      `No saved Driver turns for round 9 in any project in ${home}`,
+      `No saved Driver turns for voyage 9 in any project in ${home}`,
     );
     expect(connections).toEqual([]);
   });
 
   it('reports a missing saved input without connecting', async () => {
-    await saveRounds();
+    await saveVoyages();
     await save('deck', DRIVER, 8, 'after a gap');
 
     expect(await main(['replay', '3', '--runtime', 'kiro'], io)).toBe(1);
@@ -386,7 +386,7 @@ describe('quarterdeck replay', () => {
   });
 
   it('is listed in the usage and prints its own help', async () => {
-    expect(USAGE).toContain('replay <round> [n]');
+    expect(USAGE).toContain('replay <voyage> [n]');
     expect(await main(['replay', '--help'], io)).toBe(0);
     expect(io.lines).toEqual([REPLAY_USAGE]);
   });

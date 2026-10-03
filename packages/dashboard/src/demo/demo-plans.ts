@@ -9,14 +9,14 @@ export interface DemoQuestionPlan {
   recommendation: string;
 }
 
-export interface DemoRoundPlan {
+export interface DemoVoyagePlan {
   goal: string;
   tickets: [DemoTicketPlan, DemoTicketPlan, DemoTicketPlan];
   question: DemoQuestionPlan;
   lesson: string;
 }
 
-export const DEMO_ROUND_PLANS: readonly DemoRoundPlan[] = [
+export const DEMO_VOYAGE_PLANS: readonly DemoVoyagePlan[] = [
   {
     goal: 'Take deposits when a berth is booked',
     tickets: [
@@ -95,4 +95,4 @@ export const DEMO_ROUND_PLANS: readonly DemoRoundPlan[] = [
 ];
 
 export const DEMO_PLANNER_REPLY =
-  'Here is a ticket for that. Approve it, edit it or reject it; an approved ticket goes to the Driver in the next round.';
+  'Here is a ticket for that. Approve it, edit it or reject it; an approved ticket goes to the Driver in the next voyage.';

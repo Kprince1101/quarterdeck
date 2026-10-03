@@ -1,13 +1,13 @@
 import type {
   AgentRow,
   CardRow,
-  RoundRow,
+  VoyageRow,
   TicketRow,
 } from '@quarterdeck/server/stream-schema';
 import {
-  DEMO_ROUND_PLANS,
+  DEMO_VOYAGE_PLANS,
   type DemoQuestionPlan,
-  type DemoRoundPlan,
+  type DemoVoyagePlan,
 } from './demo-plans.js';
 import type { DemoTurnText, DemoWorld, TurnTokens } from './demo-world.js';
 
@@ -50,11 +50,11 @@ export const turnTokens = (
 const SHA_LENGTH = 40;
 const PR_STRIDE = 10;
 
-const pr = (round: RoundRow, index: number): string =>
-  `https://github.com/demo/harbor/pull/${round.number * PR_STRIDE + index}`;
+const pr = (voyage: VoyageRow, index: number): string =>
+  `https://github.com/demo/harbor/pull/${voyage.number * PR_STRIDE + index}`;
 
-const sha = (round: RoundRow, index: number): string =>
-  `${round.number}${index}`
+const sha = (voyage: VoyageRow, index: number): string =>
+  `${voyage.number}${index}`
     .padEnd(SHA_LENGTH, '7e3a91c05d')
     .slice(0, SHA_LENGTH);
 
@@ -63,9 +63,9 @@ export interface DemoScriptOptions {
   answerCards?: boolean;
 }
 
-export const planOf = (number: number): DemoRoundPlan => {
-  const plan = DEMO_ROUND_PLANS[(number - 1) % DEMO_ROUND_PLANS.length];
-  if (plan === undefined) throw new Error('No demo round plans');
+export const planOf = (number: number): DemoVoyagePlan => {
+  const plan = DEMO_VOYAGE_PLANS[(number - 1) % DEMO_VOYAGE_PLANS.length];
+  if (plan === undefined) throw new Error('No demo voyage plans');
   return plan;
 };
 
@@ -114,7 +114,7 @@ const askCard = (
 
 const proposeLesson = (
   world: DemoWorld,
-  round: RoundRow,
+  voyage: VoyageRow,
   driver: AgentRow,
   lesson: string,
 ): void => {
@@ -123,13 +123,13 @@ const proposeLesson = (
   store.put('notebook_proposals', {
     id,
     projectId: store.projectId,
-    roundId: round.id,
+    voyageId: voyage.id,
     agentId: driver.id,
     op: 'add',
     entryId: null,
     body: lesson,
     pinned: false,
-    rationale: `Learned in round ${round.number}.`,
+    rationale: `Learned in voyage ${voyage.number}.`,
     status: 'open',
     createdAt: store.now(),
     decidedAt: null,
@@ -140,36 +140,36 @@ const proposeLesson = (
   });
 };
 
-const roundCrew = (world: DemoWorld, roundId: string): AgentRow[] =>
-  world.store.rows('agents').filter((agent) => agent.roundId === roundId);
+const voyageCrew = (world: DemoWorld, voyageId: string): AgentRow[] =>
+  world.store.rows('agents').filter((agent) => agent.voyageId === voyageId);
 
 const crewMember = (
   world: DemoWorld,
-  roundId: string,
+  voyageId: string,
   role: AgentRow['role'],
   nth = 0,
 ): AgentRow | undefined =>
-  roundCrew(world, roundId).filter((agent) => agent.role === role)[nth];
+  voyageCrew(world, voyageId).filter((agent) => agent.role === role)[nth];
 
-const roundTickets = (world: DemoWorld, roundId: string): TicketRow[] =>
-  world.store.rows('tickets').filter((ticket) => ticket.roundId === roundId);
+const voyageTickets = (world: DemoWorld, voyageId: string): TicketRow[] =>
+  world.store.rows('tickets').filter((ticket) => ticket.voyageId === voyageId);
 
-export const roundBeats = (
+export const voyageBeats = (
   world: DemoWorld,
-  round: RoundRow,
+  voyage: VoyageRow,
   options: DemoScriptOptions,
 ): DemoBeat[] => {
   const { store } = world;
-  const plan = planOf(round.number);
+  const plan = planOf(voyage.number);
   const agent = (role: AgentRow['role'], nth = 0): AgentRow | undefined => {
-    const row = crewMember(world, round.id, role, nth);
+    const row = crewMember(world, voyage.id, role, nth);
     if (row === undefined || world.isGone(row) || row.status === 'paused') {
       return undefined;
     }
     return row;
   };
   const ticket = (nth: number): TicketRow | undefined => {
-    const row = roundTickets(world, round.id)[nth];
+    const row = voyageTickets(world, voyage.id)[nth];
     if (row === undefined || HANDS_OFF_TICKETS.has(row.status)) {
       return undefined;
     }
@@ -228,18 +228,20 @@ export const roundBeats = (
   const card = () =>
     store
       .rows('cards')
-      .findLast((row) => row.ticketId === roundTickets(world, round.id)[1]?.id);
+      .findLast(
+        (row) => row.ticketId === voyageTickets(world, voyage.id)[1]?.id,
+      );
   let waited = 0;
 
-  const planRound = (): boolean => {
+  const planVoyage = (): boolean => {
     const driver = world.birth(
       freeName(world, options.names),
       'driver',
-      round.id,
+      voyage.id,
     );
-    world.activateRound(round);
+    world.activateVoyage(voyage);
     work('driver', 0, null, () => ({
-      input: `Round ${round.number}. Goal: ${round.goal}. Read the notebook and the open tickets, then plan the round.`,
+      input: `Voyage ${voyage.number}. Goal: ${voyage.goal}. Read the notebook and the open tickets, then plan the voyage.`,
       output: `${driver.name}: three tickets fit the goal. Two builders and a reviewer; the second builder takes the riskiest ticket.`,
     }));
     return true;
@@ -247,28 +249,28 @@ export const roundBeats = (
 
   const assign = (): boolean => {
     const isUnplanned = (row: TicketRow) =>
-      row.roundId === null ||
-      store.find('rounds', row.roundId)?.status === 'ended';
+      row.voyageId === null ||
+      store.find('voyages', row.voyageId)?.status === 'ended';
     const waiting = store
       .rows('tickets')
       .filter((row) => row.status === 'open' && isUnplanned(row))
       .slice(0, plan.tickets.length);
     waiting.forEach((row) =>
-      store.patch('tickets', row.id, { roundId: round.id }),
+      store.patch('tickets', row.id, { voyageId: voyage.id }),
     );
     plan.tickets
       .slice(waiting.length)
       .forEach((row) =>
-        world.createTicket(row.title, row.body, 'open', round.id),
+        world.createTicket(row.title, row.body, 'open', voyage.id),
       );
-    world.birth(freeName(world, options.names), 'builder', round.id);
-    world.birth(freeName(world, options.names), 'builder', round.id, 'claude');
-    world.birth(freeName(world, options.names), 'reviewer', round.id);
+    world.birth(freeName(world, options.names), 'builder', voyage.id);
+    world.birth(freeName(world, options.names), 'builder', voyage.id, 'claude');
+    world.birth(freeName(world, options.names), 'reviewer', voyage.id);
     move(0, 'assigned', { assigneeId: assignee(0) });
     move(1, 'assigned', { assigneeId: assignee(1) });
     work('driver', 0, null, () => ({
-      input: 'Assign the round.',
-      output: roundTickets(world, round.id)
+      input: 'Assign the voyage.',
+      output: voyageTickets(world, voyage.id)
         .map((row, at) => `${at + 1}. ${row.title}`)
         .join('\n'),
     }));
@@ -278,7 +280,7 @@ export const roundBeats = (
 
   return [
     () => true,
-    planRound,
+    planVoyage,
     assign,
     () => {
       move(0, 'in_progress');
@@ -296,7 +298,7 @@ export const roundBeats = (
       return true;
     },
     () => {
-      move(0, 'in_review', { prUrl: pr(round, 1), headSha: sha(round, 1) });
+      move(0, 'in_review', { prUrl: pr(voyage, 1), headSha: sha(voyage, 1) });
       rest('builder', 0);
       review(0, 'Approved: the tests cover the change.');
       return true;
@@ -325,7 +327,7 @@ export const roundBeats = (
       return true;
     },
     () => {
-      move(1, 'in_review', { prUrl: pr(round, 2), headSha: sha(round, 2) });
+      move(1, 'in_review', { prUrl: pr(voyage, 2), headSha: sha(voyage, 2) });
       rest('builder', 1);
       review(1, 'Bounced: the new path has no test for a cancelled booking.');
       move(1, 'bounced');
@@ -333,8 +335,8 @@ export const roundBeats = (
     },
     () => {
       build('builder', 1, 1, 'Add the missing test and push.');
-      move(1, 'in_review', { headSha: sha(round, 3) });
-      move(2, 'in_review', { prUrl: pr(round, 3), headSha: sha(round, 4) });
+      move(1, 'in_review', { headSha: sha(voyage, 3) });
+      move(2, 'in_review', { prUrl: pr(voyage, 3), headSha: sha(voyage, 4) });
       rest('builder', 0);
       rest('builder', 1);
       return true;
@@ -353,17 +355,17 @@ export const roundBeats = (
     () => {
       const driver = agent('driver');
       work('driver', 0, null, () => ({
-        input: 'Every ticket is merged. Wrap up the round.',
-        output: `Round ${round.number} is done. One lesson for the notebook.`,
+        input: 'Every ticket is merged. Wrap up the voyage.',
+        output: `Voyage ${voyage.number} is done. One lesson for the notebook.`,
       }));
       if (driver !== undefined) {
-        proposeLesson(world, round, driver, plan.lesson);
+        proposeLesson(world, voyage, driver, plan.lesson);
       }
       rest('driver');
       return true;
     },
     () => {
-      world.endRound(round, 'ended');
+      world.endVoyage(voyage, 'ended');
       return true;
     },
   ];

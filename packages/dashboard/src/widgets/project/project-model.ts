@@ -1,7 +1,7 @@
 import type {
   AgentRow,
   ProjectRow,
-  RoundRow,
+  VoyageRow,
   SnapshotTables,
   TicketRow,
 } from '@quarterdeck/server/stream-schema';
@@ -32,7 +32,7 @@ export interface ProjectOption {
   label: string;
 }
 
-export interface RoundView {
+export interface VoyageView {
   id: string;
   label: string;
   goal: string;
@@ -44,7 +44,7 @@ export interface ProjectPanel {
   slug: string;
   name: string;
   isArchived: boolean;
-  round: RoundView | null;
+  voyage: VoyageView | null;
   reviewer: string;
   retiredCount: number;
   idleAgentIds: string[];
@@ -72,34 +72,36 @@ const activeTickets = (tickets: readonly TicketRow[]): TicketRow[] =>
   );
 
 const reopenCountOf = (
-  roundId: string,
+  voyageId: string,
   agents: readonly AgentRow[],
   active: readonly TicketRow[],
 ): number => {
   const builders = new Set(
     agents
-      .filter((agent) => agent.roundId === roundId && agent.role === 'builder')
+      .filter(
+        (agent) => agent.voyageId === voyageId && agent.role === 'builder',
+      )
       .map(({ id }) => id),
   );
   return active.filter(({ assigneeId }) => builders.has(assigneeId ?? ''))
     .length;
 };
 
-const openRound = (
-  rounds: readonly RoundRow[],
+const openVoyage = (
+  voyages: readonly VoyageRow[],
   projectId: string,
   agents: readonly AgentRow[],
   active: readonly TicketRow[],
-): RoundView | null => {
-  const [round] = rounds
+): VoyageView | null => {
+  const [voyage] = voyages
     .filter((row) => row.projectId === projectId && row.status !== 'ended')
     .toSorted((a, b) => b.number - a.number);
-  if (round === undefined) return null;
+  if (voyage === undefined) return null;
   return {
-    id: round.id,
-    label: `Round ${round.number} · ${round.status}`,
-    goal: round.goal,
-    reopenCount: reopenCountOf(round.id, agents, active),
+    id: voyage.id,
+    label: `Voyage ${voyage.number} · ${voyage.status}`,
+    goal: voyage.goal,
+    reopenCount: reopenCountOf(voyage.id, agents, active),
   };
 };
 
@@ -144,7 +146,7 @@ const projectPanel = (
     slug: project.slug,
     name: project.name,
     isArchived: project.archivedAt !== null,
-    round: openRound(tables.rounds, project.id, agents, active),
+    voyage: openVoyage(tables.voyages, project.id, agents, active),
     reviewer: reviewerOf(agents),
     retiredCount: agents.filter(({ status }) => status === 'retired').length,
     idleAgentIds: idleWithoutTicket(agents, active),

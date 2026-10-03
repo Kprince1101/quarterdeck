@@ -1,9 +1,9 @@
 import { turnDir, turnFile } from '../../driver/files.js';
 import {
   findTurnSession,
-  type RoundAgents,
-} from '../../driver/replay-round.js';
-import { ROUND_STARTED_EVENT } from '../../driver/round.js';
+  type VoyageAgents,
+} from '../../driver/replay-voyage.js';
+import { VOYAGE_STARTED_EVENT } from '../../driver/voyage.js';
 import type { TurnReadResult } from '../../intents/index.js';
 import { readTextIfExists } from '../../lib/fs.js';
 import { projectTurnsDir, type Store } from '../../store/index.js';
@@ -30,14 +30,14 @@ const readResult = async (path: string): Promise<TurnReadResult['result']> => {
   return parseResult(text);
 };
 
-const roundAgents =
-  (store: Store): RoundAgents =>
-  async (round) => {
+const voyageAgents =
+  (store: Store): VoyageAgents =>
+  async (voyage) => {
     const { rows } = await store.db.query<{ agentId: string }>(
       `select distinct agent_id as "agentId" from events
        where project_id = $1 and kind = $2 and agent_id is not null
-         and payload ->> 'round' = $3`,
-      [store.projectId, ROUND_STARTED_EVENT, String(round)],
+         and payload ->> 'voyage' = $3`,
+      [store.projectId, VOYAGE_STARTED_EVENT, String(voyage)],
     );
     return rows.map((row) => row.agentId);
   };
@@ -61,7 +61,7 @@ export const readTurn: IntentHandler<'turn.read'> = async (
   const [output, result, session] = await Promise.all([
     readTextIfExists(turnFile(dir, 'output')),
     readResult(turnFile(dir, 'result')),
-    findTurnSession(turnsDir, turn.agentId, turn.seq, roundAgents(store)),
+    findTurnSession(turnsDir, turn.agentId, turn.seq, voyageAgents(store)),
   ]);
   const read: TurnReadResult = {
     turnId: input.turnId,
@@ -70,7 +70,7 @@ export const readTurn: IntentHandler<'turn.read'> = async (
     input: turn.prompt,
     output,
     result,
-    round: session?.session.round ?? null,
+    voyage: session?.session.voyage ?? null,
     n: session?.n ?? null,
     latestSession: session?.latest ?? false,
   };

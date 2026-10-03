@@ -16,4 +16,4 @@ What Quarterdeck keeps for a project, for the Data widget and wipe. Read through
 
 ## Tables
 
-`countTables(db, projectId)` counts the project's rows in every `STORE_TABLES` table, in that order. `readTablePage(db, projectId, table, { offset, limit })` reads one page: every column, newest first (`id` desc for `turns` and `events`, `number` desc for `rounds`, `updated_at` desc for `budget`, `name` for `layouts`, `created_at` desc for the rest), `bigint` cells as strings and timestamps as ISO strings. `isStoreTable(name)` guards the table name, which is never taken from a request without it.
+`countTables(db, projectId)` counts the project's rows in every `STORE_TABLES` table, in that order. `readTablePage(db, projectId, table, { offset, limit })` reads one page: every column, newest first (`id` desc for `turns` and `events`, `number` desc for `voyages`, `updated_at` desc for `budget`, `name` for `layouts`, `created_at` desc for the rest), `bigint` cells as strings and timestamps as ISO strings. `isStoreTable(name)` guards the table name, which is never taken from a request without it.

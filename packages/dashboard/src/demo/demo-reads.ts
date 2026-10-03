@@ -67,28 +67,28 @@ const percentOf = (used: number, cap: number | null): number | null => {
 };
 
 interface DriverPlace {
-  round: number | null;
+  voyage: number | null;
   n: number | null;
 }
 
 const driverPlace = (world: DemoWorld, turn: TurnRow): DriverPlace => {
   const { store } = world;
   const agent = store.find('agents', turn.agentId);
-  if (agent?.role !== 'driver' || agent.roundId === null) {
-    return { round: null, n: null };
+  if (agent?.role !== 'driver' || agent.voyageId === null) {
+    return { voyage: null, n: null };
   }
-  const round = store.find('rounds', agent.roundId);
+  const voyage = store.find('voyages', agent.voyageId);
   const drivers = new Set(
     store
       .rows('agents')
-      .filter((row) => row.role === 'driver' && row.roundId === agent.roundId)
+      .filter((row) => row.role === 'driver' && row.voyageId === agent.voyageId)
       .map((row) => row.id),
   );
   const turns = store
     .rows('turns')
     .filter((row) => drivers.has(row.agentId))
     .map((row) => row.id);
-  return { round: round?.number ?? null, n: turns.indexOf(turn.id) + 1 };
+  return { voyage: voyage?.number ?? null, n: turns.indexOf(turn.id) + 1 };
 };
 
 const lifecycleOf = (rules: DemoRules): Lifecycle => {
@@ -158,10 +158,10 @@ export const createDemoReads = (
     },
     usage: () => {
       const { window } = lifecycleOf(rules).budget;
-      const rounds = store
-        .rows('rounds')
+      const voyages = store
+        .rows('voyages')
         .toSorted((a, b) => b.number - a.number);
-      const opens = rounds[1]?.startedAt ?? '';
+      const opens = voyages[1]?.startedAt ?? '';
       const usedTokens = store
         .rows('turns')
         .filter((turn) => (turn.endedAt ?? '') >= opens)

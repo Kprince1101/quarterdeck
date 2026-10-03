@@ -105,7 +105,7 @@ describe('bus read', () => {
 
     expect(table.enum).toEqual(READ_TABLE_NAMES);
     expect(table.enum).not.toContain('layouts');
-    expect(read?.description).toContain('tickets(id:uuid, round_id:uuid');
+    expect(read?.description).toContain('tickets(id:uuid, voyage_id:uuid');
   });
 
   it('returns only rows of the caller project', async () => {
@@ -157,7 +157,7 @@ describe('bus read', () => {
 
     expect(Object.keys(agent ?? {})).toEqual([
       'id',
-      'round_id',
+      'voyage_id',
       'name',
       'role',
       'runtime',

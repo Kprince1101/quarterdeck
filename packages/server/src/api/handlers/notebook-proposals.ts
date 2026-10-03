@@ -11,7 +11,7 @@ interface NotebookProposalRow {
   entryId: string | null;
   body: string | null;
   pinned: boolean;
-  roundId: string | null;
+  voyageId: string | null;
   agentId: string | null;
 }
 
@@ -29,7 +29,7 @@ const lockProposal = async (
   const proposal = await findRow<NotebookProposalRow>(
     tx,
     `select status, op, entry_id as "entryId", body, pinned,
-            round_id as "roundId", agent_id as "agentId"
+            voyage_id as "voyageId", agent_id as "agentId"
      from notebook_proposals
      where id = $1 and project_id = $2 for update`,
     [proposalId, projectId],
@@ -60,11 +60,11 @@ const APPLY: Record<NotebookOp, ApplyProposal> = {
   add: async (tx, projectId, proposal) => {
     const entry = await findRow<{ id: string }>(
       tx,
-      `insert into notebook (project_id, round_id, author_id, body, pinned)
+      `insert into notebook (project_id, voyage_id, author_id, body, pinned)
        values ($1, $2, $3, $4, $5) returning id`,
       [
         projectId,
-        proposal.roundId,
+        proposal.voyageId,
         proposal.agentId,
         proposal.body,
         proposal.pinned,

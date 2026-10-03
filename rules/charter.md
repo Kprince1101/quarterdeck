@@ -46,7 +46,7 @@ Quarterdeck is the only writer of state. Change tickets, agents and cards throug
 
 The next Driver is born with your notebook and nothing else. Write down what you would want to know: decisions the human made and why, conventions the code follows, traps you hit, and work in flight with who owns it. Keep it short and current; delete what is no longer true.
 
-When the round settles, with no open tickets, no running agents and no open cards, you get one wrap-up turn before it ends. Propose notebook entries to add, update or retire, and any change to this charter. Each is a proposal: the human approves it before the next Driver is born with it.
+When the voyage settles, with no open tickets, no running agents and no open cards, you get one wrap-up turn before it ends. Propose notebook entries to add, update or retire, and any change to this charter. Each is a proposal: the human approves it before the next Driver is born with it.
 
 ## Data
 

@@ -5,24 +5,24 @@ import { useIntentRequest } from '../use-intent-request.js';
 import type { ProjectPanel } from './project-model.js';
 import { useConfirm } from './use-confirm.js';
 
-interface RoundTarget {
+interface VoyageTarget {
   project: string;
-  roundId: string;
+  voyageId: string;
 }
 
-type RoundSender = (target: RoundTarget) => Promise<unknown>;
+type VoyageSender = (target: VoyageTarget) => Promise<unknown>;
 
-export interface RoundControlsView {
-  hasRound: boolean;
-  noRound: boolean;
-  roundLabel: string;
-  roundGoal: string;
+export interface VoyageControlsView {
+  hasVoyage: boolean;
+  noVoyage: boolean;
+  voyageLabel: string;
+  voyageGoal: string;
   goal: string;
   canStart: boolean;
   isPending: boolean;
   error: string | null;
   isConfirmingKill: boolean;
-  showRoundActions: boolean;
+  showVoyageActions: boolean;
   killConfirmLabel: string;
   handleGoalChange: (event: ChangeEvent<HTMLInputElement>) => void;
   handleStart: () => void;
@@ -37,45 +37,45 @@ const ticketCount = (count: number): string => {
   return `${count} tickets`;
 };
 
-export const useRoundControls = (panel: ProjectPanel): RoundControlsView => {
+export const useVoyageControls = (panel: ProjectPanel): VoyageControlsView => {
   const { intents } = useDeck();
   const { isPending, error, run } = useIntentRequest();
   const kill = useConfirm();
   const [goal, setGoal] = useState('');
-  const { round } = panel;
-  const sendForRound = (send: RoundSender) => {
-    if (round === null) return;
-    void run(() => send({ project: panel.slug, roundId: round.id }));
+  const { voyage } = panel;
+  const sendForVoyage = (send: VoyageSender) => {
+    if (voyage === null) return;
+    void run(() => send({ project: panel.slug, voyageId: voyage.id }));
   };
   return {
-    hasRound: round !== null,
-    noRound: round === null,
-    roundLabel: round?.label ?? '',
-    roundGoal: round?.goal ?? '',
+    hasVoyage: voyage !== null,
+    noVoyage: voyage === null,
+    voyageLabel: voyage?.label ?? '',
+    voyageGoal: voyage?.goal ?? '',
     goal,
     canStart: goal.trim() !== '' && !isPending,
     isPending,
     error,
     isConfirmingKill: kill.isConfirming,
-    showRoundActions: kill.isAsking,
-    killConfirmLabel: `Kill round? This reopens ${ticketCount(round?.reopenCount ?? 0)}`,
+    showVoyageActions: kill.isAsking,
+    killConfirmLabel: `Kill voyage? This reopens ${ticketCount(voyage?.reopenCount ?? 0)}`,
     handleGoalChange: (event) => {
       setGoal(valueOf(event.currentTarget));
     },
     handleStart: () => {
-      void run(() => intents.round.start({ project: panel.slug, goal })).then(
+      void run(() => intents.voyage.start({ project: panel.slug, goal })).then(
         (sent) => {
           if (sent) setGoal('');
         },
       );
     },
     handleEnd: () => {
-      sendForRound(intents.round.end);
+      sendForVoyage(intents.voyage.end);
     },
     handleKill: kill.handleAsk,
     handleConfirmKill: () => {
       kill.settle();
-      sendForRound(intents.round.kill);
+      sendForVoyage(intents.voyage.kill);
     },
     handleCancelKill: kill.handleCancel,
   };

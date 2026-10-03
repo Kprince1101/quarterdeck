@@ -58,15 +58,15 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
     expect(created.status).toBe(200);
   };
 
-  const startRound = async (qd: Quarterdeck, project: string) => {
-    const reply = await sendIntent(qd, 'round.start', {
+  const startVoyage = async (qd: Quarterdeck, project: string) => {
+    const reply = await sendIntent(qd, 'voyage.start', {
       project,
       goal: 'Ship the greeting',
     });
     expect(reply.status).toBe(202);
     const store = storeOf(qd, project);
     await vi.waitFor(async () => {
-      expect(await eventsOf(store, 'driver.round_started')).toHaveLength(1);
+      expect(await eventsOf(store, 'driver.voyage_started')).toHaveLength(1);
     }, WAIT);
     return store;
   };
@@ -84,12 +84,12 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
     await rm(homeDir, { recursive: true, force: true });
   });
 
-  it('assigns an approved ticket, reviews and merges its pull request, and ends the round', async () => {
+  it('assigns an approved ticket, reviews and merges its pull request, and ends the voyage', async () => {
     const runtime = crewRuntime({});
     const github = fakeGitHub();
     const qd = await start({ adapters: runtime.adapters, github });
     await openProject(qd, PROJECT);
-    const store = await startRound(qd, PROJECT);
+    const store = await startVoyage(qd, PROJECT);
     const ticketId = await proposeTicket(store, 'Add a greeting');
 
     const approved = await sendIntent(qd, 'ticket.approve', {
@@ -144,13 +144,13 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
     ).toBe('done');
 
     await vi.waitFor(async () => {
-      expect(await eventsOf(store, 'round.ended')).toEqual([
+      expect(await eventsOf(store, 'voyage.ended')).toEqual([
         expect.objectContaining({
           payload: expect.objectContaining({ reason: 'settled' }),
         }),
       ]);
     }, WAIT);
-    expect(await eventsOf(store, 'round.wrapped_up')).toHaveLength(1);
+    expect(await eventsOf(store, 'voyage.wrapped_up')).toHaveLength(1);
     expect(
       await valueOf(
         store,
@@ -239,7 +239,7 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
       github: fakeGitHub(),
     });
     await openProject(qd, PROJECT);
-    const store = await startRound(qd, PROJECT);
+    const store = await startVoyage(qd, PROJECT);
     const ticketId = await proposeTicket(store, 'Add a greeting');
     await sendIntent(qd, 'ticket.approve', { project: PROJECT, ticketId });
     return store;
@@ -281,14 +281,14 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
       github: fakeGitHub(),
     });
     await openProject(qd, PROJECT);
-    const store = await startRound(qd, PROJECT);
-    const [started] = await eventsOf(store, 'driver.round_started');
+    const store = await startVoyage(qd, PROJECT);
+    const [started] = await eventsOf(store, 'driver.voyage_started');
     const driverId = started?.agentId;
 
     const poked = await sendIntent(qd, 'agent.message', {
       project: PROJECT,
       agentId: driverId,
-      text: 'How is the round going?',
+      text: 'How is the voyage going?',
     });
     expect(poked.status).toBe(202);
     await vi.waitFor(async () => {
@@ -296,7 +296,7 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
         await valueOf(
           store,
           `select count(*)::int as value from turns
-           where agent_id = $1 and prompt like '%Message from the human: How is the round going?%'`,
+           where agent_id = $1 and prompt like '%Message from the human: How is the voyage going?%'`,
           [driverId],
         ),
       ).toBe(1);
@@ -321,11 +321,11 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
     ]);
   });
 
-  it('stops every agent on close and ends the round it left open at the next start', async () => {
+  it('stops every agent on close and ends the voyage it left open at the next start', async () => {
     const runtime = crewRuntime({});
     const first = await start({ adapters: runtime.adapters });
     await openProject(first, PROJECT);
-    await startRound(first, PROJECT);
+    await startVoyage(first, PROJECT);
     expect(openAcpClientCount()).toBeGreaterThan(0);
 
     await first.close();
@@ -334,7 +334,7 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
     const second = await start({ adapters: runtime.adapters });
     const store = storeOf(second, PROJECT);
     await vi.waitFor(async () => {
-      expect(await eventsOf(store, 'round.ended')).toEqual([
+      expect(await eventsOf(store, 'voyage.ended')).toEqual([
         expect.objectContaining({
           payload: expect.objectContaining({ reason: 'restart' }),
         }),
@@ -359,7 +359,7 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
     await openProject(qd, BROKEN);
     await openProject(qd, PROJECT);
 
-    const broken = await startRound(qd, BROKEN);
+    const broken = await startVoyage(qd, BROKEN);
     await vi.waitFor(async () => {
       expect(await eventsOf(broken, CREW_FAILED_EVENT)).toContainEqual(
         expect.objectContaining({
@@ -377,7 +377,7 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
       ).status,
     ).toBe(200);
 
-    const store = await startRound(qd, PROJECT);
+    const store = await startVoyage(qd, PROJECT);
     const ticketId = await proposeTicket(store, 'Add a greeting');
     expect(
       (await sendIntent(qd, 'ticket.approve', { project: PROJECT, ticketId }))

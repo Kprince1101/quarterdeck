@@ -6,7 +6,7 @@ One process on your machine. It starts agents through their own CLIs (Kiro, Clau
 
 No API keys. No account. No telemetry. Everything Quarterdeck stores lives in one folder you can open, read and delete.
 
-Status: alpha. Built, by itself, from a written spec. [docs/proof.md](docs/proof.md) records it running a round on its own repository end to end over claude: the Planner proposed a ticket, a builder opened the pull request, the reviewer and merge gate merged it, and the round wrapped itself up.
+Status: alpha. Built, by itself, from a written spec. [docs/proof.md](docs/proof.md) records it running a voyage on its own repository end to end over claude: the Planner proposed a ticket, a builder opened the pull request, the reviewer and merge gate merged it, and the voyage wrapped itself up.
 
 ## Getting started
 
@@ -20,14 +20,14 @@ npx quarterdeck up                        # starts the server and prints the das
 
 Open the URL exactly as `up` prints it: the `#token=` part is a new token for each start, and the API refuses any request without it, including one from another program on your machine.
 
-`init` writes nothing into your repository unless you agree to a `.quarterdeck/` folder for that project's settings. `quarterdeck wipe <project>` removes a project and everything it stored; `quarterdeck replay <round> [n]` re-runs a round's Driver turns in a fresh session that writes nothing, which is how you ask "why did it decide that?". See `packages/cli/README.md` for every command and flag.
+`init` writes nothing into your repository unless you agree to a `.quarterdeck/` folder for that project's settings. `quarterdeck wipe <project>` removes a project and everything it stored; `quarterdeck replay <voyage> [n]` re-runs a voyage's Driver turns in a fresh session that writes nothing, which is how you ask "why did it decide that?". See `packages/cli/README.md` for every command and flag.
 
-## How a round works
+## How a voyage works
 
 - The **Planner** is a conversation per project. You describe what you want; it proposes tickets; you approve, edit or reject them on the board.
-- **Start Round** births a **Driver**: one session that is told each time a ticket is approved, a builder finishes a turn, the reviewer or the merge gate sends work back, or a pull request merges. It births builders with names from the naming theme, assigns work, continues idle builders, and asks you questions as **cards** when something is irreversible or product-shaped. A declined or unanswered card is a result the Driver sees, not a crash. One round runs per project at a time.
-- Each **builder** works in its own git worktree, opens a pull request, and reports it. The project's **reviewer**, born when a round starts and kept between rounds, reads the PR against `rules/reviewer.md` and returns a verdict. Approve plus auto-merge means a squash merge through `gh`; otherwise it waits for you.
-- A round **ends itself** when nothing is open and the settle time has passed, then runs a wrap-up that proposes **notebook** entries and charter edits. Approved entries are what the next Driver is born knowing. A round still open when `quarterdeck up` starts again is ended, its tickets reopened, because its agents stopped with the last run.
+- **Start Voyage** births a **Driver**: one session that is told each time a ticket is approved, a builder finishes a turn, the reviewer or the merge gate sends work back, or a pull request merges. It births builders with names from the naming theme, assigns work, continues idle builders, and asks you questions as **cards** when something is irreversible or product-shaped. A declined or unanswered card is a result the Driver sees, not a crash. One voyage runs per project at a time.
+- Each **builder** works in its own git worktree, opens a pull request, and reports it. The project's **reviewer**, born when a voyage starts and kept between voyages, reads the PR against `rules/reviewer.md` and returns a verdict. Approve plus auto-merge means a squash merge through `gh`; otherwise it waits for you.
+- A voyage **ends itself** when nothing is open and the settle time has passed, then runs a wrap-up that proposes **notebook** entries and charter edits. Approved entries are what the next Driver is born knowing. A voyage still open when `quarterdeck up` starts again is ended, its tickets reopened, because its agents stopped with the last run.
 - A tool call your permission rules leave at `ask` becomes a card for you to allow or deny.
 - Guardrails: pause an agent, a project or everything; kill, retire or reset an agent; a stuck detector for builders that stop making commits; a token budget that holds launches at 80% of a cap; and a merge gate you can turn off.
 
@@ -35,7 +35,7 @@ Agents are driven over the Agent Client Protocol. Permission requests are answer
 
 ## The dashboard
 
-A grid of widgets you drag, resize, hide and duplicate; layouts are saved by the server and three presets ship (default, ops, minimal). Widgets: **Board** (liveness, pause all, project picker), **Project** (round controls, toggles, reviewer), **Agents** (state, held work, actions), **Events** (filtered feed), **Cards** (open questions with reply), **Planner**, **Driver** (turns, replay command), **Notebook** (proposals with diffs), **Usage** (tokens in the 5-hour window), **Rules** (edit any rules file in place, with validation), **Data** (every table, every path, wipe). See `site/public/docs/widgets.html`.
+A grid of widgets you drag, resize, hide and duplicate; layouts are saved by the server and three presets ship (default, ops, minimal). Widgets: **Board** (liveness, pause all, project picker), **Project** (voyage controls, toggles, reviewer), **Agents** (state, held work, actions), **Events** (filtered feed), **Cards** (open questions with reply), **Planner**, **Driver** (turns, replay command), **Notebook** (proposals with diffs), **Usage** (tokens in the 5-hour window), **Rules** (edit any rules file in place, with validation), **Data** (every table, every path, wipe). See `site/public/docs/widgets.html`.
 
 ## Where your data lives
 
@@ -88,7 +88,7 @@ Permissions are the exception: the repo layer is not merged. It is checked on it
 
 The merge gate (`mergeGate` in `lifecycle.json`) is tighten-only in the repo layer too: a `require*` flag is on if any layer turns it on, `autoMerge` is on only if no layer turns it off, and the repo layer may not set `base`. See `packages/server/src/gate/README.md`.
 
-So is the auto-end settle time (`autoEndSettleSeconds`, how long a round must stay settled before it ends itself): the repo layer can lengthen it but never shorten it. See `packages/server/src/round-end/README.md`.
+So is the auto-end settle time (`autoEndSettleSeconds`, how long a voyage must stay settled before it ends itself): the repo layer can lengthen it but never shorten it. See `packages/server/src/voyage-end/README.md`.
 
 Agents do not inherit the server's environment. They get a short allowlist (`PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`, `LC_*`, `TERM`, `TMPDIR`, `TZ`, `SSH_AUTH_SOCK`, `QUARTERDECK_BUS_*`), plus the sign-in variables their runtime declares. `GH_TOKEN`, `GITHUB_TOKEN` and `DATABASE_URL` stay out. `env.json` lists more names in `pass`; values always come from the server's environment. Only the machine layer (`~/.quarterdeck/rules.local.env.json`) can add names: the repo layer is ignored, because agents can write to the repo. See `packages/server/src/acp/README.md`.
 

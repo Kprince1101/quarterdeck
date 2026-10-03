@@ -23,7 +23,7 @@ export const READ_TABLES = {
     scope: 'id = $1',
     order: 'id',
   },
-  rounds: {
+  voyages: {
     columns: {
       id: 'uuid',
       number: 'int',
@@ -38,7 +38,7 @@ export const READ_TABLES = {
   agents: {
     columns: {
       id: 'uuid',
-      round_id: 'uuid',
+      voyage_id: 'uuid',
       name: 'text',
       role: 'text',
       runtime: 'text',
@@ -54,7 +54,7 @@ export const READ_TABLES = {
   tickets: {
     columns: {
       id: 'uuid',
-      round_id: 'uuid',
+      voyage_id: 'uuid',
       assignee_id: 'uuid',
       title: 'text',
       body: 'text',
@@ -121,7 +121,7 @@ export const READ_TABLES = {
   notebook: {
     columns: {
       id: 'uuid',
-      round_id: 'uuid',
+      voyage_id: 'uuid',
       author_id: 'uuid',
       body: 'text',
       pinned: 'bool',
@@ -134,7 +134,7 @@ export const READ_TABLES = {
   notebook_proposals: {
     columns: {
       id: 'uuid',
-      round_id: 'uuid',
+      voyage_id: 'uuid',
       agent_id: 'uuid',
       op: 'text',
       entry_id: 'uuid',
@@ -151,7 +151,7 @@ export const READ_TABLES = {
   charter_proposals: {
     columns: {
       id: 'uuid',
-      round_id: 'uuid',
+      voyage_id: 'uuid',
       agent_id: 'uuid',
       body: 'text',
       rationale: 'text',
@@ -165,7 +165,7 @@ export const READ_TABLES = {
   budget: {
     columns: {
       id: 'uuid',
-      round_id: 'uuid',
+      voyage_id: 'uuid',
       agent_id: 'uuid',
       limit_tokens: 'int',
       limit_usd: 'numeric',

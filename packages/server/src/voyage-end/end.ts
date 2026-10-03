@@ -2,16 +2,16 @@ import type { AgentLifecycle } from '../agents/index.js';
 import type { Store } from '../store/index.js';
 import { startAutoEnd, type AutoEnd, type AutoEndOptions } from './auto-end.js';
 import {
-  cleanUpRound,
-  releaseRound,
+  cleanUpVoyage,
+  releaseVoyage,
   type CleanUpOptions,
-  type RoundCleanup,
-  type RoundRelease,
+  type VoyageCleanup,
+  type VoyageRelease,
 } from './cleanup.js';
 import {
   NO_DRIVER_SESSION,
   missWrapUp,
-  wrapUpRound,
+  wrapUpVoyage,
   type WrapUp,
   type WrapUpOptions,
 } from './wrap-up.js';
@@ -20,26 +20,26 @@ export const SETTLED_REASON = 'settled';
 export const ENDED_REASON = 'ended';
 export const KILLED_REASON = 'killed';
 
-export interface EndRoundOptions extends WrapUpOptions {
+export interface EndVoyageOptions extends WrapUpOptions {
   lifecycle: Pick<AgentLifecycle, 'retire'>;
   reason?: string;
 }
 
-export interface EndedRound {
+export interface EndedVoyage {
   wrapUp: WrapUp;
-  cleanup: RoundCleanup;
+  cleanup: VoyageCleanup;
 }
 
-export interface RoundStepOptions {
+export interface VoyageStepOptions {
   store: Store;
   lifecycle: Pick<AgentLifecycle, 'retire'>;
-  roundId: string;
+  voyageId: string;
 }
 
 const withRelease = (
-  released: RoundRelease,
-  cleanup: RoundCleanup,
-): RoundCleanup => ({
+  released: VoyageRelease,
+  cleanup: VoyageCleanup,
+): VoyageCleanup => ({
   ...cleanup,
   closedCards: [...released.closedCards, ...cleanup.closedCards],
   retired: [...released.retired, ...cleanup.retired],
@@ -49,51 +49,53 @@ const withRelease = (
 const endWith = async (
   options: CleanUpOptions,
   wrapUp: () => Promise<WrapUp>,
-): Promise<EndedRound> => {
-  const released = await releaseRound(options);
+): Promise<EndedVoyage> => {
+  const released = await releaseVoyage(options);
   const wrapped = await wrapUp();
-  const cleanup = await cleanUpRound(options);
+  const cleanup = await cleanUpVoyage(options);
   return { wrapUp: wrapped, cleanup: withRelease(released, cleanup) };
 };
 
-export const endRound = (options: EndRoundOptions): Promise<EndedRound> =>
+export const endVoyage = (options: EndVoyageOptions): Promise<EndedVoyage> =>
   endWith(
     {
       store: options.store,
       lifecycle: options.lifecycle,
-      roundId: options.round.round.id,
+      voyageId: options.voyage.voyage.id,
       reason: options.reason ?? SETTLED_REASON,
     },
-    () => wrapUpRound(options),
+    () => wrapUpVoyage(options),
   );
 
-export const endRoundWithoutDriver = (
-  options: RoundStepOptions,
-): Promise<EndedRound> =>
+export const endVoyageWithoutDriver = (
+  options: VoyageStepOptions,
+): Promise<EndedVoyage> =>
   endWith({ ...options, reason: ENDED_REASON }, () =>
-    missWrapUp(options.store, options.roundId, NO_DRIVER_SESSION),
+    missWrapUp(options.store, options.voyageId, NO_DRIVER_SESSION),
   );
 
-export const killRound = (options: RoundStepOptions): Promise<RoundCleanup> =>
-  cleanUpRound({ ...options, reason: KILLED_REASON, reopen: true });
+export const killVoyage = (
+  options: VoyageStepOptions,
+): Promise<VoyageCleanup> =>
+  cleanUpVoyage({ ...options, reason: KILLED_REASON, reopen: true });
 
-export interface RoundAutoEndOptions
+export interface VoyageAutoEndOptions
   extends
-    EndRoundOptions,
+    EndVoyageOptions,
     Pick<AutoEndOptions, 'settleSeconds' | 'schedule' | 'home' | 'onError'> {
-  onEnded?: (ended: EndedRound) => void;
+  onEnded?: (ended: EndedVoyage) => void;
 }
 
-export const startRoundAutoEnd = (
-  options: RoundAutoEndOptions,
+export const startVoyageAutoEnd = (
+  options: VoyageAutoEndOptions,
 ): Promise<AutoEnd> => {
   const { settleSeconds, schedule, home, onError, onEnded, ...end } = options;
   const auto: AutoEndOptions = {
     store: options.store,
-    roundId: options.round.round.id,
+    voyageId: options.voyage.voyage.id,
     settleSeconds,
     end: async () => {
-      const ended = await endRound(end);
+      const ended = await endVoyage(end);
       onEnded?.(ended);
     },
   };

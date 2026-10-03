@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { NotebookEntry, Round, TurnFormat } from '../driver/index.js';
+import type { NotebookEntry, Voyage, TurnFormat } from '../driver/index.js';
 
 export const MAX_NOTEBOOK_PROPOSALS = 50;
 
@@ -93,7 +93,7 @@ export const WRAP_UP_INSTRUCTIONS = `End your reply with your wrap-up result: on
 }
 \`\`\`
 
-- \`summary\`: one or two sentences on what this round did.
+- \`summary\`: one or two sentences on what this voyage did.
 - \`notebook\`: changes to the notebook, or \`[]\`. \`add\` writes a new entry (\`pinned\` keeps it first); \`update\` replaces an entry's text; \`retire\` takes an entry out of the notebook. \`entry\` is an id from the notebook above. At most one change per entry, and at most ${MAX_NOTEBOOK_PROPOSALS} changes.
 - \`charter\`: \`null\`, or \`{ "body": "...", "rationale": "..." }\` where \`body\` is the whole charter as you would have it, not a diff.
 
@@ -113,15 +113,15 @@ const notebookSection = (notebook: readonly NotebookEntry[]): string => {
 };
 
 export interface WrapUpPromptParts {
-  round: Pick<Round, 'number'>;
+  voyage: Pick<Voyage, 'number'>;
   charter: string;
   notebook: readonly NotebookEntry[];
 }
 
 export const buildWrapUpPrompt = (parts: WrapUpPromptParts): string =>
   [
-    `Round ${parts.round.number} has settled: no open tickets, no running agents and no open cards. This is your wrap-up turn; the round ends after it.`,
-    'Look back over the round and propose what the next Driver should be born with: notebook entries to add, update or retire, and any change to the charter.',
+    `Voyage ${parts.voyage.number} has settled: no open tickets, no running agents and no open cards. This is your wrap-up turn; the voyage ends after it.`,
+    'Look back over the voyage and propose what the next Driver should be born with: notebook entries to add, update or retire, and any change to the charter.',
     '# Notebook',
     'The active notebook, each entry under its id.',
     notebookSection(parts.notebook),
