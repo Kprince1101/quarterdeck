@@ -26,17 +26,36 @@ export interface LayoutSync {
   resetTo: (preset: PresetName) => void;
 }
 
-const useLayoutWriter = (
+const flushOnLeave = <Target>(writer: LayoutWriter<Target>): (() => void) => {
+  const leave = () => writer.flush({ keepalive: true });
+  const hidden = () => {
+    if (document.visibilityState === 'hidden') leave();
+  };
+  window.addEventListener('pagehide', leave);
+  document.addEventListener('visibilitychange', hidden);
+  return () => {
+    window.removeEventListener('pagehide', leave);
+    document.removeEventListener('visibilitychange', hidden);
+  };
+};
+
+const useLayoutWriter = <Target>(
   delayMs: number,
   setError: (error: string | null) => void,
-): LayoutWriter => {
+): LayoutWriter<Target> => {
   const [writer] = useState(() =>
-    createLayoutWriter({
+    createLayoutWriter<Target>({
       delayMs,
       onError: (err) => setError(getErrorMessage(err)),
     }),
   );
-  useEffect(() => () => writer.flush(), [writer]);
+  useEffect(() => {
+    const stopListening = flushOnLeave(writer);
+    return () => {
+      stopListening();
+      writer.flush();
+    };
+  }, [writer]);
   return writer;
 };
 
@@ -51,41 +70,50 @@ export const useLayoutSync = ({
     [stream.tables.layouts],
   );
   const [error, setError] = useState<string | null>(null);
-  const writer = useLayoutWriter(delayMs, setError);
+  const writer = useLayoutWriter<string>(delayMs, setError);
   const [initialLayout] = useState(() => saved ?? presetLayout(DEFAULT_PRESET));
   const [syncedLayout, setSyncedLayout] = useState<GridLayout | null>(null);
 
   useEffect(() => {
     if (saved === null || writer.isEcho(layoutKey(saved))) return;
+    if (writer.hasQueued()) return;
     setSyncedLayout(saved);
   }, [saved, writer]);
 
+  useEffect(() => {
+    writer.setTarget(project);
+  }, [project, writer]);
+
   const handleLayoutChange = useCallback(
     (spec: GridLayout) => {
-      if (project === null) return;
       setError(null);
       writer.write({
         key: layoutKey(spec),
-        send: () =>
-          intents.layout.save({ project, name: DASHBOARD_LAYOUT, spec }),
+        send: (to, options) =>
+          intents.layout.save(
+            { project: to, name: DASHBOARD_LAYOUT, spec },
+            options,
+          ),
       });
     },
-    [project, intents, writer],
+    [intents, writer],
   );
 
   const resetTo = useCallback(
     (preset: PresetName) => {
       const layout = presetLayout(preset);
       setSyncedLayout(layout);
-      if (project === null) return;
       setError(null);
       writer.write({
         key: layoutKey(layout),
-        send: () =>
-          intents.layout.reset({ project, name: DASHBOARD_LAYOUT, preset }),
+        send: (to, options) =>
+          intents.layout.reset(
+            { project: to, name: DASHBOARD_LAYOUT, preset },
+            options,
+          ),
       });
     },
-    [project, intents, writer],
+    [intents, writer],
   );
 
   return { initialLayout, syncedLayout, error, handleLayoutChange, resetTo };

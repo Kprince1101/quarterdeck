@@ -214,9 +214,12 @@ The schema lives in the server (`@quarterdeck/server/layouts`), so the dashboard
 
 - Layouts are saved per project under the name `dashboard`, so every tab open on a project shares one layout.
 - On load the grid shows the saved layout, or the `default` preset until the snapshot brings one. A stored spec the grid cannot parse is ignored.
-- Each edit is sent as `layout.save` once edits pause for 300 ms. One write is in flight at a time and only the newest queued one follows it. The change the server streams back for our own write is recognised and dropped, so a slow echo never undoes a newer edit. A change made anywhere else (another tab, the CLI) loads into the grid.
+- Each edit is sent as `layout.save` once edits pause for 300 ms. One write is in flight at a time and only the newest queued one follows it. The change the server streams back for our own write is recognised and dropped, so a slow echo never undoes a newer edit. A change made anywhere else (another tab, the CLI) loads into the grid, unless an edit of ours is still waiting to be sent: that edit is sent next and wins.
 - The bar above the grid picks a preset and resets to it: the grid switches at once and `layout.reset` writes the same preset on the server. A refused write shows its error under the bar.
-- Nothing is written before the snapshot names the project.
+- A refresh or a closed tab does not lose the last edit. On `pagehide`, and when the tab is hidden (`visibilitychange`), the waiting write goes out at once as a `keepalive` request, which the browser finishes after the page is gone. It does not wait behind a write still in flight, since that one may never settle. Browsers cap keepalive bodies at 64 KiB (`KEEPALIVE_BODY_LIMIT`); a layout is far smaller, and one that is not is refused with a `413` `IntentError` before it is sent rather than dropped silently.
+- An edit or reset made before the snapshot names the project is kept as the waiting write and sent once the project is known. The saved layout the snapshot brings does not replace the grid while that edit waits, so the person's edit is what the grid shows and what the server keeps. An edit still waiting when the page closes before any snapshot is lost, since there is no project to send it to.
+
+`createLayoutWriter` (`layout-writer.ts`) holds the queue and knows nothing of projects: writes wait until `setTarget` gives them somewhere to go, and `flush({ keepalive: true })` sends the waiting one as the page leaves. `use-layout-sync.ts` sets the target from `projectOf` and wires the page events.
 
 The presets ship in the server (`LAYOUT_PRESETS` in `packages/server/src/layouts/presets.ts`) and name widgets by their registered `type`, so a preset slot for a widget that has not landed yet stays empty until it does:
 

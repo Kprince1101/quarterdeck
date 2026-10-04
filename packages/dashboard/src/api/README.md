@@ -25,14 +25,16 @@ const reply = await remote.planner.message({
 reply.status; // 'pending'
 ```
 
-`intents` posts to the page's own origin. Every intent in the registry is `client.<group>.<action>`, typed from its schema's input (`IntentInput<N>`), and resolves to the server's `IntentReply` with `intent` narrowed to that name. `createIntentSender()` gives the same thing as one `send(name, input)` function.
+`intents` posts to the page's own origin. Every intent in the registry is `client.<group>.<action>`, typed from its schema's input (`IntentInput<N>`), and resolves to the server's `IntentReply` with `intent` narrowed to that name. `createIntentSender()` gives the same thing as one `send(name, input, options?)` function.
+
+Every sender takes an optional second options argument (third for `send`). `{ keepalive: true }` sends the request with `fetch`'s `keepalive`, so it completes after the page unloads (the dashboard uses it to save the layout on `pagehide`). Browsers cap keepalive bodies at `KEEPALIVE_BODY_LIMIT` (64 KiB); a larger body is refused before sending with `IntentError` status `413` and `sent: false`.
 
 The input is checked against the same schema before it is sent. A refusal, local or from the server, throws `IntentError`:
 
 | Field    | Meaning                                                                           |
 | -------- | --------------------------------------------------------------------------------- |
 | `intent` | The intent name.                                                                  |
-| `status` | The HTTP status (`400` for a local refusal).                                      |
+| `status` | The HTTP status (`400` for a local refusal, `413` for a keepalive body too big).  |
 | `issues` | zod's `{ path, message }` list for an invalid body, otherwise `undefined`.        |
 | `sent`   | `false` when the schema refused it before any request went out, `true` otherwise. |
 

@@ -27,25 +27,37 @@ const gate = (): Gate => {
 
 describe('layout writer', () => {
   const sent: string[] = [];
+  const calls: { key: string; to: string; keepalive: boolean }[] = [];
   const gates = new Map<string, Gate>();
   const errors: unknown[] = [];
 
-  const write = (key: string): LayoutWrite => ({
+  const write = (key: string): LayoutWrite<string> => ({
     key,
-    send: () => {
+    send: (to, { keepalive }) => {
       sent.push(key);
+      calls.push({ key, to, keepalive });
       const opened = gate();
       gates.set(key, opened);
       return opened.promise;
     },
   });
 
-  const writer = () =>
-    createLayoutWriter({ delayMs: DELAY, onError: (err) => errors.push(err) });
+  const unaimed = () =>
+    createLayoutWriter<string>({
+      delayMs: DELAY,
+      onError: (err) => errors.push(err),
+    });
+
+  const writer = () => {
+    const layouts = unaimed();
+    layouts.setTarget('deck');
+    return layouts;
+  };
 
   beforeEach(() => {
     vi.useFakeTimers();
     sent.length = 0;
+    calls.length = 0;
     errors.length = 0;
     gates.clear();
   });
@@ -110,5 +122,56 @@ describe('layout writer', () => {
     expect(sent).toEqual(['a']);
     layouts.flush();
     expect(sent).toEqual(['a']);
+  });
+
+  it('keeps the newest write until it has a target, then sends it there', async () => {
+    const layouts = unaimed();
+    layouts.write(write('a'));
+    layouts.write(write('b'));
+    await vi.advanceTimersByTimeAsync(DELAY);
+    layouts.flush();
+    expect(sent).toEqual([]);
+    expect(layouts.hasQueued()).toBe(true);
+    layouts.setTarget('deck');
+    expect(calls).toEqual([{ key: 'b', to: 'deck', keepalive: false }]);
+    expect(layouts.hasQueued()).toBe(false);
+  });
+
+  it('waits out the delay when the target arrives mid-edit', async () => {
+    const layouts = unaimed();
+    layouts.write(write('a'));
+    layouts.setTarget('deck');
+    expect(sent).toEqual([]);
+    await vi.advanceTimersByTimeAsync(DELAY);
+    expect(sent).toEqual(['a']);
+  });
+
+  it('sends a pending write with keepalive when the page is leaving', () => {
+    const layouts = writer();
+    layouts.write(write('a'));
+    layouts.flush({ keepalive: true });
+    expect(calls).toEqual([{ key: 'a', to: 'deck', keepalive: true }]);
+    expect(layouts.isEcho('a')).toBe(true);
+  });
+
+  it('does not hold a leaving write behind one still in flight', async () => {
+    const layouts = writer();
+    layouts.write(write('a'));
+    layouts.flush();
+    layouts.write(write('b'));
+    layouts.flush({ keepalive: true });
+    expect(calls).toEqual([
+      { key: 'a', to: 'deck', keepalive: false },
+      { key: 'b', to: 'deck', keepalive: true },
+    ]);
+    gates.get('a')?.open();
+    await vi.advanceTimersByTimeAsync(DELAY);
+    expect(sent).toEqual(['a', 'b']);
+  });
+
+  it('sends nothing on leaving when nothing is pending', () => {
+    const layouts = writer();
+    layouts.flush({ keepalive: true });
+    expect(sent).toEqual([]);
   });
 });
