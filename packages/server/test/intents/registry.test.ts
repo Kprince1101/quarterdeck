@@ -21,6 +21,8 @@ const GLOBAL_INTENTS = new Set([
   'rules.reset',
   'wipe.all',
   'pause.all',
+  'layout.save',
+  'layout.reset',
   'voyage.start',
   'voyage.end',
   'voyage.kill',
@@ -65,7 +67,7 @@ describe('intent registry', () => {
     expect(ruleNameSchema.options).toEqual(RULE_NAMES);
   });
 
-  it('scopes every intent but machine rules, wipe.all, pause.all and the voyage to a project', () => {
+  it('scopes every intent but machine rules, wipe.all, pause.all, the dashboard layout and the voyage to a project', () => {
     const unscoped = INTENT_NAMES.filter((name) =>
       INTENTS[name]
         .safeParse({})
@@ -227,5 +229,21 @@ describe('intent schemas', () => {
       true,
     ]);
     expect(resets('cockpit')).toBe(false);
+  });
+
+  it('takes the dashboard layout without a project and every other with one', () => {
+    const resets = (input: object) =>
+      INTENTS['layout.reset'].safeParse({ ...input, preset: 'ops' });
+    expect(resets({ name: 'dashboard' }).success).toBe(true);
+    expect(resets({ project, name: 'spare' }).success).toBe(true);
+    const refused = [
+      resets({ project, name: 'dashboard' }),
+      resets({ name: 'spare' }),
+    ];
+    refused.forEach((result) => {
+      expect(result.error?.issues.map(({ path }) => path)).toEqual([
+        ['project'],
+      ]);
+    });
   });
 });

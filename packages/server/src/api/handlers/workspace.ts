@@ -1,7 +1,12 @@
-import type { WorkspaceIntentName } from '../../intents/index.js';
+import { createGlobalLayouts } from '../../global-layout/index.js';
+import type {
+  IntentReply,
+  IntentResult,
+  WorkspaceIntentName,
+} from '../../intents/index.js';
 import { presetLayout, type GridLayout } from '../../layouts/index.js';
 import type { Queryable } from '../../store/index.js';
-import type { IntentHandlers } from '../context.js';
+import type { ApiContext, IntentHandlers } from '../context.js';
 import { applyInProject, findRow, unrecorded } from '../record.js';
 import { assertDirectory } from '../repo-path.js';
 import { RULES_HANDLERS } from './rules.js';
@@ -55,6 +60,11 @@ const PROJECT_HANDLERS: IntentHandlers<ProjectIntentName> = {
     }),
 };
 
+interface LayoutInput {
+  project?: string | undefined;
+  name: string;
+}
+
 const saveLayout = async (
   tx: Queryable,
   projectId: string,
@@ -72,23 +82,39 @@ const saveLayout = async (
   return { layoutId: layout.id, name };
 };
 
+const writeLayout = async (
+  ctx: ApiContext,
+  intent: 'layout.save' | 'layout.reset',
+  input: LayoutInput,
+  spec: GridLayout,
+  extra: IntentResult = {},
+): Promise<IntentReply> => {
+  const { project } = input;
+  if (project === undefined) {
+    const layouts = ctx.layouts ?? createGlobalLayouts(ctx.stores.dataHome);
+    const { updatedAt } = await layouts.save(spec);
+    return unrecorded(intent, { name: input.name, updatedAt, ...extra });
+  }
+  return applyInProject(
+    ctx,
+    intent,
+    { ...input, project },
+    async (tx, projectId) => ({
+      ...(await saveLayout(tx, projectId, input.name, spec)),
+      ...extra,
+    }),
+  );
+};
+
 export const WORKSPACE_HANDLERS: IntentHandlers<WorkspaceIntentName> = {
   ...PROJECT_HANDLERS,
   ...RULES_HANDLERS,
   'layout.save': (ctx, input, name) =>
-    applyInProject(ctx, name, input, (tx, projectId) =>
-      saveLayout(tx, projectId, input.name, input.spec),
-    ),
+    writeLayout(ctx, name, input, input.spec),
   'layout.reset': (ctx, input, name) =>
-    applyInProject(ctx, name, input, async (tx, projectId) => ({
-      ...(await saveLayout(
-        tx,
-        projectId,
-        input.name,
-        presetLayout(input.preset),
-      )),
+    writeLayout(ctx, name, input, presetLayout(input.preset), {
       preset: input.preset,
-    })),
+    }),
   'layout.delete': (ctx, input, name) =>
     applyInProject(ctx, name, input, async (tx, projectId) => {
       await findRow(

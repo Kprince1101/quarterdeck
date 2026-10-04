@@ -45,6 +45,8 @@ export const PRESET_NAMES = Object.keys(LAYOUT_PRESETS) as [
 
 export const DEFAULT_PRESET: PresetName = 'default';
 
+export const DASHBOARD_LAYOUT = 'dashboard';
+
 export const presetNameSchema = z.enum(PRESET_NAMES);
 
 export const presetLayout = (name: PresetName): GridLayout =>

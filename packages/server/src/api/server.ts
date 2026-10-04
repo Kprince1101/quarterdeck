@@ -3,6 +3,10 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { homedir } from 'node:os';
 import { closeAllAcpClients } from '../acp/client/index.js';
+import {
+  createGlobalLayouts,
+  type GlobalLayouts,
+} from '../global-layout/index.js';
 import type { StopHosts } from '../lifecycle/stop.js';
 import { quarterdeckHome } from '../store/index.js';
 import type { UpgradeHandler } from '../stream/socket.js';
@@ -35,6 +39,7 @@ export interface ApiServerOptions {
   token?: string;
   projectHooks?: ProjectHooks;
   voyages?: ApiVoyages;
+  layouts?: GlobalLayouts;
   upgrade?: UpgradeHandler;
   openRequests?: Pick<OpenRequestsOptions, 'hosts' | 'refreshMs'>;
 }
@@ -43,10 +48,28 @@ export interface ApiServer {
   url: string;
   port: number;
   stores: ProjectStores;
+  layouts: GlobalLayouts;
   token: string;
   tokenPath: string;
   close: () => Promise<void>;
 }
+
+const reportError = (err: unknown): void => {
+  console.error(err);
+};
+
+const seedLayout = async (
+  layouts: GlobalLayouts,
+  stores: ProjectStores,
+  onError: (err: unknown) => void = reportError,
+): Promise<void> => {
+  try {
+    const opened = await stores.opened();
+    await layouts.seed(opened.map(({ db }) => db));
+  } catch (err) {
+    onError(err);
+  }
+};
 
 export const startApiServer = async (
   options: ApiServerOptions = {},
@@ -65,9 +88,11 @@ export const startApiServer = async (
     stores,
     homeDir,
   });
+  const layouts = options.layouts ?? createGlobalLayouts(home);
   const ctx: ApiContext = {
     stores,
     homeDir,
+    layouts,
     openRequests,
     voyages: options.voyages,
   };
@@ -112,11 +137,13 @@ export const startApiServer = async (
       await close();
       throw err;
     }
+    await seedLayout(layouts, stores, options.onError);
   }
   return {
     url: `http://${API_HOST}:${port}`,
     port,
     stores,
+    layouts,
     token,
     tokenPath,
     close,

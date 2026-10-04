@@ -11,6 +11,7 @@ import { presetLayout } from '@quarterdeck/server/layouts';
 import type {
   LayoutRow,
   NotebookProposalRow,
+  SavedLayout,
   VoyageRow,
 } from '@quarterdeck/server/stream-schema';
 import { DemoRefusal } from './demo-fetch.js';
@@ -60,6 +61,25 @@ const UNRECORDED: ReadonlySet<IntentName> = new Set([
   'wipe.project',
   'wipe.all',
 ]);
+
+const LAYOUT_WRITES: ReadonlySet<IntentName> = new Set([
+  'layout.save',
+  'layout.reset',
+]);
+
+interface LayoutTarget {
+  project?: string | undefined;
+  name: string;
+}
+
+const isGlobalLayout = (target: LayoutTarget): boolean =>
+  target.project === undefined;
+
+const isRecorded = (name: IntentName, input: unknown): boolean => {
+  if (UNRECORDED.has(name)) return false;
+  if (!LAYOUT_WRITES.has(name)) return true;
+  return !isGlobalLayout(input as LayoutTarget);
+};
 
 const refuse = (status: number, message: string): never => {
   throw new DemoRefusal(status, message);
@@ -169,7 +189,7 @@ export const createDemoIntents = (
     }
     return proposal.entryId;
   };
-  const saveLayout = (name: string, spec: unknown) => {
+  const saveProjectLayout = (name: string, spec: unknown) => {
     const existing = store.rows('layouts').find((row) => row.name === name);
     const at = store.now();
     const id = existing?.id ?? store.newId();
@@ -182,6 +202,16 @@ export const createDemoIntents = (
       updatedAt: at,
     });
     return id;
+  };
+  const saveLayout = (target: LayoutTarget, spec: unknown): IntentResult => {
+    if (isGlobalLayout(target)) {
+      const { updatedAt } = store.setLayout(spec as SavedLayout['spec']);
+      return { name: target.name, updatedAt };
+    }
+    return {
+      layoutId: saveProjectLayout(target.name, spec),
+      name: target.name,
+    };
   };
 
   const handlers: Handlers = {
@@ -400,14 +430,10 @@ export const createDemoIntents = (
       return reply('applied', { name: input.name, scope: input.scope });
     },
     'layout.save': (input, reply) =>
-      reply('applied', {
-        layoutId: saveLayout(input.name, input.spec),
-        name: input.name,
-      }),
+      reply('applied', saveLayout(input, input.spec)),
     'layout.reset': (input, reply) =>
       reply('applied', {
-        layoutId: saveLayout(input.name, presetLayout(input.preset)),
-        name: input.name,
+        ...saveLayout(input, presetLayout(input.preset)),
         preset: input.preset,
       }),
     'layout.delete': (input, reply) => {
@@ -440,7 +466,7 @@ export const createDemoIntents = (
   };
 
   return (name, input) => {
-    const recorded = !UNRECORDED.has(name);
+    const recorded = isRecorded(name, input);
     const id = (recorded && store.newId()) || null;
     const reply = (status: IntentStatus, result: IntentResult | null) => {
       if (id !== null) store.emit(name, { payload: { intentId: id, status } });

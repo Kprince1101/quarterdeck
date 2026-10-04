@@ -1,4 +1,5 @@
 import {
+  DASHBOARD_LAYOUT,
   DEFAULT_PRESET,
   layoutKey,
   presetLayout,
@@ -8,8 +9,8 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { IntentClient, StreamState } from '../api/index.js';
 import { getErrorMessage } from '../lib/errors.js';
-import { DASHBOARD_LAYOUT, LAYOUT_SAVE_DELAY_MS } from './constants.js';
-import { projectOf, savedLayoutOf } from './layout-source.js';
+import { LAYOUT_SAVE_DELAY_MS } from './constants.js';
+import { hasSnapshot, savedLayoutOf } from './layout-source.js';
 import { createLayoutWriter, type LayoutWriter } from './layout-writer.js';
 
 export interface LayoutSyncSources {
@@ -26,7 +27,7 @@ export interface LayoutSync {
   resetTo: (preset: PresetName) => void;
 }
 
-const flushOnLeave = <Target>(writer: LayoutWriter<Target>): (() => void) => {
+const flushOnLeave = (writer: LayoutWriter): (() => void) => {
   const leave = () => writer.flush({ keepalive: true });
   const hidden = () => {
     if (document.visibilityState === 'hidden') leave();
@@ -39,12 +40,12 @@ const flushOnLeave = <Target>(writer: LayoutWriter<Target>): (() => void) => {
   };
 };
 
-const useLayoutWriter = <Target>(
+const useLayoutWriter = (
   delayMs: number,
   setError: (error: string | null) => void,
-): LayoutWriter<Target> => {
+): LayoutWriter => {
   const [writer] = useState(() =>
-    createLayoutWriter<Target>({
+    createLayoutWriter({
       delayMs,
       onError: (err) => setError(getErrorMessage(err)),
     }),
@@ -64,13 +65,10 @@ export const useLayoutSync = ({
   intents,
   delayMs = LAYOUT_SAVE_DELAY_MS,
 }: LayoutSyncSources): LayoutSync => {
-  const project = projectOf(stream.tables.projects);
-  const saved = useMemo(
-    () => savedLayoutOf(stream.tables.layouts, DASHBOARD_LAYOUT),
-    [stream.tables.layouts],
-  );
+  const ready = hasSnapshot(stream);
+  const saved = useMemo(() => savedLayoutOf(stream.layout), [stream.layout]);
   const [error, setError] = useState<string | null>(null);
-  const writer = useLayoutWriter<string>(delayMs, setError);
+  const writer = useLayoutWriter(delayMs, setError);
   const [initialLayout] = useState(() => saved ?? presetLayout(DEFAULT_PRESET));
   const [syncedLayout, setSyncedLayout] = useState<GridLayout | null>(null);
 
@@ -81,19 +79,16 @@ export const useLayoutSync = ({
   }, [saved, writer]);
 
   useEffect(() => {
-    writer.setTarget(project);
-  }, [project, writer]);
+    writer.setReady(ready);
+  }, [ready, writer]);
 
   const handleLayoutChange = useCallback(
     (spec: GridLayout) => {
       setError(null);
       writer.write({
         key: layoutKey(spec),
-        send: (to, options) =>
-          intents.layout.save(
-            { project: to, name: DASHBOARD_LAYOUT, spec },
-            options,
-          ),
+        send: (options) =>
+          intents.layout.save({ name: DASHBOARD_LAYOUT, spec }, options),
       });
     },
     [intents, writer],
@@ -106,11 +101,8 @@ export const useLayoutSync = ({
       setError(null);
       writer.write({
         key: layoutKey(layout),
-        send: (to, options) =>
-          intents.layout.reset(
-            { project: to, name: DASHBOARD_LAYOUT, preset },
-            options,
-          ),
+        send: (options) =>
+          intents.layout.reset({ name: DASHBOARD_LAYOUT, preset }, options),
       });
     },
     [intents, writer],

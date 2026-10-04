@@ -185,31 +185,34 @@ describe('workspace intents', { timeout: TIMEOUT }, () => {
       expect(outside.status).toBe(400);
     });
 
-    it('resets a layout to a shipped preset', async () => {
+    it('resets a project layout to a shipped preset', async () => {
       await t.send('layout.save', {
         project: 'deck',
-        name: 'dashboard',
+        name: 'spare',
         spec: BOARD_LAYOUT,
       });
       const res = await t.send('layout.reset', {
         project: 'deck',
-        name: 'dashboard',
+        name: 'spare',
         preset: 'ops',
       });
       expect(res).toMatchObject({
         status: 200,
-        body: { result: { name: 'dashboard', preset: 'ops' } },
+        body: { result: { name: 'spare', preset: 'ops' } },
       });
       const store = await t.store('deck');
-      const { rows } = await store.db.query<{ spec: unknown }>(
-        "select spec from layouts where name = 'dashboard'",
+      const { rows } = await store.db.query<{ spec: unknown; result: unknown }>(
+        `select l.spec, i.result from layouts l, intents i
+         where l.name = 'spare' and i.id = $1`,
+        [res.body['id']],
       );
       expect(rows.map((row) => parseGridLayout(row.spec))).toEqual([
         LAYOUT_PRESETS.ops,
       ]);
+      expect(rows[0]?.result).toMatchObject({ name: 'spare', preset: 'ops' });
       const unknown = await t.send('layout.reset', {
         project: 'deck',
-        name: 'dashboard',
+        name: 'spare',
         preset: 'cockpit',
       });
       expect(unknown.status).toBe(400);

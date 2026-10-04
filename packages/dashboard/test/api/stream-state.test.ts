@@ -89,6 +89,7 @@ const snapshot = (
   cursor,
   tables: { ...emptyTables(), agents },
   machine: { pausedAt },
+  layout: null,
 });
 
 describe('stream state', () => {

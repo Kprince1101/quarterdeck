@@ -444,13 +444,44 @@ describe('demo server', () => {
     );
   });
 
-  it('saves and resets the layout', async () => {
+  it('opens on the global layout and pushes a reset to the stream', async () => {
     const server = createDemoServer();
     const { intents, store } = parts(server);
-    await intents.layout.reset({ project, name: 'dashboard', preset: 'ops' });
-    const rows = store.rows('layouts');
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.spec).toEqual(presetLayout('ops'));
+    const messages: StreamMessage[] = [];
+    store.connect(null, (message) => messages.push(message));
+    expect(messages[0]).toMatchObject({
+      type: 'snapshot',
+      layout: { spec: DEMO_LAYOUT },
+    });
+    expect(store.layout()?.spec).toEqual(DEMO_LAYOUT);
+    expect(store.rows('layouts')).toEqual([]);
+    const before = store.events().length;
+    const reply = await intents.layout.reset({
+      name: 'dashboard',
+      preset: 'ops',
+    });
+    expect(reply).toMatchObject({
+      id: null,
+      result: { name: 'dashboard', preset: 'ops' },
+    });
+    expect(store.events()).toHaveLength(before);
+    expect(store.layout()?.spec).toEqual(presetLayout('ops'));
+    expect(messages.at(-1)).toMatchObject({
+      type: 'layout',
+      layout: { spec: presetLayout('ops') },
+    });
+    expect(store.rows('layouts')).toEqual([]);
+  });
+
+  it('keeps a project layout as a row, apart from the dashboard', async () => {
+    const server = createDemoServer();
+    const { intents, store } = parts(server);
+    await intents.layout.reset({ project, name: 'spare', preset: 'ops' });
+    expect(store.rows('layouts').map(({ name }) => name)).toEqual(['spare']);
+    expect(store.layout()?.spec).toEqual(DEMO_LAYOUT);
+    await expect(
+      intents.layout.reset({ project, name: 'dashboard', preset: 'ops' }),
+    ).rejects.toThrow(IntentError);
   });
 
   it('answers the reads the widgets make', async () => {

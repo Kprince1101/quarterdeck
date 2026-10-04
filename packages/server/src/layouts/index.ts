@@ -10,6 +10,7 @@ export {
   type Size,
 } from './geometry.js';
 export {
+  DASHBOARD_LAYOUT,
   DEFAULT_PRESET,
   LAYOUT_PRESETS,
   PRESET_NAMES,

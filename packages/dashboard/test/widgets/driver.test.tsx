@@ -112,6 +112,7 @@ const SNAPSHOT: StreamMessage = {
     ],
   },
   machine: { pausedAt: null },
+  layout: null,
 };
 
 const READS: Record<number, Partial<TurnReadResult>> = {

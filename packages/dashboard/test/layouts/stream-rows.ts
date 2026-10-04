@@ -1,14 +1,12 @@
 import type { GridLayout } from '@quarterdeck/server/layouts';
 import type {
-  LayoutRow,
   ProjectRow,
+  SavedLayout,
   StreamMessage,
 } from '@quarterdeck/server/stream-schema';
 import { emptyTables } from '../../src/api/index.js';
-import { DASHBOARD_LAYOUT } from '../../src/layouts/constants.js';
 
 export const PROJECT_ID = '00000000-0000-4000-8000-000000000001';
-const LAYOUT_ID = '00000000-0000-4000-8000-000000000002';
 const AT = '2026-10-01T12:00:00.000Z';
 
 export const STARTER_LAYOUT: GridLayout = {
@@ -49,29 +47,22 @@ export const projectRow = (slug = 'deck'): ProjectRow => ({
   publishes: null,
 });
 
-export const layoutRow = (
-  spec: unknown,
-  name: string = DASHBOARD_LAYOUT,
-): LayoutRow => ({
-  id: LAYOUT_ID,
-  projectId: PROJECT_ID,
-  name,
-  spec: spec as LayoutRow['spec'],
-  createdAt: AT,
+export const savedLayout = (spec: unknown): SavedLayout => ({
+  spec: spec as SavedLayout['spec'],
   updatedAt: AT,
 });
 
-export const snapshotWith = (...layouts: LayoutRow[]): StreamMessage => ({
+export const snapshotWith = (
+  layout: SavedLayout | null = null,
+): StreamMessage => ({
   type: 'snapshot',
   cursor: 0,
-  tables: { ...emptyTables(), projects: [projectRow()], layouts },
+  tables: { ...emptyTables(), projects: [projectRow()] },
   machine: { pausedAt: null },
+  layout,
 });
 
-export const layoutChange = (row: LayoutRow): StreamMessage => ({
-  type: 'change',
-  table: 'layouts',
-  op: 'update',
-  id: row.id,
-  row,
+export const layoutFrame = (spec: unknown): StreamMessage => ({
+  type: 'layout',
+  layout: savedLayout(spec),
 });

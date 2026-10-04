@@ -4,6 +4,7 @@ import { startApiServer, type ApiServer } from '../api/server.js';
 import { createApiToken } from '../api/token.js';
 import { startCoordinator, type Coordinator } from '../crew/index.js';
 import type { ForgeHost } from '../gate/index.js';
+import { createGlobalLayouts } from '../global-layout/index.js';
 import type { PlannerAdapters } from '../planner/sessions.js';
 import { quarterdeckHome } from '../store/index.js';
 import { routeStreams, type Stream } from '../stream/socket.js';
@@ -41,19 +42,22 @@ export const startQuarterdeck = async (
   options: QuarterdeckOptions = {},
 ): Promise<Quarterdeck> => {
   const homeDir = options.homeDir ?? homedir();
+  const home = quarterdeckHome(homeDir);
+  const layouts = createGlobalLayouts(home);
   const running = new Map<string, RunningProject>();
   const openStores = () => [...running.values()].map(({ store }) => store);
   const coordinator = startCoordinator({
-    home: quarterdeckHome(homeDir),
+    home,
     homeDir,
     openStores,
     adapters: options.adapters,
     onError: options.onError,
   });
   const context: ProjectServicesContext = {
-    home: quarterdeckHome(homeDir),
+    home,
     homeDir,
     token: createApiToken(),
+    layouts,
     allowedOrigins: options.allowedOrigins,
     onError: options.onError,
     openStores,
@@ -91,6 +95,7 @@ export const startQuarterdeck = async (
     token: context.token,
     projectHooks,
     voyages: coordinator.desk,
+    layouts,
     upgrade: routeStreams({
       token: context.token,
       allowedOrigins: options.allowedOrigins,

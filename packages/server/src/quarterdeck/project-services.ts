@@ -2,6 +2,7 @@ import { startBusHost, type BusHost } from '../bus/host.js';
 import { startCrew, type Coordinator, type Crew } from '../crew/index.js';
 import { crewFailedEvent } from '../crew/failures.js';
 import { projectForge, type ForgeHost } from '../gate/index.js';
+import type { GlobalLayouts } from '../global-layout/index.js';
 import type { PlannerAdapters } from '../planner/sessions.js';
 import type { Store } from '../store/index.js';
 import { createStream, type Stream } from '../stream/socket.js';
@@ -10,6 +11,7 @@ export interface ProjectServicesContext {
   home: string;
   homeDir: string;
   token: string;
+  layouts: GlobalLayouts;
   allowedOrigins?: readonly string[] | undefined;
   onError?: ((err: unknown) => void) | undefined;
   openStores: () => readonly Store[];
@@ -96,6 +98,7 @@ export const startProjectServices = async (
       store,
       token: context.token,
       home: context.home,
+      layouts: context.layouts,
       allowedOrigins: context.allowedOrigins,
       onError: context.onError,
     });

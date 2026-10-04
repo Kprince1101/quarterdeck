@@ -1,3 +1,4 @@
+import type { GlobalLayouts } from '../global-layout/index.js';
 import type { Queryable } from '../store/index.js';
 import type {
   IntentName,
@@ -20,6 +21,7 @@ export interface ApiVoyages {
 export interface ApiContext {
   stores: ProjectStores;
   homeDir: string;
+  layouts?: GlobalLayouts | undefined;
   openRequests?: OpenRequests | undefined;
   voyages?: ApiVoyages | undefined;
 }

@@ -1,5 +1,6 @@
 import type {
   MachineState,
+  SavedLayout,
   SnapshotMessage,
   SnapshotTables,
   StreamEvent,
@@ -45,6 +46,8 @@ export interface DemoStore {
   events: () => readonly StreamEvent[];
   machine: () => MachineState;
   setMachine: (machine: MachineState) => void;
+  layout: () => SavedLayout | null;
+  setLayout: (spec: SavedLayout['spec']) => SavedLayout;
   reset: () => void;
   connect: (after: number | null, listener: DemoListener) => () => void;
 }
@@ -71,6 +74,7 @@ export const createDemoStore = ({
   let lastEventId = 0;
   let wipedThrough = 0;
   let machine: MachineState = { pausedAt: null };
+  let layout: SavedLayout | null = null;
 
   const broadcast = (message: StreamMessage): void => {
     listeners.forEach((listener) => listener(message));
@@ -151,6 +155,13 @@ export const createDemoStore = ({
       machine = next;
       broadcast({ type: 'machine', machine });
     },
+    layout: () => layout,
+    setLayout: (spec) => {
+      const saved = { spec, updatedAt: store.now() };
+      layout = saved;
+      broadcast({ type: 'layout', layout: saved });
+      return saved;
+    },
     reset: () => {
       Object.assign(tables, emptyTables());
       log.length = 0;
@@ -160,6 +171,7 @@ export const createDemoStore = ({
         cursor: lastEventId,
         tables: emptyTables(),
         machine,
+        layout,
       });
     },
     connect: (after, listener) => {
@@ -170,6 +182,7 @@ export const createDemoStore = ({
         cursor,
         tables: structuredClone(tables),
         machine,
+        layout,
       };
       listener(snapshot);
       log

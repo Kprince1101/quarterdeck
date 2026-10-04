@@ -27,30 +27,30 @@ const gate = (): Gate => {
 
 describe('layout writer', () => {
   const sent: string[] = [];
-  const calls: { key: string; to: string; keepalive: boolean }[] = [];
+  const calls: { key: string; keepalive: boolean }[] = [];
   const gates = new Map<string, Gate>();
   const errors: unknown[] = [];
 
-  const write = (key: string): LayoutWrite<string> => ({
+  const write = (key: string): LayoutWrite => ({
     key,
-    send: (to, { keepalive }) => {
+    send: ({ keepalive }) => {
       sent.push(key);
-      calls.push({ key, to, keepalive });
+      calls.push({ key, keepalive });
       const opened = gate();
       gates.set(key, opened);
       return opened.promise;
     },
   });
 
-  const unaimed = () =>
-    createLayoutWriter<string>({
+  const waiting = () =>
+    createLayoutWriter({
       delayMs: DELAY,
       onError: (err) => errors.push(err),
     });
 
   const writer = () => {
-    const layouts = unaimed();
-    layouts.setTarget('deck');
+    const layouts = waiting();
+    layouts.setReady(true);
     return layouts;
   };
 
@@ -124,23 +124,23 @@ describe('layout writer', () => {
     expect(sent).toEqual(['a']);
   });
 
-  it('keeps the newest write until it has a target, then sends it there', async () => {
-    const layouts = unaimed();
+  it('keeps the newest write until it is ready, then sends it', async () => {
+    const layouts = waiting();
     layouts.write(write('a'));
     layouts.write(write('b'));
     await vi.advanceTimersByTimeAsync(DELAY);
     layouts.flush();
     expect(sent).toEqual([]);
     expect(layouts.hasQueued()).toBe(true);
-    layouts.setTarget('deck');
-    expect(calls).toEqual([{ key: 'b', to: 'deck', keepalive: false }]);
+    layouts.setReady(true);
+    expect(calls).toEqual([{ key: 'b', keepalive: false }]);
     expect(layouts.hasQueued()).toBe(false);
   });
 
-  it('waits out the delay when the target arrives mid-edit', async () => {
-    const layouts = unaimed();
+  it('waits out the delay when it becomes ready mid-edit', async () => {
+    const layouts = waiting();
     layouts.write(write('a'));
-    layouts.setTarget('deck');
+    layouts.setReady(true);
     expect(sent).toEqual([]);
     await vi.advanceTimersByTimeAsync(DELAY);
     expect(sent).toEqual(['a']);
@@ -150,7 +150,7 @@ describe('layout writer', () => {
     const layouts = writer();
     layouts.write(write('a'));
     layouts.flush({ keepalive: true });
-    expect(calls).toEqual([{ key: 'a', to: 'deck', keepalive: true }]);
+    expect(calls).toEqual([{ key: 'a', keepalive: true }]);
     expect(layouts.isEcho('a')).toBe(true);
   });
 
@@ -161,8 +161,8 @@ describe('layout writer', () => {
     layouts.write(write('b'));
     layouts.flush({ keepalive: true });
     expect(calls).toEqual([
-      { key: 'a', to: 'deck', keepalive: false },
-      { key: 'b', to: 'deck', keepalive: true },
+      { key: 'a', keepalive: false },
+      { key: 'b', keepalive: true },
     ]);
     gates.get('a')?.open();
     await vi.advanceTimersByTimeAsync(DELAY);

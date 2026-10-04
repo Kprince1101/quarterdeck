@@ -39,6 +39,7 @@ export const startDeck = async (project: string): Promise<Deck> => {
         store,
         port,
         home: api.stores.dataHome,
+        layouts: api.layouts,
         token: api.token,
       });
       served.push(stream);

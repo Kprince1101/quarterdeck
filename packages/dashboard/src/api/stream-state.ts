@@ -2,6 +2,7 @@ import {
   STREAM_TABLES,
   type ChangeMessage,
   type MachineState,
+  type SavedLayout,
   type SnapshotTables,
   type StreamEvent,
   type StreamMessage,
@@ -15,6 +16,7 @@ export interface StreamState {
   cursor: number | null;
   tables: SnapshotTables;
   machine: MachineState;
+  layout: SavedLayout | null;
   events: readonly StreamEvent[];
   error: string | null;
 }
@@ -49,6 +51,7 @@ export const initialStreamState: StreamState = {
   cursor: null,
   tables: emptyTables(),
   machine: UNPAUSED_MACHINE,
+  layout: null,
   events: [],
   error: null,
 };
@@ -118,11 +121,15 @@ export const applyStreamMessage = (
         cursor: message.cursor,
         tables: message.tables,
         machine: message.machine,
+        layout: message.layout,
         error: null,
       };
     }
     case 'machine': {
       return { ...state, machine: message.machine };
+    }
+    case 'layout': {
+      return { ...state, layout: message.layout };
     }
     case 'event': {
       return applyEvent(state, message.event, limits);

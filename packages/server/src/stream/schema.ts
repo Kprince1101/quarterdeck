@@ -240,16 +240,27 @@ export const machineStateSchema = z.object({
   pausedAt: timestampSchema.nullable(),
 });
 
+export const savedLayoutSchema = z.object({
+  spec: z.json(),
+  updatedAt: timestampSchema,
+});
+
 export const snapshotMessageSchema = z.object({
   type: z.literal('snapshot'),
   cursor: z.int().nonnegative(),
   tables: snapshotTablesSchema,
   machine: machineStateSchema,
+  layout: savedLayoutSchema.nullable(),
 });
 
 export const machineMessageSchema = z.object({
   type: z.literal('machine'),
   machine: machineStateSchema,
+});
+
+export const layoutMessageSchema = z.object({
+  type: z.literal('layout'),
+  layout: savedLayoutSchema,
 });
 
 export const eventMessageSchema = z.object({
@@ -293,6 +304,7 @@ export const streamMessageSchema = z.discriminatedUnion('type', [
   eventMessageSchema,
   changeMessageSchema,
   machineMessageSchema,
+  layoutMessageSchema,
 ]);
 
 export type ProjectRow = z.infer<typeof projectRowSchema>;
@@ -310,6 +322,8 @@ export type StreamEvent = z.infer<typeof streamEventSchema>;
 export type SnapshotTables = z.infer<typeof snapshotTablesSchema>;
 export type MachineState = z.infer<typeof machineStateSchema>;
 export type MachineMessage = z.infer<typeof machineMessageSchema>;
+export type SavedLayout = z.infer<typeof savedLayoutSchema>;
+export type LayoutMessage = z.infer<typeof layoutMessageSchema>;
 export type SnapshotMessage = z.infer<typeof snapshotMessageSchema>;
 export type EventMessage = z.infer<typeof eventMessageSchema>;
 export type ChangeMessage = z.infer<typeof changeMessageSchema>;

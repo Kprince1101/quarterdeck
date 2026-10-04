@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { gridLayoutSchema, presetNameSchema } from '../layouts/index.js';
+import {
+  DASHBOARD_LAYOUT,
+  gridLayoutSchema,
+  presetNameSchema,
+} from '../layouts/index.js';
 import {
   MAX_TEXT_LENGTH,
   absolutePathSchema,
@@ -26,6 +30,24 @@ const projectRule = { scope: z.literal('project'), name: ruleNameSchema };
 
 const PROJECT_FIELDS = ['name', 'repoPath'] as const;
 
+const layoutTarget = {
+  project: projectSlugSchema.optional(),
+  name: titleSchema,
+};
+
+interface LayoutTarget {
+  project?: string | undefined;
+  name: string;
+}
+
+const scopedRight = ({ project, name }: LayoutTarget): boolean =>
+  (project === undefined) === (name === DASHBOARD_LAYOUT);
+
+const LAYOUT_SCOPE = {
+  message: `the ${DASHBOARD_LAYOUT} layout is global, so send it without project; any other layout needs project`,
+  path: ['project'],
+};
+
 export const WORKSPACE_INTENTS = {
   'project.create': inProject({
     name: titleSchema.optional(),
@@ -47,14 +69,12 @@ export const WORKSPACE_INTENTS = {
     z.strictObject(machineRule),
     inProject(projectRule),
   ]),
-  'layout.save': inProject({
-    name: titleSchema,
-    spec: gridLayoutSchema,
-  }),
-  'layout.reset': inProject({
-    name: titleSchema,
-    preset: presetNameSchema,
-  }),
+  'layout.save': z
+    .strictObject({ ...layoutTarget, spec: gridLayoutSchema })
+    .refine(scopedRight, LAYOUT_SCOPE),
+  'layout.reset': z
+    .strictObject({ ...layoutTarget, preset: presetNameSchema })
+    .refine(scopedRight, LAYOUT_SCOPE),
   'layout.delete': inProject({ name: titleSchema }),
   'wipe.project': inProject({ confirm: projectSlugSchema }).refine(
     (input) => input.confirm === input.project,

@@ -1,5 +1,5 @@
-import { isGloballyPaused } from '@quarterdeck/server';
-import { LAYOUT_PRESETS, parseGridLayout } from '@quarterdeck/server/layouts';
+import { isGloballyPaused, readGlobalLayout } from '@quarterdeck/server';
+import { LAYOUT_PRESETS } from '@quarterdeck/server/layouts';
 import {
   Window,
   type HTMLElement as HappyElement,
@@ -52,11 +52,8 @@ describe('dashboard on a live server', () => {
   let deck: Deck;
 
   const savedLayout = async (): Promise<unknown> => {
-    const { rows } = await deck.store.db.query<{ spec: unknown }>(
-      'select spec from layouts where name = $1',
-      [DASHBOARD_LAYOUT],
-    );
-    return rows.map((row) => parseGridLayout(row.spec));
+    const saved = await readGlobalLayout(deck.api.stores.dataHome);
+    return [saved?.spec];
   };
 
   beforeAll(async () => {
@@ -97,7 +94,6 @@ describe('dashboard on a live server', () => {
       expect(container.querySelector('.qd-table-counts')).toBe(null);
 
       await deck.client.layout.save({
-        project: deck.project,
         name: DASHBOARD_LAYOUT,
         spec: STARTER_LAYOUT,
       });
@@ -141,6 +137,50 @@ describe('dashboard on a live server', () => {
   );
 
   it(
+    'loads a layout edited in one client into a second one',
+    async () => {
+      const { all, render } = await import('./page.js');
+      const { App } = await import('../../src/App.js');
+      await deck.client.layout.save({
+        name: DASHBOARD_LAYOUT,
+        spec: STARTER_LAYOUT,
+      });
+      const open = async () => {
+        const served = await deck.serve();
+        return render(
+          <App
+            stream={{
+              url: served.url,
+              token: deck.api.token,
+              WebSocket: WsSocket as unknown as typeof WebSocket,
+            }}
+            intents={deck.client}
+          />,
+        );
+      };
+      const cells = (container: PageElement) =>
+        all(container, '[data-grid-item]').map((cell) =>
+          cell.getAttribute('data-grid-item'),
+        );
+      const first = await open();
+      const second = await open();
+      await vi.waitFor(() => {
+        expect(cells(first.container)).toEqual(['events-1', 'tables-1']);
+        expect(cells(second.container)).toEqual(['events-1', 'tables-1']);
+      }, WAIT);
+
+      element(first.container, '[aria-label="Hide Tables"]').click();
+      await vi.waitFor(() => {
+        expect(cells(second.container)).toEqual(['events-1']);
+      }, WAIT);
+      expect(cells(first.container)).toEqual(['events-1']);
+      first.unmount();
+      second.unmount();
+    },
+    TIMEOUT,
+  );
+
+  it(
     'reads counts, rows and paths from the server in the Data widget',
     async () => {
       const { all, render, textOf } = await import('./page.js');
@@ -166,7 +206,6 @@ describe('dashboard on a live server', () => {
         expect(textOf(container, '[role="status"]')).toBe('Live');
       });
       await deck.client.layout.save({
-        project: deck.project,
         name: DASHBOARD_LAYOUT,
         spec: {
           columns: 12,
@@ -232,7 +271,6 @@ describe('dashboard on a live server', () => {
         expect(textOf(container, '[role="status"]')).toBe('Live');
       });
       await deck.client.layout.save({
-        project: deck.project,
         name: DASHBOARD_LAYOUT,
         spec: LAYOUT_PRESETS.minimal,
       });

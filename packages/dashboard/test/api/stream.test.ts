@@ -66,6 +66,7 @@ describe('stream retries', () => {
     cursor: 9,
     tables: emptyTables(),
     machine: { pausedAt: null },
+    layout: null,
   };
 
   const open = (onError?: (err: unknown) => void) =>
