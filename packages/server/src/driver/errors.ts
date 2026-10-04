@@ -74,6 +74,26 @@ export class TicketNotAssignableError extends Error {
   }
 }
 
+export class TicketNotBlockableError extends Error {
+  readonly ticketId: string;
+
+  constructor(ticketId: string, reason: string) {
+    super(`Ticket ${ticketId} cannot be blocked: ${reason}`);
+    this.name = 'TicketNotBlockableError';
+    this.ticketId = ticketId;
+  }
+}
+
+export class TicketNotPublishableError extends Error {
+  readonly ticketId: string;
+
+  constructor(ticketId: string, reason: string) {
+    super(`Ticket ${ticketId} cannot be recorded as published: ${reason}`);
+    this.name = 'TicketNotPublishableError';
+    this.ticketId = ticketId;
+  }
+}
+
 export class BuilderNotAvailableError extends Error {
   readonly agentId: string;
 

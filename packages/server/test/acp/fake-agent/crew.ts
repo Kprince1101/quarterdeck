@@ -31,6 +31,17 @@ const APPROVED_LINE =
 const WAITING_LINE = /^- "/;
 const TICKET_IDS = new RegExp(`\\(ticket (${UUID})\\)`, 'g');
 const NAMED_BUS = /use the tools of the bus `([^`]+)`/;
+const WAKE = new RegExp(
+  `^Ticket ".*" \\(ticket (${UUID})\\) is no longer blocked`,
+);
+const NEEDS = new RegExp(
+  `ended its turn .*needs ticket (${UUID}).*\\(ticket (${UUID})\\)`,
+);
+const PUBLISH_LINE = /needs publishing/;
+
+export const FAKE_WAIT_MARKER = 'Wait for the library change.';
+export const FAKE_PACKAGE = 'acme-library';
+export const FAKE_VERSION = '1.4.0-SNAPSHOT';
 
 const PLANNER_OPENING = /^# Planner brief\n/;
 const PLANNER_REPROMPT = /^\[Quarterdeck\] These proposals were refused/;
@@ -62,6 +73,7 @@ type CrewRole =
   | 'birth'
   | 'wrap-up'
   | 'builder'
+  | 'wake'
   | 'reviewer'
   | 'driver'
   | 'planner'
@@ -73,6 +85,7 @@ const roleOf = (text: string): CrewRole => {
   if (DRIVER_BIRTH.test(text)) return 'birth';
   if (WRAP_UP.test(text)) return 'wrap-up';
   if (REVIEW.test(text)) return 'reviewer';
+  if (WAKE.test(text)) return 'wake';
   if (ASSIGNMENT.test(text)) return 'builder';
   return 'driver';
 };
@@ -264,6 +277,24 @@ const ticketsOn = (text: string, pattern: RegExp): string[] =>
 const assignAll = (tickets: readonly string[]) =>
   tickets.map((ticket) => ({ kind: 'assign', ticket }));
 
+const blockedOnce = new Set<string>();
+
+const blocksIn = (text: string) =>
+  text.split('\n').flatMap((line) => {
+    const [, on = '', ticket = ''] = NEEDS.exec(line) ?? [];
+    if (ticket === '' || blockedOnce.has(ticket)) return [];
+    blockedOnce.add(ticket);
+    return [{ kind: 'block', ticket, on: [on] }];
+  });
+
+const publishesIn = (text: string) =>
+  ticketsOn(text, PUBLISH_LINE).map((ticket) => ({
+    kind: 'published',
+    ticket,
+    package: FAKE_PACKAGE,
+    version: FAKE_VERSION,
+  }));
+
 const HANDLERS: Record<
   CrewRole,
   (turn: FakeTurn, options: FakeAgentOptions) => Promise<StopReason>
@@ -287,10 +318,17 @@ const HANDLERS: Record<
       turn,
       fenced({
         summary: 'Assigned what was approved.',
-        actions: assignAll(ticketsOn(turn.text, APPROVED_LINE)),
+        actions: [
+          ...assignAll(ticketsOn(turn.text, APPROVED_LINE)),
+          ...blocksIn(turn.text),
+          ...publishesIn(turn.text),
+        ],
       }),
     ),
+  wake: (turn) => say(turn, `Bumped ${FAKE_PACKAGE}; carrying on.`),
   builder: async (turn, options) => {
+    if (turn.text.includes(FAKE_WAIT_MARKER))
+      return say(turn, 'This needs a library change first.');
     if (!(await pushAllowed(turn, options)))
       return say(turn, 'Quarterdeck refused my push.');
     const reply = await callBus(turn, 'report', {

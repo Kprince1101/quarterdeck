@@ -1,5 +1,5 @@
 import type { Queryable } from '../../store/index.js';
-import type { IntentHandlers } from '../context.js';
+import type { ApiContext, IntentHandlers } from '../context.js';
 import { badRequest, conflict } from '../http-error.js';
 import { applyInProject, findRow } from '../record.js';
 
@@ -19,18 +19,37 @@ interface TicketEdits {
 const CLOSED_STATUSES = new Set(['done', 'cancelled', 'rejected']);
 const CANCELLABLE_STATUSES = new Set(['open', 'bounced']);
 
+const FOUND_TICKETS = `select id from tickets
+  where project_id = $1 and id = any($2::uuid[])`;
+
+const foundIn = async (
+  db: Queryable,
+  projectId: string,
+  ids: readonly string[],
+): Promise<string[]> => {
+  const { rows } = await db.query<{ id: string }>(FOUND_TICKETS, [
+    projectId,
+    ids,
+  ]);
+  return rows.map((row) => row.id);
+};
+
 const assertDependencies = async (
+  ctx: ApiContext,
   tx: Queryable,
   projectId: string,
   dependsOn: string[] | undefined,
 ) => {
   if (dependsOn === undefined || dependsOn.length === 0) return;
-  const { rows } = await tx.query<{ found: number }>(
-    `select count(*)::int as found from tickets
-     where project_id = $1 and id = any($2::uuid[])`,
-    [projectId, dependsOn],
-  );
-  if (rows[0]?.found !== dependsOn.length) {
+  const found = new Set(await foundIn(tx, projectId, dependsOn));
+  for (const store of await ctx.stores.opened()) {
+    const missing = dependsOn.filter((id) => !found.has(id));
+    if (missing.length === 0) break;
+    if (store.projectId === projectId) continue;
+    for (const id of await foundIn(store.db, store.projectId, missing))
+      found.add(id);
+  }
+  if (dependsOn.some((id) => !found.has(id))) {
     throw badRequest('dependsOn names a ticket that does not exist');
   }
 };
@@ -62,6 +81,7 @@ const requireProposed = async (
 };
 
 const editTicket = async (
+  ctx: ApiContext,
   tx: Queryable,
   projectId: string,
   ticketId: string,
@@ -70,7 +90,7 @@ const editTicket = async (
   if (edits.dependsOn?.includes(ticketId)) {
     throw badRequest('a ticket cannot depend on itself');
   }
-  await assertDependencies(tx, projectId, edits.dependsOn);
+  await assertDependencies(ctx, tx, projectId, edits.dependsOn);
   await tx.query(
     `update tickets set
        title = coalesce($2, title),
@@ -104,7 +124,7 @@ const assertDependenciesApproved = async (tx: Queryable, ticketId: string) => {
 export const TICKET_HANDLERS: IntentHandlers<TicketIntentName> = {
   'ticket.create': (ctx, input, name) =>
     applyInProject(ctx, name, input, async (tx, projectId) => {
-      await assertDependencies(tx, projectId, input.dependsOn);
+      await assertDependencies(ctx, tx, projectId, input.dependsOn);
       const ticket = await findRow<{ id: string }>(
         tx,
         `insert into tickets (project_id, title, body, depends_on)
@@ -120,7 +140,7 @@ export const TICKET_HANDLERS: IntentHandlers<TicketIntentName> = {
       if (CLOSED_STATUSES.has(status)) {
         throw conflict(`ticket ${input.ticketId} is ${status}`);
       }
-      await editTicket(tx, projectId, input.ticketId, input);
+      await editTicket(ctx, tx, projectId, input.ticketId, input);
       return { ticketId: input.ticketId };
     }),
   'ticket.cancel': (ctx, input, name) =>
@@ -139,7 +159,7 @@ export const TICKET_HANDLERS: IntentHandlers<TicketIntentName> = {
   'ticket.approve': (ctx, input, name) =>
     applyInProject(ctx, name, input, async (tx, projectId) => {
       await requireProposed(tx, projectId, input.ticketId);
-      await editTicket(tx, projectId, input.ticketId, input);
+      await editTicket(ctx, tx, projectId, input.ticketId, input);
       await assertDependenciesApproved(tx, input.ticketId);
       await tx.query(`update tickets set status = 'open' where id = $1`, [
         input.ticketId,

@@ -8,9 +8,10 @@ import type { BusHost } from '../bus/index.js';
 import {
   ACTIVE_TICKET_STATUSES,
   type BriefBuilder,
-  type BuilderAction,
   type BuilderContext,
+  type DependencyResolver,
   type ProjectBrief,
+  type TurnAction,
 } from '../driver/index.js';
 import { projectBusName } from '../bus/index.js';
 import { isProjectArchived, type PauseGate } from '../pause/index.js';
@@ -72,6 +73,7 @@ export const voyageSites = async (
 export const builderContext = async (
   leg: VoyageLeg,
   home: string,
+  dependencies?: DependencyResolver,
 ): Promise<BuilderContext> => {
   const [models, rules, forge, services] = await Promise.all([
     leg.rules.load('models'),
@@ -79,7 +81,7 @@ export const builderContext = async (
     leg.rules.forge(),
     leg.rules.services(),
   ]);
-  return {
+  const ctx: BuilderContext = {
     store: leg.store,
     lifecycle: leg.lifecycle,
     sessions: leg.sessions,
@@ -95,6 +97,8 @@ export const builderContext = async (
     pause: leg.pause,
     voyageId: leg.voyageId,
   };
+  if (dependencies !== undefined) ctx.dependencies = dependencies;
+  return ctx;
 };
 
 const holds = async (
@@ -110,11 +114,11 @@ const holds = async (
 };
 
 const actionTarget = (
-  action: BuilderAction,
+  action: TurnAction,
 ): { table: 'tickets' | 'agents'; id: string; noun: string } => {
-  if (action.kind === 'assign')
-    return { table: 'tickets', id: action.ticket, noun: 'ticket' };
-  return { table: 'agents', id: action.builder, noun: 'builder' };
+  if (action.kind === 'continue')
+    return { table: 'agents', id: action.builder, noun: 'builder' };
+  return { table: 'tickets', id: action.ticket, noun: 'ticket' };
 };
 
 export class NotInVoyageError extends Error {
@@ -126,15 +130,16 @@ export class NotInVoyageError extends Error {
 
 export const resolveLeg = async (
   legs: readonly VoyageLeg[],
-  action: BuilderAction,
+  action: TurnAction,
   home: string,
+  dependencies?: DependencyResolver,
 ): Promise<RunLeg> => {
   const target = actionTarget(action);
   for (const leg of legs) {
     if (await holds(leg, target.table, target.id))
       return {
         project: leg.project,
-        builders: await builderContext(leg, home),
+        builders: await builderContext(leg, home, dependencies),
       };
   }
   throw new NotInVoyageError(target.noun, target.id);

@@ -34,6 +34,7 @@ export interface ProjectStores {
   get: (project: string) => Promise<Store>;
   create: (project: string) => Promise<Store>;
   list: () => Promise<string[]>;
+  opened: () => Promise<Store[]>;
   wipe: (project: string) => Promise<WipeResult>;
   openAll: () => Promise<string[]>;
   wipeAll: () => Promise<WipeResult>;
@@ -220,6 +221,13 @@ export const createProjectStores = (
       const listed = await catalog.list();
       const found = await Promise.all(listed.map(exists));
       return listed.filter((_project, index) => found[index]);
+    },
+    opened: async () => {
+      const settled = await Promise.allSettled(open.values());
+      return settled.flatMap((result) => {
+        if (result.status === 'rejected') return [];
+        return [result.value];
+      });
     },
     wipe: async (project) => {
       if (!(await exists(project))) {

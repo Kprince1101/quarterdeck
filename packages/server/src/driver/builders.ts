@@ -10,6 +10,7 @@ import {
 import type { PauseGuard } from '../pause/index.js';
 import type { PromptServices } from '../services/index.js';
 import type { Store } from '../store/index.js';
+import type { DependencyResolver } from './dependencies.js';
 import { BuilderNotAvailableError, BuilderSessionLostError } from './errors.js';
 import { heldTickets } from './tickets.js';
 import {
@@ -38,6 +39,7 @@ export interface BuilderContext {
   budget: BudgetWindow;
   pause: PauseGuard;
   voyageId?: string;
+  dependencies?: DependencyResolver;
 }
 
 export interface ClaimedBuilder {

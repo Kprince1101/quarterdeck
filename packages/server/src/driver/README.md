@@ -214,7 +214,7 @@ await reassignTickets(ctx, retiredBuilderId);
 
 ### Assigning
 
-`assignTicket(ctx, { ticketId, builderId? })` takes an approved ticket: status `open`, no assignee, and every ticket in `depends_on` `done`. Anything else throws `TicketNotAssignableError` before a builder is touched.
+`assignTicket(ctx, { ticketId, builderId? })` takes an approved ticket: status `open`, no assignee, and every ticket in `depends_on` [satisfied](#dependencies), in whatever project it is. Anything else throws `TicketNotAssignableError` before a builder is touched; one waiting on dependencies names each with why it is not satisfied (`it waits on <id> ("<title>", project library): it is merged but not published yet`). `ctx.dependencies` resolves them; without it only `ctx.store` is searched.
 
 Every assign and continue is a launch, so it checks `ctx.budget` first (see [budget](../budget/README.md)). A held launch throws `BudgetHeldError` and touches no builder, worktree, session or ticket. A new builder is checked by the lifecycle's birth with the ticket's id. A moved builder is checked with its id and the ticket's, and a continue with the builder's id.
 
@@ -243,14 +243,16 @@ The Driver sees each flag once. Every `voyage.turn`, the birth included (not `vo
 
 ### Actions
 
-The Driver asks for these through its turn result. `DRIVER_TURN_INSTRUCTIONS` includes `BUILDER_ACTION_INSTRUCTIONS`:
+The Driver asks for these through its turn result. `DRIVER_TURN_INSTRUCTIONS` includes `BUILDER_ACTION_INSTRUCTIONS` and `TICKET_ACTION_INSTRUCTIONS`:
 
-| `kind`     | Fields                         | Runs                                  |
-| ---------- | ------------------------------ | ------------------------------------- |
-| `assign`   | `ticket`, `builder` (optional) | `assignTicket`                        |
-| `continue` | `builder`, `prompt`            | `continueBuilder` (prompt is trimmed) |
+| `kind`      | Fields                                     | Runs                                             |
+| ----------- | ------------------------------------------ | ------------------------------------------------ |
+| `assign`    | `ticket`, `builder` (optional)             | `assignTicket`                                   |
+| `continue`  | `builder`, `prompt`                        | `continueBuilder` (prompt is trimmed)            |
+| `block`     | `ticket`, `on` (ticket ids), `note` (opt.) | `blockTicket`, see [Blocking](#blocking)         |
+| `published` | `ticket`, `package`, `version`             | `recordPublished`, see [Publishing](#publishing) |
 
-`builderActionSchema` parses one of them; `applyBuilderAction(ctx, action)` runs it and resolves to `{ kind: 'assign', assignment }` or `{ kind: 'continue', continuation }`.
+`builderActionSchema` parses `assign` or `continue`; `applyBuilderAction(ctx, action)` runs it and resolves to `{ kind: 'assign', assignment }` or `{ kind: 'continue', continuation }`. `turnActionSchema` parses any of the four and `applyTurnAction(ctx, action)` runs it; `block` resolves to `{ kind: 'block', block }` and `published` to `{ kind: 'published', ticket, package, version }`.
 
 ### Builder events
 
@@ -261,6 +263,50 @@ The Driver asks for these through its turn result. `DRIVER_TURN_INSTRUCTIONS` in
 | `builder.stuck`     | `{ name, head, continues }`                        |
 
 All carry the builder's id and, when there is one, the ticket's. `driver.stuck_surfaced` (`{ flags }`) carries the Driver's id.
+
+## Dependencies
+
+A ticket's `depends_on` may name tickets in any project. Each project has its own store, so those ids are not foreign keys: a `DependencyResolver` looks each one up in the open project stores.
+
+```ts
+import { storeDependencies } from '@quarterdeck/server';
+
+const dependencies = storeDependencies(openStores, { homeDir });
+const [dependency] = await dependencies([ticketId]);
+// { id, project, title, status, publishes, published, satisfied, reason }
+```
+
+A dependency is satisfied when it is `done` and, if its project [publishes](../services/README.md) (`publishes: true`), a `ticket.published` event exists for it; `published` is the latest one's `{ package, version }`. Otherwise `reason` says why not:
+
+| Dependency                          | `reason`                             |
+| ----------------------------------- | ------------------------------------ |
+| not `done`                          | `it is <status>`                     |
+| `done`, project publishes, no event | `it is merged but not published yet` |
+| in an archived project              | `its project <slug> is archived`     |
+| in no open store                    | `it is in no open project`           |
+
+A dependency in an archived project, or in a project that is not open (wiped, or not served), stays unsatisfied until that changes, and the reason shows in the Driver's turns and in the `ticket.waiting` and `ticket.blocked` events. The coordinator passes a resolver over every open store as `ctx.dependencies`; `storeDependencies(() => [store])` is the default, which only sees the context's own project.
+
+### Blocking
+
+`blockTicket(store, dependencies, { ticketId, on, note? })` holds a ticket a builder already has (`assigned`, `in_progress`, `in_review` or `bounced`) until every ticket in `on` is satisfied. It adds `on` to the ticket's `depends_on`, makes it `blocked` and records `ticket.blocked` with `{ name, previousStatus, reason: 'dependencies', dependsOn, unmet, note }`, `unmet` listing each unsatisfied dependency with its reason. The builder is untouched: it keeps its worktree and session and is not retired. It refuses (`TicketNotBlockableError`) a ticket no builder holds (an unassigned ticket waits on its `depends_on` by itself), one not in the project, one that would wait on itself, and one whose `on` is already all satisfied.
+
+`readHeldTickets(store)` lists the tickets held this way: `blocked`, with `reason: 'dependencies'` on their latest `ticket.blocked`. A ticket a [kill](../agents/README.md) blocked is not among them. `unblockHeld(store, ticketId, dependencies)` puts one back to its `previousStatus` and records `ticket.unblocked` with `{ held: true, status, dependencies }`, each dependency's `{ ticket, project, title, package, version }`; it does nothing (and resolves `undefined`) for a ticket that is no longer held, so it acts once however often it is called. `wakePrompt(ticket, dependencies)` is the prompt the builder gets then: the ticket, each dependency with its published package and version (or `merged`), and to bump and carry on.
+
+`readDependentTickets(store)` lists the open, unassigned tickets with dependencies, each with `waiting` set when its latest `ticket.waiting` or `ticket.unblocked` is `ticket.waiting`. `markWaiting` records `ticket.waiting` (`{ dependsOn, unmet }`) for one whose dependencies are not satisfied, and `markUnblocked` records `ticket.unblocked` (`{ held: false, status, dependencies }`) once they are; each records only when the last mark was the other, so neither repeats.
+
+### Publishing
+
+`recordPublished(store, { ticketId, package, version })` records `ticket.published` with `{ package, version }` on a `done` ticket, a snapshot or a release; it refuses (`TicketNotPublishableError`) any other. The Driver publishes with its own shell and the project's CLI first: Quarterdeck never publishes. A later `published` for the same ticket (a release after a snapshot) replaces the version dependents see.
+
+The coordinator acts on all of this without being asked; see [crew](../crew/README.md#blocked-work).
+
+| `kind`             | Payload                                                                    |
+| ------------------ | -------------------------------------------------------------------------- |
+| `ticket.blocked`   | `{ name, previousStatus, reason: 'dependencies', dependsOn, unmet, note }` |
+| `ticket.published` | `{ package, version }`                                                     |
+| `ticket.waiting`   | `{ dependsOn, unmet }`                                                     |
+| `ticket.unblocked` | `{ held, status, dependencies }`                                           |
 
 ## Other agents
 

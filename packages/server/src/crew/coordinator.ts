@@ -7,7 +7,7 @@ import {
   type StoreEvent,
   type Subscription,
 } from '../store/index.js';
-import { DRIVER_NOTE_KINDS } from './driver-notes.js';
+import { DRIVER_NOTE_KINDS, WAKE_EVENT_KINDS } from './driver-notes.js';
 import { reportToEach } from './failures.js';
 import { startCrewIntents, type CrewIntents } from './intents.js';
 import { createReviewerDesk } from './reviewer.js';
@@ -126,7 +126,10 @@ export const startCoordinator = (options: CoordinatorOptions): Coordinator => {
     (crew: CrewProject) =>
     (event: StoreEvent): void => {
       if (event.kind === GATE_EVENTS.reported) ensureReviewer();
-      if (DRIVER_NOTE_KINDS.includes(event.kind))
+      if (
+        DRIVER_NOTE_KINDS.includes(event.kind) ||
+        WAKE_EVENT_KINDS.includes(event.kind)
+      )
         voyages.noteEvent(crew, event);
     };
 

@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { getErrorMessage } from '../lib/errors.js';
-import { BUILDER_ACTION_INSTRUCTIONS } from './action-schemas.js';
+import {
+  BUILDER_ACTION_INSTRUCTIONS,
+  TICKET_ACTION_INSTRUCTIONS,
+} from './action-schemas.js';
 
 export interface TurnFormat<T> {
   schema: z.ZodType<T>;
@@ -90,7 +93,9 @@ export const DRIVER_TURN_INSTRUCTIONS = `End every reply with your turn result: 
 - \`summary\`: one or two sentences on what you did this turn and why.
 - \`actions\`: what Quarterdeck should do next, in order, or \`[]\` when there is nothing to do. Each action is an object with a \`kind\` and that kind's fields.
 
-${BUILDER_ACTION_INSTRUCTIONS}`;
+${BUILDER_ACTION_INSTRUCTIONS}
+
+${TICKET_ACTION_INSTRUCTIONS}`;
 
 export const DRIVER_TURN_FORMAT: TurnFormat<DriverTurnResult> = {
   schema: driverTurnResultSchema,

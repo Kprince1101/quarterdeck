@@ -285,10 +285,18 @@ export const assignTicket = async (
   ctx: BuilderContext,
   request: AssignRequest,
 ): Promise<Assignment> => {
-  const ticket = await findApprovedTicket(ctx.store, request.ticketId);
+  const ticket = await findApprovedTicket(
+    ctx.store,
+    request.ticketId,
+    ctx.dependencies,
+  );
   const subject = launchSubject('assign', ticket, request.builderId);
   return ctx.pause.hold(subject, async () => {
-    const approved = await findApprovedTicket(ctx.store, ticket.id);
+    const approved = await findApprovedTicket(
+      ctx.store,
+      ticket.id,
+      ctx.dependencies,
+    );
     return handOver(ctx, approved, request.builderId, null);
   });
 };

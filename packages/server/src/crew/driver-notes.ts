@@ -1,9 +1,17 @@
+import {
+  DEPENDENCIES_REASON,
+  TICKET_PUBLISHED_EVENT,
+  TICKET_UNBLOCKED_EVENT,
+  TICKET_WAITING_EVENT,
+} from '../driver/index.js';
 import { GATE_EVENTS } from '../gate/index.js';
 import { getErrorMessage } from '../lib/errors.js';
 import type { Store, StoreEvent } from '../store/index.js';
+import { TICKET_REOPENED_EVENT } from '../voyage-end/index.js';
 
 export const TICKET_APPROVE_INTENT = 'ticket.approve';
 export const TICKET_CREATE_INTENT = 'ticket.create';
+export const TICKET_UPDATE_INTENT = 'ticket.update';
 
 const TICKET_INTENTS: readonly string[] = [
   TICKET_APPROVE_INTENT,
@@ -34,7 +42,22 @@ export const DRIVER_NOTE_KINDS: readonly string[] = [
   GATE_EVENTS.bounced,
   GATE_EVENTS.merged,
   TICKET_BLOCKED_EVENT,
+  TICKET_WAITING_EVENT,
+  TICKET_UNBLOCKED_EVENT,
 ];
+
+export const WAKE_EVENT_KINDS: readonly string[] = [
+  ...TICKET_INTENTS,
+  TICKET_UPDATE_INTENT,
+  GATE_EVENTS.merged,
+  TICKET_BLOCKED_EVENT,
+  TICKET_PUBLISHED_EVENT,
+  TICKET_REOPENED_EVENT,
+];
+
+export interface NoteContext {
+  publishes?: boolean;
+}
 
 type Payload = Record<string, unknown>;
 
@@ -91,7 +114,65 @@ const verdictText = (ticket: NoteTicket, payload: Payload): string => {
   return `The reviewer asked for changes on ${ticketLabel(ticket)}, held by ${builderLabel(ticket)}: ${textOf(payload, 'notes')}`;
 };
 
-type NoteText = (ticket: NoteTicket, payload: Payload) => string;
+type NoteText = (
+  ticket: NoteTicket,
+  payload: Payload,
+  context: NoteContext,
+) => string;
+
+const listOf = (payload: Payload, key: string): Payload[] => {
+  const value = payload[key];
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (item): item is Payload => typeof item === 'object' && item !== null,
+  );
+};
+
+const dependencyText = (dependency: Payload): string => {
+  const id = textOf(dependency, 'ticket');
+  const project = textOf(dependency, 'project');
+  if (project === '') return id;
+  return `${id} ("${textOf(dependency, 'title')}", project ${project})`;
+};
+
+const readyText = (dependency: Payload): string => {
+  const name = textOf(dependency, 'package');
+  if (name === '') return `${dependencyText(dependency)} merged`;
+  return `${dependencyText(dependency)} published as ${name} ${textOf(dependency, 'version')}`;
+};
+
+const unmetText = (payload: Payload): string =>
+  listOf(payload, 'unmet')
+    .map(
+      (dependency) =>
+        `${dependencyText(dependency)}: ${textOf(dependency, 'reason')}`,
+    )
+    .join('; ');
+
+const noteSuffix = (payload: Payload): string => {
+  const note = textOf(payload, 'note');
+  if (note === '') return '';
+  return ` Note: ${note}`;
+};
+
+const blockedText: NoteText = (ticket, payload) => {
+  if (payload['reason'] !== DEPENDENCIES_REASON)
+    return `${ticketLabel(ticket)} is blocked: its builder was killed.`;
+  return `${ticketLabel(ticket)} is blocked, held by ${builderLabel(ticket)}, waiting on ${unmetText(payload)}. Quarterdeck continues the builder once they are satisfied.${noteSuffix(payload)}`;
+};
+
+const unblockedText: NoteText = (ticket, payload) => {
+  const ready = listOf(payload, 'dependencies').map(readyText).join('; ');
+  if (payload['held'] === true)
+    return `${ticketLabel(ticket)} is unblocked and ${ticket.status} again: ${ready}. Quarterdeck continues ${builderLabel(ticket)} with these versions.`;
+  return `${ticketLabel(ticket)} is ready to assign: ${ready}.`;
+};
+
+const mergedText: NoteText = (ticket, payload, context) => {
+  const merged = `${ticketLabel(ticket)} merged: ${textOf(payload, 'pr')}.`;
+  if (context.publishes !== true) return merged;
+  return `${merged} Its project publishes, so it needs publishing: publish it with your shell and the project's CLI, then send \`published\` with the package and version.`;
+};
 
 const NOTE_TEXTS: Record<string, NoteText> = {
   [TICKET_APPROVE_INTENT]: (ticket) =>
@@ -103,10 +184,25 @@ const NOTE_TEXTS: Record<string, NoteText> = {
   [GATE_EVENTS.verdict]: verdictText,
   [GATE_EVENTS.bounced]: (ticket, payload) =>
     `The merge gate bounced ${ticketLabel(ticket)}, held by ${builderLabel(ticket)}: ${textOf(payload, 'reason')}`,
-  [GATE_EVENTS.merged]: (ticket, payload) =>
-    `${ticketLabel(ticket)} merged: ${textOf(payload, 'pr')}.`,
-  [TICKET_BLOCKED_EVENT]: (ticket) =>
-    `${ticketLabel(ticket)} is blocked: its builder was killed.`,
+  [GATE_EVENTS.merged]: mergedText,
+  [TICKET_BLOCKED_EVENT]: blockedText,
+  [TICKET_WAITING_EVENT]: (ticket, payload) =>
+    `${ticketLabel(ticket)} waits on ${unmetText(payload)}; assign it once they are satisfied.`,
+  [TICKET_UNBLOCKED_EVENT]: unblockedText,
+};
+
+const QUIET_KINDS: readonly string[] = [TICKET_WAITING_EVENT];
+
+const wakeOf = (event: StoreEvent, payload: Payload): NoteWake => {
+  if (QUIET_KINDS.includes(event.kind)) return 'none';
+  if (event.kind === TICKET_UNBLOCKED_EVENT && payload['held'] === true)
+    return 'none';
+  if (
+    event.kind === TICKET_BLOCKED_EVENT &&
+    payload['reason'] === DEPENDENCIES_REASON
+  )
+    return 'none';
+  return 'event';
 };
 
 const eventTicketId = async (
@@ -120,6 +216,7 @@ const eventTicketId = async (
 export const noteForEvent = async (
   store: Pick<Store, 'db' | 'projectId'>,
   event: StoreEvent,
+  context: NoteContext = {},
 ): Promise<DriverNote | undefined> => {
   const write = NOTE_TEXTS[event.kind];
   if (write === undefined) return undefined;
@@ -127,7 +224,11 @@ export const noteForEvent = async (
   if (ticketId === undefined) return undefined;
   const ticket = await readNoteTicket(store, ticketId);
   if (ticket === undefined) return undefined;
-  return { text: write(ticket, payloadOf(event)), wake: 'event' };
+  const payload = payloadOf(event);
+  return {
+    text: write(ticket, payload, context),
+    wake: wakeOf(event, payload),
+  };
 };
 
 export interface NoteBuilder {
@@ -153,6 +254,15 @@ export const builderFailedNote = (
   err: unknown,
 ): DriverNote => ({
   text: `${builder.name} (builder ${builder.id}) failed its turn: ${getErrorMessage(err)}`,
+  wake: 'event',
+});
+
+export const wakeFailedNote = (
+  ticket: Pick<NoteTicket, 'id' | 'title'>,
+  builder: string,
+  error: string,
+): DriverNote => ({
+  text: `${ticketLabel(ticket)} is unblocked, but Quarterdeck could not continue ${builder}: ${error}. Continue or reassign it yourself with the versions it waited on.`,
   wake: 'event',
 });
 
