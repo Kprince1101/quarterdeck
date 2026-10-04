@@ -252,7 +252,7 @@ describe('Driver widget', () => {
 
   it('shows the replay command and copies it', async () => {
     const { container, unmount } = await mount();
-    const command = 'npx quarterdeck replay 2 2 --project deck';
+    const command = 'npm run quarterdeck -- replay 2 2 --project deck';
     expect(textOf(container, '.qd-driver-command code')).toBe(command);
 
     const copy = container.querySelector('.qd-driver-command button');
@@ -264,7 +264,7 @@ describe('Driver widget', () => {
 
     await pick(container, 11);
     expect(textOf(container, '.qd-driver-command code')).toBe(
-      'npx quarterdeck replay 2 1 --project deck',
+      'npm run quarterdeck -- replay 2 1 --project deck',
     );
     expect(textOf(container, '[aria-live="polite"]')).toBe('');
     unmount();
@@ -279,7 +279,7 @@ describe('Driver widget', () => {
 
     typeInto(through, '1');
     expect(textOf(container, '.qd-driver-command code')).toBe(
-      'npx quarterdeck replay 2 1 --project deck',
+      'npm run quarterdeck -- replay 2 1 --project deck',
     );
 
     typeInto(through, '3');
@@ -293,7 +293,7 @@ describe('Driver widget', () => {
 
     await pick(container, 11);
     expect(textOf(container, '.qd-driver-command code')).toBe(
-      'npx quarterdeck replay 2 1 --project deck',
+      'npm run quarterdeck -- replay 2 1 --project deck',
     );
     unmount();
   });

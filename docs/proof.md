@@ -20,7 +20,7 @@ npm run build
 node scripts/proof/self-voyage.ts .
 ```
 
-It needs a signed-in claude and gh (`quarterdeck doctor`). The voyage's pull request merges into the real default branch. It refuses to start while `DATABASE_URL` is set, since the store would then live in that database instead of the temp home. It fails, rather than reporting success, if:
+It needs a signed-in claude and gh (`npm run quarterdeck -- doctor`). The voyage's pull request merges into the real default branch. It refuses to start while `DATABASE_URL` is set, since the store would then live in that database instead of the temp home. It fails, rather than reporting success, if:
 
 - the voyage ends for any reason but `settled`;
 - nothing merged;

@@ -157,6 +157,7 @@ export {
   type TurnFormat,
 } from './result.js';
 export {
+  QUARTERDECK_COMMAND,
   REPLAY_COMMAND,
   replayCommand,
   type ReplayCommandParts,

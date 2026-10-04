@@ -1,6 +1,8 @@
 import { assertProjectSlug } from '../lib/slug.js';
 
-export const REPLAY_COMMAND = 'npx quarterdeck replay';
+export const QUARTERDECK_COMMAND = 'npm run quarterdeck --';
+
+export const REPLAY_COMMAND = `${QUARTERDECK_COMMAND} replay`;
 
 export interface ReplayCommandParts {
   voyage: number;

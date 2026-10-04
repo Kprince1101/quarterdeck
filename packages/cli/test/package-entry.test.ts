@@ -60,7 +60,7 @@ describe('quarterdeck bin', { timeout: TIMEOUT }, () => {
     });
     expect(result.stderr).toBe('');
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('Usage: quarterdeck <command>');
+    expect(result.stdout).toContain('Usage: npm run quarterdeck -- <command>');
   });
 
   it('inits a repo without a terminal, writing nothing into it', async () => {

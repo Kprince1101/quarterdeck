@@ -441,7 +441,7 @@ esac`,
       'gemini: 0.9.0, signed in (GEMINI_API_KEY)',
       'gh: 2.81.0, signed in (example-org on github.com)',
       '',
-      '1 of 4 need attention. Run the commands above, then quarterdeck doctor again.',
+      '1 of 4 need attention. Run the commands above, then npm run quarterdeck -- doctor again.',
     ]);
     expect(io.errors).toEqual([]);
   });

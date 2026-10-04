@@ -1,6 +1,7 @@
 import { parseArgs } from 'node:util';
 import {
   DEFAULT_API_PORT,
+  QUARTERDECK_COMMAND,
   ensurePrivateDir,
   quarterdeckHome,
   startQuarterdeck,
@@ -11,7 +12,7 @@ import { CliError, type CliIo, type Command } from './io.js';
 
 const MAX_PORT = 65_535;
 
-export const UP_USAGE = `Usage: quarterdeck up [--port <port>]
+export const UP_USAGE = `Usage: ${QUARTERDECK_COMMAND} up [--port <port>]
 
 Starts the Quarterdeck server and dashboard on 127.0.0.1 and prints the URL
 to open. The URL carries this run's API token; the dashboard needs it.

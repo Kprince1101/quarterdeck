@@ -15,7 +15,7 @@ import {
   projectWorktreesDir,
   quarterdeckHome,
 } from '@quarterdeck/server';
-import { DOCTOR_FIXES, INIT_USAGE, UP_USAGE, USAGE } from 'quarterdeck';
+import { DOCTOR_FIXES, INIT_USAGE, UP_USAGE, USAGE } from '@quarterdeck/cli';
 import { describe, expect, it } from 'vitest';
 import {
   ROOT,
@@ -78,9 +78,9 @@ describe('docs', () => {
     },
   );
 
-  it('every npx quarterdeck command is one the cli has', () => {
+  it('every npm run quarterdeck command is one the cli has', () => {
     const commands = DOCS.flatMap((page) => [
-      ...pageText(readDoc(page)).matchAll(/npx quarterdeck (\w+)/g),
+      ...pageText(readDoc(page)).matchAll(/npm run quarterdeck -- (\w+)/g),
     ]).map((match) => match[1]);
 
     expect(new Set(commands)).toEqual(
@@ -88,11 +88,34 @@ describe('docs', () => {
     );
     commands.forEach((command) => expect(USAGE).toContain(`\n  ${command} `));
   });
+
+  it.each([...DOCS.map((page) => `docs/${page}`), 'index.html'])(
+    '%s runs quarterdeck from the clone, never from the registry',
+    (page) => {
+      const text = pageText(readPage(page));
+      expect(text).not.toMatch(/npx\s+quarterdeck/);
+      expect(text).not.toMatch(/npm\s+(i|install)\s+(-g\s+)?@?quarterdeck/);
+    },
+  );
 });
 
 describe('quickstart', () => {
   const html = readDoc('quickstart.html');
   const code = codeBlocks(html).join('\n');
+
+  it('starts with the README running it: clone, npm install, npm run quarterdeck -- up', () => {
+    const readme = readFileSync(resolve(ROOT, 'README.md'), 'utf8');
+    const steps = ['npm install', 'npm run quarterdeck -- up'];
+
+    expect(headings(html, 2)[0]).toBe('Running it');
+    expect(readme).toContain('## Running it');
+    steps.forEach((step) => {
+      expect(code).toContain(`\n${step}`);
+      expect(readme).toContain(`\n${step}`);
+    });
+    expect(pageText(html)).toContain('It is not published to npm.');
+    expect(readme).toContain('It is not published to npm.');
+  });
 
   it('goes Kiro, then Claude Code, then Gemini', () => {
     const titles = headings(html, 2);

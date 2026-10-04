@@ -15,12 +15,20 @@ describe('landing page', () => {
     expect(text).toContain(pitch);
   });
 
-  it('shows an install line that runs the published cli', () => {
-    const cli = JSON.parse(
-      readFileSync(resolve(ROOT, 'packages/cli/package.json'), 'utf8'),
-    ) as { name: string };
+  it('shows an install line that runs the cli from the clone', () => {
+    const root = JSON.parse(
+      readFileSync(resolve(ROOT, 'package.json'), 'utf8'),
+    ) as { scripts: Record<string, string> };
 
-    expect(html).toContain(`<code id="install-line">npx ${cli.name} up</code>`);
+    expect(Object.keys(root.scripts)).toContain('quarterdeck');
+    expect(html).toContain(
+      '<code id="install-line">npm run quarterdeck -- up</code>',
+    );
+  });
+
+  it('says it runs locally only and is not on npm', () => {
+    expect(text).toContain('Local only: clone the repository');
+    expect(text).toContain('not published to npm');
   });
 
   it('has a screenshot slot', () => {

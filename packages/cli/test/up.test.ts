@@ -138,7 +138,7 @@ describe('quarterdeck', () => {
     async (command) => {
       const io = testIo('/nowhere');
       expect(await main([command, '--help'], io)).toBe(0);
-      expect(io.lines[0]).toContain(`Usage: quarterdeck ${command}`);
+      expect(io.lines[0]).toContain(`Usage: npm run quarterdeck -- ${command}`);
     },
   );
 });

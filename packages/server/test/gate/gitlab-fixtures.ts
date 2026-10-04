@@ -142,7 +142,7 @@ const RECORDED_MERGE_REQUEST = {
 
 const RECORDED_PROJECT = {
   id: GITLAB_PROJECT_ID,
-  description: 'Quarterdeck, self-hosted.',
+  description: 'Quarterdeck, on its own GitLab host.',
   name: 'quarterdeck',
   name_with_namespace: 'example-group / platform / quarterdeck',
   path: 'quarterdeck',

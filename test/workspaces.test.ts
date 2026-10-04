@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -10,8 +10,9 @@ interface PackageManifest {
   author?: string;
   engines?: { node?: string };
   workspaces?: string[];
-  scripts?: { build?: string };
+  scripts?: Record<string, string>;
   bin?: Record<string, string>;
+  publishConfig?: unknown;
 }
 
 const CLEAR_DIST = `node -e "require('node:fs').rmSync('dist', { recursive: true, force: true })" && `;
@@ -58,9 +59,32 @@ describe('workspace manifests', () => {
     },
   );
 
-  it('cli ships under the quarterdeck name for npx', () => {
+  it.each(ALL_MANIFESTS)('%s has nothing that publishes it', (dir) => {
+    const manifest = readManifest(dir);
+    expect(manifest.publishConfig).toBeUndefined();
+    Object.values(manifest.scripts ?? {}).forEach((script) =>
+      expect(script).not.toMatch(/\bpublish\b/),
+    );
+  });
+
+  it('no workflow publishes a package', () => {
+    const workflows = resolve(ROOT, '.github', 'workflows');
+    readdirSync(workflows).forEach((file) =>
+      expect(readFileSync(resolve(workflows, file), 'utf8')).not.toMatch(
+        /\bpublish\b/,
+      ),
+    );
+  });
+
+  it('cli is @quarterdeck/cli, never the unrelated quarterdeck on npm, with the quarterdeck bin', () => {
     const manifest = readManifest('packages/cli');
-    expect(manifest.name).toBe('quarterdeck');
+    expect(manifest.name).toBe('@quarterdeck/cli');
     expect(manifest.bin).toEqual({ quarterdeck: './dist/bin.js' });
+  });
+
+  it('root runs the cli from the clone, built on install', () => {
+    const { scripts } = readManifest('.');
+    expect(scripts?.quarterdeck).toBe('node scripts/quarterdeck.mjs');
+    expect(scripts?.prepare).toBe('npm run build');
   });
 });

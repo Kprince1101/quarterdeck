@@ -11,6 +11,7 @@ import {
   type Runtime,
 } from '@quarterdeck/rules';
 import {
+  QUARTERDECK_COMMAND,
   createProjectStores,
   dispatchIntent,
   ensurePrivateDir,
@@ -26,7 +27,7 @@ const RUNTIMES = runtimeSchema.options;
 const ROLES = Object.keys(modelsSchema.shape) as Array<keyof Models>;
 const MAX_SLUG_LENGTH = 63;
 
-export const INIT_USAGE = `Usage: quarterdeck init [repo-path] [options]
+export const INIT_USAGE = `Usage: ${QUARTERDECK_COMMAND} init [repo-path] [options]
 
 Creates ~/.quarterdeck and a project for the git repository at repo-path
 (default: the current directory). Nothing is written into the repository
@@ -275,7 +276,7 @@ const report = (
     io.out(`Runtime: ${choice.runtime}, saved in ${choice.layer.path}`);
   }
   io.out(`Data: ${data}`);
-  io.out('Next: quarterdeck up');
+  io.out(`Next: ${QUARTERDECK_COMMAND} up`);
 };
 
 export const runInit: Command = async (args, io) => {

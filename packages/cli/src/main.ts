@@ -1,5 +1,5 @@
 import { RulesError } from '@quarterdeck/rules';
-import { HttpError } from '@quarterdeck/server';
+import { HttpError, QUARTERDECK_COMMAND } from '@quarterdeck/server';
 import { runDoctor } from './doctor.js';
 import { runInit } from './init.js';
 import { CliError, type CliIo, type Command } from './io.js';
@@ -9,7 +9,7 @@ import { runWipe } from './wipe.js';
 
 export const CANCELLED_EXIT_CODE = 130;
 
-export const USAGE = `Usage: quarterdeck <command> [options]
+export const USAGE = `Usage: ${QUARTERDECK_COMMAND} <command> [options]
 
 Commands:
   up                  Start the server and dashboard and print the URL
@@ -18,7 +18,7 @@ Commands:
   replay <voyage> [n]  Replay a voyage's Driver turns 1 to n, writing nothing
   wipe <project>      Stop a project's agents and delete its data (--all for every project)
 
-Run quarterdeck <command> --help for a command's options.`;
+Run ${QUARTERDECK_COMMAND} <command> --help for a command's options.`;
 
 const COMMANDS: Record<string, Command> = {
   up: runUp,

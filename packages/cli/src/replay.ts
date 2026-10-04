@@ -7,6 +7,7 @@ import {
   GEMINI_ADAPTER,
   KIRO_ADAPTER,
   NoBirthTurnError,
+  QUARTERDECK_COMMAND,
   ReplaySignInError,
   TurnInputMissingError,
   findVoyageSessions,
@@ -28,7 +29,7 @@ const RUNTIMES = runtimeSchema.options;
 export const REPLAY_CLIENT_NAME = 'quarterdeck';
 export const REPLAY_CLIENT_VERSION = '0.0.0';
 
-export const REPLAY_USAGE = `Usage: quarterdeck replay <voyage> [n] [options]
+export const REPLAY_USAGE = `Usage: ${QUARTERDECK_COMMAND} replay <voyage> [n] [options]
 
 Sends the Driver's saved prompts for voyage <voyage> again, turns 1 to n of the
 voyage (default: all of them), in one new session, and prints the replies.

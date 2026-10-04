@@ -128,7 +128,7 @@ An unmapped host is an `UnknownForgeError` naming the host and that file. The re
 
 ### GitLab
 
-`glabCli()` reads a merge request URL, `https://<host>/<group>/<subgroups…>/<project>/-/merge_requests/<iid>` (`parseMergeRequestUrl`; nested groups are the owner, as in a remote), through `glab api`. Every call passes `--hostname` with the merge request's host, which the gate has already checked is the host of the project's `origin`, so a self-hosted GitLab mapped in `forges.json` is asked directly whatever `glab` defaults to. The project in a path is URL-encoded (`example-group%2Fplatform%2Fdeck`).
+`glabCli()` reads a merge request URL, `https://<host>/<group>/<subgroups…>/<project>/-/merge_requests/<iid>` (`parseMergeRequestUrl`; nested groups are the owner, as in a remote), through `glab api`. Every call passes `--hostname` with the merge request's host, which the gate has already checked is the host of the project's `origin`, so a GitLab on another host mapped in `forges.json` is asked directly whatever `glab` defaults to. The project in a path is URL-encoded (`example-group%2Fplatform%2Fdeck`).
 
 `pullRequest(url)` makes three calls, and a fourth when the pipeline failed:
 

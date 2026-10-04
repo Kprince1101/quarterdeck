@@ -21,7 +21,7 @@ describe('forge detection', () => {
     expect(forgeOfHost('GitLab.com', {})).toBe('gitlab');
   });
 
-  it('reads a self-hosted host from the forges mapping', () => {
+  it('reads another host from the forges mapping', () => {
     expect(forgeOfHost('git.example.org', MAPPED)).toBe('gitlab');
     expect(forgeOfHost('Git.Example.org', MAPPED)).toBe('gitlab');
     expect(

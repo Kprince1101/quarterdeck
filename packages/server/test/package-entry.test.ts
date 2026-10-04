@@ -152,7 +152,9 @@ describe('@quarterdeck/server package entry', () => {
 
       expect(result.stderr).toBe('');
       expect(result.status).toBe(0);
-      expect(result.stdout).toBe('npx quarterdeck replay 3 7 --project deck');
+      expect(result.stdout).toBe(
+        'npm run quarterdeck -- replay 3 7 --project deck',
+      );
     },
     TIMEOUT,
   );

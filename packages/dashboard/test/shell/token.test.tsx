@@ -114,7 +114,7 @@ describe('dashboard page token', () => {
     const { container, unmount } = render(livePage());
     await vi.waitFor(() => {
       expect(textOf(container, '[role="alert"]')).toContain(
-        'Open the link printed by quarterdeck up.',
+        'Open the link printed by npm run quarterdeck -- up.',
       );
     }, WAIT);
     expect(container.querySelector('[role="status"]')).toBeNull();

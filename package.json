@@ -17,6 +17,8 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
+    "prepare": "npm run build",
+    "quarterdeck": "node scripts/quarterdeck.mjs",
     "lint": "oxlint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

@@ -5,8 +5,8 @@ import { terminalPrompter } from './prompt.js';
 
 const untilStopped = () =>
   new Promise<void>((resolve) => {
-    process.once('SIGINT', () => resolve());
-    process.once('SIGTERM', () => resolve());
+    process.on('SIGINT', () => resolve());
+    process.on('SIGTERM', () => resolve());
   });
 
 const prompter = () => {

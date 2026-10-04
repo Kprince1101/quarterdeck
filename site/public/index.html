@@ -33,8 +33,15 @@
       </ul>
 
       <section class="install" aria-label="Install">
-        <pre><code id="install-line">npx quarterdeck up</code></pre>
+        <pre><code id="install-line">npm run quarterdeck -- up</code></pre>
       </section>
+
+      <p class="detail" id="local-only">
+        Local only: clone the repository, run <code>npm install</code> in it,
+        then the line above, and open the dashboard it prints. Quarterdeck is
+        not published to npm, and the <code>quarterdeck</code> package there is
+        unrelated. See <a href="docs/quickstart.html#running-it">running it</a>.
+      </p>
 
       <p class="docs-link">
         New here? Start with the <a href="docs/quickstart.html">quickstart</a>,
