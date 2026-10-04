@@ -6,6 +6,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createIntentClient } from '../../src/api/index.js';
 import { DeckProvider } from '../../src/deck/DeckProvider.js';
 import { LAYOUT_LOADED } from '../../src/grid/grid-state.js';
+import { LAYOUT_SAVE_DELAY_MS } from '../../src/layouts/constants.js';
 import { DeckLayout } from '../../src/layouts/DeckLayout.js';
 import {
   createRegistry,
@@ -42,18 +43,26 @@ const SAVED: GridLayout = {
   ],
 };
 
+const boardAt = (y: number): GridLayout => ({
+  ...SAVED,
+  items: SAVED.items.map((entry) => ({ ...entry, y })),
+});
+
 interface Sent {
   intent: string;
   body: Record<string, unknown>;
+  keepalive?: true;
 }
 
 const stream = { url: 'ws://127.0.0.1:4317/ws', WebSocket: FAKE_WEBSOCKET };
 
-const setup = (status = 200, registry = REGISTRY) => {
+const setup = (status = 200, registry = REGISTRY, saveDelayMs = 0) => {
   const sent: Sent[] = [];
   const fetch = vi.fn<typeof globalThis.fetch>((url, init) => {
     const intent = String(url).split('/').at(-1) ?? '';
-    sent.push({ intent, body: JSON.parse(String(init?.body)) });
+    const entry: Sent = { intent, body: JSON.parse(String(init?.body)) };
+    if (init?.keepalive === true) entry.keepalive = true;
+    sent.push(entry);
     const body = { intent, status: 'applied', id: null, result: null };
     if (status !== 200) {
       return Promise.resolve(
@@ -65,7 +74,7 @@ const setup = (status = 200, registry = REGISTRY) => {
   const intents = createIntentClient({ fetch });
   const rendered = render(
     <DeckProvider stream={stream} intents={intents}>
-      <DeckLayout registry={registry} saveDelayMs={0} />
+      <DeckLayout registry={registry} saveDelayMs={saveDelayMs} />
     </DeckProvider>,
   );
   return { ...rendered, sent };
@@ -77,9 +86,9 @@ const deliver = (...messages: StreamMessage[]) => {
   });
 };
 
-const settle = () =>
+const settle = (ms = 5) =>
   act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    await new Promise((resolve) => setTimeout(resolve, ms));
   });
 
 const cells = (scope: PageElement) =>
@@ -176,10 +185,6 @@ describe('deck layout', () => {
     const { container, unmount, sent } = setup();
     deliver(snapshotWith(layoutRow(SAVED)));
     const handle = find(container, '[aria-label="Move Board"]');
-    const boardAt = (y: number): GridLayout => ({
-      ...SAVED,
-      items: SAVED.items.map((entry) => ({ ...entry, y })),
-    });
     press(handle, 'ArrowDown');
     await settle();
     expect(sent).toEqual([
@@ -242,11 +247,91 @@ describe('deck layout', () => {
     unmount();
   });
 
-  it('saves nothing before it knows the project', async () => {
+  it('sends an edit made just before the page closes, with keepalive', async () => {
+    const { container, unmount, sent } = setup(
+      200,
+      REGISTRY,
+      LAYOUT_SAVE_DELAY_MS,
+    );
+    deliver(snapshotWith(layoutRow(SAVED)));
+    press(find(container, '[aria-label="Move Board"]'), 'ArrowDown');
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'));
+    });
+    const moved = {
+      intent: 'layout.save',
+      body: { project: 'deck', name: 'dashboard', spec: boardAt(1) },
+      keepalive: true,
+    };
+    expect(sent).toEqual([moved]);
+    await settle(LAYOUT_SAVE_DELAY_MS + 50);
+    expect(sent).toEqual([moved]);
+    unmount();
+  });
+
+  it('sends a pending edit with keepalive when the tab is hidden', () => {
+    const { container, unmount, sent } = setup(
+      200,
+      REGISTRY,
+      LAYOUT_SAVE_DELAY_MS,
+    );
+    deliver(snapshotWith(layoutRow(SAVED)));
+    press(find(container, '[aria-label="Move Board"]'), 'ArrowDown');
+    const visibility = vi
+      .spyOn(document, 'visibilityState', 'get')
+      .mockReturnValue('hidden');
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    visibility.mockRestore();
+    expect(sent).toEqual([
+      {
+        intent: 'layout.save',
+        body: { project: 'deck', name: 'dashboard', spec: boardAt(1) },
+        keepalive: true,
+      },
+    ]);
+    unmount();
+  });
+
+  it('keeps an edit made before the snapshot and saves it once the project is known', async () => {
     const { container, unmount, sent } = setup();
     click(find(container, '[aria-label="Hide Board"]'));
     await settle();
     expect(sent).toEqual([]);
+    deliver(snapshotWith(layoutRow(SAVED)));
+    expect(cells(container)).toEqual(['planner-1', 'events-1']);
+    expect(announced(container)).not.toBe(LAYOUT_LOADED);
+    await settle();
+    expect(sent).toHaveLength(1);
+    const [save] = sent;
+    expect(save?.intent).toBe('layout.save');
+    expect(save?.body).toMatchObject({ project: 'deck', name: 'dashboard' });
+    const spec = save?.body['spec'] as GridLayout;
+    expect(spec.items.find(({ id }) => id === 'board-1')?.hidden).toBe(true);
+    deliver(layoutChange(layoutRow(spec)));
+    expect(cells(container)).toEqual(['planner-1', 'events-1']);
+    expect(announced(container)).not.toBe(LAYOUT_LOADED);
+    unmount();
+  });
+
+  it('keeps a reset made before the snapshot and sends it once the project is known', async () => {
+    const { container, unmount, sent } = setup();
+    choose(find(container, '[aria-label="Layout preset"]'), 'minimal');
+    click(find(container, '.qd-layout-bar button'));
+    await settle();
+    expect(sent).toEqual([]);
+    deliver(snapshotWith(layoutRow(SAVED)));
+    await settle();
+    expect(sent).toEqual([
+      {
+        intent: 'layout.reset',
+        body: { project: 'deck', name: 'dashboard', preset: 'minimal' },
+      },
+    ]);
+    expect(
+      find(container, '[data-grid-item="board-1"]').getAttribute('style'),
+    ).toContain('span 8');
     unmount();
   });
 

@@ -3,6 +3,7 @@ import { createRulesReader } from './rules.js';
 
 export {
   IntentError,
+  KEEPALIVE_BODY_LIMIT,
   authHeaders,
   createIntentClient,
   createIntentSender,
@@ -10,6 +11,7 @@ export {
   type IntentClientOptions,
   type IntentGroup,
   type IntentReplyOf,
+  type IntentSendOptions,
   type IntentSender,
   type SendIntent,
 } from './intents.js';

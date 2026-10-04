@@ -16,8 +16,13 @@ export type IntentGroup = IntentName extends `${infer Group}.${string}`
 
 export type IntentReplyOf<N extends IntentName> = IntentReply & { intent: N };
 
+export interface IntentSendOptions {
+  keepalive?: boolean | undefined;
+}
+
 export type IntentSender<N extends IntentName> = (
   input: IntentInput<N>,
+  options?: IntentSendOptions,
 ) => Promise<IntentReplyOf<N>>;
 
 export type IntentClient = {
@@ -64,6 +69,30 @@ export class IntentError extends Error {
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
 
+export const KEEPALIVE_BODY_LIMIT = 64 * 1024;
+
+const PAYLOAD_TOO_LARGE = 413;
+
+const keepaliveInit = (
+  name: IntentName,
+  body: string,
+  options: IntentSendOptions | undefined,
+): { keepalive?: true } => {
+  if (options?.keepalive !== true) return {};
+  const bytes = new TextEncoder().encode(body).length;
+  if (bytes > KEEPALIVE_BODY_LIMIT) {
+    throw new IntentError(
+      name,
+      PAYLOAD_TOO_LARGE,
+      {
+        error: `${name} is ${bytes} bytes; a request sent as the page closes may carry at most ${KEEPALIVE_BODY_LIMIT}`,
+      },
+      false,
+    );
+  }
+  return { keepalive: true };
+};
+
 const toIssues = (error: z.ZodError): IntentIssue[] =>
   error.issues.map(({ path, message }) => ({ path, message }));
 
@@ -92,6 +121,7 @@ const readJson = async (response: Response): Promise<unknown> => {
 export type SendIntent = <N extends IntentName>(
   name: N,
   input: IntentInput<N>,
+  options?: IntentSendOptions,
 ) => Promise<IntentReplyOf<N>>;
 
 export const createIntentSender = (
@@ -104,6 +134,7 @@ export const createIntentSender = (
   return async <N extends IntentName>(
     name: N,
     input: IntentInput<N>,
+    sendOptions?: IntentSendOptions,
   ): Promise<IntentReplyOf<N>> => {
     const schema: z.ZodType = INTENTS[name];
     const parsed = schema.safeParse(input);
@@ -115,17 +146,20 @@ export const createIntentSender = (
         false,
       );
     }
+    const body = JSON.stringify(input);
+    const keepalive = keepaliveInit(name, body, sendOptions);
     const response = await send(`${baseUrl}${intentPath(name)}`, {
       method: 'POST',
       headers,
-      body: JSON.stringify(input),
+      body,
+      ...keepalive,
     });
-    const body = await readJson(response);
+    const reply = await readJson(response);
     if (!response.ok) {
-      const reply = errorReply(name, response.status, body);
-      throw new IntentError(name, response.status, reply, true);
+      const refusal = errorReply(name, response.status, reply);
+      throw new IntentError(name, response.status, refusal, true);
     }
-    return body as IntentReplyOf<N>;
+    return reply as IntentReplyOf<N>;
   };
 };
 
@@ -137,8 +171,10 @@ export const createIntentClient = (
   INTENT_NAMES.forEach((name) => {
     const [group = name, action = name] = name.split('.');
     const actions = (client[group] ??= {});
-    actions[action] = (input: IntentInput<typeof name>) =>
-      sendIntent(name, input);
+    actions[action] = (
+      input: IntentInput<typeof name>,
+      options?: IntentSendOptions,
+    ) => sendIntent(name, input, options);
   });
   return client as IntentClient;
 };

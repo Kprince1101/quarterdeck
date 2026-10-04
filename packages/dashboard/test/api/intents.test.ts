@@ -10,6 +10,7 @@ import {
 } from 'vitest';
 import {
   IntentError,
+  KEEPALIVE_BODY_LIMIT,
   createIntentClient,
   createIntentSender,
   type IntentInput,
@@ -70,6 +71,42 @@ describe('intent client', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ project: 'deck', body: 'remember this' }),
     });
+  });
+
+  it('marks the request keepalive when asked', async () => {
+    const post = replyWith(
+      200,
+      JSON.stringify({ intent: 'layout.reset', status: 'applied' }),
+    );
+    const client = createIntentClient({ fetch: post });
+    const input = {
+      project: 'deck',
+      name: 'dashboard',
+      preset: 'ops' as const,
+    };
+    await client.layout.reset(input, { keepalive: true });
+    expect(post).toHaveBeenCalledWith('/api/intents/layout.reset', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+      keepalive: true,
+    });
+  });
+
+  it('refuses a keepalive body over the browser limit without sending it', async () => {
+    const post = vi.fn<typeof fetch>();
+    const send = createIntentSender({ fetch: post });
+    const body = 'x'.repeat(KEEPALIVE_BODY_LIMIT);
+    const err = await caught(
+      send('notebook.add', { project: 'deck', body }, { keepalive: true }),
+    );
+    expect(post).not.toHaveBeenCalled();
+    expect(err).toMatchObject({
+      intent: 'notebook.add',
+      status: 413,
+      sent: false,
+    });
+    expect(err.message).toContain(`at most ${KEEPALIVE_BODY_LIMIT}`);
   });
 
   it('refuses input the shared schema rejects without sending it', async () => {
