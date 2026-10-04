@@ -5,9 +5,11 @@ import type {
   VoyageRow,
   TicketRow,
 } from '@quarterdeck/server/stream-schema';
+import { specBody } from '@quarterdeck/server/ticket-spec';
 import {
   DEMO_VOYAGE_PLANS,
   type DemoQuestionPlan,
+  type DemoTicketPlan,
   type DemoVoyagePlan,
 } from './demo-plans.js';
 import { DEMO_FORGE } from './demo-seed.js';
@@ -85,6 +87,18 @@ export const freeName = (
     `agent-${agents.length + 1}`
   );
 };
+
+const planSpec = (ticket: DemoTicketPlan): string =>
+  specBody({
+    intro: ticket.body,
+    sections: {
+      Requirements: `- As the harbour office, I want this: ${ticket.body}\n  - WHEN the change is merged THE SYSTEM SHALL behave as described above.`,
+      Design:
+        'Change only the code the ticket names; keep the booking flow as it is.',
+      Tasks: `1. Make the change.\n2. Add tests, the unhappy path included.\n3. Open a ${forgeTerms(DEMO_FORGE).long}.`,
+    },
+    proven: 'the new tests pass and show the change working.',
+  });
 
 const builderText = (ticket: TicketRow, step: string): DemoTurnText => ({
   input: `Ticket: ${ticket.title}\n\n${ticket.body}\n\n${step}`,
@@ -245,7 +259,7 @@ export const voyageBeats = (
     world.activateVoyage(voyage);
     work('driver', 0, null, () => ({
       input: `Voyage ${voyage.number}. Goal: ${voyage.goal}. Read the notebook and the open tickets, then plan the voyage.`,
-      output: `${driver.name}: three tickets fit the goal. Two builders and a reviewer; the second builder takes the riskiest ticket.`,
+      output: `${driver.name}: three tickets fit the goal. Two builders, the second on the riskiest ticket; the reviewer reads every ${forgeTerms(DEMO_FORGE).long}.`,
     }));
     return true;
   };
@@ -264,7 +278,7 @@ export const voyageBeats = (
     plan.tickets
       .slice(waiting.length)
       .forEach((row) =>
-        world.createTicket(row.title, row.body, 'open', voyage.id),
+        world.createTicket(row.title, planSpec(row), 'open', voyage.id),
       );
     world.birth(freeName(world, options.names), 'builder', voyage.id);
     world.birth(freeName(world, options.names), 'builder', voyage.id, 'claude');

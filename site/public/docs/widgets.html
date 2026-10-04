@@ -15,6 +15,7 @@
     <nav class="site-nav" aria-label="Docs">
       <a class="home" href="../">Quarterdeck</a>
       <a href="quickstart.html">Quickstart</a>
+      <a href="voyages.html">Voyages</a>
       <a href="rules.html">Rules</a>
       <a href="widgets.html" aria-current="page">Widgets</a>
       <a href="data.html">Where your data lives</a>
@@ -26,7 +27,8 @@
       <p class="lead">
         The dashboard is made of widgets that you arrange on a grid. Layouts are
         JSON the server keeps, and presets ship with Quarterdeck: the first is
-        Board, then the Planner, Driver and Notebook as tabs, then Events.
+        Board, then the Planner, Driver and Notebook as tabs, then Events and
+        the pull and merge requests.
       </p>
       <p>
         The dashboard is still being built, so this page says what each widget
@@ -85,12 +87,21 @@
 
       <h2 id="driver">Driver</h2>
       <p>
-        The Driver's work: which builder has which ticket, and what it is doing
-        about each.
+        The turns of the voyage's Driver, the one coordinator for every project:
+        what it was told, what it answered and the actions it took, such as
+        assigning a ticket, blocking one on another project's work, or recording
+        that a library was published. Pick an earlier voyage to read its turns.
+        Each turn shows the command that replays the Driver up to it in a fresh
+        session that writes nothing.
       </p>
 
       <h2 id="events">Events</h2>
-      <p>Everything that happened in the project, in order, as it happens.</p>
+      <p>
+        Everything that happened, in order, as it happens, filtered by project
+        and kind. A ticket waiting on another project's work says what it is
+        waiting for (<em>merged but not published yet</em>, for example), and
+        the feed shows when a blocked builder is woken.
+      </p>
 
       <h2 id="notebook">Notebook</h2>
       <p>
@@ -103,11 +114,20 @@
         Your conversation with the Planner, which turns what you describe into
         tickets for you to approve. One conversation plans for every active
         project: each proposal shows the project it belongs to, and editing it
-        can move it to another project.
+        can move it to another project. Each proposal is a
+        <a href="voyages.html#planner">spec</a>, shown and edited section by
+        section: Requirements, Design, Tasks and the Proven line.
       </p>
 
       <h2 id="project">Project</h2>
-      <p>One project: its repository and its crew.</p>
+      <p>
+        One project: pause it, turn the AI review gate and auto-merge on or off
+        for your machine, see the reviewer and how many agents have retired, and
+        archive it. Its services are here too: the forge detected from its
+        remote, its tracker and how agents reach it, and whether it
+        <a href="voyages.html#dependencies">publishes</a>. See
+        <a href="voyages.html#services">project services</a>.
+      </p>
 
       <h2 id="requests">Pull and merge requests</h2>
       <p>

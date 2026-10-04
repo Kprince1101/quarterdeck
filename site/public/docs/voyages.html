@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Voyages · Quarterdeck docs</title>
+    <meta
+      name="description"
+      content="How Quarterdeck works: one voyage, one Driver and one reviewer across every project, spec tickets, cross-project dependencies, forges and project services."
+    />
+    <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <nav class="site-nav" aria-label="Docs">
+      <a class="home" href="../">Quarterdeck</a>
+      <a href="quickstart.html">Quickstart</a>
+      <a href="voyages.html" aria-current="page">Voyages</a>
+      <a href="rules.html">Rules</a>
+      <a href="widgets.html">Widgets</a>
+      <a href="data.html">Where your data lives</a>
+      <a href="faq.html">FAQ</a>
+    </nav>
+
+    <main class="docs">
+      <h1>Voyages</h1>
+      <p class="lead">
+        A voyage is one run of work toward a goal, from Start voyage until it
+        ends. One voyage runs at a time, and it spans every project you have
+        added: one Driver coordinates it and one reviewer reviews it, whichever
+        repository the work is in.
+      </p>
+      <p>
+        A voyage is not an ACP session. A session is one agent's conversation
+        with its runtime; a voyage holds many of them, the Driver's, the
+        reviewer's and one per builder.
+      </p>
+
+      <h2 id="planner">The Planner and spec tickets</h2>
+      <p>
+        The Planner is one conversation for every active project. You describe
+        what you want; it proposes tickets, and each one names the project it
+        belongs to. You approve, edit or reject each proposal in the
+        <a href="widgets.html#planner">Planner widget</a>, and editing one can
+        move it to another project. Only approved tickets reach the Driver.
+      </p>
+      <p>
+        Every ticket is a spec, in the shape Kiro uses, so a builder starts with
+        requirements, a design and a task list:
+      </p>
+      <pre><code>## Requirements
+
+- As a maintainer, I want …
+  - WHEN … THE SYSTEM SHALL …
+
+## Design
+
+Where in the repository, the approach, the constraints and decisions.
+
+## Tasks
+
+1. A numbered checklist sized for one pull request.
+
+Proven: &lt;observable check&gt;</code></pre>
+      <p>
+        A proposal that names no active project or does not follow this format
+        never reaches the board: the Planner is told what is wrong and asked
+        once more. The spec lives in the ticket only; nothing is written to the
+        repository. A ticket can also carry its id in the project's tracker, its
+        <code>external_ref</code> (see
+        <a href="#services">project services</a>).
+      </p>
+
+      <h2 id="crew">One Driver, one reviewer</h2>
+      <p>
+        Start voyage births the Driver, the coordinator for every project with a
+        repository. It is told whenever something it should act on happens in
+        any of them: a ticket approved, a builder's turn ended, a pull request
+        reported, a verdict, a merge. Each line names its project. It births
+        builders, assigns them tickets, keeps them going, and asks you a card
+        when a decision is irreversible or product-shaped.
+      </p>
+      <p>
+        Each builder works one ticket in its own git worktree of that ticket's
+        project and opens a pull request there. There is one reviewer for every
+        project, kept between voyages; it reads each request against
+        <a href="rules.html#prompts"><code>reviewer.md</code></a> and approves
+        it or sends it back. Then the project's
+        <a href="rules.html#merge-gate">merge gate</a> decides whether it
+        merges.
+      </p>
+      <p>
+        A voyage ends itself once nothing is open and it has stayed settled for
+        <a href="rules.html#lifecycle"><code>autoEndSettleSeconds</code></a
+        >. The Driver then gets a wrap-up turn and proposes notebook entries and
+        charter edits for you to approve.
+      </p>
+
+      <h2 id="dependencies">Work across projects</h2>
+      <p>
+        A ticket can depend on tickets in any project. An approved ticket waits
+        until everything it depends on is done, and the
+        <a href="widgets.html#events">Events</a> feed says what it is waiting
+        for. The Driver can also block a ticket a builder already holds on
+        tickets elsewhere; the builder keeps its worktree and session while it
+        waits.
+      </p>
+      <p>
+        A project marked <code>publishes</code> is a library: merging one of its
+        tickets is not enough for the projects that depend on it, because they
+        need a release. When such a ticket merges, the Driver is asked to
+        publish it with the project's own tooling and then send the
+        <code>published</code> action with the package and version. Quarterdeck
+        never publishes anything itself. Until then, dependents read
+        <em>merged but not published yet</em>.
+      </p>
+      <p>
+        Once every dependency of a ticket is satisfied, Quarterdeck acts without
+        waiting to be asked. A blocked builder is woken by itself, told which
+        package versions to bump, and carries on. An unassigned ticket that is
+        now ready goes to the Driver, which assigns it.
+      </p>
+
+      <h2 id="steering">Steering one project</h2>
+      <p>
+        The <a href="widgets.html#board">Board</a> lists each project in the
+        voyage with its own Kill, which stops that project's builders and blocks
+        their tickets while the voyage, the Driver and every other project keep
+        going. Pausing a project holds its launches and continues and nothing
+        else. Kill all ends the voyage everywhere and reopens its tickets.
+      </p>
+
+      <h2 id="forges">GitHub and GitLab</h2>
+      <p>
+        Each project is on the forge its <code>origin</code> remote points at:
+        <code>github.com</code> is GitHub, <code>gitlab.com</code> is GitLab,
+        and a self-hosted instance is mapped once in
+        <a href="rules.html#forges"><code>forges.json</code></a
+        >. On GitHub, agents and the dashboard say pull request (PR) and use
+        <code>gh</code>; on GitLab they say merge request (MR) and use
+        <code>glab</code>, and <code>npm run quarterdeck -- doctor</code> checks
+        <code>glab</code> for each GitLab host. One voyage can mix both.
+      </p>
+      <p>
+        The merge gate can also wait for an AI review:
+        <a href="rules.html#merge-gate"><code>requireAiReview</code></a> holds a
+        request until one of the forge's <code>aiReviewers</code> has reviewed
+        it and every thread it opened is resolved. On GitHub those ship as the
+        Copilot reviewer's logins. GitLab ships none, so you name your bot in
+        your machine layer; until you do, the gate stops with an error rather
+        than pass. The old <code>requireCopilotReview</code> key is deprecated
+        and reads as <code>requireAiReview</code>.
+      </p>
+
+      <h2 id="services">Project services</h2>
+      <p>
+        Each project tells its agents how to reach the outside world: its forge,
+        detected from the remote, and its ticket service (a tracker such as Jira
+        or Targetprocess), reached through a CLI command or an MCP server you
+        name in the <a href="widgets.html#project">Project widget</a> or in
+        <a href="rules.html#services"><code>services.json</code></a
+        >. Every prompt for work on a ticket carries a Services section with
+        them, and a builder's and the reviewer's add the ticket's
+        <code>external_ref</code>, so an agent can update the tracker item
+        itself. Quarterdeck never calls the tracker. This supersedes the
+        ticket-source plugins in <code>~/.quarterdeck/plugins/</code>.
+      </p>
+
+      <h2 id="kiro">Kiro base agents</h2>
+      <p>
+        On Kiro, the Driver, the reviewer and the builders can each start from
+        one of your own Kiro agents, with its MCP servers, steering, skills,
+        prompt and model. A project can give its builders a different base from
+        its own repo layer, so a component library's builders and an app's need
+        not match. Hooks are never copied from a base. See
+        <a href="rules.html#kiro"><code>kiro.json</code></a
+        >.
+      </p>
+
+      <h2 id="multi-repo">How Quarterdeck fits a multi-repo effort</h2>
+      <p>
+        Take two libraries and three apps: <code>ui-kit</code>, a React
+        component library; <code>ui-extras</code>, a library of bespoke
+        components built on <code>ui-kit</code>; and <code>retrofit-a</code>,
+        <code>retrofit-b</code> and <code>retrofit-c</code>, three existing apps
+        moving onto them. A new component has to land in <code>ui-kit</code>, be
+        wrapped in <code>ui-extras</code>, be published, and then be adopted by
+        all three apps.
+      </p>
+      <ol>
+        <li>
+          <strong>Add the five repositories.</strong> Run
+          <code>npm run quarterdeck -- init &lt;path&gt;</code> for each, then
+          one <code>npm run quarterdeck -- up</code>. If
+          <code>retrofit-c</code> lives on a self-hosted GitLab, map its host in
+          <code>forges.json</code>; its agents then work with merge requests and
+          <code>glab</code>.
+        </li>
+        <li>
+          <strong>Mark the libraries.</strong> In the Project widget, turn on
+          <em>publishes</em> for <code>ui-kit</code> and <code>ui-extras</code>,
+          and name each project's tracker if it has one. Optionally give
+          <code>ui-kit</code>'s builders their own Kiro base agent from its repo
+          layer.
+        </li>
+        <li>
+          <strong>Plan once.</strong> Tell the Planner what you want. It
+          proposes a spec ticket per project: the component in
+          <code>ui-kit</code>; the wrapper in <code>ui-extras</code>, depending
+          on the <code>ui-kit</code> ticket; and an adoption ticket in each
+          retrofit app, depending on the <code>ui-extras</code> ticket. Approve
+          them.
+        </li>
+        <li>
+          <strong>Start one voyage.</strong> One Driver coordinates all five
+          projects and one reviewer reviews every pull or merge request. The
+          Driver assigns the <code>ui-kit</code> ticket; the rest wait on their
+          dependencies, or the Driver starts retrofit prep work and blocks it on
+          the library ticket.
+        </li>
+        <li>
+          <strong>Merge, then publish.</strong> When the
+          <code>ui-kit</code> request merges, its dependents still wait: it is
+          merged but not published yet. The Driver publishes
+          <code>ui-kit</code> with the repository's own release tooling and
+          sends <code>published</code> with the package and version. The
+          <code>ui-extras</code> ticket is now ready; its merge and publish
+          follow the same way.
+        </li>
+        <li>
+          <strong>The retrofit work wakes up.</strong> Once
+          <code>ui-extras</code> is published, the ready retrofit tickets go to
+          the Driver, and any retrofit builder it had blocked is woken by itself
+          with the versions to bump. Three builders work three worktrees in
+          parallel; the reviewer reads each request, and each project's merge
+          gate merges it under that project's rules.
+        </li>
+        <li>
+          <strong>Steer per project.</strong> If <code>retrofit-b</code> goes
+          wrong, pause it or Kill its builders from the Board; everything else
+          carries on. The voyage ends itself once everything has merged and
+          settled.
+        </li>
+      </ol>
+    </main>
+
+    <footer>
+      <p>
+        MIT licensed. &copy; Kristopher Prince. &ldquo;Kiro&rdquo; is a
+        trademark of Amazon.com, Inc. or its affiliates. Quarterdeck is not
+        affiliated with or endorsed by Amazon.
+      </p>
+    </footer>
+  </body>
+</html>

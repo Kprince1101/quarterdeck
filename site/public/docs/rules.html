@@ -15,6 +15,7 @@
     <nav class="site-nav" aria-label="Docs">
       <a class="home" href="../">Quarterdeck</a>
       <a href="quickstart.html">Quickstart</a>
+      <a href="voyages.html">Voyages</a>
       <a href="rules.html" aria-current="page">Rules</a>
       <a href="widgets.html">Widgets</a>
       <a href="data.html">Where your data lives</a>
@@ -364,7 +365,11 @@
           <tr>
             <td><code>autoEndSettleSeconds</code></td>
             <td><code>120</code></td>
-            <td>How long a finished agent settles before it is ended.</td>
+            <td>
+              How long a voyage must stay settled, with nothing open in any
+              project, before it ends itself. The repo layer can lengthen it but
+              never shorten it.
+            </td>
           </tr>
           <tr>
             <td><code>stuckAfterMinutes</code></td>
@@ -407,9 +412,9 @@
 
       <h3 id="merge-gate">The merge gate</h3>
       <p>
-        After a builder reports a pull request, the reviewer reads it and
-        approves it or sends it back. The merge gate then decides whether it
-        merges.
+        After a builder reports a pull request (a merge request on GitLab), the
+        reviewer reads it and approves it or sends it back. The merge gate then
+        decides whether it merges.
       </p>
       <table>
         <thead>
@@ -547,6 +552,18 @@
         from <code>~/.kiro/agents/everyday.json</code>:
       </p>
       <pre><code>{ "baseAgents": { "builder": "everyday" } }</code></pre>
+      <p>
+        One project can override that for its own builders, so a component
+        library's builders can start from a different agent than an app's. This
+        <code>&lt;repo&gt;/.quarterdeck/rules.local.kiro.json</code> starts the
+        project's builders from <code>component-builder</code>, looked up in the
+        repository's <code>.kiro/agents/</code> first:
+      </p>
+      <pre><code>{ "baseAgents": { "builder": "component-builder" } }</code></pre>
+      <p>
+        <code>npm run quarterdeck -- doctor</code> prints the base each role
+        resolves to, or the error naming a missing or broken file.
+      </p>
 
       <h2 id="forges">forges.json</h2>
       <p>
@@ -565,7 +582,8 @@
         <code>&lt;repo&gt;/.quarterdeck/rules.local.forges.json</code> is an
         error naming the file. The forge decides the words agents and the
         dashboard use: pull requests and <code>gh</code> on GitHub, merge
-        requests and <code>glab</code> on GitLab.
+        requests and <code>glab</code> on GitLab. Doctor checks
+        <code>glab</code> for every host mapped to <code>gitlab</code> here.
       </p>
 
       <h2 id="services">services.json</h2>
@@ -580,7 +598,8 @@
         Only a <code>kind</code> of <code>none</code> may leave
         <code>how</code> out. <code>notes</code> is passed on as written.
         <code>publishes</code> marks a library whose merged tickets must be
-        published before dependents unblock. This
+        published before dependents unblock (see
+        <a href="voyages.html#dependencies">work across projects</a>). This
         <code>~/.quarterdeck/rules.local.services.json</code> reaches one
         project's tracker through an MCP server and another's through a CLI:
       </p>
@@ -606,6 +625,12 @@
         machine layer can set services: a tracker names a command agents run, so
         a <code>&lt;repo&gt;/.quarterdeck/rules.local.services.json</code> is an
         error naming the file.
+      </p>
+      <p>
+        A ticket's id in the tracker is its <code>external_ref</code>, which the
+        Planner sets when it proposes the ticket; a builder's and the reviewer's
+        Services section name it. Services supersede the ticket-source plugins
+        in <code>~/.quarterdeck/plugins/</code>.
       </p>
 
       <h2 id="prompts">charter.md and reviewer.md</h2>

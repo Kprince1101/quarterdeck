@@ -15,6 +15,7 @@
     <nav class="site-nav" aria-label="Docs">
       <a class="home" href="../">Quarterdeck</a>
       <a href="quickstart.html">Quickstart</a>
+      <a href="voyages.html">Voyages</a>
       <a href="rules.html">Rules</a>
       <a href="widgets.html">Widgets</a>
       <a href="data.html" aria-current="page">Where your data lives</a>
@@ -46,6 +47,7 @@
   plugins/&lt;name&gt;.mjs             ticket-source plugins you add yourself
   pause.json                     only while everything is paused
   sock/&lt;hash&gt;.sock               a project's bus socket, while running
+  _deck/                         where the Driver and the reviewer run
   kiro/                          where kiro-cli runs
   gemini/                        where gemini runs, and its locked settings
   runtimes/claude/               where the Claude Code agent runs</code></pre>
@@ -132,6 +134,14 @@
               holds no data and is removed on shutdown. When the path would be
               too long it goes in
               <code>$TMPDIR/quarterdeck-&lt;uid&gt;/</code> instead.
+            </td>
+          </tr>
+          <tr>
+            <td><code>~/.quarterdeck/_deck/</code></td>
+            <td>
+              The folder the Driver and the reviewer run in. They work every
+              project, so they start in none of your repositories. It holds no
+              data, and wiping leaves it.
             </td>
           </tr>
           <tr>

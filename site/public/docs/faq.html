@@ -6,7 +6,7 @@
     <title>FAQ · Quarterdeck docs</title>
     <meta
       name="description"
-      content="Common questions about Quarterdeck: keys, accounts, merging, permissions and data."
+      content="Common questions about Quarterdeck: keys, accounts, GitLab, several repositories, trackers, merging, permissions and data."
     />
     <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="../styles.css" />
@@ -15,6 +15,7 @@
     <nav class="site-nav" aria-label="Docs">
       <a class="home" href="../">Quarterdeck</a>
       <a href="quickstart.html">Quickstart</a>
+      <a href="voyages.html">Voyages</a>
       <a href="rules.html">Rules</a>
       <a href="widgets.html">Widgets</a>
       <a href="data.html">Where your data lives</a>
@@ -36,8 +37,39 @@
       <p>
         No. There is no hosted component and no telemetry, and the server
         listens on <code>127.0.0.1</code> only. The agents themselves talk to
-        their own providers, as they do when you run them by hand, and pull
-        requests go to GitHub through <code>gh</code>.
+        their own providers, as they do when you run them by hand, pull requests
+        go to GitHub through <code>gh</code>, and merge requests go to GitLab
+        through <code>glab</code>. A tracker is reached only by the agents, with
+        the CLI or MCP server you name; Quarterdeck never calls it.
+      </p>
+
+      <h2 id="gitlab">Does it work with GitLab?</h2>
+      <p>
+        Yes, gitlab.com and self-hosted instances. A self-hosted host needs one
+        line in <a href="rules.html#forges"><code>forges.json</code></a
+        >; after that, agents and the dashboard say merge request instead of
+        pull request, and <code>npm run quarterdeck -- doctor</code> checks
+        <code>glab</code>. See <a href="quickstart.html#gitlab">GitLab</a>.
+      </p>
+
+      <h2 id="repos">Can it work across several repositories?</h2>
+      <p>
+        Yes. Add each repository as a project; one voyage, one Driver and one
+        reviewer then work them all. Tickets can depend on tickets in other
+        projects, and a library can be marked as publishing, so the apps that
+        use it wait for its release, not just its merge. See
+        <a href="voyages.html#multi-repo"
+          >how Quarterdeck fits a multi-repo effort</a
+        >.
+      </p>
+
+      <h2 id="tracker">Can agents use my ticket tracker?</h2>
+      <p>
+        Yes. Name the tracker and how to reach it (a CLI command or an MCP
+        server) in the Project widget or in
+        <a href="rules.html#services"><code>services.json</code></a
+        >. Every agent working a ticket is told, along with the ticket's id
+        there. See <a href="voyages.html#services">project services</a>.
       </p>
 
       <h2 id="runtime">Which runtime should I use?</h2>
@@ -45,7 +77,9 @@
         Kiro is the default. Claude Code and Gemini CLI work too, and you can
         mix them: <a href="rules.html#models"><code>models.json</code></a> sets
         the runtime for each role, so the reviewer can run on a different
-        runtime from the builders.
+        runtime from the builders. On Kiro, each role can start from one of your
+        own Kiro agents; see <a href="rules.html#kiro"><code>kiro.json</code></a
+        >.
       </p>
 
       <h2 id="signin">What happens when a sign-in expires?</h2>
@@ -61,7 +95,10 @@
         nothing merges until you answer it. Setting
         <a href="rules.html#merge-gate"><code>autoMerge</code></a> to
         <code>true</code> on your machine lets the gate merge by itself, and a
-        repository can never turn that on for you.
+        repository can never turn that on for you. You can also make it wait for
+        an AI review with
+        <a href="rules.html#merge-gate"><code>requireAiReview</code></a
+        >.
       </p>
 
       <h2 id="permissions">Can an agent run any command it likes?</h2>
@@ -78,7 +115,7 @@
         Nothing, unless you agree to a <code>.quarterdeck/</code> folder for
         that project's rules. Builders work in their own git worktrees under
         <code>~/.quarterdeck/</code> and change your code only through pull
-        requests.
+        requests (merge requests on GitLab).
       </p>
 
       <h2 id="postgres">Can I use my own Postgres?</h2>
