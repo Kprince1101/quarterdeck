@@ -4,11 +4,11 @@ What a project's agents use to reach the outside world: its forge and its tracke
 
 ## The settings
 
-| Setting     | Where it comes from                                                                                                                                                                           |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `forge`     | Read-only. The [forge](../gate/README.md#forges) detected from the project's `origin` remote, and that remote's host (`detectProjectForge`). No origin reads as GitHub with no host.          |
-| `tracker`   | `{ kind, how?, command?, server?, notes? }`. `kind` is free text (`jira`, `github-issues`, `none`). `how` is `cli` (needs `command`) or `mcp` (needs `server`); only `none` may leave it out. |
-| `publishes` | `true` for a library whose merged tickets must be published before dependents unblock. Defined here; the Driver does not act on it yet.                                                       |
+| Setting     | Where it comes from                                                                                                                                                                                                           |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `forge`     | Read-only. The [forge](../gate/README.md#forges) detected from the project's `origin` remote, and that remote's host (`detectProjectForge`). No origin reads as GitHub with no host.                                          |
+| `tracker`   | `{ kind, how?, command?, server?, notes? }`. `kind` is free text (`jira`, `github-issues`, `none`). `how` is `cli` (needs `command`) or `mcp` (needs `server`); only `none` may leave it out.                                 |
+| `publishes` | `true` for a library whose merged tickets must be published before dependents unblock. A merged ticket of such a project asks the Driver to publish it and send `published` (see [driver](../driver/README.md#dependencies)). |
 
 `tracker` and `publishes` are stored on the project (`projects.tracker` jsonb and `projects.publishes`, from `0025_project_services`) and edited in the dashboard's Project widget. Either can also come from the machine rules layer, `~/.quarterdeck/rules.local.services.json`, keyed by project slug:
 

@@ -12,6 +12,7 @@ export {
 } from './coordinator.js';
 export {
   DRIVER_NOTE_KINDS,
+  WAKE_EVENT_KINDS,
   composeTurnInput,
   noteForEvent,
   projectNote,
@@ -77,6 +78,13 @@ export {
   type RunLeg,
   type VoyageRun,
 } from './voyage-run.js';
+export {
+  WAKE_RETRY_MS,
+  startWake,
+  type Wake,
+  type WakeLeg,
+  type WakeOptions,
+} from './wake.js';
 export {
   DRIVER_FAILED_REASON,
   PROJECT_CLOSED_REASON,

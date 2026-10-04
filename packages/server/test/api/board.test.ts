@@ -205,6 +205,27 @@ describe('board intents', { timeout: TIMEOUT }, () => {
       });
     });
 
+    it('creates a ticket that depends on a ticket in another open project', async () => {
+      await t.send('project.create', { project: 'library' });
+      const library = await t.send('ticket.create', {
+        project: 'library',
+        title: 'Add the call',
+      });
+      const { ticketId } = library.body.result as { ticketId: string };
+      const created = await t.send('ticket.create', {
+        project,
+        title: 'Use the call',
+        dependsOn: [ticketId],
+      });
+      expect(created.status).toBe(200);
+      const id = (created.body.result as { ticketId: string }).ticketId;
+      expect(await ticketRow(id)).toEqual({
+        title: 'Use the call',
+        status: 'open',
+        depends_on: [ticketId],
+      });
+    });
+
     it('updates only the fields it is given', async () => {
       const created = await t.send('ticket.create', {
         project,

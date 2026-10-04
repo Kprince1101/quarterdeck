@@ -1,4 +1,10 @@
 import type { Queryable, Store } from '../store/index.js';
+import {
+  storeDependencies,
+  unmetDependencies,
+  unmetText,
+  type DependencyResolver,
+} from './dependencies.js';
 import { TicketNotAssignableError } from './errors.js';
 
 export const ACTIVE_TICKET_STATUSES: readonly string[] = [
@@ -43,23 +49,10 @@ export const findTicket = async (
   return ticket;
 };
 
-const unmetDependencies = async (
-  store: Store,
-  ticket: BuilderTicket,
-): Promise<string[]> => {
-  if (ticket.dependsOn.length === 0) return [];
-  const { rows } = await store.db.query<{ id: string }>(
-    `select id from tickets
-     where project_id = $1 and id = any($2::uuid[]) and status <> 'done'
-     order by id`,
-    [store.projectId, ticket.dependsOn],
-  );
-  return rows.map((row) => row.id);
-};
-
 export const findApprovedTicket = async (
   store: Store,
   ticketId: string,
+  dependencies: DependencyResolver = storeDependencies(() => [store]),
 ): Promise<BuilderTicket> => {
   const ticket = await findTicket(store.db, store.projectId, ticketId);
   if (ticket.status !== APPROVED_TICKET_STATUS)
@@ -69,11 +62,12 @@ export const findApprovedTicket = async (
       ticketId,
       `it is assigned to ${ticket.assigneeId}`,
     );
-  const unmet = await unmetDependencies(store, ticket);
-  if (unmet.length > 0)
+  if (ticket.dependsOn.length === 0) return ticket;
+  const resolved = await dependencies(ticket.dependsOn);
+  if (unmetDependencies(resolved).length > 0)
     throw new TicketNotAssignableError(
       ticketId,
-      `it waits on ${unmet.join(', ')}`,
+      `it waits on ${unmetText(resolved)}`,
     );
   return ticket;
 };

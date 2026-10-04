@@ -44,17 +44,47 @@ const assertPlanner = async (
     throw new BusToolError('this conversation has ended');
 };
 
+interface DependencyRow {
+  id: string;
+  status: string;
+}
+
+const DEPENDENCY_ROWS = `select id, status from tickets
+  where project_id = $1 and id = any($2::uuid[])`;
+
+const findDependencies = async (
+  tx: Queryable,
+  projectId: string,
+  dependsOn: readonly string[],
+  others: readonly BusStore[],
+): Promise<DependencyRow[]> => {
+  const { rows } = await tx.query<DependencyRow>(DEPENDENCY_ROWS, [
+    projectId,
+    dependsOn,
+  ]);
+  for (const other of others) {
+    if (other.projectId === projectId) continue;
+    const missing = dependsOn.filter(
+      (id) => !rows.some((row) => row.id === id),
+    );
+    if (missing.length === 0) break;
+    const found = await other.db.query<DependencyRow>(DEPENDENCY_ROWS, [
+      other.projectId,
+      missing,
+    ]);
+    rows.push(...found.rows);
+  }
+  return rows;
+};
+
 const assertDependencies = async (
   tx: Queryable,
   projectId: string,
   dependsOn: readonly string[],
+  others: readonly BusStore[],
 ) => {
   if (dependsOn.length === 0) return;
-  const { rows } = await tx.query<{ id: string; status: string }>(
-    `select id, status from tickets
-     where project_id = $1 and id = any($2::uuid[])`,
-    [projectId, dependsOn],
-  );
+  const rows = await findDependencies(tx, projectId, dependsOn, others);
   const missing = dependsOn.filter((id) => !rows.some((row) => row.id === id));
   if (missing.length > 0)
     throw new BusToolError(
@@ -102,8 +132,9 @@ const insertTicket = async (
   tx: Queryable,
   projectId: string,
   proposal: Proposal,
+  others: readonly BusStore[],
 ): Promise<string> => {
-  await assertDependencies(tx, projectId, proposal.dependsOn);
+  await assertDependencies(tx, projectId, proposal.dependsOn, others);
   const { rows } = await tx.query<{ id: string }>(
     `insert into tickets
        (project_id, title, body, depends_on, external_ref, status)
@@ -143,10 +174,11 @@ const proposeHere = (
   store: BusStore,
   agentId: string,
   proposal: Proposal,
+  others: readonly BusStore[],
 ): Promise<string> =>
   store.db.transaction(async (tx) => {
     await assertPlanner(tx, store.projectId, agentId);
-    const ticketId = await insertTicket(tx, store.projectId, proposal);
+    const ticketId = await insertTicket(tx, store.projectId, proposal, others);
     await recordProposed(tx, store, agentId, {
       ...proposal,
       ticketId,
@@ -160,10 +192,11 @@ const proposeElsewhere = async (
   agentId: string,
   proposal: Proposal,
   target: BusStore,
+  others: readonly BusStore[],
 ): Promise<string> => {
   await assertPlanner(store.db, store.projectId, agentId);
   const ticketId = await target.db.transaction((tx) =>
-    insertTicket(tx, target.projectId, proposal),
+    insertTicket(tx, target.projectId, proposal, others),
   );
   try {
     await store.db.transaction(async (tx) => {
@@ -192,10 +225,10 @@ const targetOf = (
 
 export default defineBusTool({
   description: [
-    'Planner only. Propose one ticket: the project it belongs to, a title, a body written as a spec (## Requirements, ## Design, ## Tasks, then a final `Proven:` line), and the ids of tickets in that project it depends on.',
+    'Planner only. Propose one ticket: the project it belongs to, a title, a body written as a spec (## Requirements, ## Design, ## Tasks, then a final `Proven:` line), and the ids of tickets it depends on, in any open project.',
     'A proposal that names no active project, or whose body does not follow the spec format, is refused and nothing is stored.',
     'The ticket is stored as proposed in its project. The human approves, edits or rejects it; only approved tickets reach the Driver.',
-    'Returns the new ticket id, which later proposals in the same project can name in dependsOn.',
+    'Returns the new ticket id, which later proposals in any project can name in dependsOn.',
     "When the work comes from the project's tracker, pass its id there (a Jira key, a story number) as externalRef; agents see it in their prompts.",
   ].join('\n'),
   input: {
@@ -210,7 +243,8 @@ export default defineBusTool({
     externalRef: externalRefSchema.optional(),
   },
   run: async ({ store, agentId, openStores }, proposal) => {
-    const projects = await activeProjects([store, ...(openStores?.() ?? [])]);
+    const stores = [store, ...(openStores?.() ?? [])];
+    const projects = await activeProjects(stores);
     const problems = proposalProblems(
       proposal,
       projects.map(({ slug }) => slug),
@@ -218,7 +252,7 @@ export default defineBusTool({
     if (problems.length > 0) return refuse(store, agentId, proposal, problems);
     const target = targetOf(projects, proposal.project);
     if (target.projectId === store.projectId)
-      return `proposed ${await proposeHere(store, agentId, proposal)}`;
-    return `proposed ${await proposeElsewhere(store, agentId, proposal, target)}`;
+      return `proposed ${await proposeHere(store, agentId, proposal, stores)}`;
+    return `proposed ${await proposeElsewhere(store, agentId, proposal, target, stores)}`;
   },
 });

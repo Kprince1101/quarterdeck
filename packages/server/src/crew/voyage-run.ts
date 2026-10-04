@@ -1,13 +1,13 @@
 import { z } from 'zod';
 import {
-  applyBuilderAction,
-  builderActionSchema,
-  type BuilderAction,
-  type BuilderActionOutcome,
+  applyTurnAction,
+  turnActionSchema,
   type BuilderContext,
   type DriverAction,
   type DriverVoyage,
   type DriverTurnOutcome,
+  type TurnAction,
+  type TurnActionOutcome,
   type TurnRecord,
 } from '../driver/index.js';
 import { getErrorMessage } from '../lib/errors.js';
@@ -41,8 +41,9 @@ export interface VoyageRunDriver {
 export interface VoyageRunOptions {
   voyage: DriverVoyage;
   charter: string;
-  resolve: (action: BuilderAction) => Promise<RunLeg>;
+  resolve: (action: TurnAction) => Promise<RunLeg>;
   report: CrewFailureReporter;
+  onBuilderTurn?: () => void;
 }
 
 export interface VoyageRun {
@@ -60,18 +61,25 @@ export interface VoyageRun {
   close: () => void;
 }
 
+const outcomeText = (outcome: TurnActionOutcome): string | undefined => {
+  if (outcome.kind === 'assign') {
+    const { assignment } = outcome;
+    return `Assigned ${ticketLabel(assignment.ticket)} to ${assignment.builder.name} (builder ${assignment.builder.id}).`;
+  }
+  if (outcome.kind === 'block')
+    return `Blocked ${ticketLabel(outcome.block.ticket)} on ${outcome.block.dependencies.map(({ id }) => id).join(', ')}.`;
+  if (outcome.kind === 'published')
+    return `Recorded ${ticketLabel(outcome.ticket)} as published: ${outcome.package} ${outcome.version}.`;
+  return undefined;
+};
+
 const outcomeNote = (
   leg: RunLeg,
-  outcome: BuilderActionOutcome,
+  outcome: TurnActionOutcome,
 ): DriverNote | undefined => {
-  if (outcome.kind !== 'assign') return undefined;
-  const { assignment } = outcome;
-  return projectNote(
-    leg.project,
-    actionDoneNote(
-      `Assigned ${ticketLabel(assignment.ticket)} to ${assignment.builder.name} (builder ${assignment.builder.id}).`,
-    ),
-  );
+  const text = outcomeText(outcome);
+  if (text === undefined) return undefined;
+  return projectNote(leg.project, actionDoneNote(text));
 };
 
 export const startVoyageRun = (options: VoyageRunOptions): VoyageRun => {
@@ -121,10 +129,11 @@ export const startVoyageRun = (options: VoyageRunOptions): VoyageRun => {
         (err: unknown) =>
           note(projectNote(leg.project, builderFailedNote(builder, err))),
       )
+      .finally(() => options.onBuilderTurn?.())
       .catch(options.report('builder', { ...links, agentId: builder.id }));
   };
 
-  const watchOutcome = (leg: RunLeg, outcome: BuilderActionOutcome): void => {
+  const watchOutcome = (leg: RunLeg, outcome: TurnActionOutcome): void => {
     if (outcome.kind === 'assign') {
       const { assignment } = outcome;
       watchBuilder(
@@ -135,6 +144,7 @@ export const startVoyageRun = (options: VoyageRunOptions): VoyageRun => {
       );
       return;
     }
+    if (outcome.kind !== 'continue') return;
     const { continuation } = outcome;
     watchBuilder(
       leg,
@@ -145,16 +155,16 @@ export const startVoyageRun = (options: VoyageRunOptions): VoyageRun => {
   };
 
   const applyAction = async (action: DriverAction): Promise<void> => {
-    const parsed = builderActionSchema.safeParse(action);
+    const parsed = turnActionSchema.safeParse(action);
     if (!parsed.success) {
       note(actionFailedNote(action, z.prettifyError(parsed.error)));
       return;
     }
     let leg: RunLeg;
-    let outcome: BuilderActionOutcome;
+    let outcome: TurnActionOutcome;
     try {
       leg = await options.resolve(parsed.data);
-      outcome = await applyBuilderAction(leg.builders, parsed.data);
+      outcome = await applyTurnAction(leg.builders, parsed.data);
     } catch (err) {
       note(actionFailedNote(action, getErrorMessage(err)));
       return;

@@ -141,6 +141,37 @@ describe('bus propose', { timeout: TIMEOUT }, () => {
     expect(rows).toEqual([{ depends_on: [first, open] }]);
   });
 
+  it('lets a proposal depend on a ticket in another open project', async () => {
+    const library = await openTestStore('library');
+    try {
+      const { rows } = await library.db.query<{ id: string }>(
+        `insert into tickets (project_id, title, status)
+         values ($1, 'Add the call', 'open') returning id`,
+        [library.projectId],
+      );
+      const blocker = rows[0]?.id ?? '';
+      const linked = await connectClient(
+        store,
+        plannerId,
+        undefined,
+        undefined,
+        () => [store, library],
+      );
+      clients.push(linked);
+      const ticketId = proposedId(
+        (await propose(linked, { title: 'retrofit', dependsOn: [blocker] }))
+          .text,
+      );
+      const depends = await store.db.query(
+        'select depends_on from tickets where id = $1',
+        [ticketId],
+      );
+      expect(depends.rows).toEqual([{ depends_on: [blocker] }]);
+    } finally {
+      await library.close();
+    }
+  });
+
   it('refuses dependencies that do not exist or will never be built', async () => {
     const missing = crypto.randomUUID();
     expect(

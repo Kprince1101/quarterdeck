@@ -3,10 +3,13 @@ import type { DeskReply } from '../api/context.js';
 import {
   continueBuilder,
   openDriverVoyage,
+  storeDependencies,
   type DriverVoyage,
   type ProjectBrief,
 } from '../driver/index.js';
+import { GATE_EVENTS } from '../gate/index.js';
 import { getErrorMessage } from '../lib/errors.js';
+import { loadServices } from '../services/index.js';
 import { RESTART_REASON } from '../lifecycle/index.js';
 import { startPauseGate, type PauseGate } from '../pause/index.js';
 import type { PlannerAdapters } from '../planner/sessions.js';
@@ -28,10 +31,12 @@ import {
   type StoreEvent,
 } from '../store/index.js';
 import {
+  WAKE_EVENT_KINDS,
   noteForEvent,
   projectNote,
   readWaitingTickets,
   waitingTicketsNote,
+  type NoteContext,
 } from './driver-notes.js';
 import {
   AgentExitedError,
@@ -58,6 +63,7 @@ import {
   type VoyageLeg,
 } from './voyage-legs.js';
 import { startVoyageRun, type VoyageRun } from './voyage-run.js';
+import { startWake, type Wake } from './wake.js';
 import {
   activeVoyageIds,
   nextVoyageNumber,
@@ -107,6 +113,7 @@ interface LiveVoyage {
   voyage?: DriverVoyage;
   charter?: string;
   run?: VoyageRun;
+  wake?: Wake;
   auto?: AutoEnd;
 }
 
@@ -135,6 +142,9 @@ const cleanupResult = (
 
 export const startCrewVoyages = (options: CrewVoyagesOptions): CrewVoyages => {
   const { home, log } = options;
+  const dependencies = storeDependencies(options.openStores, {
+    homeDir: options.homeDir,
+  });
   const tasks = new Set<Promise<void>>();
   let current: LiveVoyage | undefined;
   let tail: Promise<unknown> = Promise.resolve();
@@ -167,6 +177,7 @@ export const startCrewVoyages = (options: CrewVoyagesOptions): CrewVoyages => {
     );
 
   const closeDriver = async (live: LiveVoyage): Promise<void> => {
+    live.wake?.close();
     live.run?.close();
     await live.driver?.sessions.closeAll();
   };
@@ -305,13 +316,24 @@ export const startCrewVoyages = (options: CrewVoyagesOptions): CrewVoyages => {
       onError: log,
       end: () => endLive(live, SETTLED_REASON),
     });
-    live.run = startVoyageRun({
+    const voyageRun = startVoyageRun({
       voyage,
       charter: live.charter ?? '',
-      resolve: (action) => resolveLeg(live.legs, action, home),
+      resolve: (action) => resolveLeg(live.legs, action, home, dependencies),
       report: crewFailureReporter(lead.store, log),
+      onBuilderTurn: () => live.wake?.poke(),
     });
-    await noteLateTickets(live, live.run);
+    live.run = voyageRun;
+    live.wake = startWake({
+      legs: () => live.legs,
+      dependencies,
+      builders: (leg) => builderContext(leg, home, dependencies),
+      note: voyageRun.note,
+      watch: voyageRun.watchBuilder,
+      report: reportLegs(live, 'voyages'),
+    });
+    await noteLateTickets(live, voyageRun);
+    live.wake.poke();
   };
 
   const closeLegs = async (
@@ -546,7 +568,7 @@ export const startCrewVoyages = (options: CrewVoyagesOptions): CrewVoyages => {
       return true;
     }
     if (agent.role !== 'builder') return false;
-    const builders = await builderContext(leg, home);
+    const builders = await builderContext(leg, home, dependencies);
     const continuation = await continueBuilder(builders, {
       builderId: agent.id,
       prompt: text,
@@ -560,13 +582,27 @@ export const startCrewVoyages = (options: CrewVoyagesOptions): CrewVoyages => {
     return true;
   };
 
+  const noteContext = async (
+    store: Store,
+    event: StoreEvent,
+  ): Promise<NoteContext> => {
+    if (event.kind !== GATE_EVENTS.merged) return {};
+    const services = await loadServices(store, { homeDir: options.homeDir });
+    return { publishes: services.publishes };
+  };
+
   const noteEvent = (project: CrewProject, event: StoreEvent): void => {
     noting = noting
       .then(async () => {
         const live = current;
         if (live?.run === undefined || !isLive(live)) return;
+        if (WAKE_EVENT_KINDS.includes(event.kind)) live.wake?.poke();
         if (!live.legs.some((leg) => leg.project === project.project)) return;
-        const note = await noteForEvent(project.store, event);
+        const note = await noteForEvent(
+          project.store,
+          event,
+          await noteContext(project.store, event),
+        );
         if (note) live.run.note(projectNote(project.project, note));
       })
       .catch(log);
@@ -583,6 +619,7 @@ export const startCrewVoyages = (options: CrewVoyagesOptions): CrewVoyages => {
     idle: async () => {
       while (tasks.size > 0) await Promise.allSettled(tasks);
       await noting;
+      await current?.wake?.idle();
     },
     close: async () => {
       closing = true;
