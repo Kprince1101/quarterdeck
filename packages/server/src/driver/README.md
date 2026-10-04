@@ -142,13 +142,15 @@ Each `ReplayTurn` holds the `seq`, the `input` sent, the `savedOutput` from `out
 `replayCommand({ voyage, through?, project? })` is the command the Driver widget shows to replay a voyage up to its `through`th Driver turn (1 is the birth), or the whole voyage without `through`. It runs [`quarterdeck replay`](../../../cli/README.md#replay):
 
 ```sh
-npx quarterdeck replay 3 7
-npx quarterdeck replay 3 7 --project example
+npm run quarterdeck -- replay 3 7
+npm run quarterdeck -- replay 3 7 --project example
 ```
+
+That is `REPLAY_COMMAND`, `QUARTERDECK_COMMAND` (`npm run quarterdeck --`, the CLI run from the clone, never from a registry) plus `replay`; the CLI's usage text and the dashboard's no-token screen use `QUARTERDECK_COMMAND` too.
 
 Voyages are numbered across every project, and a voyage's Driver turns are saved under its lead project only, so the CLI finds a voyage without `project`. Voyages from before then were numbered from 1 in each project; for one of those two projects share, pass `project`. `through` counts Driver turns within the voyage, not `seq`: the turn with `seq` s in a session born at `seq` b is turn s - b + 1.
 
-It refuses a voyage or `n` that is not a positive integer and a project that is not a slug, so the line is always safe to paste. It lives in `replay-command.ts`, which imports nothing from Node, and the dashboard imports it as `@quarterdeck/server/replay-command`. `readTurnChain` checks `agentId` is a uuid, since it names a folder under `turnsDir`.
+It refuses a voyage or `n` that is not a positive integer and a project that is not a slug, so the line is always safe to paste. It lives in `replay-command.ts`, which imports nothing from Node, and the dashboard imports it (and `QUARTERDECK_COMMAND`) as `@quarterdeck/server/replay-command`. `readTurnChain` checks `agentId` is a uuid, since it names a folder under `turnsDir`.
 
 ### Finding a voyage's Driver
 

@@ -33,11 +33,32 @@
         You need Node.js 22 or later and a git repository with a GitHub remote.
         Quarterdeck never signs in for you and never asks for an API key: each
         runtime signs in through its own CLI, and
-        <code>quarterdeck doctor</code> tells you exactly which command to run.
+        <code>npm run quarterdeck -- doctor</code> tells you exactly which
+        command to run.
+      </p>
+
+      <h2 id="running-it">Running it</h2>
+      <p>
+        Quarterdeck is installed and run locally only: clone it, install it, and
+        run it on your own machine. It is not published to npm. The
+        <code>quarterdeck</code> package on npm is someone else's, unrelated to
+        this one: do not install it, and do not run Quarterdeck through
+        <code>npx</code>, which would download and run that package instead.
+      </p>
+      <pre><code>git clone https://github.com/&lt;owner&gt;/quarterdeck.git
+cd quarterdeck
+npm install
+npm run quarterdeck -- up</code></pre>
+      <p>
+        <code>npm install</code> installs the dependencies and builds every
+        package; run it again after a <code>git pull</code>. Then open the
+        dashboard at the URL <code>up</code> prints. Every command on this page
+        runs from the clone the same way, as
+        <code>npm run quarterdeck -- &lt;command&gt;</code>.
       </p>
 
       <h2 id="doctor">1. See what is missing</h2>
-      <pre><code>npx quarterdeck doctor</code></pre>
+      <pre><code>npm run quarterdeck -- doctor</code></pre>
       <p>
         Doctor checks <code>kiro-cli</code>, <code>claude</code>,
         <code>gemini</code> and <code>gh</code>: installed, which version, and
@@ -96,12 +117,12 @@
       <pre><code>gh: 2.81.0, not signed in
   Sign in: gh auth login</code></pre>
       <p>
-        Run <code>npx quarterdeck doctor</code> again until your runtime and
-        <code>gh</code> say <code>signed in</code>.
+        Run <code>npm run quarterdeck -- doctor</code> again until your runtime
+        and <code>gh</code> say <code>signed in</code>.
       </p>
 
       <h2 id="init">4. Create a project</h2>
-      <pre><code>npx quarterdeck init path/to/your/repo</code></pre>
+      <pre><code>npm run quarterdeck -- init /path/to/your/repo</code></pre>
       <p>
         <code>init</code> creates <code>~/.quarterdeck/</code> and a project for
         the repository (the current directory if you leave the path out). In a
@@ -132,7 +153,7 @@
       <pre><code>Created project my-app (my-app) for /home/you/code/my-app
 Runtime: kiro
 Data: /home/you/.quarterdeck/my-app
-Next: quarterdeck up</code></pre>
+Next: npm run quarterdeck -- up</code></pre>
       <p>
         The project slug comes from the folder name; <code>--project</code> and
         <code>--name</code> set the slug and display name yourself. If
@@ -140,7 +161,7 @@ Next: quarterdeck up</code></pre>
       </p>
 
       <h2 id="up">5. Start Quarterdeck</h2>
-      <pre><code>npx quarterdeck up</code></pre>
+      <pre><code>npm run quarterdeck -- up</code></pre>
       <pre><code>Quarterdeck is running at http://127.0.0.1:4317
 Data: /home/you/.quarterdeck
 Press Ctrl+C to stop.</code></pre>

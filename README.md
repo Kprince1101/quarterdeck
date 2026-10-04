@@ -8,19 +8,36 @@ No API keys. No account. No telemetry. Everything Quarterdeck stores lives in on
 
 Status: alpha. Built, by itself, from a written spec. [docs/proof.md](docs/proof.md) records it running a voyage on its own repository end to end over claude: the Planner proposed a ticket, a builder opened the pull request, the reviewer and merge gate merged it, and the voyage wrapped itself up.
 
-## Getting started
+## Running it
 
-Node 22 and one agent CLI signed in. Then:
+Quarterdeck is installed and run locally only: clone it, install it, run it on your own machine. It is not published to npm. The `quarterdeck` package on npm is someone else's, unrelated to this one; do not install it, and do not run Quarterdeck through `npx`, which would download and run that package instead.
+
+With Node 22:
 
 ```sh
-npx quarterdeck doctor                    # checks kiro-cli, claude, gemini and gh, and says exactly what to run for each miss
-npx quarterdeck init path/to/your/repo   # creates ~/.quarterdeck and a project, asks which runtime
-npx quarterdeck up                        # starts the server and prints the dashboard URL
+git clone https://github.com/<owner>/quarterdeck.git
+cd quarterdeck
+npm install                      # installs dependencies and builds every package
+npm run quarterdeck -- up        # starts the server and prints the dashboard URL
+```
+
+Open the dashboard at the URL `up` prints. After a `git pull`, run `npm install` again so the build is current.
+
+## Getting started
+
+One agent CLI signed in. Then, from the clone:
+
+```sh
+npm run quarterdeck -- doctor                     # checks kiro-cli, claude, gemini and gh, and says exactly what to run for each miss
+npm run quarterdeck -- init /path/to/your/repo   # creates ~/.quarterdeck and a project, asks which runtime
+npm run quarterdeck -- up                         # starts the server and prints the dashboard URL
 ```
 
 Open the URL exactly as `up` prints it: the `#token=` part is a new token for each start, and the API refuses any request without it, including one from another program on your machine.
 
-`init` writes nothing into your repository unless you agree to a `.quarterdeck/` folder for that project's settings. `quarterdeck wipe <project>` removes a project and everything it stored; `quarterdeck replay <voyage> [n]` re-runs a voyage's Driver turns in a fresh session that writes nothing, which is how you ask "why did it decide that?". See `packages/cli/README.md` for every command and flag.
+`npm run quarterdeck` runs the CLI in the folder you ran it from, so `npm --prefix /path/to/quarterdeck run quarterdeck -- doctor` from your own repository checks that repository's settings too.
+
+`init` writes nothing into your repository unless you agree to a `.quarterdeck/` folder for that project's settings. `npm run quarterdeck -- wipe <project>` removes a project and everything it stored; `npm run quarterdeck -- replay <voyage> [n]` re-runs a voyage's Driver turns in a fresh session that writes nothing, which is how you ask "why did it decide that?". See `packages/cli/README.md` for every command and flag.
 
 ## How a voyage works
 
@@ -70,7 +87,7 @@ The dashboard's Data widget lists every table with its rows and every path above
 - **Wipe project** (type the project's name to confirm) stops the project first: it is archived so nothing new starts, every live agent is killed, every process group it started is swept, and each worktree is removed from your repository. Then its rows, `pg/`, `pg.lock`, `turns/` and `worktrees/` are deleted. If a process cannot be confirmed stopped, the wipe is refused and the project kept, so the next start can sweep it.
 - **Wipe everything** (type `wipe everything`) does the same for every project.
 
-`quarterdeck wipe <project>` and `quarterdeck wipe --all` do the same from a terminal, with the same typed confirmation (or `--confirm <phrase>` in a script). See `packages/cli/README.md`.
+`npm run quarterdeck -- wipe <project>` and `npm run quarterdeck -- wipe --all` do the same from a terminal, with the same typed confirmation (or `--confirm <phrase>` in a script). See `packages/cli/README.md`.
 
 Wiping keeps the rules files and everything else under `~/.quarterdeck/` that is not a project: `plugins/`, `pause.json`, `sock/` and the runtime folders. To remove everything by hand, stop Quarterdeck and delete `~/.quarterdeck/`, then run `git worktree prune` in each repository. See `site/public/docs/data.html`.
 
@@ -92,13 +109,13 @@ So is the auto-end settle time (`autoEndSettleSeconds`, how long a voyage must s
 
 Agents do not inherit the server's environment. They get a short allowlist (`PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`, `LC_*`, `TERM`, `TMPDIR`, `TZ`, `SSH_AUTH_SOCK`, `QUARTERDECK_BUS_*`), plus the sign-in variables their runtime declares. `GH_TOKEN`, `GITHUB_TOKEN` and `DATABASE_URL` stay out. `env.json` lists more names in `pass`; values always come from the server's environment. Only the machine layer (`~/.quarterdeck/rules.local.env.json`) can add names: the repo layer is ignored, because agents can write to the repo. See `packages/server/src/acp/README.md`.
 
-The forge a project is on comes from its `origin` host: `github.com` is GitHub, `gitlab.com` is GitLab, and a self-hosted host needs a line in `forges` in `~/.quarterdeck/rules.local.forges.json`, such as `{ "forges": { "git.example.org": "gitlab" } }`. An unmapped host is an error naming it; the repo layer may not set `forges`. Agents and the dashboard say pull request on GitHub and merge request on GitLab. See `packages/server/src/gate/README.md#forges`.
+The forge a project is on comes from its `origin` host: `github.com` is GitHub, `gitlab.com` is GitLab, and any other host needs a line in `forges` in `~/.quarterdeck/rules.local.forges.json`, such as `{ "forges": { "git.example.org": "gitlab" } }`. An unmapped host is an error naming it; the repo layer may not set `forges`. Agents and the dashboard say pull request on GitHub and merge request on GitLab. See `packages/server/src/gate/README.md#forges`.
 
 ## Contributing
 
 ### Workspace packages
 
-Each workspace package is written in TypeScript under `src/` and built to `dist/` by its own `build` script (`tsc -p tsconfig.build.json`). Node refuses to strip types from files under `node_modules`, so a published package has to ship JavaScript. Its `exports` map lists three conditions, in this order:
+Each workspace package is written in TypeScript under `src/` and built to `dist/` by its own `build` script (`tsc -p tsconfig.build.json`). Node refuses to strip types from files under `node_modules`, so a package loaded from there has to ship JavaScript. Its `exports` map lists three conditions, in this order:
 
 ```json
 "exports": {
@@ -111,13 +128,15 @@ Each workspace package is written in TypeScript under `src/` and built to `dist/
 ```
 
 - `@quarterdeck/source` is for this repo only. The root `tsconfig.json` (`customConditions`) and `vitest.config.ts` (`resolve.conditions`) turn it on, so typecheck and tests read `src/` directly and need no build.
-- `types` and `default` are what plain Node and npm consumers see.
+- `types` and `default` are what plain Node sees, `npm run quarterdeck` included.
 - `files` lists `dist` and any data files the package reads at runtime.
 
-`npm run build` builds every package, and `npm test` builds before it runs vitest. Each package gets a test that spawns `process.execPath` to import it by name, which proves the built entry loads in plain Node.
+`npm run build` builds every package, `npm install` runs it (the root `prepare` script), and `npm test` builds before it runs vitest. Each package gets a test that spawns `process.execPath` to import it by name, which proves the built entry loads in plain Node. Every `package.json` is `"private": true`; nothing here is published.
 
-The `clean-machine` CI job goes one step further. It packs `rules`, `server`, `dashboard` and `cli` with `npm pack`, installs the tarballs into an empty folder in a `node:22-bookworm-slim` container that has nothing else on it, and runs `scripts/clean-machine/check.ts` there: `npx quarterdeck up` must serve the built dashboard and the intents API, the installed ACP client must drive the in-repo fake agent through a turn, `up` must print `Stopped.` and let go of its port on `SIGTERM`, and `npx quarterdeck wipe` must delete the project. To run the check against a local build, from `packages/cli` (so `npx` finds the bin):
+The root `quarterdeck` script runs `scripts/quarterdeck.mjs`, which starts `packages/cli/dist/bin.js` in the folder `npm run` was typed in (`INIT_CWD`), since npm starts every script in the workspace root.
+
+The `clean-machine` CI job follows [Running it](#running-it) on a machine with nothing else on it. It copies the clone into a `node:22-bookworm-slim` container, runs `npm install` there, and runs `scripts/clean-machine/check.ts`: `npm ls quarterdeck` must find no `quarterdeck` package, `npm run quarterdeck -- up` must serve the built dashboard and the intents API, the ACP client must drive the in-repo fake agent through a turn, `up` must print `Stopped.` and let go of its port on `SIGTERM`, and `npm run quarterdeck -- wipe` must delete the project. To run the check in your clone after `npm install`:
 
 ```sh
-node --experimental-strip-types ../../scripts/clean-machine/check.ts ../server/test/acp/fake-agent/main.ts
+node --experimental-strip-types scripts/clean-machine/check.ts
 ```

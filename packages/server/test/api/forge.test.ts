@@ -60,7 +60,7 @@ describe('forge.read', { timeout: TIMEOUT }, () => {
     });
   });
 
-  it('reads GitLab and its terms for a mapped self-hosted origin', async () => {
+  it('reads GitLab and its terms for an origin on a mapped host', async () => {
     await mkdir(join(t.homeDir, '.quarterdeck'), { recursive: true });
     await writeFile(
       join(t.homeDir, '.quarterdeck', 'rules.local.forges.json'),

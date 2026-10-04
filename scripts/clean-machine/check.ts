@@ -10,9 +10,17 @@ const RUNNING =
   /Quarterdeck is running at (http:\/\/127\.0\.0\.1:\d+)\/#token=([\w-]+)/;
 const PROJECT = 'deck';
 const GREETING = 'hello from a clean machine';
-const NPX = 'npx';
-const FAKE_AGENT_ENTRY =
-  process.argv[2] ?? join(import.meta.dirname, 'fake-agent', 'main.ts');
+const CLONE = join(import.meta.dirname, '..', '..');
+const QUARTERDECK = ['run', 'quarterdeck', '--'];
+const FAKE_AGENT_ENTRY = join(
+  CLONE,
+  'packages',
+  'server',
+  'test',
+  'acp',
+  'fake-agent',
+  'main.ts',
+);
 const TYPESCRIPT_FLAGS = [
   '--experimental-strip-types',
   '--disable-warning=ExperimentalWarning',
@@ -56,12 +64,13 @@ const waitForUrl = (child: ChildProcess, output: () => string) =>
   });
 
 const startUp = async (env: NodeJS.ProcessEnv): Promise<Running> => {
-  const child = spawn(NPX, ['quarterdeck', 'up', '--port', '0'], {
+  const child = spawn('npm', [...QUARTERDECK, 'up', '--port', '0'], {
+    cwd: CLONE,
     env,
     detached: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  if (child.pid === undefined) throw new Error('npx did not start');
+  if (child.pid === undefined) throw new Error('npm did not start');
   let text = '';
   const collect = (chunk: Buffer) => {
     text += chunk.toString('utf8');
@@ -161,16 +170,28 @@ const checkWipe = async (
   projectDir: string,
 ): Promise<void> => {
   const wipe = spawnSync(
-    NPX,
-    ['quarterdeck', 'wipe', PROJECT, '--confirm', PROJECT],
-    { env, encoding: 'utf8' },
+    'npm',
+    [...QUARTERDECK, 'wipe', PROJECT, '--confirm', PROJECT],
+    { cwd: CLONE, env, encoding: 'utf8' },
   );
   check(wipe.status === 0, `wipe exits 0 (${wipe.status}) ${wipe.stderr}`);
   check(wipe.stdout.includes(`Wiped ${PROJECT}.`), 'wipe says what it wiped');
   check(!(await exists(projectDir)), 'wipe deleted the project folder');
 };
 
+const checkNoRegistryPackage = (): void => {
+  const ls = spawnSync('npm', ['ls', 'quarterdeck', '--all', '--parseable'], {
+    cwd: CLONE,
+    encoding: 'utf8',
+  });
+  check(
+    ls.stdout.trim() === '',
+    'npm ls quarterdeck finds no quarterdeck package from the registry',
+  );
+};
+
 const main = async (): Promise<void> => {
+  checkNoRegistryPackage();
   const home = await mkdtemp(join(tmpdir(), 'qd-clean-home-'));
   const repo = join(home, 'repo');
   await mkdir(join(repo, '.git'), { recursive: true });
@@ -179,7 +200,7 @@ const main = async (): Promise<void> => {
   try {
     check(
       RUNNING.test(running.output()),
-      `npx quarterdeck up serves ${running.url}`,
+      `npm run quarterdeck -- up serves ${running.url}`,
     );
     await checkDashboard(running.url);
     await checkCreate(running, home, repo);

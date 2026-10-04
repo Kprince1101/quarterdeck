@@ -1,14 +1,16 @@
-# quarterdeck
+# @quarterdeck/cli
 
-The `quarterdeck` command. `npx quarterdeck <command>`, or `node packages/cli/dist/bin.js <command>` in this repo after `npm run build`.
+The `quarterdeck` command, run from the clone as `npm run quarterdeck -- <command>` after `npm install` (which builds it; see [Running it](../../README.md#running-it)). The root script runs `scripts/quarterdeck.mjs`, which starts `dist/bin.js` in the folder `npm run` was typed in, so `npm --prefix <clone> run quarterdeck -- <command>` works from any folder. The package is private and never published; the `quarterdeck` package on npm is unrelated.
+
+The CLI's own usage text and the commands it prints (`Next: npm run quarterdeck -- up`) use the same form, `QUARTERDECK_COMMAND` from `@quarterdeck/server`.
 
 ## up
 
 ```sh
-quarterdeck up [--port <port>]
+npm run quarterdeck -- up [--port <port>]
 ```
 
-Starts the server on `127.0.0.1` (port 4317 by default, `0` picks a free one), creates `~/.quarterdeck/` as `0700` if it is missing (and tightens it to `0700` if it is looser), and prints the URL to open: `http://127.0.0.1:<port>/#token=<token>`. The token is new on every start, written to `~/.quarterdeck/api.token` (mode `0600`) and removed on a clean stop; every API request and the stream need it (see [api](../server/src/api/README.md#token)), and the dashboard takes it from the URL's fragment, which the browser never sends to the server. A command that talks to the running server reads it from `~/.quarterdeck/api.token`. The same port serves the HTTP intents API under `/api/` and the dashboard everywhere else. The dashboard is the built bundle in `@quarterdeck/dashboard`'s `dist/`; until that exists, a placeholder page says the server is running. At startup it opens every project in `~/.quarterdeck/` and recovers it from the last run (see [lifecycle](../server/src/lifecycle/README.md#recovery)): agent processes left running are reaped, overdue cards expire and work a pause was holding is dropped. Ctrl+C (or `SIGTERM`) closes every ACP client the server started, which stops each agent's process group, then the server and every open project store, then exits 0. A port that is already in use is an error that says so.
+Starts the server on `127.0.0.1` (port 4317 by default, `0` picks a free one), creates `~/.quarterdeck/` as `0700` if it is missing (and tightens it to `0700` if it is looser), and prints the URL to open: `http://127.0.0.1:<port>/#token=<token>`. The token is new on every start, written to `~/.quarterdeck/api.token` (mode `0600`) and removed on a clean stop; every API request and the stream need it (see [api](../server/src/api/README.md#token)), and the dashboard takes it from the URL's fragment, which the browser never sends to the server. A command that talks to the running server reads it from `~/.quarterdeck/api.token`. The same port serves the HTTP intents API under `/api/` and the dashboard everywhere else. The dashboard is the built bundle in `@quarterdeck/dashboard`'s `dist/`; until that exists, a placeholder page says the server is running. At startup it opens every project in `~/.quarterdeck/` and recovers it from the last run (see [lifecycle](../server/src/lifecycle/README.md#recovery)): agent processes left running are reaped, overdue cards expire and work a pause was holding is dropped. Ctrl+C (or `SIGTERM`) closes every ACP client the server started, which stops each agent's process group, then the server and every open project store, then exits 0. Another Ctrl+C or `SIGTERM` while it stops is ignored, since `npm run` passes each one on a second time. A port that is already in use is an error that says so.
 
 `DATABASE_URL` switches the store to an external Postgres, as it does for the server.
 
@@ -21,7 +23,7 @@ On stop, each project's agents stop first, then its stream and bus host (removin
 ## init
 
 ```sh
-quarterdeck init [repo-path] [--project <slug>] [--name <name>] [--runtime kiro|claude|gemini] [--folder | --no-folder]
+npm run quarterdeck -- init [repo-path] [--project <slug>] [--name <name>] [--runtime kiro|claude|gemini] [--folder | --no-folder]
 ```
 
 Creates `~/.quarterdeck/` (`0700`) and a project (the `project.create` intent) for the git repository at `repo-path`, the current directory by default. The slug comes from the folder name (lowercased, other characters turned into `-`) unless `--project` is given; the display name is the folder name unless `--name` is given. A project that already exists is an error.
@@ -40,7 +42,7 @@ Every question and check runs before anything is created, so a failed or cancell
 ## doctor
 
 ```sh
-quarterdeck doctor
+npm run quarterdeck -- doctor
 ```
 
 Checks the three agent runtimes and `gh`: installed, which version, and signed in. Each one gets a line; each miss is followed by the exact command to run. It exits 0 when everything is ready and 1 otherwise. It never signs in for you and never starts a download.
@@ -52,7 +54,7 @@ claude: 2.1.30, signed in (user@example.com)
 gemini: 0.9.0, signed in (Google account)
 gh: 2.81.0, signed in (example-org on github.com)
 
-1 of 4 need attention. Run the commands above, then quarterdeck doctor again.
+1 of 4 need attention. Run the commands above, then npm run quarterdeck -- doctor again.
 ```
 
 | Tool       | Installed                                                                                                                          | Signed in                                                                                                                           | Install                                                                                              | Sign in                                                                              |
@@ -87,7 +89,7 @@ QUARTERDECK_LIVE=1 npx vitest run packages/cli/test/doctor-live.test.ts
 ## replay
 
 ```sh
-quarterdeck replay <voyage> [n] [--project <slug>] [--runtime kiro|claude|gemini]
+npm run quarterdeck -- replay <voyage> [n] [--project <slug>] [--runtime kiro|claude|gemini]
 ```
 
 Sends a voyage's saved Driver prompts again, turns 1 to `n` of the voyage (1 is the birth; all of them by default), in one new session, and prints each reply as it arrives. This is the command the Driver widget prints (`replayCommand`). It is for seeing how the Driver reads a turn now, for example after changing the charter or the runtime.
@@ -123,8 +125,8 @@ A missing `input.md` in the chain is an error naming the file, before anything s
 ## wipe
 
 ```sh
-quarterdeck wipe <project> [--confirm <project>]
-quarterdeck wipe --all [--confirm "wipe everything"]
+npm run quarterdeck -- wipe <project> [--confirm <project>]
+npm run quarterdeck -- wipe --all [--confirm "wipe everything"]
 ```
 
 Does what the Data widget's Wipe buttons do, through the same `wipe.project` and `wipe.all` intents: the project is archived, every live agent is killed, every process group it started is swept and each worktree is removed, then its rows and its folder under `~/.quarterdeck/` are deleted (see [where your data lives](../../README.md#where-your-data-lives)). Rules files and the rest of `~/.quarterdeck/` stay.
@@ -132,7 +134,7 @@ Does what the Data widget's Wipe buttons do, through the same `wipe.project` and
 The confirmation is the dashboard's: type the project slug, or `wipe everything` for `--all`. Anything else wipes nothing and exits 1. Without a terminal there is no prompt, so pass the phrase you would have typed as `--confirm`; without it, wipe refuses. A project that does not exist is an error before anything is asked, and `--all` with no projects says there is nothing to wipe and exits 0.
 
 ```
-$ quarterdeck wipe deck
+$ npm run quarterdeck -- wipe deck
 This stops deck's agents and deletes everything Quarterdeck stores for it in /home/you/.quarterdeck/deck.
 Type deck to wipe: deck
 Wiped deck. Stopped wren (deck) first.

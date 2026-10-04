@@ -81,7 +81,7 @@
           </tr>
           <tr>
             <td><code>forges.json</code></td>
-            <td>Which forge (GitHub or GitLab) a self-hosted git host is.</td>
+            <td>Which forge (GitHub or GitLab) any other git host is.</td>
           </tr>
           <tr>
             <td><code>services.json</code></td>
@@ -333,7 +333,7 @@
       </table>
       <p>
         The <a href="widgets.html#rules">Rules widget</a> and
-        <code>npx quarterdeck doctor</code> warn about every
+        <code>npm run quarterdeck -- doctor</code> warn about every
         <code>execute</code> allow that is a bare command plus a wildcard (<code
           >git *</code
         >, <code>*</code>), names an interpreter or has no pattern, and about a
@@ -552,8 +552,8 @@
       <p>
         Quarterdeck works out which forge a project is on from the host of its
         <code>origin</code> remote: <code>github.com</code> is GitHub and
-        <code>gitlab.com</code> is GitLab. A self-hosted forge needs a line in
-        <code>forges</code>, mapping its host to <code>github</code> or
+        <code>gitlab.com</code> is GitLab. A forge on any other host needs a
+        line in <code>forges</code>, mapping its host to <code>github</code> or
         <code>gitlab</code>. The default is empty. A project whose host is in
         neither place stops with an error naming the host and this file. This
         <code>~/.quarterdeck/rules.local.forges.json</code> puts every project

@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import {
+  QUARTERDECK_COMMAND,
   createProjectStores,
   dispatchIntent,
   quarterdeckHome,
@@ -16,8 +17,8 @@ import {
 import { parseIntent } from './intent.js';
 import { CliError, type CliIo, type Command } from './io.js';
 
-export const WIPE_USAGE = `Usage: quarterdeck wipe <project> [--confirm <project>]
-       quarterdeck wipe --all [--confirm "${WIPE_ALL_CONFIRMATION}"]
+export const WIPE_USAGE = `Usage: ${QUARTERDECK_COMMAND} wipe <project> [--confirm <project>]
+       ${QUARTERDECK_COMMAND} wipe --all [--confirm "${WIPE_ALL_CONFIRMATION}"]
 
 Stops the project's agents, then deletes everything Quarterdeck stores for it,
 as the dashboard's Wipe button does. You are asked to type the project slug

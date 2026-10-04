@@ -75,7 +75,7 @@ describe('quarterdeck init', { timeout: TIMEOUT }, () => {
       `Created project ${SLUG} (Deck Repo) for ${box.repo}`,
       'Runtime: kiro',
       `Data: ${join(quarterdeckHome(box.home), SLUG)}`,
-      'Next: quarterdeck up',
+      'Next: npm run quarterdeck -- up',
     ]);
   });
 

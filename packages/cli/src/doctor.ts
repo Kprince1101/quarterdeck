@@ -19,6 +19,7 @@ import {
   KIRO_COMMAND,
   KiroConfigError,
   NPM_PUBLIC_REGISTRY,
+  QUARTERDECK_COMMAND,
   claudeCliCommand,
   loadKiroBaseAgent,
   parseRemoteUrl,
@@ -31,7 +32,7 @@ import { CliError, type CliIo, type Command } from './io.js';
 
 export const DOCTOR_PROBE_TIMEOUT_MS = 15_000;
 
-export const DOCTOR_USAGE = `Usage: quarterdeck doctor
+export const DOCTOR_USAGE = `Usage: ${QUARTERDECK_COMMAND} doctor
 
 Checks that kiro-cli, claude, gemini and gh are installed and signed in, and
 prints the command to run for each one that is not. Checks glab the same way
@@ -479,7 +480,7 @@ const render = (io: CliIo, checks: DoctorCheck[], misses: number) => {
     return;
   }
   io.out(
-    `${misses} of ${checks.length} need attention. Run the commands above, then quarterdeck doctor again.`,
+    `${misses} of ${checks.length} need attention. Run the commands above, then ${QUARTERDECK_COMMAND} doctor again.`,
   );
 };
 

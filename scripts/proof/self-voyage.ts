@@ -14,7 +14,7 @@ import {
   redactSecrets,
   redactValue,
 } from '@quarterdeck/server';
-import { main, type CliIo } from 'quarterdeck';
+import { main, type CliIo } from '@quarterdeck/cli';
 import { cardCwd, createScrubber, permissionAnswer } from './policy.ts';
 
 type Row = Record<string, unknown>;

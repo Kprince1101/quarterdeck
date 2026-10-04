@@ -13,8 +13,8 @@
     "node": ">=22"
   },
   "devDependencies": {
+    "@quarterdeck/cli": "0.0.0",
     "@quarterdeck/rules": "0.0.0",
-    "@quarterdeck/server": "0.0.0",
-    "quarterdeck": "0.0.0"
+    "@quarterdeck/server": "0.0.0"
   }
 }

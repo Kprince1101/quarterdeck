@@ -63,7 +63,7 @@ describe('project forge', () => {
     expect(await repoForge(repo, { homeDir })).toBe('gitlab');
   });
 
-  it('detects a self-hosted host mapped in the home layer', async () => {
+  it('detects another host mapped in the home layer', async () => {
     await writeForges(homeDir, { 'git.example.org': 'gitlab' });
     await withOrigin('ssh://git@git.example.org/example-org/quarterdeck.git');
 

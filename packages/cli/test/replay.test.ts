@@ -335,7 +335,7 @@ describe('quarterdeck replay', () => {
   it('runs the command the Driver widget prints', async () => {
     await saveVoyages();
     const { adapters, connections } = fakeAdapters();
-    const [, , ...args] = replayCommand({
+    const [, , , , ...args] = replayCommand({
       voyage: 2,
       through: 1,
       project: 'deck',

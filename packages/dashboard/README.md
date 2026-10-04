@@ -26,7 +26,7 @@ The page talks only to its own origin: intents go to `POST /api/intents/<name>`,
 
 ```
 src/main.tsx                 mounts livePage() into #root
-src/live.tsx                 livePage(): the API token from #token= and <App /> with it, or "open the link printed by quarterdeck up"
+src/live.tsx                 livePage(): the API token from #token= and <App /> with it, or "open the link printed by npm run quarterdeck -- up"
 src/mount.tsx                mountPage(node) / mountApp(props): the stylesheets and the page in #root
 src/App.tsx                  DeckProvider > Shell > DeckLayout; `mode` labels the header
 src/demo/                    demo mode: a fake server in the page, built by site/

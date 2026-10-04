@@ -641,7 +641,7 @@ describe('replayCommand', () => {
     expect(replayCommand({ voyage: 3, through: 7, project: 'example' })).toBe(
       `${REPLAY_COMMAND} 3 7 --project example`,
     );
-    expect(REPLAY_COMMAND).toBe('npx quarterdeck replay');
+    expect(REPLAY_COMMAND).toBe('npm run quarterdeck -- replay');
   });
 
   it('refuses parts that are not safe to paste into a shell', () => {
