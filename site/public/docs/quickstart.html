@@ -15,6 +15,7 @@
     <nav class="site-nav" aria-label="Docs">
       <a class="home" href="../">Quarterdeck</a>
       <a href="quickstart.html" aria-current="page">Quickstart</a>
+      <a href="voyages.html">Voyages</a>
       <a href="rules.html">Rules</a>
       <a href="widgets.html">Widgets</a>
       <a href="data.html">Where your data lives</a>
@@ -24,15 +25,16 @@
     <main class="docs">
       <h1>Quickstart</h1>
       <p class="lead">
-        Pick one agent runtime, sign in to it and to GitHub, point Quarterdeck
-        at a git repository, and start it. Kiro is the default; Claude Code and
-        Gemini CLI work the same way.
+        Pick one agent runtime, sign in to it and to your forge (GitHub or
+        GitLab), point Quarterdeck at a git repository, and start it. Kiro is
+        the default; Claude Code and Gemini CLI work the same way.
       </p>
 
       <p>
-        You need Node.js 22 or later and a git repository with a GitHub remote.
-        Quarterdeck never signs in for you and never asks for an API key: each
-        runtime signs in through its own CLI, and
+        You need Node.js 22 or later and a git repository whose remote is on
+        GitHub or on GitLab (gitlab.com or your own instance). Quarterdeck never
+        signs in for you and never asks for an API key: each runtime signs in
+        through its own CLI, and
         <code>npm run quarterdeck -- doctor</code> tells you exactly which
         command to run.
       </p>
@@ -64,8 +66,10 @@ npm run quarterdeck -- up</code></pre>
         <code>gemini</code> and <code>gh</code>: installed, which version, and
         signed in. Every miss is followed by the command that fixes it. You only
         need the runtime you pick and <code>gh</code>; the other runtimes can
-        stay on the list. Doctor exits 0 when all four are ready and 1
-        otherwise. It never signs in for you and never starts a download.
+        stay on the list. When a GitLab host is in use it checks
+        <code>glab</code> too (see <a href="#gitlab">GitLab</a>). Doctor exits 0
+        when everything is ready and 1 otherwise. It never signs in for you and
+        never starts a download.
       </p>
 
       <h2 id="kiro">2a. Kiro</h2>
@@ -121,6 +125,25 @@ npm run quarterdeck -- up</code></pre>
         and <code>gh</code> say <code>signed in</code>.
       </p>
 
+      <h3 id="gitlab">GitLab</h3>
+      <p>
+        On GitLab, builders open merge requests and the merge gate merges them
+        with <code>glab</code>, and everything Quarterdeck says to agents and
+        shows you says merge request (MR) instead of pull request (PR). A
+        repository on <code>gitlab.com</code> needs nothing more. For a
+        self-hosted GitLab, map its host once in
+        <code>~/.quarterdeck/rules.local.forges.json</code> (see
+        <a href="rules.html#forges">forges.json</a>):
+      </p>
+      <pre><code>{ "forges": { "git.example.org": "gitlab" } }</code></pre>
+      <p>
+        Doctor then checks <code>glab</code> for every GitLab host it knows
+        about, and for the repository it runs in:
+      </p>
+      <pre><code>glab: not installed, needed for git.example.org
+  Install: brew install glab
+  Sign in: glab auth login --hostname git.example.org</code></pre>
+
       <h2 id="init">4. Create a project</h2>
       <pre><code>npm run quarterdeck -- init /path/to/your/repo</code></pre>
       <p>
@@ -157,7 +180,9 @@ Next: npm run quarterdeck -- up</code></pre>
       <p>
         The project slug comes from the folder name; <code>--project</code> and
         <code>--name</code> set the slug and display name yourself. If
-        <code>init</code> fails or you cancel it, nothing is left behind.
+        <code>init</code> fails or you cancel it, nothing is left behind. Run
+        <code>init</code> once for each repository you want worked: one server
+        and one voyage cover them all.
       </p>
 
       <h2 id="up">5. Start Quarterdeck</h2>
@@ -174,6 +199,11 @@ Press Ctrl+C to stop.</code></pre>
 
       <h2 id="next">Next</h2>
       <ul>
+        <li>
+          <a href="voyages.html">Voyages</a>: how the Planner, the Driver, the
+          reviewer and the builders work across your projects, with a multi-repo
+          walkthrough.
+        </li>
         <li>
           <a href="rules.html">Rules</a>: what agents may do, how the merge gate
           decides, and how to override the defaults.

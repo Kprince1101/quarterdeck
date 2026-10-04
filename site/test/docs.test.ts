@@ -28,6 +28,7 @@ import {
 
 const DOCS = [
   'quickstart.html',
+  'voyages.html',
   'rules.html',
   'widgets.html',
   'data.html',
