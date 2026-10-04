@@ -57,6 +57,7 @@ const mount = (reads: ServicesReadResult[]) => {
       cursor: 0,
       tables: projectTables(),
       machine: { pausedAt: null },
+      layout: null,
     });
   });
   return { ...rendered, sent };

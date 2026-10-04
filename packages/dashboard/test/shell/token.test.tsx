@@ -41,7 +41,6 @@ describe('dashboard page token', () => {
   beforeAll(async () => {
     deck = await startDeck('example');
     await deck.client.layout.save({
-      project: deck.project,
       name: DASHBOARD_LAYOUT,
       spec: DATA_LAYOUT,
     });

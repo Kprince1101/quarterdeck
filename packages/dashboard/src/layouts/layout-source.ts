@@ -1,14 +1,13 @@
 import { readGridLayout, type GridLayout } from '@quarterdeck/server/layouts';
-import type { LayoutRow, ProjectRow } from '@quarterdeck/server/stream-schema';
+import type { SavedLayout } from '@quarterdeck/server/stream-schema';
+import type { StreamState } from '../api/index.js';
 
-export const projectOf = (projects: readonly ProjectRow[]): string | null =>
-  projects[0]?.slug ?? null;
+export const hasSnapshot = (stream: StreamState): boolean =>
+  stream.cursor !== null;
 
 export const savedLayoutOf = (
-  layouts: readonly LayoutRow[],
-  name: string,
+  layout: SavedLayout | null,
 ): GridLayout | null => {
-  const row = layouts.find((layout) => layout.name === name);
-  if (row === undefined) return null;
-  return readGridLayout(row.spec);
+  if (layout === null) return null;
+  return readGridLayout(layout.spec);
 };

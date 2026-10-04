@@ -1,7 +1,6 @@
 import type { Forge } from '@quarterdeck/rules/forges';
 import type { GridLayout } from '@quarterdeck/server/layouts';
-import type { LayoutRow } from '@quarterdeck/server/stream-schema';
-import { DASHBOARD_LAYOUT } from '../layouts/constants.js';
+import type { SavedLayout } from '@quarterdeck/server/stream-schema';
 import { DEMO_REPO_PATH } from './demo-reads.js';
 import type { DemoWorld } from './demo-world.js';
 
@@ -99,14 +98,7 @@ export const seedProject = (world: DemoWorld): void => {
     publishes: null,
   });
   store.emit('project.created', { payload: { slug: DEMO_PROJECT } });
-  store.put('layouts', {
-    id: store.newId(),
-    projectId: store.projectId,
-    name: DASHBOARD_LAYOUT,
-    spec: DEMO_LAYOUT as LayoutRow['spec'],
-    createdAt: at,
-    updatedAt: at,
-  });
+  store.setLayout(DEMO_LAYOUT as SavedLayout['spec']);
   NOTES.forEach((note) => {
     store.put('notebook', {
       id: store.newId(),

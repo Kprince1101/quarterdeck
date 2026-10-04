@@ -16,7 +16,7 @@ import {
 import { FAKE_WEBSOCKET, FakeSocket } from '../api/fake-socket.js';
 import { choose, click, press } from '../grid/events.js';
 import { all, render, textOf, type PageElement } from '../shell/page.js';
-import { layoutChange, layoutRow, snapshotWith } from './stream-rows.js';
+import { layoutFrame, savedLayout, snapshotWith } from './stream-rows.js';
 
 const Probe = ({ instanceId }: WidgetProps) => (
   <p data-probe={instanceId}>{instanceId}</p>
@@ -166,9 +166,7 @@ describe('deck layout', () => {
 
   it('loads the layout the server holds once the snapshot arrives', () => {
     const { container, unmount } = setup();
-    deliver(
-      snapshotWith(layoutRow(SAVED), layoutRow(LAYOUT_PRESETS.ops, 'other')),
-    );
+    deliver(snapshotWith(savedLayout(SAVED)));
     expect(cells(container)).toEqual(['board-1']);
     expect(announced(container)).toBe(LAYOUT_LOADED);
     unmount();
@@ -176,25 +174,25 @@ describe('deck layout', () => {
 
   it('keeps the preset when the stored layout is not one the grid can show', () => {
     const { container, unmount } = setup();
-    deliver(snapshotWith(layoutRow({ columns: 12, items: [] })));
+    deliver(snapshotWith(savedLayout({ columns: 12, items: [] })));
     expect(cells(container)).toEqual(['board-1', 'planner-1', 'events-1']);
     unmount();
   });
 
   it('saves each edit through layout.save and ignores its own echo', async () => {
     const { container, unmount, sent } = setup();
-    deliver(snapshotWith(layoutRow(SAVED)));
+    deliver(snapshotWith(savedLayout(SAVED)));
     const handle = find(container, '[aria-label="Move Board"]');
     press(handle, 'ArrowDown');
     await settle();
     expect(sent).toEqual([
       {
         intent: 'layout.save',
-        body: { project: 'deck', name: 'dashboard', spec: boardAt(1) },
+        body: { name: 'dashboard', spec: boardAt(1) },
       },
     ]);
     press(handle, 'ArrowDown');
-    deliver(layoutChange(layoutRow(boardAt(1))));
+    deliver(layoutFrame(boardAt(1)));
     expect(announced(container)).toBe('Board moved to column 1, row 3.');
     await settle();
     expect(sent.map(({ body }) => body['spec'])).toEqual([
@@ -206,8 +204,8 @@ describe('deck layout', () => {
 
   it('follows a layout changed somewhere else', () => {
     const { container, unmount } = setup();
-    deliver(snapshotWith(layoutRow(SAVED)));
-    deliver(layoutChange(layoutRow(LAYOUT_PRESETS.default)));
+    deliver(snapshotWith(savedLayout(SAVED)));
+    deliver(layoutFrame(LAYOUT_PRESETS.default));
     expect(cells(container)).toEqual(['board-1', 'planner-1', 'events-1']);
     expect(announced(container)).toBe(LAYOUT_LOADED);
     unmount();
@@ -215,7 +213,7 @@ describe('deck layout', () => {
 
   it('resets to the chosen preset at once and through layout.reset', async () => {
     const { container, unmount, sent } = setup();
-    deliver(snapshotWith(layoutRow(SAVED)));
+    deliver(snapshotWith(savedLayout(SAVED)));
     const options = all(container, '[aria-label="Layout preset"] option').map(
       (option) => option.textContent,
     );
@@ -230,10 +228,10 @@ describe('deck layout', () => {
     expect(sent).toEqual([
       {
         intent: 'layout.reset',
-        body: { project: 'deck', name: 'dashboard', preset: 'minimal' },
+        body: { name: 'dashboard', preset: 'minimal' },
       },
     ]);
-    deliver(layoutChange(layoutRow(LAYOUT_PRESETS.minimal)));
+    deliver(layoutFrame(LAYOUT_PRESETS.minimal));
     expect(cells(container)).toEqual(['board-1']);
     unmount();
   });
@@ -253,14 +251,14 @@ describe('deck layout', () => {
       REGISTRY,
       LAYOUT_SAVE_DELAY_MS,
     );
-    deliver(snapshotWith(layoutRow(SAVED)));
+    deliver(snapshotWith(savedLayout(SAVED)));
     press(find(container, '[aria-label="Move Board"]'), 'ArrowDown');
     act(() => {
       window.dispatchEvent(new Event('pagehide'));
     });
     const moved = {
       intent: 'layout.save',
-      body: { project: 'deck', name: 'dashboard', spec: boardAt(1) },
+      body: { name: 'dashboard', spec: boardAt(1) },
       keepalive: true,
     };
     expect(sent).toEqual([moved]);
@@ -275,7 +273,7 @@ describe('deck layout', () => {
       REGISTRY,
       LAYOUT_SAVE_DELAY_MS,
     );
-    deliver(snapshotWith(layoutRow(SAVED)));
+    deliver(snapshotWith(savedLayout(SAVED)));
     press(find(container, '[aria-label="Move Board"]'), 'ArrowDown');
     const visibility = vi
       .spyOn(document, 'visibilityState', 'get')
@@ -287,46 +285,46 @@ describe('deck layout', () => {
     expect(sent).toEqual([
       {
         intent: 'layout.save',
-        body: { project: 'deck', name: 'dashboard', spec: boardAt(1) },
+        body: { name: 'dashboard', spec: boardAt(1) },
         keepalive: true,
       },
     ]);
     unmount();
   });
 
-  it('keeps an edit made before the snapshot and saves it once the project is known', async () => {
+  it('keeps an edit made before the snapshot and saves it once the snapshot arrives', async () => {
     const { container, unmount, sent } = setup();
     click(find(container, '[aria-label="Hide Board"]'));
     await settle();
     expect(sent).toEqual([]);
-    deliver(snapshotWith(layoutRow(SAVED)));
+    deliver(snapshotWith(savedLayout(SAVED)));
     expect(cells(container)).toEqual(['planner-1', 'events-1']);
     expect(announced(container)).not.toBe(LAYOUT_LOADED);
     await settle();
     expect(sent).toHaveLength(1);
     const [save] = sent;
     expect(save?.intent).toBe('layout.save');
-    expect(save?.body).toMatchObject({ project: 'deck', name: 'dashboard' });
     const spec = save?.body['spec'] as GridLayout;
+    expect(save?.body).toEqual({ name: 'dashboard', spec });
     expect(spec.items.find(({ id }) => id === 'board-1')?.hidden).toBe(true);
-    deliver(layoutChange(layoutRow(spec)));
+    deliver(layoutFrame(spec));
     expect(cells(container)).toEqual(['planner-1', 'events-1']);
     expect(announced(container)).not.toBe(LAYOUT_LOADED);
     unmount();
   });
 
-  it('keeps a reset made before the snapshot and sends it once the project is known', async () => {
+  it('keeps a reset made before the snapshot and sends it once the snapshot arrives', async () => {
     const { container, unmount, sent } = setup();
     choose(find(container, '[aria-label="Layout preset"]'), 'minimal');
     click(find(container, '.qd-layout-bar button'));
     await settle();
     expect(sent).toEqual([]);
-    deliver(snapshotWith(layoutRow(SAVED)));
+    deliver(snapshotWith(savedLayout(SAVED)));
     await settle();
     expect(sent).toEqual([
       {
         intent: 'layout.reset',
-        body: { project: 'deck', name: 'dashboard', preset: 'minimal' },
+        body: { name: 'dashboard', preset: 'minimal' },
       },
     ]);
     expect(
@@ -337,7 +335,7 @@ describe('deck layout', () => {
 
   it('shows why a save was refused', async () => {
     const { container, unmount } = setup(400);
-    deliver(snapshotWith(layoutRow(SAVED)));
+    deliver(snapshotWith(savedLayout(SAVED)));
     click(find(container, '[aria-label="Hide Board"]'));
     await settle();
     expect(textOf(container, '[role="alert"]')).toBe('layout refused');

@@ -55,6 +55,7 @@ const snapshot = (
   cursor: 0,
   tables: { ...emptyTables(), projects, agents },
   machine: { pausedAt },
+  layout: null,
 });
 
 const deliver = (message: StreamMessage) => {

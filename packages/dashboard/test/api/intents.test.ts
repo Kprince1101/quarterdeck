@@ -79,11 +79,7 @@ describe('intent client', () => {
       JSON.stringify({ intent: 'layout.reset', status: 'applied' }),
     );
     const client = createIntentClient({ fetch: post });
-    const input = {
-      project: 'deck',
-      name: 'dashboard',
-      preset: 'ops' as const,
-    };
+    const input = { name: 'dashboard', preset: 'ops' as const };
     await client.layout.reset(input, { keepalive: true });
     expect(post).toHaveBeenCalledWith('/api/intents/layout.reset', {
       method: 'POST',

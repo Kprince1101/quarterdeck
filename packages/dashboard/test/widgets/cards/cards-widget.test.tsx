@@ -95,6 +95,7 @@ const snapshot = (cards: CardRow[]): StreamMessage => ({
     cards,
   },
   machine: { pausedAt: null },
+  layout: null,
 });
 
 const changed = (row: CardRow): StreamMessage => ({

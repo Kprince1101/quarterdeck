@@ -2,9 +2,9 @@ export interface SendOptions {
   keepalive: boolean;
 }
 
-export interface LayoutWrite<Target> {
+export interface LayoutWrite {
   key: string;
-  send: (target: Target, options: SendOptions) => Promise<unknown>;
+  send: (options: SendOptions) => Promise<unknown>;
 }
 
 export interface LayoutWriterOptions {
@@ -12,34 +12,33 @@ export interface LayoutWriterOptions {
   onError: (err: unknown) => void;
 }
 
-export interface LayoutWriter<Target> {
-  write: (write: LayoutWrite<Target>) => void;
+export interface LayoutWriter {
+  write: (write: LayoutWrite) => void;
   flush: (options?: SendOptions) => void;
-  setTarget: (target: Target | null) => void;
+  setReady: (ready: boolean) => void;
   hasQueued: () => boolean;
   isEcho: (key: string) => boolean;
 }
 
 const IN_PAGE: SendOptions = { keepalive: false };
 
-export const createLayoutWriter = <Target>({
+export const createLayoutWriter = ({
   delayMs,
   onError,
-}: LayoutWriterOptions): LayoutWriter<Target> => {
+}: LayoutWriterOptions): LayoutWriter => {
   const awaitingEcho: string[] = [];
-  let queued: LayoutWrite<Target> | null = null;
-  let target: Target | null = null;
+  let queued: LayoutWrite | null = null;
+  let ready = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let sending = false;
 
   const sendOne = async (
-    { key, send }: LayoutWrite<Target>,
-    to: Target,
+    { key, send }: LayoutWrite,
     options: SendOptions,
   ): Promise<void> => {
     awaitingEcho.push(key);
     try {
-      await send(to, options);
+      await send(options);
     } catch (err) {
       awaitingEcho.splice(awaitingEcho.lastIndexOf(key), 1);
       onError(err);
@@ -48,21 +47,21 @@ export const createLayoutWriter = <Target>({
 
   const drain = async (options: SendOptions): Promise<void> => {
     const next = queued;
-    if (next === null || target === null) {
+    if (next === null || !ready) {
       sending = false;
       return;
     }
     queued = null;
     sending = true;
-    await sendOne(next, target, options);
+    await sendOne(next, options);
     return drain(IN_PAGE);
   };
 
   const sendBeforeLeaving = (options: SendOptions): void => {
     const next = queued;
-    if (next === null || target === null) return;
+    if (next === null || !ready) return;
     queued = null;
-    void sendOne(next, target, options);
+    void sendOne(next, options);
   };
 
   const flush = (options = IN_PAGE): void => {
@@ -79,8 +78,8 @@ export const createLayoutWriter = <Target>({
       timer = setTimeout(flush, delayMs);
     },
     flush,
-    setTarget: (next) => {
-      target = next;
+    setReady: (next) => {
+      ready = next;
       if (timer === undefined) flush();
     },
     hasQueued: () => queued !== null,

@@ -114,6 +114,7 @@ const mount = (
       cursor: 0,
       tables,
       machine: { pausedAt: null },
+      layout: null,
     });
   });
   return { ...rendered, sent, forgeReads, asked: rules.asked };
@@ -515,6 +516,7 @@ describe('Project widget', () => {
         cursor: 0,
         tables: projectTables(),
         machine: { pausedAt: null },
+        layout: null,
       });
     });
     const copy = (n: number) => find(container, `[data-copy="${n}"]`);

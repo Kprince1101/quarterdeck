@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
+import { LAYOUT_PRESETS } from '../../src/layouts/index.js';
 import {
   startQuarterdeck,
   type ProjectServices,
@@ -225,6 +226,40 @@ describe('startQuarterdeck', { timeout: TIMEOUT }, () => {
       tables: { projects: [expect.objectContaining({ slug: 'sample' })] },
     });
     client.ws.terminate();
+  });
+
+  it('pushes one dashboard layout save to every project’s stream', async () => {
+    const qd = await start();
+    await sendIntent(qd, 'project.create', { project: PROJECT });
+    await sendIntent(qd, 'project.create', { project: 'sample' });
+    const clients = await Promise.all(
+      [PROJECT, 'sample'].map((project) =>
+        openStreamClient(streamUrl(qd, `?project=${project}`), qd.token),
+      ),
+    );
+    await vi.waitFor(() =>
+      clients.forEach(({ frames }) =>
+        expect(frames[0]).toMatchObject({ type: 'snapshot', layout: null }),
+      ),
+    );
+
+    expect(
+      await sendIntent(qd, 'layout.reset', {
+        name: 'dashboard',
+        preset: 'minimal',
+      }),
+    ).toBe(200);
+    await vi.waitFor(() =>
+      clients.forEach(({ frames }) =>
+        expect(frames).toContainEqual(
+          expect.objectContaining({
+            type: 'layout',
+            layout: expect.objectContaining({ spec: LAYOUT_PRESETS.minimal }),
+          }),
+        ),
+      ),
+    );
+    clients.forEach(({ ws }) => ws.terminate());
   });
 
   it('stops a wiped project’s bus and stream', async () => {

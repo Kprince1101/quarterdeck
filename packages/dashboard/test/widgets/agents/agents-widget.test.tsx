@@ -99,6 +99,7 @@ const mount = (
     cursor: 0,
     tables,
     machine: { pausedAt: null },
+    layout: null,
   });
   return { ...rendered, sent };
 };

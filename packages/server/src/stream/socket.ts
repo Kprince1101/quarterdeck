@@ -8,6 +8,11 @@ import type { AddressInfo } from 'node:net';
 import type { Duplex } from 'node:stream';
 import { WebSocket, WebSocketServer } from 'ws';
 import { createApiToken, verifyApiToken } from '../api/token.js';
+import {
+  createGlobalLayouts,
+  type GlobalLayout,
+  type GlobalLayouts,
+} from '../global-layout/index.js';
 import { reporter } from '../store/events.js';
 import { quarterdeckHome } from '../store/index.js';
 import type { StoreEvent, Store, TableChange } from '../store/index.js';
@@ -42,6 +47,7 @@ export interface StreamOptions {
   store: Store;
   token: string;
   home?: string;
+  layouts?: GlobalLayouts | undefined;
   tail?: number;
   turnsPerAgent?: number;
   maxBufferedBytes?: number;
@@ -78,10 +84,12 @@ type Outgoing =
       cursor: number;
       tables: SnapshotRows;
       machine: MachineState;
+      layout: GlobalLayout | null;
     }
   | { type: 'event'; event: StoreEvent }
   | ({ type: 'change' } & TableChange)
-  | { type: 'machine'; machine: MachineState };
+  | { type: 'machine'; machine: MachineState }
+  | { type: 'layout'; layout: GlobalLayout };
 
 const jsonValue = (_: string, value: unknown): unknown => {
   if (typeof value === 'bigint') return Number(value);
@@ -90,6 +98,12 @@ const jsonValue = (_: string, value: unknown): unknown => {
 
 const serialize = (message: Outgoing): string =>
   JSON.stringify(message, jsonValue);
+
+const isNewLayout = (
+  pending: GlobalLayout | undefined,
+  sent: GlobalLayout | null,
+): pending is GlobalLayout =>
+  pending !== undefined && JSON.stringify(pending) !== JSON.stringify(sent);
 
 const reject = (socket: Duplex, status: number, reason: string): void => {
   socket.end(
@@ -159,6 +173,7 @@ const parseAfter = (url: URL): number | undefined | null => {
 export const createStream = (options: StreamOptions): Stream => {
   const { store } = options;
   const home = options.home ?? quarterdeckHome();
+  const layouts = options.layouts ?? createGlobalLayouts(home);
   const tail = options.tail ?? STREAM_TAIL;
   const maxBuffered = options.maxBufferedBytes ?? MAX_BUFFERED_BYTES;
   const allowedOrigins = new Set(options.allowedOrigins);
@@ -217,9 +232,15 @@ export const createStream = (options: StreamOptions): Stream => {
         ws.once('close', done);
         ws.send(serialize(message), done);
       });
-    const sendChange = (change: TableChange): void => {
+    const sendNow = (message: Outgoing): void => {
       if (ws.readyState !== WebSocket.OPEN || behind()) return;
-      ws.send(serialize({ type: 'change', ...change }));
+      ws.send(serialize(message));
+    };
+    const sendChange = (change: TableChange): void => {
+      sendNow({ type: 'change', ...change });
+    };
+    const sendLayout = (layout: GlobalLayout): void => {
+      sendNow({ type: 'layout', layout });
     };
     const sendEvent = async (event: StoreEvent): Promise<void> => {
       if (behind()) return;
@@ -239,14 +260,22 @@ export const createStream = (options: StreamOptions): Stream => {
         { onError: report },
       );
       if (!(await keep(() => watcher.close()))) return;
+      let pendingLayout: GlobalLayout | undefined;
+      const unsubscribe = layouts.subscribe((layout) => {
+        if (live) sendLayout(layout);
+        else pendingLayout = layout;
+      });
+      if (!(await keep(() => Promise.resolve(unsubscribe())))) return;
       const after = requested ?? (await tailCursor(store, tail));
       const tables = await readSnapshot(store, options.turnsPerAgent);
       const machine = await readMachineState(home);
+      const layout = await layouts.read();
       if (!open) return;
-      await write({ type: 'snapshot', cursor: after, tables, machine });
+      await write({ type: 'snapshot', cursor: after, tables, machine, layout });
       if (!open) return;
       live = true;
       pending.splice(0).forEach(sendChange);
+      if (isNewLayout(pendingLayout, layout)) sendLayout(pendingLayout);
       const subscription = await store.subscribe(sendEvent, {
         after,
         onError: report,

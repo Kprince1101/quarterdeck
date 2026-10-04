@@ -74,6 +74,7 @@ const snapshot: StreamMessage = {
   cursor: 0,
   tables: { ...emptyTables(), projects: [streamProject] },
   machine: { pausedAt: null },
+  layout: null,
 };
 
 const mount = async (first: Answer): Promise<Harness> => {

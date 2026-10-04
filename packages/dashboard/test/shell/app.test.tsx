@@ -21,7 +21,7 @@ import { FAKE_WEBSOCKET, FakeSocket } from '../api/fake-socket.js';
 import {
   PROJECT_ID,
   STARTER_LAYOUT,
-  layoutRow,
+  savedLayout,
   snapshotWith,
 } from '../layouts/stream-rows.js';
 import { all, render, textOf } from './page.js';
@@ -33,6 +33,7 @@ const SNAPSHOT: StreamMessage = {
   cursor: 0,
   tables: emptyTables(),
   machine: { pausedAt: null },
+  layout: null,
 };
 
 const event = (id: number, kind: string): StreamMessage => {
@@ -100,7 +101,7 @@ describe('dashboard shell', () => {
 
   it('gives every panel its own scrolling body', () => {
     const { container, unmount } = render(<App stream={stream} />);
-    deliver(snapshotWith(layoutRow(STARTER_LAYOUT)));
+    deliver(snapshotWith(savedLayout(STARTER_LAYOUT)));
     const panels = all(
       container,
       '[data-widget-mount] .qd-grid-cell > .qd-panel',
@@ -117,7 +118,7 @@ describe('dashboard shell', () => {
     const { container, unmount } = render(<App stream={stream} />);
     deliver(
       snapshotWith(
-        layoutRow({
+        savedLayout({
           columns: 12,
           rows: 12,
           items: [
@@ -144,7 +145,7 @@ describe('dashboard shell', () => {
     const { container, unmount } = render(<App stream={stream} />);
     deliver(
       snapshotWith(
-        layoutRow({
+        savedLayout({
           columns: 12,
           rows: 12,
           items: [
@@ -174,7 +175,7 @@ describe('dashboard shell', () => {
     );
 
     deliver(
-      snapshotWith(layoutRow(STARTER_LAYOUT)),
+      snapshotWith(savedLayout(STARTER_LAYOUT)),
       event(1, 'project.created'),
       event(2, 'notebook.added'),
     );

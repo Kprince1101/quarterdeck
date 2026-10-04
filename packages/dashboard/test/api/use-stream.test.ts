@@ -26,6 +26,7 @@ const SNAPSHOT: StreamMessage = {
   cursor: 3,
   tables: emptyTables(),
   machine: { pausedAt: null },
+  layout: null,
 };
 
 interface Rendered {

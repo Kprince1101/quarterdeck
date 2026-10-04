@@ -50,6 +50,7 @@ const mount = (tables: SnapshotTables, status = 200, reply: object = {}) => {
       cursor: 0,
       tables,
       machine: { pausedAt: null },
+      layout: null,
     });
   });
   return { ...rendered, sent };
