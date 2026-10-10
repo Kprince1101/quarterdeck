@@ -40,6 +40,7 @@
       <pre><code>~/.quarterdeck/
   rules.local.&lt;file&gt;           your machine's rules
   claude.json                    which Claude auth mode this machine uses
+  profiles/&lt;name&gt;/               rules profiles you add yourself
   &lt;project&gt;/
     pg/                          the project's Postgres data
     pg.lock                      which process has the project open
@@ -78,6 +79,16 @@
               <code>vertex</code>), when you set it in a file rather than in
               <code>QUARTERDECK_CLAUDE_AUTH</code>. It holds the mode only,
               never a key. Wiping leaves it.
+            </td>
+          </tr>
+          <tr>
+            <td><code>~/.quarterdeck/profiles/&lt;name&gt;/</code></td>
+            <td>
+              <a href="rules.html#profiles">Rules profiles</a> you add with
+              <code>profile add</code>: a <code>profile.json</code> naming the
+              standards docs it reads, and any reviewer, charter or lifecycle
+              layer. <code>rules.local.profile.json</code> picks the active one.
+              Configuration, not state: wiping projects leaves them.
             </td>
           </tr>
           <tr>

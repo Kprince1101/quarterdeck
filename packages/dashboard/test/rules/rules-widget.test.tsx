@@ -15,7 +15,13 @@ import { RulesWidget } from '../../src/widgets/rules/RulesWidget.js';
 import { FAKE_WEBSOCKET, FakeSocket } from '../api/fake-socket.js';
 import { choose, click } from '../grid/events.js';
 import { all, render, textOf, type PageElement } from '../shell/page.js';
-import { HOME, REPO, rulesView, type RuleOverrides } from './fixtures.js';
+import {
+  HOME,
+  HOUSE_DIR,
+  REPO,
+  rulesView,
+  type RuleOverrides,
+} from './fixtures.js';
 
 const stream = { url: 'ws://127.0.0.1:4317/ws', WebSocket: FAKE_WEBSOCKET };
 
@@ -322,6 +328,81 @@ describe('rules widget', () => {
     expect(all(container, '.qd-rules-sources .qd-rules-tag').length).toBe(
       all(container, '.qd-rules-sources tbody tr').length,
     );
+    unmount();
+  });
+
+  it('shows the active profile, the files it reads and the file picking writes', async () => {
+    const { container, unmount } = await mount();
+    const panel = find(container, '[aria-label="Rules profile"]');
+    expect(textOf(panel, 'h3')).toBe('Profile: default');
+    expect(panel.textContent).toContain('Chosen by the shipped default.');
+    expect(panel.textContent).toContain(
+      `Picking a profile or a level writes ${HOME}/rules.local.profile.json`,
+    );
+    expect(all(panel, 'option').map(({ textContent }) => textContent)).toEqual([
+      'default (shipped)',
+      'house (this machine)',
+    ]);
+    expect(panel.textContent).toContain('This profile sets no rule levels.');
+    unmount();
+  });
+
+  it('drafts the profile layer when a profile is picked, and saves it only through the diff', async () => {
+    const { container, sent, unmount } = await mount();
+    const panel = find(container, '[aria-label="Rules profile"]');
+    choose(find(panel, 'select'), 'house');
+
+    expect(find(container, 'textarea').getAttribute('aria-label')).toBe(
+      'Edit rules.local.profile.json',
+    );
+    expect(
+      all(container, '[aria-label="Files the profile reads"] code').map(
+        ({ textContent }) => textContent,
+      ),
+    ).toEqual([`${HOUSE_DIR}/profile.json`, '/docs/house-standards.md']);
+    expect(
+      all(container, '[aria-label="Rule levels"] code').map(
+        ({ textContent }) => textContent,
+      ),
+    ).toEqual(['max-lines', 'no-ternary']);
+
+    choose(find(container, 'select[name="max-lines"]'), '0');
+    click(button(container, 'Review changes'));
+    expect(diffLines(container)).toEqual([
+      '+ {',
+      '+   "profile": "house",',
+      '+   "levels": {',
+      '+     "max-lines": 0',
+      '+   }',
+      '+ }',
+    ]);
+    expect(textOf(container, '[aria-label="Rule levels"] .qd-rules-tag')).toBe(
+      'local',
+    );
+    click(button(container, 'Save'));
+    await flush();
+    expect(sent).toEqual([
+      {
+        url: '/api/intents/rules.write',
+        body: {
+          scope: 'machine',
+          name: 'profile',
+          content:
+            '{\n  "profile": "house",\n  "levels": {\n    "max-lines": 0\n  }\n}\n',
+        },
+      },
+    ]);
+    unmount();
+  });
+
+  it('shows the profile the machine already chose', async () => {
+    const { container, unmount } = await mount({
+      profile: { machine: '{ "profile": "house" }' },
+    });
+    const panel = find(container, '[aria-label="Rules profile"]');
+    expect(textOf(panel, 'h3')).toBe('Profile: house');
+    expect(panel.textContent).toContain('Chosen by this machine.');
+    expect(panel.textContent).toContain('The house style.');
     unmount();
   });
 });

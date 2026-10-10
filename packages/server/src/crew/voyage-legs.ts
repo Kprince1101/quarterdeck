@@ -92,6 +92,7 @@ export const builderContext = async (
     base: await baseRef(leg.repoPath, rules.mergeGate.base),
     terms: forgeTerms(forge),
     services,
+    standards: leg.rules.kickoff,
     worktreesDir: projectWorktreesDir(leg.project, home),
     turnsDir: projectTurnsDir(leg.project, home),
     budget: rules.budget.window,

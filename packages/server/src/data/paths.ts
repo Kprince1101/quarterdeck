@@ -1,5 +1,9 @@
 import { basename } from 'node:path';
-import { RULE_NAMES, ruleLayerPaths } from '@quarterdeck/rules';
+import {
+  RULE_NAMES,
+  machineProfilesDir,
+  ruleLayerPaths,
+} from '@quarterdeck/rules';
 import { claudeRuntimeDir } from '../acp/runtimes/claude/adapter.js';
 import { claudeAuthPath } from '../acp/runtimes/claude/auth.js';
 import { defaultGeminiDir } from '../acp/runtimes/gemini/lockdown.js';
@@ -82,6 +86,12 @@ export const dataPaths = ({
     ),
     ...repoRuleFiles(repoPath),
     ...ruleFiles(homeDir, 'machine'),
+    entry(
+      'Rules profiles',
+      machineProfilesDir(homeDir),
+      'directory',
+      'machine',
+    ),
     entry('Ticket plugins', ticketPluginsDir(home), 'directory', 'machine'),
     entry('Workspace', workspacePath(home), 'file', 'machine'),
     entry('Global pause', globalPausePath(home), 'file', 'machine'),

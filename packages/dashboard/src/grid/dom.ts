@@ -37,3 +37,10 @@ export const capturePointer = (
 
 export const valueOf = (target: EventTarget): string =>
   (target as ValueTarget).value;
+
+export interface NamedTarget extends EventTarget {
+  name: string;
+}
+
+export const nameOf = (target: EventTarget): string =>
+  (target as NamedTarget).name;

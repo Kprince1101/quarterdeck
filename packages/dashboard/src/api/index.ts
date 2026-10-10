@@ -54,9 +54,12 @@ export type {
   IntentInput,
   IntentName,
   IntentReply,
+  ProfileSummaryView,
+  ProfilesView,
   RuleLayer,
   RuleView,
   RulesView,
+  SteeringFileView,
 } from '@quarterdeck/server/intents';
 export type * from '@quarterdeck/server/stream-schema';
 

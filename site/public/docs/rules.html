@@ -91,6 +91,13 @@
               publishes.
             </td>
           </tr>
+          <tr>
+            <td><code>profile.json</code></td>
+            <td>
+              The active rules profile and local rule levels: the standards doc
+              and steering block builders and the reviewer read at kickoff.
+            </td>
+          </tr>
         </tbody>
       </table>
 
@@ -702,14 +709,63 @@
         in <code>~/.quarterdeck/plugins/</code>.
       </p>
 
+      <h2 id="profiles">profile.json and rules profiles</h2>
+      <p>
+        A rules profile is the coding standard agents are told to follow. Every
+        builder's assignment and the reviewer's brief end with the active
+        profile's standards doc and steering block. The shipped
+        <code>default</code> profile is generic and language-neutral: how an
+        agent works a ticket, with no style opinions and no steering block. It
+        is what a new workspace gets.
+      </p>
+      <p>
+        <code>profile.json</code> names the active profile and any local rule
+        levels: <code>{ "profile": "default", "levels": {} }</code>. The machine
+        layer picks one profile for every project; a project's repo layer may
+        pick another, and wins. Levels are 3 (enforced, a disable comment naming
+        the rule is itself a violation), 2 (enforced, a scoped disable comment
+        with a reason is allowed), 1 (warns) and 0 (off). Machine levels apply
+        over the profile's own. A repo layer's levels can only raise a rule's
+        level, never lower it, since agents can write to the repo.
+      </p>
+      <p>
+        Profiles other than <code>default</code> live on your machine, in
+        <code>~/.quarterdeck/profiles/&lt;name&gt;/</code>, never in the
+        repository. Each has a <code>profile.json</code> with a
+        <code>description</code>, the <code>standards</code> docs it reads
+        (absolute, or relative to the profile folder), its <code>levels</code>,
+        and optionally a <code>steering</code> source and a <code>setup</code>.
+        A <code>charter.md</code> or <code>reviewer.md</code> there is added to
+        the shipped one, and a <code>lifecycle.json</code> there layers over the
+        shipped lifecycle (a merge gate, say). When a project's repo layer picks
+        the profile, that lifecycle layer can only tighten. Create one with
+        <code
+          >npm run quarterdeck -- profile add &lt;name&gt; --standards
+          &lt;path&gt;</code
+        >, and choose it with
+        <code>npm run quarterdeck -- profile use &lt;name&gt;</code> or the
+        Rules widget, which names the file it writes.
+      </p>
+      <p>
+        The steering block is generated from the levels, between
+        <code>&lt;!-- quarterdeck-steering:start --&gt;</code> and
+        <code>&lt;!-- quarterdeck-steering:end --&gt;</code>. A profile whose
+        own tool writes the block can name the file and markers in
+        <code>steering</code>; agents then read the block from the repository. A
+        profile's <code>setup</code> names an <code>install</code> command, a
+        <code>levelsFile</code> to write the levels to, and a
+        <code>steer</code> command; <code>init</code> lists what it would run
+        and write and asks first. The default profile has no setup.
+      </p>
+
       <h2 id="prompts">charter.md and reviewer.md</h2>
       <p>
         The Driver's charter and the reviewer's prompt, in plain Markdown. A
         <code>rules.local.charter.md</code> or
-        <code>rules.local.reviewer.md</code> replaces the default whole. In a
-        GitLab project, agents read them with every &ldquo;pull request&rdquo;
-        and &ldquo;PR&rdquo; turned into &ldquo;merge request&rdquo; and
-        &ldquo;MR&rdquo;.
+        <code>rules.local.reviewer.md</code> replaces the default whole,
+        including what the active profile adds. In a GitLab project, agents read
+        them with every &ldquo;pull request&rdquo; and &ldquo;PR&rdquo; turned
+        into &ldquo;merge request&rdquo; and &ldquo;MR&rdquo;.
       </p>
     </main>
 

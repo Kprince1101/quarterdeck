@@ -99,7 +99,11 @@ export {
   NO_VOYAGE_REPO,
   NoRepoPathError,
   baseRef,
+  crewRules,
+  kickoffFor,
   machineRules,
+  reviewerBrief,
+  type CrewRules,
   type MachineRules,
 } from './rules.js';
 export {

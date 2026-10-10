@@ -6,7 +6,12 @@ import {
   RULE_NAMES,
   type RuleName,
 } from '@quarterdeck/rules';
-import type { RuleLayer, RuleView, RulesView } from '../../src/api/index.js';
+import type {
+  ProfilesView,
+  RuleLayer,
+  RuleView,
+  RulesView,
+} from '../../src/api/index.js';
 
 export const HOME = '/home/me/.quarterdeck';
 export const REPO = '/work/deck';
@@ -47,6 +52,47 @@ export const ruleView = (
   };
 };
 
+export const HOUSE_DIR = join(HOME, 'profiles', 'house');
+
+const activeProfile = (overrides: RuleOverrides = {}): string => {
+  if (overrides.machine === undefined) return 'default';
+  const layer = JSON.parse(overrides.machine) as { profile?: string };
+  return layer.profile ?? 'default';
+};
+
+export const profilesView = (overrides: RuleOverrides = {}): ProfilesView => {
+  const active = activeProfile(overrides);
+  return {
+    active,
+    chosenBy: (active === 'default' && 'shipped') || 'machine',
+    levels: {},
+    error: null,
+    profiles: [
+      {
+        name: 'default',
+        source: 'shipped',
+        dir: join(DEFAULT_RULES_DIR, 'profiles', 'default'),
+        description: 'Generic and language-neutral.',
+        files: [join(DEFAULT_RULES_DIR, 'profiles', 'default', 'profile.json')],
+        levels: {},
+        setup: false,
+        error: null,
+      },
+      {
+        name: 'house',
+        source: 'machine',
+        dir: HOUSE_DIR,
+        description: 'The house style.',
+        files: [join(HOUSE_DIR, 'profile.json'), '/docs/house-standards.md'],
+        levels: { 'no-ternary': 3, 'max-lines': 2 },
+        setup: true,
+        error: null,
+      },
+    ],
+    steeringFiles: [],
+  };
+};
+
 export const rulesView = (
   overrides: Partial<Record<RuleName, RuleOverrides>> = {},
   repoDir: string | null = null,
@@ -54,4 +100,5 @@ export const rulesView = (
   project: repoDir && 'deck',
   repoPath: repoDir,
   rules: RULE_NAMES.map((name) => ruleView(name, overrides[name], repoDir)),
+  profiles: profilesView(overrides.profile),
 });

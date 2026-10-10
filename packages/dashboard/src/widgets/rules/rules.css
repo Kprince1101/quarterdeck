@@ -113,6 +113,18 @@
   gap: var(--qd-space-2);
 }
 
+.qd-rules-files,
+.qd-rules-levels {
+  margin: 0;
+  padding-left: var(--qd-space-3);
+}
+
+.qd-rules-levels label {
+  display: flex;
+  gap: var(--qd-space-2);
+  align-items: center;
+}
+
 .qd-rules-text,
 .qd-diff {
   margin: 0;

@@ -35,6 +35,7 @@ export interface BuilderContext {
   base: string;
   terms: ForgeTerms;
   services: PromptServices;
+  standards?: (() => Promise<string>) | undefined;
   worktreesDir: string;
   turnsDir: string;
   budget: BudgetWindow;

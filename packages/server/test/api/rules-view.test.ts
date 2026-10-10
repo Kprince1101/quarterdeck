@@ -120,6 +120,68 @@ describe('GET /api/rules', { timeout: TIMEOUT }, () => {
     expect(post.res.headers.get('allow')).toBe('GET');
   });
 
+  it('lists the profiles, the files each reads and the steering files a person may edit', async () => {
+    const machine = await view(null);
+    expect(machine.profiles).toMatchObject({
+      active: 'default',
+      chosenBy: 'shipped',
+      error: null,
+    });
+    expect(machine.profiles.profiles).toEqual([
+      expect.objectContaining({
+        name: 'default',
+        source: 'shipped',
+        files: [
+          join(DEFAULT_RULES_DIR, 'profiles', 'default', 'profile.json'),
+          join(DEFAULT_RULES_DIR, 'profiles', 'default', 'standards.md'),
+        ],
+        setup: false,
+      }),
+    ]);
+    expect(machine.profiles.steeringFiles.map(({ file }) => file)).toEqual([
+      'charter.md',
+      'reviewer.md',
+      'permissions.json',
+      'profile.json',
+    ]);
+    expect(machine.profiles.steeringFiles[3]).toMatchObject({
+      machine: join(t.homeDir, LOCAL, 'rules.local.profile.json'),
+      repo: null,
+    });
+    expect((await view('deck')).profiles.steeringFiles[1]?.repo).toBe(
+      join(repoDir, LOCAL, 'rules.local.reviewer.md'),
+    );
+  });
+
+  it('refuses to choose a profile that is not installed, then accepts a machine one', async () => {
+    const missing = await t.send('rules.write', {
+      scope: 'machine',
+      name: 'profile',
+      content: '{ "profile": "house" }',
+    });
+    expect(missing.status).toBe(400);
+    expect(String(missing.body['error'])).toContain('no profile named house');
+
+    const dir = join(t.homeDir, LOCAL, 'profiles', 'house');
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      join(dir, 'profile.json'),
+      '{ "description": "The house style." }',
+    );
+    const chosen = await t.send('rules.write', {
+      scope: 'machine',
+      name: 'profile',
+      content: '{ "profile": "house" }',
+    });
+    expect(chosen.status).toBe(200);
+    const { profiles } = await view(null);
+    expect(profiles).toMatchObject({ active: 'house', chosenBy: 'machine' });
+    expect(profiles.profiles.map(({ name }) => name)).toEqual([
+      'default',
+      'house',
+    ]);
+  });
+
   it('keeps the Origin guard', async () => {
     const res = await fetch(`${t.api.url}/api/rules`, {
       headers: { origin: 'http://evil.example', ...bearer(t.api.token) },

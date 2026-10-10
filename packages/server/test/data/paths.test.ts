@@ -32,6 +32,7 @@ describe('dataPaths', () => {
     );
     expect(machine.map(({ path }) => path)).toEqual(
       expect.arrayContaining([
+        join(DATA, 'profiles'),
         join(DATA, 'plugins'),
         join(DATA, 'pause.json'),
         join(DATA, 'sock'),

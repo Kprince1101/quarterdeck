@@ -1,4 +1,4 @@
-import { readFile, stat } from 'node:fs/promises';
+import { stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import {
@@ -29,6 +29,8 @@ import {
 import type { IntentPayload } from '@quarterdeck/server/intents';
 import { parseIntent } from './intent.js';
 import { CliError, type CliIo, type Command } from './io.js';
+import { jsonText, readJsonLayer } from './json-layer.js';
+import { setUpProfile } from './profile-setup.js';
 import { choose, confirm } from './prompt.js';
 
 export { slugFromFolder };
@@ -50,7 +52,9 @@ written into a repository unless you agree to a .quarterdeck/ folder there.
   --skip <slug>        In a folder, leave this repository out (repeatable)
   --runtime <runtime>  ${RUNTIMES.join(', ')} (asked when interactive)
   --folder             Save a non-default runtime in <repo>/.quarterdeck/, for that repository only
-  --no-folder          Save it in ~/.quarterdeck/ instead, for every repository on this machine`;
+  --no-folder          Save it in ~/.quarterdeck/ instead, for every repository on this machine
+  --setup              Run the active rules profile's repo setup without asking
+  --no-setup           Skip it (the shipped default profile has none)`;
 
 interface InitOptions {
   project?: string | undefined;
@@ -59,6 +63,8 @@ interface InitOptions {
   runtime?: string | undefined;
   folder?: boolean | undefined;
   'no-folder'?: boolean | undefined;
+  setup?: boolean | undefined;
+  'no-setup'?: boolean | undefined;
 }
 
 interface RuntimeLayer {
@@ -81,22 +87,6 @@ const parseRuntime = (value: string): Runtime => {
   const parsed = runtimeSchema.safeParse(value);
   if (parsed.success) return parsed.data;
   throw new CliError(`--runtime must be one of ${RUNTIMES.join(', ')}`);
-};
-
-const readJsonLayer = async (
-  path: string,
-): Promise<Record<string, unknown>> => {
-  const text = await readFile(path, 'utf8').catch(() => undefined);
-  if (text === undefined) return {};
-  try {
-    const value = JSON.parse(text) as unknown;
-    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      return value as Record<string, unknown>;
-    }
-  } catch {
-    throw new CliError(`${path} is not valid JSON`);
-  }
-  throw new CliError(`${path} is not a JSON object`);
 };
 
 const withRuntime = (
@@ -242,7 +232,7 @@ const saveRuntime = async (
   layer: RuntimeLayer,
 ) => {
   const models = withRuntime(await readJsonLayer(layer.path), runtime);
-  const content = `${JSON.stringify(models, null, 2)}\n`;
+  const content = jsonText(models);
   await dispatchIntent(
     { stores, homeDir: io.homeDir },
     'rules.write',
@@ -396,7 +386,6 @@ const report = (
   }
   io.out(workspaceLine(update.workspace));
   for (const path of data) io.out(`Data: ${path}`);
-  io.out(`Next: ${QUARTERDECK_COMMAND} up`);
 };
 
 const decide = (
@@ -423,6 +412,8 @@ export const runInit: Command = async (args, io) => {
       runtime: { type: 'string' },
       folder: { type: 'boolean' },
       'no-folder': { type: 'boolean' },
+      setup: { type: 'boolean' },
+      'no-setup': { type: 'boolean' },
       help: { type: 'boolean', short: 'h' },
     },
   });
@@ -433,6 +424,9 @@ export const runInit: Command = async (args, io) => {
   if (positionals.length > 1) throw new CliError('init takes one path');
   if (values.folder && values['no-folder']) {
     throw new CliError('Pass --folder or --no-folder, not both');
+  }
+  if (values.setup && values['no-setup']) {
+    throw new CliError('Pass --setup or --no-setup, not both');
   }
   const detection = await detectWorkspace(
     resolve(io.cwd, positionals[0] ?? '.'),
@@ -458,5 +452,10 @@ export const runInit: Command = async (args, io) => {
     projects: repos,
   });
   report(io, repos, choice, data, update);
+  if (!values['no-setup']) {
+    for (const repo of repos)
+      await setUpProfile(io, repo.repoPath, { yes: values.setup ?? false });
+  }
+  io.out(`Next: ${QUARTERDECK_COMMAND} up`);
   return 0;
 };

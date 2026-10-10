@@ -3,6 +3,7 @@ import { HttpError, QUARTERDECK_COMMAND } from '@quarterdeck/server';
 import { runDoctor } from './doctor.js';
 import { runInit } from './init.js';
 import { CliError, type CliIo, type Command } from './io.js';
+import { runProfile } from './profile.js';
 import { runReplay } from './replay.js';
 import { runUp } from './up.js';
 import { runWipe } from './wipe.js';
@@ -17,6 +18,7 @@ Commands:
   doctor              Check kiro-cli, claude, gemini and gh are installed and signed in
   replay <voyage> [n]  Replay a voyage's Driver turns 1 to n, writing nothing
   wipe <project>      Stop a project's agents and delete its data (--all for every project)
+  profile <command>   List, add or choose rules profiles, or set a repo up for one
 
 Run ${QUARTERDECK_COMMAND} <command> --help for a command's options.`;
 
@@ -26,6 +28,7 @@ const COMMANDS: Record<string, Command> = {
   doctor: runDoctor,
   replay: runReplay,
   wipe: runWipe,
+  profile: runProfile,
 };
 
 const HELP = new Set(['help', '--help', '-h']);

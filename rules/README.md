@@ -1,12 +1,16 @@
 # Rules
 
-The shipped defaults: `charter.md`, `reviewer.md`, `permissions.json`, `naming.json`, `lifecycle.json`, `models.json`, `env.json`, `kiro.json`, `forges.json` and `services.json`. Override any of them with `~/.quarterdeck/rules.local.<file>` (this machine). All but three can also be overridden with `<repo>/.quarterdeck/rules.local.<file>` (one project). The exceptions are machine-only: a repo `env.json` is ignored and a repo `forges.json` or `services.json` is an error. `services.json` gives each project, by slug, its tracker and whether it publishes; see [services](../packages/server/src/services/README.md). The layers, the schemas and the tighten-only rules are described in the [rules docs](../site/public/docs/rules.html); how a permission request is decided is in [the permission policy](../packages/server/src/acp/permissions/README.md).
+The shipped defaults: `charter.md`, `reviewer.md`, `permissions.json`, `naming.json`, `lifecycle.json`, `models.json`, `env.json`, `kiro.json`, `forges.json`, `services.json` and `profile.json`. Override any of them with `~/.quarterdeck/rules.local.<file>` (this machine). All but three can also be overridden with `<repo>/.quarterdeck/rules.local.<file>` (one project). The exceptions are machine-only: a repo `env.json` is ignored and a repo `forges.json` or `services.json` is an error. `services.json` gives each project, by slug, its tracker and whether it publishes; see [services](../packages/server/src/services/README.md). The layers, the schemas and the tighten-only rules are described in the [rules docs](../site/public/docs/rules.html); how a permission request is decided is in [the permission policy](../packages/server/src/acp/permissions/README.md).
 
 `examples/` holds layers you can copy into place. They are not loaded unless you copy them.
 
 ## The workspace
 
 `~/.quarterdeck/workspace.json` is not a rules file but sits with them in the machine layer: `{ root, mode: "single" | "multi", projects: [...] }`, written by `quarterdeck init` (see [workspace](../packages/server/src/workspace/README.md)). Its mode decides how `charter.md` and `reviewer.md` read. A line ending in `<!-- multi -->` is kept only when the workspace has several projects, and one ending in `<!-- single -->` only when it is one repository; the tag itself never reaches an agent. In a single-repository workspace every other "project" in them reads "repository". A layer of your own can use the same tags, and one without them is worded the same way.
+
+## Profiles
+
+`profile.json` names the active rules profile and local rule levels. `profiles/default/` is the only shipped profile: generic, language-neutral, no rule levels and no repo setup. Other profiles live on the machine in `~/.quarterdeck/profiles/<name>/` and are never committed here. A profile's `profile.json` lists the standards docs it reads, by absolute path or relative to its folder; a `charter.md` or `reviewer.md` beside it is added to the shipped one and a `lifecycle.json` beside it layers over the shipped lifecycle. Builders and the reviewer read the active profile's standards and steering block at kickoff (`profileKickoff` in `src/profiles.ts`). See [the team quickstart](../docs/team-quickstart.md) and the [rules docs](../site/public/docs/rules.html#profiles).
 
 ## Kiro base agents
 

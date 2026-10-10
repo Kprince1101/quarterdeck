@@ -23,6 +23,8 @@ export interface RuleDrafts {
   editor: RuleEditor | null;
   selectRule: (name: RuleName) => void;
   edit: (draft: string) => void;
+  editRule: (name: RuleName, draft: string) => void;
+  draftOf: (name: RuleName) => string | null;
   discard: (name: RuleName) => void;
 }
 
@@ -60,17 +62,38 @@ export const useRuleDrafts = (view: RulesView | null): RuleDrafts => {
     return editorFor(rule, drafts);
   }, [view, name, drafts]);
 
+  const editRule = useCallback((target: RuleName, draft: string) => {
+    setDrafts((current) => ({ ...current, [target]: draft }));
+  }, []);
+
   const edit = useCallback(
     (draft: string) => {
-      if (name === null) return;
-      setDrafts((current) => ({ ...current, [name]: draft }));
+      if (name !== null) editRule(name, draft);
     },
-    [name],
+    [name, editRule],
+  );
+
+  const draftOf = useCallback(
+    (target: RuleName): string | null => {
+      const rule = view?.rules.find((candidate) => candidate.name === target);
+      if (rule === undefined) return null;
+      return drafts[target] ?? initialDraft(rule);
+    },
+    [view, drafts],
   );
 
   const discard = useCallback((target: RuleName) => {
     setDrafts((current) => withoutDraft(current, target));
   }, []);
 
-  return { names, name, editor, selectRule: setChosen, edit, discard };
+  return {
+    names,
+    name,
+    editor,
+    selectRule: setChosen,
+    edit,
+    editRule,
+    draftOf,
+    discard,
+  };
 };

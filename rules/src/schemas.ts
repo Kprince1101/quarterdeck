@@ -5,6 +5,7 @@ const AGENT_NAME = /^[a-z][a-z0-9-]*$/;
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const KIRO_AGENT_NAME = /^[a-z0-9][a-z0-9_-]*$/i;
 const PROJECT_SLUG = /^[a-z0-9][a-z0-9_-]{0,62}$/;
+const PROFILE_NAME = /^[a-z0-9][a-z0-9_-]{0,62}$/;
 const MAX_TRACKER_TEXT = 200;
 const MAX_TRACKER_NOTES = 2000;
 const HOSTNAME =
@@ -208,6 +209,47 @@ export const servicesSchema = z.strictObject({
   projects: z.record(z.string().regex(PROJECT_SLUG), projectServicesSchema),
 });
 
+export const profileNameSchema = z.string().regex(PROFILE_NAME);
+
+export const ruleLevelSchema = z.union([
+  z.literal(0),
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+]);
+
+export const ruleLevelsSchema = z.record(
+  z.string().trim().min(1),
+  ruleLevelSchema,
+);
+
+export const profileRuleSchema = z.strictObject({
+  profile: profileNameSchema,
+  levels: ruleLevelsSchema,
+});
+
+const commandSchema = z.array(z.string().min(1)).min(1);
+
+export const steeringSourceSchema = z.strictObject({
+  file: z.string().min(1),
+  start: z.string().min(1),
+  end: z.string().min(1),
+});
+
+export const profileSetupSchema = z.strictObject({
+  install: commandSchema.optional(),
+  levelsFile: z.string().min(1).optional(),
+  steer: commandSchema.optional(),
+});
+
+export const profileManifestSchema = z.strictObject({
+  description: z.string().trim().min(1),
+  standards: z.array(z.string().min(1)).default([]),
+  levels: ruleLevelsSchema.default({}),
+  steering: steeringSourceSchema.optional(),
+  setup: profileSetupSchema.optional(),
+});
+
 export const RULE_SCHEMAS = {
   charter: markdownSchema,
   reviewer: markdownSchema,
@@ -219,6 +261,7 @@ export const RULE_SCHEMAS = {
   kiro: kiroSchema,
   forges: forgesSchema,
   services: servicesSchema,
+  profile: profileRuleSchema,
 };
 
 export type RuleName = keyof typeof RULE_SCHEMAS;
@@ -250,3 +293,9 @@ export type TrackerHow = z.infer<typeof trackerHowSchema>;
 export type Tracker = z.infer<typeof trackerSchema>;
 export type ProjectServicesRule = z.infer<typeof projectServicesSchema>;
 export type ServicesRule = z.infer<typeof servicesSchema>;
+export type RuleLevel = z.infer<typeof ruleLevelSchema>;
+export type RuleLevels = z.infer<typeof ruleLevelsSchema>;
+export type ProfileRule = z.infer<typeof profileRuleSchema>;
+export type SteeringSource = z.infer<typeof steeringSourceSchema>;
+export type ProfileSetup = z.infer<typeof profileSetupSchema>;
+export type ProfileManifest = z.infer<typeof profileManifestSchema>;

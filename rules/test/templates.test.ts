@@ -5,7 +5,12 @@ import { DEFAULT_RULES_DIR } from '@quarterdeck/rules';
 import { PRIVATE_NAME_HASHES, hashName, namesIn } from './private-names.js';
 
 const ROOT = resolve(import.meta.dirname, '../..');
-const TEMPLATES = ['charter.md', 'reviewer.md'];
+const TEMPLATES = [
+  'charter.md',
+  'reviewer.md',
+  'profiles/default/standards.md',
+  'profiles/default/profile.json',
+];
 const NAME_SOURCES = ['LICENSE.md', 'TRADEMARK.md'];
 
 const MID_SENTENCE_CAPITALISED = /(?<=[a-z0-9,'"(/-] *)\b[A-Z][A-Za-z0-9]*\b/g;

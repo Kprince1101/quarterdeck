@@ -85,7 +85,7 @@ describe('docs', () => {
     ]).map((match) => match[1]);
 
     expect(new Set(commands)).toEqual(
-      new Set(['doctor', 'init', 'up', 'wipe']),
+      new Set(['doctor', 'init', 'up', 'wipe', 'profile']),
     );
     commands.forEach((command) => expect(USAGE).toContain(`\n  ${command} `));
   });

@@ -11,6 +11,7 @@ import {
   type ReviewKind,
 } from './constants.js';
 import { shellWarnings, type ValueSource } from './rule-layers.js';
+import { useProfilePanel, type ProfilePanelView } from './use-profile-panel.js';
 import { useRuleDrafts, type RuleEditor } from './use-rule-drafts.js';
 import { useRuleReview } from './use-rule-review.js';
 import { useRulesSource } from './use-rules-source.js';
@@ -49,6 +50,7 @@ export interface RulesWidgetView {
   showRepoLayer: boolean;
   repoError: string | null;
   repoNotMerged: boolean;
+  profile: ProfilePanelView;
   handleRuleChange: (event: ChangeEvent<HTMLSelectElement>) => void;
   handleProjectChange: (event: ChangeEvent<HTMLSelectElement>) => void;
   handleDraftChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
@@ -95,6 +97,14 @@ export const useRulesWidget = (): RulesWidgetView => {
     reload: source.reload,
     discard: drafts.discard,
   });
+  const profile = useProfilePanel({
+    view: source.view,
+    drafts,
+    onEdit: () => {
+      review.leave();
+      review.clearSaved();
+    },
+  });
   const rule = editor?.rule ?? null;
   const fileName = rule?.file ?? '';
 
@@ -127,6 +137,7 @@ export const useRulesWidget = (): RulesWidgetView => {
     showRepoLayer: source.project !== null,
     repoError: editor?.check.repoError ?? null,
     repoNotMerged: rule?.name === 'permissions',
+    profile,
     handleRuleChange: (event) => {
       drafts.selectRule(valueOf(event.currentTarget) as RuleName);
       review.leave();
