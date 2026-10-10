@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   readSignInPrompt,
   runLoginProcess,
+  trackSignInPrompt,
   type LoginCommand,
   type SignInProgress,
 } from '@quarterdeck/server';
@@ -61,6 +62,24 @@ describe('readSignInPrompt', () => {
     ['Logged in as example on github.com (2025-09-01)', {}],
   ])('reads %j', (line, prompt) => {
     expect(readSignInPrompt(line)).toEqual(prompt);
+  });
+});
+
+describe('trackSignInPrompt', () => {
+  it('ignores output that arrives after the sign-in finished', () => {
+    const progress: SignInProgress[] = [];
+    const opened: string[] = [];
+    const tracker = trackSignInPrompt({
+      onProgress: (step) => progress.push(step),
+      openUrl: (url) => {
+        opened.push(url);
+        return Promise.resolve();
+      },
+    });
+    tracker.report({ status: 'signed_in' });
+    tracker.line(GH_OUTPUT[1] ?? '');
+    expect(progress).toEqual([{ status: 'starting' }, { status: 'signed_in' }]);
+    expect(opened).toEqual([]);
   });
 });
 

@@ -38,7 +38,7 @@ const ENTRY_SCRIPT = [
   '  kind: published.kind,',
   '  agent: client.agent.agentInfo.name,',
   '  pid: spawned.pid,',
-  "  events: events.map((event) => event.type).filter((type) => type !== 'stderr'),",
+  "  events: events.map((event) => event.type).filter((type) => !type.startsWith('stderr')),",
   '}));',
 ].join('\n');
 const SCHEMA_SCRIPT = [

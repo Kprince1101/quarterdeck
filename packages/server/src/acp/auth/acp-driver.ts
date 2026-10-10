@@ -21,6 +21,8 @@ import type { SignInOutcome, SignInRunOptions } from './types.js';
 export const SIGN_IN_CLIENT_NAME = 'quarterdeck-signin';
 export const SIGN_IN_CLIENT_VERSION = '0.0.0';
 
+const STDERR_DRAIN_GUARD_MS = 5_000;
+
 export interface AcpSignInTarget {
   displayName: string;
   methodId: string;
@@ -83,9 +85,35 @@ const withDeadline = async <T>(
   }
 };
 
+interface StderrDrain {
+  done: Promise<void>;
+  closed: () => void;
+}
+
+const stderrDrain = (): StderrDrain => {
+  let closed = () => {};
+  const done = new Promise<void>((resolve) => {
+    closed = resolve;
+  });
+  return { done, closed };
+};
+
+const drained = async (drain: StderrDrain): Promise<void> => {
+  let timer: NodeJS.Timeout | undefined;
+  const stuck = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, STDERR_DRAIN_GUARD_MS);
+  });
+  try {
+    await Promise.race([drain.done, stuck]);
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 const connect = (
   target: AcpSignInTarget,
   tracker: PromptTracker,
+  drain: StderrDrain,
   options: SignInRunOptions,
 ): Promise<AcpClient> =>
   spawnAcpClient(withShellEnv(target.agent, options.env), {
@@ -94,6 +122,7 @@ const connect = (
     onPermissionRequest: () => Promise.resolve(CANCELLED_PERMISSION),
     onEvent: (event) => {
       if (event.type === 'stderr') tracker.line(event.line);
+      if (event.type === 'stderr_closed') drain.closed();
     },
     ...(target.initializeTimeoutMs !== undefined && {
       initializeTimeoutMs: target.initializeTimeoutMs,
@@ -128,9 +157,10 @@ export const signInOverAcp = async (
     tracker.report({ ...tracker.current(), status: 'failed', message: reason });
     return { ok: false, reason };
   };
+  const drain = stderrDrain();
   let client: AcpClient;
   try {
-    client = await connect(target, tracker, options);
+    client = await connect(target, tracker, drain, options);
   } catch (err) {
     return fail(`${target.displayName} did not start: ${getErrorMessage(err)}`);
   }
@@ -146,6 +176,8 @@ export const signInOverAcp = async (
       return await runLoginProcess(terminalLogin(target, method), options);
     }
     const outcome = await authenticate(client, method, target, options);
+    await client.close();
+    await drained(drain);
     tracker.report({ ...tracker.current(), status: 'signed_in' });
     return outcome;
   } catch (err) {

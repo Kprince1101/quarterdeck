@@ -27,6 +27,11 @@ export interface PromptTracker {
   current: () => SignInProgress;
 }
 
+const FINISHED: ReadonlySet<SignInProgress['status']> = new Set([
+  'signed_in',
+  'failed',
+]);
+
 const sameProgress = (a: SignInProgress, b: SignInProgress): boolean =>
   a.status === b.status &&
   a.url === b.url &&
@@ -44,6 +49,7 @@ export const trackSignInPrompt = (
     options.onProgress?.(state);
   };
   const line = (text: string) => {
+    if (FINISHED.has(state.status)) return;
     const prompt = readSignInPrompt(text);
     if (!prompt.url && !prompt.code) return;
     const url = state.url ?? prompt.url;

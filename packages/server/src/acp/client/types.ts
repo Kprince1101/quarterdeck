@@ -102,6 +102,10 @@ export interface StderrEvent {
   line: string;
 }
 
+export interface StderrClosedEvent {
+  type: 'stderr_closed';
+}
+
 export interface ExitEvent {
   type: 'exit';
   code: number | null;
@@ -144,6 +148,7 @@ export type AcpClientEvent =
   | ExtensionEvent
   | TurnEndEvent
   | StderrEvent
+  | StderrClosedEvent
   | ExitEvent
   | ProcessErrorEvent
   | ClosedEvent;
