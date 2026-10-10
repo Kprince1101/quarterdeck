@@ -30,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Copy the clone onto a clean Node 22 image, npm install and run npm run quarterdeck -- up
+      - name: Clone onto a clean Node 22 image, npm install, up, Setup and one voyage on the fake runtime
         run: >-
           docker run --rm
           -v "$GITHUB_WORKSPACE:/repo:ro"
