@@ -72,6 +72,13 @@ export const sourceEnv = (spec?: ChildEnvSpec): NodeJS.ProcessEnv => {
   return process.env;
 };
 
+export const wholeEnv = (
+  source: NodeJS.ProcessEnv = process.env,
+): ChildEnvSpec => ({
+  source,
+  pass: Object.keys(source),
+});
+
 export const withChildEnv = (
   spec: ChildEnvSpec | undefined,
   extra: ChildEnvSpec,

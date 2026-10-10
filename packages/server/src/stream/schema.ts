@@ -102,6 +102,13 @@ export const ticketRowSchema = z.object({
   updatedAt: timestampSchema,
 });
 
+export const signInStateSchema = z.object({
+  status: z.enum(['starting', 'waiting', 'signed_in', 'failed']),
+  url: z.string().optional(),
+  code: z.string().optional(),
+  message: z.string().optional(),
+});
+
 export const cardRowSchema = z.object({
   id: idSchema,
   projectId: idSchema,
@@ -112,6 +119,7 @@ export const cardRowSchema = z.object({
   options: z.json(),
   checked: z.string().nullable(),
   recommendation: z.string().nullable(),
+  signIn: signInStateSchema.nullable().optional(),
   status: z.enum(['open', 'answered', 'declined', 'expired']),
   answer: z.string().nullable(),
   createdAt: timestampSchema,
@@ -335,6 +343,7 @@ export type VoyageRow = z.infer<typeof voyageRowSchema>;
 export type AgentRow = z.infer<typeof agentRowSchema>;
 export type TicketRow = z.infer<typeof ticketRowSchema>;
 export type CardRow = z.infer<typeof cardRowSchema>;
+export type SignInState = z.infer<typeof signInStateSchema>;
 export type TurnRow = z.infer<typeof turnRowSchema>;
 export type NotebookRow = z.infer<typeof notebookRowSchema>;
 export type NotebookProposalRow = z.infer<typeof notebookProposalRowSchema>;

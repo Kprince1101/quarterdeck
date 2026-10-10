@@ -30,13 +30,20 @@ import {
 } from '@quarterdeck/server';
 import { checkClaudeAuth, withClaudeAuthEnv } from './doctor-claude-auth.js';
 import { CliError, type CliIo, type Command } from './io.js';
+import {
+  signInFailure,
+  signInWhereNeeded,
+  type SignInAttempts,
+} from './signin.js';
 
 export const DOCTOR_PROBE_TIMEOUT_MS = 15_000;
 
 export const DOCTOR_USAGE = `Usage: ${QUARTERDECK_COMMAND} doctor
 
-Checks that kiro-cli, claude, gemini and gh are installed and signed in, and
-prints the command to run for each one that is not. Checks glab the same way
+Checks that kiro-cli, claude, gemini and gh are installed and signed in. In a
+terminal, each one that is installed but signed out is signed in through its
+own browser sign-in, then checked again; the command to run is printed only
+for what is still missing, with why. Checks glab the same way
 for each GitLab host in use: every host mapped to gitlab in
 ~/.quarterdeck/rules.local.forges.json, and this folder's origin host when it
 is on GitLab. Warns when gh is signed in only through GH_TOKEN or
@@ -471,10 +478,18 @@ export const runDoctorChecks = async (
   return [...checks.filter((check) => check !== undefined), ...glab];
 };
 
-const render = (io: CliIo, checks: DoctorCheck[], misses: number) => {
+const render = (
+  io: CliIo,
+  checks: DoctorCheck[],
+  misses: number,
+  attempts: SignInAttempts,
+) => {
   for (const check of checks) {
     io.out(`${check.name}: ${check.state}`);
     for (const fix of check.fixes) io.out(`  ${fix.label}: ${fix.command}`);
+    const why =
+      check.fixes.length > 0 && signInFailure(attempts.get(check.name));
+    if (why) io.out(`  Why: ${why}`);
   }
   io.out('');
   if (misses === 0) {
@@ -551,14 +566,17 @@ export const runDoctor: Command = async (args, io) => {
     return 0;
   }
   if (positionals.length > 0) throw new CliError('doctor takes no arguments');
-  const checks = [
+  const allChecks = async () => [
     ...(await runDoctorChecks(await withClaudeAuthEnv(io))),
     ...(await checkClaudeAuth(io)),
     ...(await checkKiroBases(io)),
     ...(await checkShellRules(io)),
   ];
+  let checks = await allChecks();
+  const attempts = await signInWhereNeeded(checks, io);
+  if (attempts.size > 0) checks = await allChecks();
   const misses = checks.filter((check) => check.fixes.length > 0).length;
-  render(io, checks, misses);
+  render(io, checks, misses, attempts);
   if (misses > 0) return 1;
   return 0;
 };

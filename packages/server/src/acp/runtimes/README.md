@@ -102,7 +102,7 @@ Kiro's client-to-agent extension requests (`_kiro.dev/commands/execute`, `_kiro.
 
 ### Sign-in
 
-Sign-in stays with `kiro-cli login`. When Kiro is not signed in, `session/new` fails with auth required, which `isAuthRequiredError` recognises. Quarterdeck raises a sign-in card naming `kiro-cli login`, resumes once the person answers, and never calls `authenticate` on its own (see [../../signin/README.md](../../signin/README.md)).
+Quarterdeck signs Kiro in through Kiro itself: ACP `authenticate` with `kiro-login`, then `kiro-cli whoami` to confirm, then `kiro-cli login` if Kiro is still signed out (see [Signing in](#signing-in) below). When Kiro is not signed in, `session/new` fails with auth required, which `isAuthRequiredError` recognises, and the [sign-in gate](../../signin/README.md) runs that flow before it falls back to a card naming `kiro-cli login`.
 
 ### Live smoke
 
@@ -169,7 +169,7 @@ Quarterdeck does not merge an unknown administrator policy under its own, becaus
 
 ### Sign-in
 
-Sign-in stays with Gemini CLI. When it has no usable credentials, `session/new` fails with auth required, which `isAuthRequiredError` recognises. The methods it offers (Google sign-in, Gemini API key, Vertex AI) are in `client.agent.authMethods`. Quarterdeck raises a sign-in card telling the person to run `gemini` and pick one, resumes once they answer, and never calls `authenticate` on its own (see [../../signin/README.md](../../signin/README.md)).
+When Gemini CLI has no usable credentials, `session/new` fails with auth required, which `isAuthRequiredError` recognises. The methods it offers (Google sign-in, Gemini API key, Vertex AI, a gateway) are in `client.agent.authMethods`. Quarterdeck signs in with ACP `authenticate` and `oauth-personal`, Gemini's own Log in with Google, which opens the browser (see [Signing in](#signing-in) below). Only if that fails does the [sign-in gate](../../signin/README.md) fall back to a card telling the person to run `gemini` and pick a method.
 
 ### Live test
 
@@ -229,7 +229,7 @@ The project and local files sit in the agent's own worktree, so an agent could g
 
 ### Sign-in
 
-Sign-in stays with Claude Code. When it is not signed in, `session/new` fails with auth required, and so does `session/prompt` if the login lapses mid-session. `isAuthRequiredError` recognises both. Quarterdeck raises a sign-in card with the command claude-agent-acp advertises as a terminal auth method (`npx --yes @agentclientprotocol/claude-agent-acp@0.85.0 --cli auth login --claudeai`, or `claude auth login` when none is advertised), resumes the session once the person answers (re-sending the prompt in the same session), and never calls `authenticate` on its own (see [../../signin/README.md](../../signin/README.md)).
+When Claude Code is not signed in, `session/new` fails with auth required, and so does `session/prompt` if the login lapses mid-session. `isAuthRequiredError` recognises both. Quarterdeck runs claude-agent-acp's `claude-ai-login` terminal method, which is `npx --yes @agentclientprotocol/claude-agent-acp@0.85.0 --cli auth login --claudeai`: Claude Code's own claude.ai login, which opens the browser (see [Signing in](#signing-in) below). It then resumes the session, re-sending the prompt in the same session. Only if the sign-in fails does the [sign-in gate](../../signin/README.md) fall back to a card with that command.
 
 ### Auth modes
 
@@ -258,3 +258,52 @@ It needs a signed-in Claude Code and `claude` on `PATH`, and is skipped unless `
 ```sh
 QUARTERDECK_LIVE=1 npx vitest run packages/server/test/acp/claude-live.test.ts
 ```
+
+## Signing in
+
+Quarterdeck never prints a sign-in command for a person to copy while it can run the sign-in itself. The drivers are in [`../auth/`](../auth/) and exported from `@quarterdeck/server`. `quarterdeck doctor`, `up` and `init` use them in a terminal, and the [sign-in gate](../../signin/README.md) uses them for the dashboard. Each driver runs the runtime's own browser sign-in, so the runtime keeps its credentials where it always does. Quarterdeck never sees, stores or logs a token.
+
+### The pinned methods
+
+Every runtime advertises its sign-in methods in its `initialize` reply (`authMethods`). Quarterdeck picks one by id, pinned in `BROWSER_AUTH_METHODS` (`acp/auth/methods.ts`). Each id was read from the runtime's own source or published output, not guessed:
+
+| Runtime | Method id         | Type       | What it runs                                                                           | Where the id comes from                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------- | ----------------- | ---------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| claude  | `claude-ai-login` | `terminal` | The agent invocation plus `--cli auth login --claudeai`: Claude Code's claude.ai login | `@agentclientprotocol/claude-agent-acp@0.85.0`, `dist/acp-agent.js`, `initialize`: `id: "claude-ai-login"`, `type: "terminal"`, `args: ["--cli", "auth", "login", "--claudeai"]`. It is advertised only when the client sets `clientCapabilities.auth.terminal`, and not under SSH or `NO_BROWSER` (there it offers `claude-login`, the interactive `/login`). Its `authenticate` handles only the `gateway` methods and throws `Method not implemented.` for anything else.         |
+| kiro    | `kiro-login`      | agent      | ACP `authenticate`, then `kiro-cli login` if `kiro-cli whoami` still fails             | kiro-cli is closed source. Its `initialize` reply is quoted in [kirodotdev/Kiro#6603](https://github.com/kirodotdev/Kiro/issues/6603) (kiro-cli 1.28.1): `{"id": "kiro-login", "name": "Kiro Login", "description": "Run 'kiro-cli login' in terminal to authenticate."}`, with no `type`, so ACP treats it as an `authenticate` method. `kiro-cli login` opens the browser locally and uses a device code over SSH ([CLI commands](https://kiro.dev/docs/reference/cli-commands/)). |
+| gemini  | `oauth-personal`  | agent      | ACP `authenticate`: Gemini CLI's Log in with Google                                    | [google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli) at `9b6e0265`: `packages/cli/src/acp/acpRpcDispatcher.ts` advertises `id: AuthType.LOGIN_WITH_GOOGLE`, and `packages/core/src/core/contentGenerator.ts` sets `LOGIN_WITH_GOOGLE = 'oauth-personal'`. Its `authenticate` calls `config.refreshAuth(method)`, which runs the Google OAuth flow, then saves `security.auth.selectedType` in the user's settings.                                                |
+
+The ACP spec decides how a method runs. An agent method (no `type`) goes to `authenticate`. A `terminal` method must not: the client runs the agent's own invocation again with the method's `args` and `env` added, and a zero exit means signed in. That is why claude is signed in by running a process rather than by `authenticate`, though both are claude-agent-acp's own flow. Gemini CLI is signed in over ACP, not by spawning `gemini`, because its source shows it has an `authenticate` method that opens the browser.
+
+`connectAcpClient` advertises `clientCapabilities.auth.terminal: true`, because Quarterdeck can now run the agent invocation for a terminal method. claude-agent-acp therefore lists `claude-ai-login` and `console-login` to every client, and the [fallback card](../../signin/README.md#the-command) names the first.
+
+### The drivers
+
+`signInRuntime(runtime, options)` runs one runtime's sign-in, and `runtimeSignInDriver(runtime)` returns it as a `SignInDriver`:
+
+1. Start the runtime's ACP agent in the folder Quarterdeck owns for it, never a worktree: `npx --yes @agentclientprotocol/claude-agent-acp@0.85.0` in `~/.quarterdeck/runtimes/claude`, `kiro-cli acp` in `~/.quarterdeck/kiro`, `gemini --acp` in `~/.quarterdeck/gemini`. No session is opened, so no agent config or lockdown file is written, and every permission request is cancelled. The process gets the user's whole environment, as the sign-in command would in their shell.
+2. Find the pinned method in `authMethods`. If it is missing, fail with the ids the agent did offer.
+3. Run it: `client.authenticate(id)` for an agent method, `runLoginProcess` for a terminal method (after closing the agent).
+4. For claude only, before anything starts: in the `api_key` or `vertex` [auth mode](#auth-modes) the claude.ai login would not change what the agent uses, so the driver fails at once with what the mode needs, and the fallback card says so.
+5. For kiro only, check `kiro-cli whoami`. If Kiro is still signed out, run `kiro-cli login` and check again. ACP `authenticate` with `kiro-login` is not documented to open the browser, so the documented login command backs it up.
+
+`signInOverAcp(target, options)` is steps 1 to 3 for any `AcpSignInTarget`; tests point it at the fake agent.
+
+The forge CLIs have no ACP agent, so they are signed in by running their web login with `runLoginProcess`: `GH_WEB_SIGN_IN` (`gh auth login --web --git-protocol https`) and `glabWebSignIn(host)` (`glab auth login --hostname <host> --web --git-protocol https`). Success is checked by running the existing signed-in check again (doctor does that). `runSignIn(tool, options)` signs in any `SignInTool` (`{ kind: 'runtime', runtime }`, `{ kind: 'gh' }`, `{ kind: 'glab', host }`), and `signInToolName(tool)` names it for a card or a terminal line. Every driver, the forge commands and the progress types are exported from `acp/auth/index.ts`, and so from `@quarterdeck/server`; the CLI and the server use them from there. `withRuntimeSignIn(adapter)` wraps an adapter so every client it connects carries `client.signIn`, the driver for its runtime (a `launch.command` override signs in through that command). `PLANNER_ADAPTERS` wraps all three, which is how the sign-in gate finds a driver. Adapters a test passes in are not wrapped, so tests never start a real runtime.
+
+Every driver takes `SignInRunOptions`:
+
+| Option       | Meaning                                                                                                                                                                                                       |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tty`        | A spawned login gets the terminal (`stdio: 'inherit'`), so it can prompt and print its own code. Otherwise its output is piped and read for the URL and code.                                                 |
+| `onProgress` | Called with `{ status, url?, code?, message? }` as the sign-in moves through `starting`, `waiting` (a URL or device code was seen), `signed_in` or `failed` (with why).                                       |
+| `openUrl`    | Opens the URL a sign-in printed, once, in the default browser (`openInBrowser`: `open`, `xdg-open` or `rundll32 url.dll`, and only `http(s)` URLs). Skipped for runtimes that open it themselves (all three). |
+| `signal`     | Cancels the sign-in and stops its process.                                                                                                                                                                    |
+| `timeoutMs`  | Gives up after `SIGN_IN_TIMEOUT_MS` (10 minutes) by default.                                                                                                                                                  |
+| `env`        | The environment for the agent and the login; `process.env` by default.                                                                                                                                        |
+
+The URL and code come from the tool's own output (`readSignInPrompt`): the first `http(s)` URL on a line, and a code such as `ABCD-1234`, after the word `code` or alone. Only the URL, the code and Quarterdeck's own status text reach a card; raw output lines do not. A failure's reason ends with the last line the tool printed, so the card says why.
+
+### Tests
+
+`test/acp/auth.test.ts` drives the ACP path against the fake agent: `authenticate` with an agent method (the URL and code it prints on stderr reach `onProgress`), a terminal method run as the invocation plus its `args` (success and a non-zero exit), a pinned method the agent does not offer, an agent that does not start, and `withRuntimeSignIn`. `test/acp/login-process.test.ts` drives `runLoginProcess` with stub commands: gh's device-code output, a failure, a missing tool, a timeout and a cancel.

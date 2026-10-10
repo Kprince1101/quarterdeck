@@ -2,6 +2,7 @@
 import { homedir } from 'node:os';
 import { main } from './main.js';
 import { terminalPrompter } from './prompt.js';
+import { terminalSignIn } from './signin.js';
 
 const untilStopped = () =>
   new Promise<void>((resolve) => {
@@ -14,6 +15,11 @@ const prompter = () => {
   return terminalPrompter();
 };
 
+const signIn = () => {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) return {};
+  return { signIn: terminalSignIn };
+};
+
 process.exitCode = await main(process.argv.slice(2), {
   out: (line) => process.stdout.write(`${line}\n`),
   err: (line) => process.stderr.write(`${line}\n`),
@@ -22,4 +28,5 @@ process.exitCode = await main(process.argv.slice(2), {
   env: process.env,
   prompter: prompter(),
   untilStopped,
+  ...signIn(),
 });

@@ -14,6 +14,8 @@ Starts the server on `127.0.0.1` (port 4317 by default, `0` picks a free one), c
 
 `DATABASE_URL` switches the store to an external Postgres, as it does for the server.
 
+In a terminal, `up` first runs doctor's runtime checks for every runtime `~/.quarterdeck/rules.local.models.json` (or the default) gives a role, and signs in each one that is installed but signed out, as doctor does (see [Signing in](#signing-in)). Then it starts. A sign-in that fails is one line naming why, and `up` carries on: when an agent of that runtime starts, the dashboard shows the [sign-in card](../server/src/signin/README.md). Without a terminal (stdin or stdout not a TTY) `up` checks nothing and the dashboard card does it all.
+
 The port also serves the WebSocket stream at `/ws` (`?project=<slug>` picks the project when more than one is open), and each open project gets its bus host, the socket its agents' MCP relay connects to (see [bus](../server/src/bus/README.md)). A socket file left by a crash is removed at start.
 
 Each open project also gets its crew (see [crew](../server/src/crew/README.md)): the Planner answers the Planner widget, Start Voyage births a Driver that assigns approved tickets to builders, the reviewer and merge gate take each reported pull request to a merge under the project's rules, and a settled voyage ends itself. A project created while `up` runs gets its crew at once; a wiped one stops its crew first. A voyage still open from a run that stopped is ended at start with reason `restart` and its tickets reopened, since its agents went with that run. One project's crew failing is recorded as a `crew.failed` event on the dashboard and stops nothing else.
@@ -44,21 +46,34 @@ Interactively, init asks which; without a terminal it refuses to guess and asks 
 
 Every question and check runs before anything is created, so a failed or cancelled init (Ctrl+C at a prompt exits 130) leaves nothing behind.
 
+Once the projects exist, init in a terminal signs in what they need, as doctor does (see [Signing in](#signing-in)): the runtime it chose, and the forge of each added repository's `origin` (`glab` for a GitLab host, `gh` otherwise; nothing for a repository without an origin). Then it prints `Next:` as usual. A sign-in that fails is one line naming why; init still succeeds.
+
 ## doctor
 
 ```sh
 npm run quarterdeck -- doctor
 ```
 
-Checks the three agent runtimes and `gh`: installed, which version, and signed in. Each one gets a line; each miss is followed by the exact command to run. It exits 0 when everything is ready and 1 otherwise. It never signs in for you and never starts a download.
+Checks the three agent runtimes and `gh`: installed, which version, and signed in. In a terminal, every tool that is installed but signed out is then signed in through its own browser sign-in, one at a time, and doctor checks everything again (see [Signing in](#signing-in)). Each tool gets a line; each miss that is left is followed by the exact command to run, and by why the automatic sign-in did not fix it. It exits 0 when everything is ready and 1 otherwise. It never starts a download.
 
 ```
-kiro-cli: 1.20.1, not signed in
-  Sign in: kiro-cli login
+Signing in to Kiro with its own browser sign-in...
+  Signed in to Kiro.
+kiro-cli: 1.20.1, signed in (user@example.com)
 claude: 2.1.30, signed in (user@example.com)
 gemini: 0.9.0, signed in (Google account)
 gh: 2.81.0, signed in (example-org on github.com)
 claude auth: subscription (the default), uses the Claude Code sign-in
+
+All set.
+```
+
+When a sign-in fails, or doctor runs without a terminal, the command stays:
+
+```
+gh: 2.81.0, not signed in
+  Sign in: gh auth login
+  Why: automatic sign-in failed: gh auth login --web exited with 1: error: device flow was denied
 
 1 of 5 need attention. Run the commands above, then npm run quarterdeck -- doctor again.
 ```
@@ -99,6 +114,26 @@ Quarterdeck runs claude through npx, so a standalone `claude` is not needed and 
 ```sh
 QUARTERDECK_LIVE=1 npx vitest run packages/cli/test/doctor-live.test.ts
 ```
+
+### Signing in
+
+doctor, `up` and `init` share one sign-in path, `src/signin.ts`. A check is a sign-in miss when its only fix is `Sign in`; a tool that is not installed is left to its install command. Each miss is mapped to its tool by the check's name and signed in by that tool's own flow:
+
+| Tool             | How Quarterdeck signs it in                                                                                                                                                         |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `claude`         | claude-agent-acp's `claude-ai-login` method: `npx --yes @agentclientprotocol/claude-agent-acp@0.85.0 --cli auth login --claudeai`, which opens the browser for the claude.ai login. |
+| `kiro-cli`       | ACP `authenticate` with `kiro-login` on `kiro-cli acp`; if `kiro-cli whoami` still fails, `kiro-cli login`, which opens the browser (a device code over SSH).                       |
+| `gemini`         | ACP `authenticate` with `oauth-personal` on `gemini --acp`: Gemini CLI's Log in with Google.                                                                                        |
+| `gh`             | `gh auth login --web --git-protocol https`: GitHub's device flow, with the one-time code.                                                                                           |
+| `glab on <host>` | `glab auth login --hostname <host> --web --git-protocol https`: GitLab's OAuth web login.                                                                                           |
+
+The runtime drivers, and the pinned method ids with where each comes from, are in [Signing in](../server/src/acp/runtimes/README.md#signing-in). The forge commands are `GH_WEB_SIGN_IN` and `glabWebSignIn(host)`, run by `runLoginProcess` from `@quarterdeck/server`.
+
+In the terminal the login gets the terminal itself, so it prints its own code and prompts (gh asks for Enter before it opens the browser). An ACP sign-in prints what the runtime reports: `Code: …` and `Open: …`, with the URL opened in the default browser. When the tool exits, doctor runs every check again and reports the result: no command typed, nothing re-run.
+
+The terminal runner is `CliIo.signIn`. `bin.ts` sets it to `terminalSignIn` only when both stdin and stdout are terminals; without it, doctor, `up` and `init` sign nothing in and doctor prints the commands as before. Tests set `signIn` to a stub. Quarterdeck never sees or stores a token: each tool keeps its credentials where it always does.
+
+`test/signin.test.ts` covers the check-to-tool mapping, doctor running a stub runtime sign-in and finishing green, doctor signing a fake `gh` in through `gh auth login --web` (the code shown, the URL opened, then green), a failed `gh` login that leaves the command with why, and init signing its runtime in.
 
 ## replay
 

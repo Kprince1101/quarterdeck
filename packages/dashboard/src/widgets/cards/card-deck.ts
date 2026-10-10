@@ -2,6 +2,7 @@ import type {
   AgentRow,
   CardRow,
   ProjectRow,
+  SignInState,
   TicketRow,
 } from '@quarterdeck/server/stream-schema';
 import { relativeTime } from '../events/event-feed.js';
@@ -70,6 +71,47 @@ const STATUS_LABELS: Record<CardStatus, string> = {
   expired: 'Expired',
 };
 
+export type SignInStatus = SignInState['status'];
+
+const SIGN_IN_STATUS_LABELS: Record<SignInStatus, string> = {
+  starting: 'Starting the sign-in...',
+  waiting: 'Waiting for you to finish in the browser',
+  signed_in: 'Signed in',
+  failed: 'Automatic sign-in failed',
+};
+
+export interface SignInView {
+  status: SignInStatus;
+  statusLabel: string;
+  url: string | null;
+  code: string | null;
+  isRunning: boolean;
+}
+
+const webUrl = (url: string | undefined): string | null => {
+  if (url === undefined) return null;
+  try {
+    const { protocol } = new URL(url);
+    if (protocol === 'https:' || protocol === 'http:') return url;
+  } catch {
+    return null;
+  }
+  return null;
+};
+
+export const toSignInView = (
+  state: SignInState | null | undefined,
+): SignInView | null => {
+  if (!state) return null;
+  return {
+    status: state.status,
+    statusLabel: SIGN_IN_STATUS_LABELS[state.status],
+    url: webUrl(state.url),
+    code: state.code ?? null,
+    isRunning: state.status === 'starting' || state.status === 'waiting',
+  };
+};
+
 export interface CardView {
   id: string;
   projectSlug: string | null;
@@ -84,6 +126,7 @@ export interface CardView {
   recommendationLabel: string;
   isCommand: boolean;
   canFlagLookup: boolean;
+  signIn: SignInView | null;
   from: string | null;
   ticket: string | null;
   status: CardStatus;
@@ -154,12 +197,26 @@ const nameOf = <Row>(
   return name(row);
 };
 
+const cardSignIn = (card: CardRow): SignInView | null => {
+  if (card.kind !== SIGN_IN_CARD) return null;
+  return toSignInView(card.signIn);
+};
+
+const shownRecommendation = (
+  card: CardRow,
+  signIn: SignInView | null,
+): string | null => {
+  if (signIn?.isRunning) return null;
+  return card.recommendation;
+};
+
 export const toCardView = (card: CardRow, related: Related): CardView => {
   const kind = cardKind(card.kind);
   const options = cardOptions(card.options);
   const project = related.projects.get(card.projectId);
   const { text, lookup } = splitLookupNote(card.answer);
   const settled = settledAt(card);
+  const signIn = cardSignIn(card);
   return {
     id: card.id,
     projectSlug: project?.slug ?? null,
@@ -170,10 +227,11 @@ export const toCardView = (card: CardRow, related: Related): CardView => {
     options,
     checked: card.checked,
     checkedLabel: kind.checkedLabel,
-    recommendation: card.recommendation,
+    recommendation: shownRecommendation(card, signIn),
     recommendationLabel: kind.recommendationLabel,
     isCommand: kind.isCommand,
     canFlagLookup: card.kind === ASK_CARD && options.length === 0,
+    signIn,
     from: nameOf(related.agents, card.agentId, ({ name }) => name),
     ticket: nameOf(related.tickets, card.ticketId, ({ title }) => title),
     status: card.status,

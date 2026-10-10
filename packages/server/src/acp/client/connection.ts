@@ -109,6 +109,7 @@ export const connectAcpClient = async ({
           clientCapabilities: {
             fs: { readTextFile: false, writeTextFile: false },
             terminal: false,
+            auth: { terminal: true },
           },
           clientInfo: {
             name: options.clientName,

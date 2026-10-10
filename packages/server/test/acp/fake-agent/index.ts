@@ -1,4 +1,8 @@
-export { createFakeAgent, FAKE_AUTH_METHODS } from './agent.ts';
+export {
+  createFakeAgent,
+  FAKE_AUTH_METHODS,
+  FAKE_TERMINAL_AUTH_METHOD,
+} from './agent.ts';
 export {
   FAKE_AGENT_FLAGS,
   parseFakeAgentArgs,

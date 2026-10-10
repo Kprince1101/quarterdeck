@@ -5,6 +5,7 @@ import {
   type Agent,
   type SessionHost,
 } from '../agents/index.js';
+import { withRuntimeSignIn, type SignInDriver } from '../acp/auth/index.js';
 import type { AcpClient } from '../acp/client/index.js';
 import {
   createPermissionPolicy,
@@ -25,9 +26,9 @@ export type PlannerBus = Pick<BusHost, 'launch' | 'revoke'>;
 export type PlannerAdapters = Record<Runtime, Pick<RuntimeAdapter, 'connect'>>;
 
 export const PLANNER_ADAPTERS: PlannerAdapters = {
-  kiro: KIRO_ADAPTER,
-  claude: CLAUDE_ADAPTER,
-  gemini: GEMINI_ADAPTER,
+  kiro: withRuntimeSignIn(KIRO_ADAPTER),
+  claude: withRuntimeSignIn(CLAUDE_ADAPTER),
+  gemini: withRuntimeSignIn(GEMINI_ADAPTER),
 };
 
 export const PLANNER_CLIENT_NAME = 'quarterdeck';
@@ -65,11 +66,13 @@ export const plannerSignInGate = (
   agent: Pick<Agent, 'id' | 'runtime'>,
   signal: AbortSignal,
   authMethods: () => readonly AuthMethod[] | undefined,
+  signIn: () => SignInDriver | undefined = () => undefined,
 ): SignInGate => ({
   store,
   agentId: agent.id,
   runtime: agent.runtime,
   authMethods,
+  signIn,
   signal,
 });
 
@@ -134,6 +137,7 @@ export const connectAgentSession = (
     agent,
     site.signInSignal(),
     () => connected.client?.agent.authMethods,
+    () => connected.client?.signIn,
   );
   return withSignIn(gate, 'session/new', () =>
     connectOnce(site, agent, cwd, connected),

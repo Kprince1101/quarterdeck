@@ -19,6 +19,7 @@ import {
 import CARDS_WIDGET, {
   CardsWidget,
 } from '../../../src/widgets/cards/CardsWidget.js';
+import { CANCEL_SIGN_IN_LABEL } from '../../../src/widgets/cards/SignInParts.js';
 import {
   NO_PROJECT_ERROR,
   REPLY_LABEL,
@@ -262,6 +263,72 @@ describe('Cards widget', () => {
     await clickButton(signIn, 'Signed in');
     expect(sent.map(({ body }) => body)).toEqual([
       { project: 'deck', cardId: cardId(1), answer: 'Signed in' },
+    ]);
+    unmount();
+  });
+
+  it('shows a running sign-in with its code, link and status, and only a cancel', async () => {
+    const { container, sent, unmount } = mount();
+    const running = signInCard(1, {
+      question: 'Sign in to GitHub (gh)',
+      options: [],
+      signIn: {
+        status: 'waiting',
+        url: 'https://github.com/login/device',
+        code: 'ABCD-1234',
+      },
+    });
+    deliver(snapshot([running]));
+    const signIn = openCard(container, 1);
+    expect(textOf(signIn, '.qd-card-question')).toBe('Sign in to GitHub (gh)');
+    expect(textOf(signIn, '.qd-card-signin-status')).toBe(
+      'Waiting for you to finish in the browser',
+    );
+    expect(textOf(signIn, '.qd-card-signin-code code')).toBe('ABCD-1234');
+    const link = find(signIn, '.qd-card-signin-url a');
+    expect(link.getAttribute('href')).toBe('https://github.com/login/device');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(signIn.querySelector('[data-fact="recommendation"]')).toBeNull();
+    expect(signIn.querySelector('textarea')).toBeNull();
+
+    await clickButton(signIn, CANCEL_SIGN_IN_LABEL);
+    expect(sent.map(({ url }) => url)).toEqual(['/api/intents/card.decline']);
+    unmount();
+  });
+
+  it('turns a failed sign-in into the command, why, and Retry', async () => {
+    const { container, sent, unmount } = mount();
+    deliver(
+      snapshot([
+        signInCard(1, {
+          options: ['Retry', 'Signed in'],
+          checked: 'Automatic sign-in failed: gh exited with 1',
+          signIn: { status: 'waiting', url: 'javascript:alert(1)' },
+        }),
+      ]),
+    );
+    expect(openCard(container, 1).querySelector('.qd-card-signin-url')).toBe(
+      null,
+    );
+    const failed = signInCard(1, {
+      options: ['Retry', 'Signed in'],
+      checked: 'Automatic sign-in failed: gh exited with 1',
+      signIn: { status: 'failed', message: 'gh exited with 1' },
+    });
+    deliver(changed(failed));
+    const signIn = openCard(container, 1);
+    expect(textOf(signIn, '.qd-card-signin-status')).toBe(
+      'Automatic sign-in failed',
+    );
+    expect(fact(signIn, 'checked')).toEqual([
+      'Why',
+      'Automatic sign-in failed: gh exited with 1',
+    ]);
+    expect(textOf(signIn, '.qd-card-command')).toBe('claude /login');
+
+    await clickButton(signIn, 'Retry');
+    expect(sent.map(({ body }) => body)).toEqual([
+      { project: 'deck', cardId: cardId(1), answer: 'Retry' },
     ]);
     unmount();
   });

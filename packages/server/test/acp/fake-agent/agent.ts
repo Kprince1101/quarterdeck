@@ -19,6 +19,9 @@ import {
   FAKE_HISTORY_TEXT,
   FAKE_INITIAL_MODE_ID,
   FAKE_MODES,
+  FAKE_SIGN_IN_PROMPT,
+  FAKE_TERMINAL_AUTH_METHOD_ID,
+  FAKE_TERMINAL_LOGIN_ARG,
 } from './constants.ts';
 import { runCrewTurn } from './crew.ts';
 import { runScenario } from './scenarios.ts';
@@ -46,6 +49,21 @@ export const FAKE_AUTH_METHODS: AuthMethod[] = [
     description: 'Signs the fake agent in without leaving the process.',
   },
 ];
+
+export const FAKE_TERMINAL_AUTH_METHOD: AuthMethod = {
+  type: 'terminal',
+  id: FAKE_TERMINAL_AUTH_METHOD_ID,
+  name: 'Fake terminal login',
+  args: [FAKE_TERMINAL_LOGIN_ARG],
+};
+
+const advertisedAuthMethods = (
+  options: FakeAgentOptions,
+  clientRunsTerminal: boolean,
+): AuthMethod[] => {
+  if (!options.terminalAuth || !clientRunsTerminal) return FAKE_AUTH_METHODS;
+  return [FAKE_TERMINAL_AUTH_METHOD, ...FAKE_AUTH_METHODS];
+};
 
 const promptText = (prompt: ContentBlock[]): string =>
   prompt
@@ -121,10 +139,13 @@ export const createFakeAgent = (
   };
 
   return agent({ name: FAKE_AGENT_NAME })
-    .onRequest('initialize', () => ({
+    .onRequest('initialize', ({ params }) => ({
       protocolVersion: PROTOCOL_VERSION,
       agentCapabilities: fakeCapabilities(options),
-      authMethods: FAKE_AUTH_METHODS,
+      authMethods: advertisedAuthMethods(
+        options,
+        params.clientCapabilities?.auth?.terminal === true,
+      ),
       agentInfo: { name: FAKE_AGENT_NAME, version: FAKE_AGENT_VERSION },
     }))
     .onRequest('authenticate', ({ params }) => {
@@ -134,6 +155,7 @@ export const createFakeAgent = (
           'unknown auth method',
         );
       }
+      if (options.authPrompt) process.stderr.write(`${FAKE_SIGN_IN_PROMPT}\n`);
       state.authenticated = true;
       return {};
     })

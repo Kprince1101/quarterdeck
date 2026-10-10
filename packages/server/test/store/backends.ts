@@ -38,6 +38,7 @@ export const SHIPPED_MIGRATIONS = [
   '0024_voyages',
   '0025_project_services',
   '0026_global_voyage',
+  '0027_card_sign_in',
 ];
 
 export const POSTGRES_URL = process.env['QUARTERDECK_TEST_DATABASE_URL'] ?? '';

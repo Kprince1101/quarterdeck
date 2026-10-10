@@ -90,6 +90,8 @@ describe('fake agent arguments', () => {
       plannerNamesUnknown: true,
       onGitlab: true,
       leaksApiKey: true,
+      terminalAuth: true,
+      authPrompt: true,
     };
     expect(parseFakeAgentArgs(toFakeAgentArgs(options))).toEqual(options);
     expect(toFakeAgentArgs(options)).toEqual(Object.values(FAKE_AGENT_FLAGS));

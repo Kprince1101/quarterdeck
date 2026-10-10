@@ -84,7 +84,7 @@ export const askCard = (n: number, fields: Partial<CardRow> = {}): CardRow =>
     ...fields,
   });
 
-export const signInCard = (n: number): CardRow =>
+export const signInCard = (n: number, fields: Partial<CardRow> = {}): CardRow =>
   card(n, {
     agentId: MINK,
     kind: 'auth.sign_in',
@@ -94,6 +94,7 @@ export const signInCard = (n: number): CardRow =>
     checked:
       'session/new failed with auth required: Authentication required. Quarterdeck never signs in for you.',
     recommendation: 'claude /login',
+    ...fields,
   });
 
 export const mergeCard = (n: number): CardRow =>

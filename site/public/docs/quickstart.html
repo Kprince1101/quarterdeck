@@ -33,10 +33,9 @@
       <p>
         You need Node.js 22 or later and a git repository whose remote is on
         GitHub or on GitLab (gitlab.com or your own instance). Quarterdeck never
-        signs in for you and never asks for an API key: each runtime signs in
-        through its own CLI, and
-        <code>npm run quarterdeck -- doctor</code> tells you exactly which
-        command to run.
+        asks for an API key: each runtime signs in through its own CLI, and
+        <code>npm run quarterdeck -- doctor</code> starts that sign-in for you
+        in the browser. You approve it there; you never copy a command.
       </p>
 
       <h2 id="running-it">Running it</h2>
@@ -64,12 +63,15 @@ npm run quarterdeck -- up</code></pre>
       <p>
         Doctor checks <code>kiro-cli</code>, <code>claude</code>,
         <code>gemini</code> and <code>gh</code>: installed, which version, and
-        signed in. Every miss is followed by the command that fixes it. You only
-        need the runtime you pick and <code>gh</code>; the other runtimes can
-        stay on the list. When a GitLab host is in use it checks
-        <code>glab</code> too (see <a href="#gitlab">GitLab</a>). Doctor exits 0
-        when everything is ready and 1 otherwise. It never signs in for you and
-        never starts a download.
+        signed in. In a terminal, every tool that is installed but signed out is
+        signed in on the spot: doctor starts the tool's own browser sign-in,
+        shows any code to type, opens the page, waits for you to approve it and
+        checks again. Anything still missing is followed by the command that
+        fixes it, and why. You only need the runtime you pick and
+        <code>gh</code>; the other runtimes can stay on the list. When a GitLab
+        host is in use it checks <code>glab</code> too (see
+        <a href="#gitlab">GitLab</a>). Doctor exits 0 when everything is ready
+        and 1 otherwise. It never starts a download.
       </p>
 
       <h2 id="kiro">2a. Kiro</h2>
@@ -78,8 +80,9 @@ npm run quarterdeck -- up</code></pre>
   Install: curl -fsSL https://cli.kiro.dev/install | bash
   Sign in: kiro-cli login</code></pre>
       <p>
-        Run the two commands. Once <code>kiro-cli whoami</code> succeeds, doctor
-        shows <code>kiro-cli: &lt;version&gt;, signed in</code>.
+        Run the install command and doctor again. It signs Kiro in through
+        Kiro's own browser sign-in, then shows
+        <code>kiro-cli: &lt;version&gt;, signed in</code>.
       </p>
 
       <h2 id="claude">2b. Claude Code</h2>
@@ -93,9 +96,10 @@ npm run quarterdeck -- up</code></pre>
   Download: npx --yes @agentclientprotocol/claude-agent-acp@0.85.0 --cli --version
   Sign in: npx --yes @agentclientprotocol/claude-agent-acp@0.85.0 --cli auth login --claudeai</code></pre>
       <p>
-        The download is about 240 MB, which is why doctor leaves it to you. The
-        sign-in uses your claude.ai account. An API key or a non-Anthropic
-        backend that Claude Code is already set up for counts as signed in too.
+        The download is about 240 MB, which is why doctor leaves it to you. Run
+        it, then doctor again: it opens the claude.ai sign-in in your browser.
+        An API key or a non-Anthropic backend that Claude Code is already set up
+        for counts as signed in too.
       </p>
       <p>
         That is the <code>subscription</code> auth mode, the default. A machine
@@ -115,8 +119,10 @@ npm run quarterdeck -- up</code></pre>
   Install: npm install -g @google/gemini-cli
   Sign in: gemini, then choose Login with Google (or set GEMINI_API_KEY)</code></pre>
       <p>
-        Doctor counts Gemini as signed in when <code>GEMINI_API_KEY</code> is
-        set, when <code>GOOGLE_GENAI_USE_VERTEXAI=true</code> is set with
+        Once it is installed, doctor signs you in with Gemini CLI's own Log in
+        with Google. Doctor counts Gemini as signed in when
+        <code>GEMINI_API_KEY</code> is set, when
+        <code>GOOGLE_GENAI_USE_VERTEXAI=true</code> is set with
         <code>GOOGLE_API_KEY</code> or <code>GOOGLE_CLOUD_PROJECT</code>, or
         when <code>~/.gemini/oauth_creds.json</code> exists after a Google
         login.
@@ -127,13 +133,18 @@ npm run quarterdeck -- up</code></pre>
         Builders open pull requests and the merge gate merges them with
         <code>gh</code>. Install it (<code>brew install gh</code> on macOS,
         <code>winget install --id GitHub.cli</code> on Windows, or your system's
-        package), then sign in:
+        package), then run doctor. It starts GitHub's web sign-in for you (<code
+          >gh auth login --web</code
+        >): gh shows a one-time code, you press Enter, approve it in the
+        browser, and doctor checks again. If that fails, doctor prints the
+        command and why:
       </p>
       <pre><code>gh: 2.81.0, not signed in
-  Sign in: gh auth login</code></pre>
+  Sign in: gh auth login
+  Why: automatic sign-in failed: …</code></pre>
       <p>
-        Run <code>npm run quarterdeck -- doctor</code> again until your runtime
-        and <code>gh</code> say <code>signed in</code>.
+        Doctor finishes with <code>All set.</code> once your runtime and
+        <code>gh</code> say <code>signed in</code>.
       </p>
 
       <h3 id="gitlab">GitLab</h3>

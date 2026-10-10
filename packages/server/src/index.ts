@@ -1,3 +1,4 @@
+export * from './acp/auth/index.js';
 export * from './acp/client/index.js';
 export * from './acp/env.js';
 export * from './acp/launch/index.js';
