@@ -10,7 +10,7 @@ Quarterdeck's Agent Client Protocol client. It drives one agent process over std
 The returned client offers:
 
 - `newSession({ cwd, mcpServers, meta? })`. `meta` is sent as the request's `_meta`, the ACP extension point that runtime adapters use for agent-specific options. When the agent needs sign-in, this rejects with an error that `isAuthRequiredError(err)` recognises. Its auth methods are in `client.agent.authMethods`.
-- `authenticate(methodId)`, which is only called once a person has chosen to sign in. The client never signs in on its own.
+- `authenticate(methodId)`. The client never calls it on its own; the [sign-in drivers](../runtimes/README.md#signing-in) call it, on a connection of their own, to start a runtime's browser sign-in.
 - `prompt(sessionId, input)`
 - `cancel(sessionId)`
 - `resumeSession({ sessionId, cwd, mcpServers, meta? })`, which uses `session/resume` when the agent supports it and `session/load` otherwise
@@ -21,6 +21,8 @@ The returned client offers:
 ## Client capabilities: `fs: false`, `terminal: false`
 
 `initialize` advertises `fs: { readTextFile: false, writeTextFile: false }` and `terminal: false` on purpose. Quarterdeck does not serve file reads, file writes or terminals to agents. Each runtime (kiro, claude, gemini) reads files, writes files and runs commands with its own built-in tools, inside the session `cwd`.
+
+It does advertise `auth: { terminal: true }`: Quarterdeck can run a `terminal` auth method, the agent's own invocation again with the method's `args`, to sign the runtime in (see [Signing in](../runtimes/README.md#signing-in)). That is a separate process, not a terminal served to the agent.
 
 What Quarterdeck does control is permission: every `session/request_permission` goes to `onPermissionRequest`, which answers from the project's rules through `createPermissionPolicy` (see `../permissions/README.md`). Runtime adapters should expect agents to use their own tools, and should not count on client-side `fs/*` or `terminal/*` callbacks.
 

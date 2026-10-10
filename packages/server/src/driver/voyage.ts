@@ -50,7 +50,7 @@ const ENDED: ReadonlySet<AgentStatus> = new Set(['ended', 'killed', 'retired']);
 
 export type DriverClient = Pick<
   AcpClient,
-  'agent' | 'newSession' | 'prompt' | 'subscribe'
+  'agent' | 'newSession' | 'prompt' | 'subscribe' | 'signIn'
 >;
 
 export interface DriverSeat {
@@ -236,6 +236,7 @@ const launchVoyage = async (
     agentId: driver.id,
     runtime: driver.runtime,
     authMethods: () => client.agent.authMethods,
+    signIn: () => client.signIn,
   };
   const { sessionId } = await withSignIn(gate, 'session/new', async () =>
     client.newSession({

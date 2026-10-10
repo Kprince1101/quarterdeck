@@ -5,6 +5,7 @@ export {
   type SignInRuntime,
 } from './commands.js';
 export {
+  RETRY_SIGN_IN,
   SIGNED_IN,
   SIGN_IN_CARD,
   SIGN_IN_EVENTS,

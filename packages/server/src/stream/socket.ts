@@ -108,6 +108,7 @@ const isNewer = <T>(pending: T | undefined, sent: T | null): pending is T =>
   pending !== undefined && JSON.stringify(pending) !== JSON.stringify(sent);
 
 const reject = (socket: Duplex, status: number, reason: string): void => {
+  socket.on('error', () => undefined);
   socket.end(
     `HTTP/1.1 ${status} ${STATUS_CODES[status]}\r\n` +
       'Connection: close\r\nContent-Type: text/plain\r\n' +

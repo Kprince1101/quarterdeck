@@ -1,3 +1,5 @@
+import type { SignInRunner } from './signin.js';
+
 export interface Prompter {
   ask: (question: string) => Promise<string>;
 }
@@ -16,6 +18,7 @@ export interface CliIo {
   prompter: Prompter | undefined;
   untilStopped: () => Promise<void>;
   run?: CommandRunner | undefined;
+  signIn?: SignInRunner;
 }
 
 export type Command = (args: string[], io: CliIo) => Promise<number>;

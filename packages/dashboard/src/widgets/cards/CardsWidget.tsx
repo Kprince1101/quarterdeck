@@ -3,6 +3,7 @@ import { defineWidget } from '../registry.js';
 import { LOOKUP_LABEL, type CardView } from './card-deck.js';
 import { CardFacts, CardHead, CardTicket } from './CardParts.js';
 import { CardReply } from './CardReply.js';
+import { SignInCancel, SignInProgress } from './SignInParts.js';
 import './cards.css';
 import { useCardsWidget } from './use-cards-widget.js';
 
@@ -10,13 +11,19 @@ interface CardProps {
   card: CardView;
 }
 
+const OpenCardReply = ({ card }: CardProps) => {
+  if (card.signIn?.isRunning) return <SignInCancel card={card} />;
+  return <CardReply card={card} />;
+};
+
 const OpenCard = ({ card }: CardProps) => (
   <article className="qd-card" data-card-id={card.id} data-status="open">
     <CardHead card={card} at={card.askedAt} age={card.askedAge} />
     <CardTicket ticket={card.ticket} />
     <p className="qd-card-question">{card.question}</p>
+    {card.signIn !== null && <SignInProgress signIn={card.signIn} />}
     <CardFacts card={card} />
-    <CardReply card={card} />
+    <OpenCardReply card={card} />
   </article>
 );
 

@@ -1,6 +1,20 @@
 import { RequestError } from '@agentclientprotocol/sdk';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
+import type {
+  SignInDriver,
+  SignInOutcome,
+  SignInProgress,
+} from '../../src/acp/auth/index.js';
+import {
+  RETRY_SIGN_IN,
   SIGNED_IN,
   SIGN_IN_CARD,
   SIGN_IN_EVENTS,
@@ -265,6 +279,223 @@ describe('withSignIn', () => {
     },
     TIMEOUT,
   );
+
+  describe('with a sign-in driver', () => {
+    const signInState = async (cardId: string) => {
+      const { rows } = await store.db.query<{
+        sign_in: SignInProgress | null;
+        options: string[];
+        status: string;
+        answer: string | null;
+      }>('select sign_in, options, status, answer from cards where id = $1', [
+        cardId,
+      ]);
+      return rows[0];
+    };
+
+    const succeeding = (): SignInDriver =>
+      vi.fn<SignInDriver>(async (options) => {
+        options?.onProgress?.({ status: 'starting' });
+        options?.onProgress?.({
+          status: 'waiting',
+          url: 'https://github.com/login/device',
+          code: 'ABCD-1234',
+        });
+        return { ok: true, via: 'gh auth login --web' };
+      });
+
+    it(
+      'runs the runtime sign-in itself, shows its code on the card and resumes',
+      async () => {
+        const driver = succeeding();
+        const opened: string[] = [];
+        const gate = await gateFor('claude', {
+          authMethods: () => [CLAUDE_LOGIN],
+          signIn: () => driver,
+          openUrl: (url) => {
+            opened.push(url);
+            return Promise.resolve();
+          },
+        });
+        let calls = 0;
+
+        const value = await withSignIn(gate, 'session/new', async () => {
+          calls += 1;
+          if (calls === 1) return signedOut();
+          return 'opened';
+        });
+
+        expect(value).toBe('opened');
+        expect(driver).toHaveBeenCalledTimes(1);
+        expect(driver).toHaveBeenCalledWith(
+          expect.objectContaining({ tty: false }),
+        );
+        const [card] = await cards();
+        expect(card).toMatchObject({
+          kind: SIGN_IN_CARD,
+          question: 'Sign in to Claude Code',
+          recommendation: CLAUDE_TERMINAL_COMMAND,
+        });
+        expect(await signInState(card?.id ?? '')).toEqual({
+          sign_in: {
+            status: 'signed_in',
+            url: 'https://github.com/login/device',
+            code: 'ABCD-1234',
+          },
+          options: [],
+          status: 'answered',
+          answer: SIGNED_IN,
+        });
+        expect(
+          (await eventsOf(SIGN_IN_EVENTS.resumed))[0]?.payload,
+        ).toMatchObject({ via: 'gh auth login --web' });
+      },
+      TIMEOUT,
+    );
+
+    it(
+      'falls back to the command card with why, and Retry runs the sign-in again',
+      async () => {
+        let attempts = 0;
+        const driver = vi.fn<SignInDriver>(async () => {
+          attempts += 1;
+          if (attempts === 1) {
+            return { ok: false, reason: 'gh exited with 1: no browser' };
+          }
+          return { ok: true, via: 'gh auth login --web' };
+        });
+        const gate = await gateFor('kiro', { signIn: () => driver });
+        let calls = 0;
+
+        const running = withSignIn(gate, 'session/prompt', async () => {
+          calls += 1;
+          if (calls <= 2) return signedOut();
+          return 'resumed';
+        });
+        await expect
+          .poll(async () => (await cards())[0]?.checked)
+          .toBe('Automatic sign-in failed: gh exited with 1: no browser');
+        const card = await nextOpenCard();
+        expect(card.question).toContain('Quarterdeck could not sign you in');
+        expect(card.question).toContain('`kiro-cli login`');
+        expect(card.recommendation).toBe('kiro-cli login');
+        expect(await signInState(card.id)).toMatchObject({
+          sign_in: {
+            status: 'failed',
+            message: 'gh exited with 1: no browser',
+          },
+          options: [RETRY_SIGN_IN, SIGNED_IN],
+          status: 'open',
+        });
+
+        await store.db.query(
+          `update cards set status = 'answered', answer = $2 where id = $1`,
+          [card.id, RETRY_SIGN_IN],
+        );
+        expect(await running).toBe('resumed');
+        expect(driver).toHaveBeenCalledTimes(2);
+        expect((await cards()).map(({ status }) => status)).toEqual([
+          'answered',
+          'answered',
+        ]);
+      },
+      TIMEOUT,
+    );
+
+    it(
+      'does not loop when the runtime still needs sign-in after signing in',
+      async () => {
+        const driver = succeeding();
+        const gate = await gateFor('gemini', { signIn: () => driver });
+        let calls = 0;
+
+        const running = withSignIn(gate, 'session/new', async () => {
+          calls += 1;
+          if (calls <= 2) return signedOut();
+          return 'opened';
+        });
+        await expect
+          .poll(async () => (await cards()).find((c) => c.status === 'open'))
+          .toMatchObject({
+            checked:
+              'Automatic sign-in failed: Gemini CLI signed in but still answered auth required',
+          });
+        expect(driver).toHaveBeenCalledTimes(1);
+        const card = await nextOpenCard();
+        await answer(card.id);
+        expect(await running).toBe('opened');
+      },
+      TIMEOUT,
+    );
+
+    it(
+      'stops the sign-in and the request when the card is declined',
+      async () => {
+        let stopped: string | undefined;
+        const driver = vi.fn<SignInDriver>(
+          (options) =>
+            new Promise((resolve) => {
+              options?.signal?.addEventListener('abort', () => {
+                stopped = 'aborted';
+                resolve({ ok: false, reason: 'cancelled' });
+              });
+            }),
+        );
+        const gate = await gateFor('claude', { signIn: () => driver });
+
+        const running = withSignIn(gate, 'session/new', async () =>
+          signedOut(),
+        ).catch((err: unknown) => err);
+        const card = await nextOpenCard();
+        await store.db.query(
+          `update cards set status = 'declined' where id = $1`,
+          [card.id],
+        );
+
+        const failure = await running;
+        expect(failure).toBeInstanceOf(SignInRequiredError);
+        expect(failure).toMatchObject({ status: 'declined' });
+        expect(stopped).toBe('aborted');
+      },
+      TIMEOUT,
+    );
+
+    it(
+      'has a second agent wait on the card a running sign-in owns',
+      async () => {
+        let finish: (outcome: SignInOutcome) => void = () => {};
+        const driver = vi.fn<SignInDriver>(
+          () =>
+            new Promise((resolve) => {
+              finish = resolve;
+            }),
+        );
+        const first = await gateFor('kiro', { signIn: () => driver });
+        const second = await gateFor('kiro', { signIn: () => driver });
+        const seen = new Map<string, number>();
+        const run = (gate: SignInGate) =>
+          withSignIn(gate, 'session/new', async () => {
+            const count = (seen.get(gate.agentId) ?? 0) + 1;
+            seen.set(gate.agentId, count);
+            if (count === 1) return signedOut();
+            return gate.agentId;
+          });
+
+        const waiting = run(first);
+        await nextOpenCard();
+        const joining = run(second);
+        await expect
+          .poll(async () => (await eventsOf(SIGN_IN_EVENTS.required)).length)
+          .toBe(2);
+        finish({ ok: true, via: 'kiro-cli login' });
+
+        expect(await waiting).toBe(first.agentId);
+        expect(await joining).toBe(second.agentId);
+        expect(driver).toHaveBeenCalledTimes(1);
+      },
+      TIMEOUT,
+    );
+  });
 
   it(
     'stops waiting when the signal aborts and leaves the card open',

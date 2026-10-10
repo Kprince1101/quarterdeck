@@ -217,6 +217,7 @@ const sendPrompt = async (
     conversation.agent,
     ctx.signInSignal(),
     () => session.client.agent.authMethods,
+    () => session.client.signIn,
   );
   const response = await withSignIn(gate, 'session/prompt', () => {
     if (ending.aborted) return Promise.resolve(CANCELLED_BEFORE_SENDING);

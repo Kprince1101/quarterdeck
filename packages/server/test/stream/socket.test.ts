@@ -472,10 +472,12 @@ describe('websocket stream upgrades', () => {
 
   const socket = () => {
     const written: string[] = [];
+    const listening: string[] = [];
     const duplex = {
       end: (chunk: string) => written.push(chunk),
+      on: (event: string) => listening.push(event),
     } as unknown as Duplex;
-    return { duplex, written };
+    return { duplex, written, listening };
   };
 
   it('leaves other paths to the host server', async () => {
@@ -495,7 +497,7 @@ describe('websocket stream upgrades', () => {
 
   it('refuses connections from other machines', async () => {
     const stream = createStream({ store, token: createApiToken() });
-    const { duplex, written } = socket();
+    const { duplex, written, listening } = socket();
 
     expect(
       stream.handleUpgrade(
@@ -505,6 +507,7 @@ describe('websocket stream upgrades', () => {
       ),
     ).toBe(true);
     expect(written[0]).toMatch(/^HTTP\/1\.1 403 Forbidden/);
+    expect(listening).toContain('error');
     await stream.close();
   });
 

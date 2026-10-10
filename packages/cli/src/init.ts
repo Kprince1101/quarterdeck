@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import {
   LOCAL_RULES_DIR,
+  forgeOfHost,
   loadRule,
   modelsSchema,
   ruleLayerPaths,
@@ -18,25 +19,31 @@ import {
   detectWorkspace,
   dispatchIntent,
   ensurePrivateDir,
+  parseRemoteUrl,
   quarterdeckHome,
+  runCommand,
   slugFromFolder,
   type ProjectStores,
+  type SignInTool,
   type Workspace,
   type WorkspaceDetection,
   type WorkspaceProject,
   type WorkspaceUpdate,
 } from '@quarterdeck/server';
 import type { IntentPayload } from '@quarterdeck/server/intents';
+import { runDoctorChecks } from './doctor.js';
 import { parseIntent } from './intent.js';
 import { CliError, type CliIo, type Command } from './io.js';
 import { jsonText, readJsonLayer } from './json-layer.js';
 import { setUpProfile } from './profile-setup.js';
 import { choose, confirm } from './prompt.js';
+import { ensureSignedIn } from './signin.js';
 
 export { slugFromFolder };
 
 const RUNTIMES = runtimeSchema.options;
 const ROLES = Object.keys(modelsSchema.shape) as Array<keyof Models>;
+const GIT_TIMEOUT_MS = 10_000;
 
 export const INIT_USAGE = `Usage: ${QUARTERDECK_COMMAND} init [path] [options]
 
@@ -370,6 +377,54 @@ const createdLine = (repo: WorkspaceProject, workspace: Workspace): string => {
   return `Created project ${repo.slug} (${repo.name}) for ${repo.repoPath}`;
 };
 
+const originForge = async (
+  io: CliIo,
+  repoPath: string,
+): Promise<SignInTool | undefined> => {
+  const origin = await runCommand(
+    { command: 'git', args: ['-C', repoPath, 'remote', 'get-url', 'origin'] },
+    { timeoutMs: GIT_TIMEOUT_MS },
+  );
+  if (origin.status !== 'exited' || origin.code !== 0) return undefined;
+  try {
+    const host = parseRemoteUrl(origin.stdout).hostname;
+    const { forges } = await loadRule('forges', { homeDir: io.homeDir });
+    if (forgeOfHost(host, forges) === 'gitlab') return { kind: 'glab', host };
+    return { kind: 'gh' };
+  } catch {
+    return undefined;
+  }
+};
+
+const sameTool = (a: SignInTool, b: SignInTool): boolean =>
+  JSON.stringify(a) === JSON.stringify(b);
+
+const checkFolder = (
+  repos: readonly WorkspaceProject[],
+  forges: readonly (SignInTool | undefined)[],
+): string | undefined => {
+  const gitlab = forges.findIndex((forge) => forge?.kind === 'glab');
+  return repos[Math.max(gitlab, 0)]?.repoPath;
+};
+
+const signInForProjects = async (
+  io: CliIo,
+  repos: readonly WorkspaceProject[],
+  runtime: Runtime,
+): Promise<void> => {
+  if (io.signIn === undefined) return;
+  const forges = await Promise.all(
+    repos.map((repo) => originForge(io, repo.repoPath)),
+  );
+  const needed: SignInTool[] = [{ kind: 'runtime', runtime }];
+  for (const forge of forges) if (forge) needed.push(forge);
+  const cwd = checkFolder(repos, forges) ?? io.cwd;
+  await ensureSignedIn(io, {
+    checks: () => runDoctorChecks({ ...io, cwd }),
+    wanted: (tool) => needed.some((want) => sameTool(want, tool)),
+  });
+};
+
 const report = (
   io: CliIo,
   repos: readonly WorkspaceProject[],
@@ -451,6 +506,7 @@ export const runInit: Command = async (args, io) => {
     mode: detection.mode,
     projects: repos,
   });
+  await signInForProjects(io, repos, choice.runtime);
   report(io, repos, choice, data, update);
   if (!values['no-setup']) {
     for (const repo of repos)

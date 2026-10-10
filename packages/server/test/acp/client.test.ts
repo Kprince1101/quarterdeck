@@ -54,7 +54,11 @@ const BUS_SERVER = {
   args: ['bus.js'],
   env: [],
 };
-const LIFECYCLE_TYPES = new Set<AcpClientEvent['type']>(['spawned', 'stderr']);
+const LIFECYCLE_TYPES = new Set<AcpClientEvent['type']>([
+  'spawned',
+  'stderr',
+  'stderr_closed',
+]);
 const IS_WINDOWS = process.platform === 'win32';
 const RESUMED_SESSION = 'fake-session-9';
 

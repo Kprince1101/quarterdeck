@@ -19,6 +19,8 @@ export const FAKE_AGENT_FLAGS: Record<FakeAgentFlag, string> = {
   plannerNamesUnknown: '--planner-names-unknown',
   onGitlab: '--on-gitlab',
   leaksApiKey: '--leaks-api-key',
+  terminalAuth: '--terminal-auth',
+  authPrompt: '--auth-prompt',
 };
 
 const FLAG_ENTRIES = Object.entries(FAKE_AGENT_FLAGS) as [

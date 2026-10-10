@@ -194,3 +194,36 @@
   color: var(--qd-danger);
   font-size: var(--qd-text-sm);
 }
+
+.qd-card-signin {
+  display: grid;
+  gap: var(--qd-space-1);
+  font-size: var(--qd-text-sm);
+}
+
+.qd-card-signin p {
+  margin: 0;
+}
+
+.qd-card-signin-status {
+  font-weight: 600;
+}
+
+.qd-card-signin[data-signin-status='failed'] .qd-card-signin-status {
+  color: var(--qd-danger);
+}
+
+.qd-card-signin-code code {
+  padding: var(--qd-space-1) var(--qd-space-2);
+  border: 1px solid var(--qd-line);
+  border-radius: var(--qd-radius);
+  background: var(--qd-bg);
+  font-family: var(--qd-mono);
+  font-size: var(--qd-text-md);
+  letter-spacing: 0.1em;
+  user-select: all;
+}
+
+.qd-card-signin-url a {
+  overflow-wrap: anywhere;
+}

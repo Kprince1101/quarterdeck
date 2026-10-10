@@ -41,9 +41,13 @@ const watchProcess = (
   child: ChildProcessWithoutNullStreams,
   events: EventHub<AcpClientEvent>,
 ) => {
-  createInterface({ input: child.stderr }).on('line', (line) => {
-    events.emit({ type: 'stderr', line });
-  });
+  createInterface({ input: child.stderr })
+    .on('line', (line) => {
+      events.emit({ type: 'stderr', line });
+    })
+    .on('close', () => {
+      events.emit({ type: 'stderr_closed' });
+    });
   child.on('error', (err) => {
     events.emit({ type: 'process_error', message: getErrorMessage(err) });
   });

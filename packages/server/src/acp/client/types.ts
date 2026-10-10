@@ -12,6 +12,7 @@ import type {
   SessionUpdate,
   StopReason,
 } from '@agentclientprotocol/sdk';
+import type { SignInDriver } from '../auth/types.js';
 import type { ChildEnvSpec } from '../env.js';
 
 export interface AgentCommand {
@@ -101,6 +102,10 @@ export interface StderrEvent {
   line: string;
 }
 
+export interface StderrClosedEvent {
+  type: 'stderr_closed';
+}
+
 export interface ExitEvent {
   type: 'exit';
   code: number | null;
@@ -143,6 +148,7 @@ export type AcpClientEvent =
   | ExtensionEvent
   | TurnEndEvent
   | StderrEvent
+  | StderrClosedEvent
   | ExitEvent
   | ProcessErrorEvent
   | ClosedEvent;
@@ -160,4 +166,5 @@ export interface AcpClient {
   subscribe: (listener: AcpClientListener) => () => void;
   close: () => Promise<void>;
   readonly closed: Promise<void>;
+  readonly signIn?: SignInDriver;
 }

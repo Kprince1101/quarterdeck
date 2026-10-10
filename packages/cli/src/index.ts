@@ -31,5 +31,17 @@ export {
   type ReplayAdapters,
   type ReplayCliOptions,
 } from './replay.js';
+export {
+  ensureSignedIn,
+  signInFailure,
+  signInToolOf,
+  signInWhereNeeded,
+  terminalProgress,
+  terminalSignIn,
+  type EnsureSignedInOptions,
+  type SignInAttempts,
+  type SignInCheck,
+  type SignInRunner,
+} from './signin.js';
 export { UP_USAGE, runUp } from './up.js';
 export { WIPE_USAGE, runWipe } from './wipe.js';

@@ -29,11 +29,11 @@
       <p>
         No. Quarterdeck has no account and asks for no key. Each runtime signs
         in through its own CLI with whatever you already use, and
-        <code>npm run quarterdeck -- doctor</code> prints the command for each.
-        See the <a href="quickstart.html">quickstart</a>. A machine that runs
-        Claude on an Anthropic API key or through Vertex AI sets the
-        <a href="rules.html#claude-auth">Claude auth mode</a>; the key stays in
-        your environment or the Keychain.
+        <code>npm run quarterdeck -- doctor</code> starts that sign-in for you
+        in the browser. See the <a href="quickstart.html">quickstart</a>. A
+        machine that runs Claude on an Anthropic API key or through Vertex AI
+        sets the <a href="rules.html#claude-auth">Claude auth mode</a>; the key
+        stays in your environment or the Keychain.
       </p>
 
       <h2 id="telemetry">Does Quarterdeck send anything anywhere?</h2>
@@ -87,8 +87,11 @@
 
       <h2 id="signin">What happens when a sign-in expires?</h2>
       <p>
-        You get a card with the exact command to run. Quarterdeck waits for you
-        and then tries again. It never signs in for you.
+        Quarterdeck starts the runtime's own browser sign-in and shows a "Sign
+        in to …" card with the code to type and the page to approve. Once you
+        approve it, the agent carries on. If the sign-in fails, the card says
+        why and gives the exact command to run, with Retry. It never sees or
+        stores your token.
       </p>
 
       <h2 id="merge">Will it merge pull requests on its own?</h2>

@@ -1,4 +1,5 @@
 import { parseArgs } from 'node:util';
+import { loadRule } from '@quarterdeck/rules';
 import {
   DEFAULT_API_PORT,
   QUARTERDECK_COMMAND,
@@ -8,7 +9,9 @@ import {
   type Quarterdeck,
 } from '@quarterdeck/server';
 import { resolveDashboardDir } from './dashboard.js';
+import { runDoctorChecks } from './doctor.js';
 import { CliError, type CliIo, type Command } from './io.js';
+import { ensureSignedIn } from './signin.js';
 
 const MAX_PORT = 65_535;
 
@@ -19,6 +22,8 @@ to open. The URL carries this run's API token; the dashboard needs it.
 Every project's crew runs in it: the Planner, the Driver and its builders,
 the reviewer and the merge gate. A voyage left open by an earlier run is
 ended when it starts. Stop it with Ctrl+C; that stops every agent first.
+In a terminal, a runtime the crew uses that is signed out is signed in first,
+through its own browser sign-in. Without one, the dashboard shows the sign-in.
 
   --port <port>  Port to listen on (default ${DEFAULT_API_PORT}; 0 picks a free one)`;
 
@@ -29,6 +34,16 @@ const parsePort = (value: string | undefined): number => {
     throw new CliError(`--port must be a number from 0 to ${MAX_PORT}`);
   }
   return port;
+};
+
+const signInRuntimesInUse = async (io: CliIo): Promise<void> => {
+  if (io.signIn === undefined) return;
+  const models = await loadRule('models', { homeDir: io.homeDir });
+  const runtimes = new Set(Object.values(models).map(({ runtime }) => runtime));
+  await ensureSignedIn(io, {
+    checks: () => runDoctorChecks(io),
+    wanted: (tool) => tool.kind === 'runtime' && runtimes.has(tool.runtime),
+  });
 };
 
 const isPortTaken = (err: unknown): boolean =>
@@ -63,6 +78,7 @@ export const runUp: Command = async (args, io) => {
   }
   const port = parsePort(values.port);
   await ensurePrivateDir(quarterdeckHome(io.homeDir));
+  await signInRuntimesInUse(io);
   const api = await listen(port, io);
   io.out(`Quarterdeck is running at ${api.url}/#token=${api.token}`);
   io.out(`Data: ${api.location}`);

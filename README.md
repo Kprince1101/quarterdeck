@@ -25,10 +25,10 @@ Open the dashboard at the URL `up` prints. After a `git pull`, run `npm install`
 
 ## Getting started
 
-One agent CLI signed in. Then, from the clone:
+One agent CLI installed. Then, from the clone:
 
 ```sh
-npm run quarterdeck -- doctor                  # checks kiro-cli, claude, gemini, gh (and glab for GitLab), and says exactly what to run for each miss
+npm run quarterdeck -- doctor                  # checks kiro-cli, claude, gemini, gh (and glab for GitLab), signs each signed-out one in through its own browser sign-in, and says what to run for anything left
 npm run quarterdeck -- init /path/to/folder   # picks your workspace: one repository, or a folder of them; asks which runtime
 npm run quarterdeck -- up                      # starts the server and prints the dashboard URL
 ```

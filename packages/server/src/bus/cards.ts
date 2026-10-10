@@ -30,6 +30,7 @@ export interface AskCard {
 
 export interface CardInput extends AskCard {
   kind: string;
+  signIn?: Record<string, unknown>;
 }
 
 export interface CardNotice {
@@ -116,8 +117,8 @@ export const insertCard = async (
   const ticketId = await activeTicketId(tx, projectId, agentId);
   const { rows } = await tx.query<{ id: string; expires_at: Date }>(
     `insert into cards (project_id, agent_id, ticket_id, kind, question,
-       options, checked, recommendation, expires_at)
-     values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8,
+       options, checked, recommendation, sign_in, expires_at)
+     values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $10::jsonb,
        now() + make_interval(secs => $9::float8 / 1000))
      returning id, expires_at`,
     [
@@ -130,6 +131,7 @@ export const insertCard = async (
       card.checked,
       card.recommendation,
       expiryMs,
+      JSON.stringify(card.signIn ?? null),
     ],
   );
   const [row] = rows;

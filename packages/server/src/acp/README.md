@@ -26,6 +26,8 @@ No process Quarterdeck starts from here inherits the server's environment. `spaw
 
 Everything else stays out, `GH_TOKEN`, `GITHUB_TOKEN` and `DATABASE_URL` included. Builders open pull requests with `gh`, which keeps working through its own keyring login; `quarterdeck doctor` warns when `gh` is signed in only through a token variable. The merge gate's `gh` calls (`gate/github.ts`) run in the server process and still see the server's environment.
 
+The one exception is signing in (see [auth](runtimes/README.md#signing-in)). A sign-in runs the person's own CLI on their behalf, exactly as if they typed its login command, and it needs what their shell has to open a browser (`DISPLAY`, `BROWSER`, proxy settings and so on). So the sign-in drivers build their env with `wholeEnv(source)`, a `ChildEnvSpec` that passes every name in `source` (`process.env` by default), still through `childEnv`. No agent session runs in those processes.
+
 ### Runtime variables
 
 Each adapter declares the variables its runtime needs to sign in, as `adapter.passEnv`, and adds them to every launch, a `launch.command` override included:
