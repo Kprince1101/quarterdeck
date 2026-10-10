@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
 import { RequestError } from '../widgets/RequestError.js';
-import type { MissingRuntime } from './setup-model.js';
+import { stepNumber, type MissingRuntime } from './setup-model.js';
 import { SetupNote, SetupStep } from './SetupParts.js';
 import type { RuntimeChoice, RuntimeStepView } from './use-runtime-step.js';
 
@@ -55,7 +55,7 @@ export interface RuntimeStepProps {
 }
 
 export const RuntimeStep = ({ view }: RuntimeStepProps): JSX.Element => (
-  <SetupStep number={2} title="Runtime" help={RUNTIME_HELP}>
+  <SetupStep number={stepNumber('runtime')} title="Runtime" help={RUNTIME_HELP}>
     {view.isLoading && (
       <p className="qd-empty">Checking what is installed...</p>
     )}

@@ -1,23 +1,23 @@
 import type { JSX } from 'react';
-import type { IntentClient } from '../api/index.js';
 import { GoStep } from './GoStep.js';
+import { ProfileStep } from './ProfileStep.js';
 import { RuntimeStep } from './RuntimeStep.js';
 import { SetupProgress } from './SetupParts.js';
 import { SignInStep } from './SignInStep.js';
-import { useSetupScreen } from './use-setup-screen.js';
+import { useSetupScreen, type SetupSources } from './use-setup-screen.js';
 import { WorkspaceStep } from './WorkspaceStep.js';
 import './setup.css';
 
 export interface SetupScreenProps {
-  intents: IntentClient;
+  sources: SetupSources;
   onDone: () => void;
 }
 
 export const SetupScreen = ({
-  intents,
+  sources,
   onDone,
 }: SetupScreenProps): JSX.Element => {
-  const view = useSetupScreen(intents, onDone);
+  const view = useSetupScreen(sources, onDone);
   return (
     <div className="qd-setup">
       <header className="qd-header">
@@ -28,8 +28,13 @@ export const SetupScreen = ({
         <SetupProgress progress={view.progress} steps={view.steps} />
         <WorkspaceStep view={view.workspace} />
         <RuntimeStep view={view.runtime} />
+        <ProfileStep view={view.profile} />
         <SignInStep view={view.signIn} />
-        <GoStep view={view.go} showsSignedOutNote={view.showsSignedOutNote} />
+        <GoStep
+          view={view.go}
+          writes={view.writes}
+          showsSignedOutNote={view.showsSignedOutNote}
+        />
       </main>
     </div>
   );

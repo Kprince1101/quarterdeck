@@ -11,7 +11,12 @@ import type {
 import type { HTMLInputElement as HappyInput, Window } from 'happy-dom';
 import { act } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { createIntentClient, emptyTables } from '../../src/api/index.js';
+import type { RulesView } from '@quarterdeck/server/intents';
+import {
+  createIntentClient,
+  createRulesReader,
+  emptyTables,
+} from '../../src/api/index.js';
 import { App } from '../../src/App.js';
 import { GO_LABEL } from '../../src/setup/GoStep.js';
 import { FAKE_WEBSOCKET, FakeSocket } from '../api/fake-socket.js';
@@ -87,11 +92,58 @@ const reply = (name: string, result: unknown, status = 200): Response =>
     { status },
   );
 
+const MACHINE = '/Users/me/.quarterdeck';
+const PROFILE_LAYER = `${MACHINE}/rules.local.profile.json`;
+
+const ruleView = (name: 'profile' | 'models', file: string) => ({
+  name,
+  file,
+  defaults: { path: `/clone/rules/${file}`, content: '{}' },
+  machine: { path: `${MACHINE}/rules.local.${file}`, content: null },
+  repo: null,
+});
+
+const profileOf = (name: string, source: 'shipped' | 'machine') => ({
+  name,
+  source,
+  dir: `/profiles/${name}`,
+  description: `The ${name} standard.`,
+  files: [`/profiles/${name}/standards.md`],
+  levels: {},
+  setup: false,
+  error: null,
+});
+
+const RULES_VIEW: RulesView = {
+  project: null,
+  repoPath: null,
+  rules: [
+    ruleView('profile', 'profile.json'),
+    ruleView('models', 'models.json'),
+  ],
+  profiles: {
+    active: 'default',
+    chosenBy: 'shipped',
+    levels: {},
+    profiles: [profileOf('default', 'shipped'), profileOf('house', 'machine')],
+    steeringFiles: [
+      {
+        file: 'charter.md',
+        controls: 'How the Driver runs a voyage.',
+        machine: `${MACHINE}/rules.local.charter.md`,
+        repo: null,
+      },
+    ],
+    error: null,
+  },
+};
+
 const answer = (
   server: FakeServer,
   name: string,
   body: Record<string, unknown>,
 ) => {
+  if (name === 'rules') return new Response(JSON.stringify(RULES_VIEW));
   if (name === 'setup.read') {
     return reply(name, {
       needsSetup: server.needsSetup,
@@ -131,20 +183,30 @@ const fakeServer = (detection: SetupDetectResult): FakeServer => ({
   sent: [],
 });
 
-const sourcesFor = (server: FakeServer) => ({
-  intents: createIntentClient({
-    fetch: async (input, init) => {
-      const name = String(input).split('/').at(-1) ?? '';
-      const body = JSON.parse(String(init?.body ?? '{}')) as Record<
-        string,
-        unknown
-      >;
-      server.sent.push({ name, body });
-      return answer(server, name, body);
-    },
-  }),
-  stream: { url: 'ws://127.0.0.1:4317/ws', WebSocket: FAKE_WEBSOCKET },
-});
+const sourcesFor = (server: FakeServer) => {
+  const fetch = async (input: unknown, init?: RequestInit) => {
+    const name = String(input).split('/').at(-1) ?? '';
+    const body = JSON.parse(String(init?.body ?? '{}')) as Record<
+      string,
+      unknown
+    >;
+    server.sent.push({ name, body });
+    return answer(server, name, body);
+  };
+  return {
+    intents: createIntentClient({ fetch }),
+    rules: createRulesReader({ fetch }),
+    stream: { url: 'ws://127.0.0.1:4317/ws', WebSocket: FAKE_WEBSOCKET },
+  };
+};
+
+const pick = (select: PageElement, value: string): void => {
+  const field = select as unknown as HappyInput;
+  act(() => {
+    field.value = value;
+    field.dispatchEvent(new (win().Event)('change', { bubbles: true }));
+  });
+};
 
 const settle = async (): Promise<void> => {
   await act(async () => {
@@ -223,7 +285,7 @@ describe('the Setup screen', () => {
     FakeSocket.opened = [];
   });
 
-  it('opens instead of the board when there is no workspace, and walks the four steps to the board', async () => {
+  it('opens instead of the board when there is no workspace, and walks the steps to the board', async () => {
     const server = fakeServer(single);
     const { container, unmount } = render(<App {...sourcesFor(server)} />);
     await settle();
@@ -231,7 +293,7 @@ describe('the Setup screen', () => {
     expect(container.querySelector('.qd-setup')).not.toBeNull();
     expect(container.querySelector('[data-widget-mount]')).toBeNull();
     expect(textOf(container, '.qd-setup-progress-line')).toBe(
-      'Step 1 of 4: Workspace',
+      'Step 1 of 5: Workspace',
     );
     const runtimes = all(container, 'input[name="runtime"]');
     expect(runtimes).toHaveLength(1);
@@ -253,7 +315,7 @@ describe('the Setup screen', () => {
       body: { root: DECK },
     });
     expect(textOf(container, '.qd-setup-progress-line')).toBe(
-      'Step 3 of 4: Sign in',
+      'Step 4 of 5: Sign in',
     );
     expect(textOf(container, '.qd-setup-step[aria-label="Sign in"]')).toContain(
       'GitHub (gh)',
@@ -276,7 +338,7 @@ describe('the Setup screen', () => {
       async () => {
         await settle();
         expect(textOf(container, '.qd-setup-progress-line')).toBe(
-          'Step 4 of 4: Go',
+          'Step 5 of 5: Go',
         );
       },
       { timeout: 4000 },
@@ -333,6 +395,44 @@ describe('the Setup screen', () => {
         runtime: 'claude',
         skip: ['site'],
       },
+    );
+    unmount();
+  });
+
+  it('offers the installed profiles, names the file a new pick writes and the files a person may edit, and saves the pick', async () => {
+    const server = fakeServer(single);
+    server.claudeSignedIn = true;
+    const { container, unmount } = render(<App {...sourcesFor(server)} />);
+    await settle();
+    const step = '.qd-setup-step[aria-label="Profile"]';
+    expect(textOf(container, step)).toContain('3. Profile');
+    expect(
+      all(container, `${step} option`).map(({ textContent }) => textContent),
+    ).toEqual(['default (shipped)', 'house (this machine)']);
+    expect(textOf(container, step)).toContain(
+      'Keeps default, the profile this machine has now.',
+    );
+    expect(textOf(container, `${step} [aria-label="Files you may edit"]`)).toBe(
+      `${MACHINE}/rules.local.charter.md How the Driver runs a voyage.`,
+    );
+    expect(textOf(container, '[aria-label="Files Go writes"]')).not.toContain(
+      PROFILE_LAYER,
+    );
+
+    pick(find(container, `${step} select`), 'house');
+    expect(textOf(container, step)).toContain(
+      `Go writes "profile": "house" to ${PROFILE_LAYER}.`,
+    );
+    expect(textOf(container, step)).toContain('/profiles/house/standards.md');
+    expect(textOf(container, '[aria-label="Files Go writes"]')).toContain(
+      `${PROFILE_LAYER}, for the house profile`,
+    );
+
+    await typePath(container, DECK);
+    await clickButton(container, GO_LABEL);
+    await settle();
+    expect(server.sent.find(({ name }) => name === 'setup.save')?.body).toEqual(
+      { root: DECK, runtime: 'claude', profile: 'house', skip: [] },
     );
     unmount();
   });

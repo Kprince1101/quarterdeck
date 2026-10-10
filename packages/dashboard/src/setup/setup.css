@@ -105,6 +105,21 @@
   list-style: none;
 }
 
+.qd-setup-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qd-space-1);
+  margin: 0;
+  padding-left: var(--qd-space-4);
+  color: var(--qd-muted);
+  font-size: var(--qd-text-sm);
+}
+
+.qd-setup-files code {
+  font-family: var(--qd-mono);
+  color: var(--qd-fg);
+}
+
 .qd-setup-choice {
   display: flex;
   align-items: baseline;

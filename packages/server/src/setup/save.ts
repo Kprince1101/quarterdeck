@@ -17,6 +17,7 @@ import {
 } from '../workspace/index.js';
 import { applySetup, assertProjectSlugs } from './apply.js';
 import { needsSetup, resolveSetupPath, setupWorkspaces } from './paths.js';
+import { saveMachineProfile } from './profile-layer.js';
 import {
   modelsLayers,
   repoRuntimeLayer,
@@ -91,6 +92,7 @@ export const saveSetup = async (
     repos,
     input.runtime,
   );
+  if (input.profile !== undefined) await saveMachineProfile(ctx, input.profile);
   const { update } = await applySetup(
     {
       stores: ctx.stores,
@@ -103,6 +105,7 @@ export const saveSetup = async (
     mode: update.workspace.mode,
     projects: repos.map((repo) => repo.slug),
     runtime: input.runtime,
+    profile: input.profile ?? null,
     notice: update.notice,
   };
 };

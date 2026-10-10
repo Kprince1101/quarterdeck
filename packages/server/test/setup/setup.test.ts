@@ -208,6 +208,30 @@ describe('setup over the API', { timeout: TIMEOUT }, () => {
     }
   });
 
+  it('writes a picked profile to ~/.quarterdeck/rules.local.profile.json, and refuses one not installed before creating anything', async () => {
+    const refused = await api.send('setup.save', {
+      root: join(api.homeDir, 'work', 'deck'),
+      runtime: 'kiro',
+      profile: 'nowhere',
+    });
+    expect(refused.status).toBe(400);
+    expect(await api.api.stores.list()).toEqual([]);
+
+    const saved = await api.send('setup.save', {
+      root: join(api.homeDir, 'work', 'deck'),
+      runtime: 'kiro',
+      profile: 'default',
+    });
+    expect(saved.body).toMatchObject({ result: { profile: 'default' } });
+    const layer = JSON.parse(
+      await readFile(
+        join(api.homeDir, '.quarterdeck', 'rules.local.profile.json'),
+        'utf8',
+      ),
+    ) as unknown;
+    expect(layer).toEqual({ profile: 'default' });
+  });
+
   it('lists runtimes and the forges the workspace needs, defaulting to the only one installed', async () => {
     const listed = await api.send('setup.tools', { root: '~/work' });
     expect(listed.body).toMatchObject({

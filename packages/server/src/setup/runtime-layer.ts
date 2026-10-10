@@ -51,7 +51,7 @@ export const repoRuntimeLayer = async (
 export const usesRuntime = (models: Models, runtime: Runtime): boolean =>
   ROLES.every((role) => models[role].runtime === runtime);
 
-const readJsonLayer = async (
+export const readJsonLayer = async (
   path: string,
 ): Promise<Record<string, unknown>> => {
   const text = await readFile(path, 'utf8').catch(() => undefined);

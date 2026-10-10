@@ -1,18 +1,30 @@
 import { useCallback, useEffect, useState } from 'react';
 import { setupReadResultSchema } from '@quarterdeck/server/intents';
-import { intents as pageIntents, type IntentClient } from '../api/index.js';
+import {
+  intents as pageIntents,
+  readRules as pageRules,
+  type IntentClient,
+  type RulesReader,
+} from '../api/index.js';
+import type { SetupSources } from './use-setup-screen.js';
 
 export type AppScreen = 'board' | 'setup';
 
 export interface SetupGate {
   showsSetup: boolean;
-  intents: IntentClient;
+  sources: SetupSources;
   handleDone: () => void;
 }
 
-export const useSetupGate = (
-  intents: IntentClient = pageIntents,
-): SetupGate => {
+export interface SetupGateSources {
+  intents?: IntentClient | undefined;
+  rules?: RulesReader | undefined;
+}
+
+export const useSetupGate = ({
+  intents = pageIntents,
+  rules = pageRules,
+}: SetupGateSources): SetupGate => {
   const [screen, setScreen] = useState<AppScreen>('board');
 
   useEffect(() => {
@@ -32,5 +44,9 @@ export const useSetupGate = (
   }, [intents]);
 
   const handleDone = useCallback(() => setScreen('board'), []);
-  return { showsSetup: screen === 'setup', intents, handleDone };
+  return {
+    showsSetup: screen === 'setup',
+    sources: { intents, rules },
+    handleDone,
+  };
 };

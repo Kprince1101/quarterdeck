@@ -11,9 +11,9 @@ export interface AppProps extends DeckSources {
 }
 
 export const App = ({ mode, ...sources }: AppProps): JSX.Element => {
-  const gate = useSetupGate(sources.intents);
+  const gate = useSetupGate(sources);
   if (gate.showsSetup) {
-    return <SetupScreen intents={gate.intents} onDone={gate.handleDone} />;
+    return <SetupScreen sources={gate.sources} onDone={gate.handleDone} />;
   }
   return (
     <DeckProvider {...sources}>

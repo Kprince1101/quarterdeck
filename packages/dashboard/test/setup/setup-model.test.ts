@@ -6,6 +6,7 @@ import {
   progressLine,
   settledKeys,
   signInKey,
+  stepNumber,
 } from '../../src/setup/setup-model.js';
 
 const signIn = (
@@ -19,27 +20,31 @@ const signIn = (
 });
 
 describe('setup model', () => {
-  it('names the first step not done yet, in four steps', () => {
+  it('names the first step not done yet, in five steps with the profile after the runtime', () => {
     expect(SETUP_STEPS.map(({ id }) => id)).toEqual([
       'workspace',
       'runtime',
+      'profile',
       'sign-in',
       'go',
     ]);
+    expect(stepNumber('profile')).toBe(3);
     const none = {
       workspace: false,
       runtime: false,
+      profile: false,
       'sign-in': false,
       go: false,
     };
-    expect(progressLine(none)).toBe('Step 1 of 4: Workspace');
+    expect(progressLine(none)).toBe('Step 1 of 5: Workspace');
     expect(progressLine({ ...none, workspace: true, runtime: true })).toBe(
-      'Step 3 of 4: Sign in',
+      'Step 3 of 5: Profile',
     );
     expect(
       progressLine({
         workspace: true,
         runtime: true,
+        profile: true,
         'sign-in': true,
         go: true,
       }),

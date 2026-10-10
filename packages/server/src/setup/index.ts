@@ -7,6 +7,7 @@ export {
 } from './apply.js';
 export { needsSetup, resolveSetupPath } from './paths.js';
 export type { SetupProbe } from './probe.js';
+export { machineProfileLayer, saveMachineProfile } from './profile-layer.js';
 export {
   modelsLayers,
   repoRuntimeLayer,

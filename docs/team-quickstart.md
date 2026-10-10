@@ -33,6 +33,8 @@ npm run quarterdeck -- profile use <name>
 npm run quarterdeck -- profile use <name> --project <slug>
 ```
 
+On a first run, the dashboard's Setup screen has the same picker as its Profile step: it names `~/.quarterdeck/rules.local.profile.json` as the file a new pick writes and lists the files above with their paths.
+
 `list` marks the active profile and names every file each one reads. `use` writes `~/.quarterdeck/rules.local.profile.json`, or with `--project` the project's `<repo>/.quarterdeck/rules.local.profile.json`, which wins over the machine. Both print the file they wrote. The Rules widget's profile picker does the same for the machine layer: it says which file it writes, and you review the change before it is saved.
 
 To change a rule level for yourself, pick it in the widget's level list or add it to `levels` in `rules.local.profile.json`. Machine levels apply over the profile's. Levels in a project's `<repo>/.quarterdeck/rules.local.profile.json` can only raise a rule's level, never lower it.

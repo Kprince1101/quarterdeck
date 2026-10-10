@@ -5,9 +5,15 @@ import type { SetupRuntime } from './setup-model.js';
 export interface SetupPlanInput {
   root: string | null;
   runtime: SetupRuntime | null;
+  profile: string | undefined;
   skip: readonly string[];
   isReady: boolean;
 }
+
+const profileInput = (profile: string | undefined): { profile?: string } => {
+  if (profile === undefined) return {};
+  return { profile };
+};
 
 export interface SetupSaveView {
   canGo: boolean;
@@ -22,11 +28,16 @@ export const useSetupSave = (
   onDone: () => void,
 ): SetupSaveView => {
   const { isPending, error, run } = useIntentRequest();
-  const { root, runtime, skip } = plan;
+  const { root, runtime, profile, skip } = plan;
 
   const save = async () => {
     if (root === null || runtime === null) return;
-    await intents.setup.save({ root, runtime, skip: [...skip] });
+    await intents.setup.save({
+      root,
+      runtime,
+      ...profileInput(profile),
+      skip: [...skip],
+    });
     onDone();
   };
 

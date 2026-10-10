@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import { RequestError } from '../widgets/RequestError.js';
+import { stepNumber } from './setup-model.js';
 import { SetupNote, SetupStep, SignInProgressOf } from './SetupParts.js';
 import type { SignInRow, SignInStepView } from './use-sign-in-step.js';
 
@@ -35,7 +36,7 @@ export interface SignInStepProps {
 }
 
 export const SignInStep = ({ view }: SignInStepProps): JSX.Element => (
-  <SetupStep number={3} title="Sign in" help={SIGN_IN_HELP}>
+  <SetupStep number={stepNumber('sign-in')} title="Sign in" help={SIGN_IN_HELP}>
     {!view.hasRows && <p className="qd-empty">{NO_SIGN_IN}</p>}
     <ul className="qd-setup-list">
       {view.rows.map((row) => (

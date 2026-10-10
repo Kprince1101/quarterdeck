@@ -17,6 +17,14 @@ export const setupPathSchema = z
   .min(1)
   .max(MAX_SETUP_PATH_LENGTH);
 
+const MAX_PROFILE_NAME_LENGTH = 100;
+
+export const setupProfileSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(MAX_PROFILE_NAME_LENGTH);
+
 export const signInToolSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('runtime'), runtime: runtimeSchema }),
   z.strictObject({ kind: z.literal('gh') }),
@@ -34,6 +42,7 @@ export const SETUP_INTENTS = {
   'setup.save': z.strictObject({
     root: setupPathSchema,
     runtime: runtimeSchema,
+    profile: setupProfileSchema.optional(),
     skip: z.array(projectSlugSchema).default([]),
   }),
 };
@@ -77,6 +86,7 @@ export const setupSaveResultSchema = z.object({
   mode: workspaceModeSchema,
   projects: z.array(z.string()),
   runtime: runtimeSchema,
+  profile: z.string().nullable(),
   notice: z.string().nullable(),
 });
 

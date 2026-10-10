@@ -8,7 +8,8 @@ import type {
 
 export type SetupRuntime = NonNullable<SetupToolsResult['defaultRuntime']>;
 
-export type SetupStepId = 'workspace' | 'runtime' | 'sign-in' | 'go';
+export type SetupStepId =
+  'workspace' | 'runtime' | 'profile' | 'sign-in' | 'go';
 
 export interface SetupStep {
   id: SetupStepId;
@@ -18,9 +19,13 @@ export interface SetupStep {
 export const SETUP_STEPS: readonly SetupStep[] = [
   { id: 'workspace', label: 'Workspace' },
   { id: 'runtime', label: 'Runtime' },
+  { id: 'profile', label: 'Profile' },
   { id: 'sign-in', label: 'Sign in' },
   { id: 'go', label: 'Go' },
 ];
+
+export const stepNumber = (id: SetupStepId): number =>
+  SETUP_STEPS.findIndex((step) => step.id === id) + 1;
 
 export type SetupDone = Readonly<Record<SetupStepId, boolean>>;
 

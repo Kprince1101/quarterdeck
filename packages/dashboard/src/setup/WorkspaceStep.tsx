@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import { RequestError } from '../widgets/RequestError.js';
+import { stepNumber } from './setup-model.js';
 import { SetupNote, SetupStep } from './SetupParts.js';
 import type {
   RepositoryChoice,
@@ -38,7 +39,11 @@ export interface WorkspaceStepProps {
 }
 
 export const WorkspaceStep = ({ view }: WorkspaceStepProps): JSX.Element => (
-  <SetupStep number={1} title="Workspace" help={WORKSPACE_HELP}>
+  <SetupStep
+    number={stepNumber('workspace')}
+    title="Workspace"
+    help={WORKSPACE_HELP}
+  >
     <form className="qd-setup-row" onSubmit={view.handleDetect}>
       <input
         type="text"
