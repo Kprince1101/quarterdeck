@@ -7,7 +7,7 @@ export {
   type KeepAwakeOptions,
 } from './control.js';
 export { KeepAwakeError } from './errors.js';
-export { LINUX_BACKEND } from './linux.js';
+export { LINUX_BACKEND, LINUX_INHIBIT_ARGS, untilOwnerExits } from './linux.js';
 export { MACOS_BACKEND } from './macos.js';
 export {
   KEEP_AWAKE_KILL_GRACE_MS,

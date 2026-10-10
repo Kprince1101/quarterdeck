@@ -66,11 +66,27 @@ const CASES: Case[] = [
     backend: LINUX_BACKEND,
     timed: {
       command: 'systemd-inhibit',
-      args: ['--what=idle', '--why=Quarterdeck', 'sleep', '1800'],
+      args: [
+        '--what=idle',
+        '--why=Quarterdeck',
+        'timeout',
+        '1800',
+        'tail',
+        `--pid=${OWNER}`,
+        '-f',
+        '/dev/null',
+      ],
     },
     open: {
       command: 'systemd-inhibit',
-      args: ['--what=idle', '--why=Quarterdeck', 'sleep', 'infinity'],
+      args: [
+        '--what=idle',
+        '--why=Quarterdeck',
+        'tail',
+        `--pid=${OWNER}`,
+        '-f',
+        '/dev/null',
+      ],
     },
   },
 ];
@@ -115,9 +131,16 @@ describe('keep-awake backends', () => {
     expect(open).not.toContain('-Timeout');
   });
 
-  it('inhibits only idle on Linux', () => {
+  it('inhibits only idle on Linux, and only while the server lives', () => {
     const { args } = LINUX_BACKEND.command({ seconds: 60, ownerPid: OWNER });
     expect(args.slice(0, 2)).toEqual(['--what=idle', '--why=Quarterdeck']);
+    expect(args.slice(-4)).toEqual([
+      'tail',
+      `--pid=${OWNER}`,
+      '-f',
+      '/dev/null',
+    ]);
+    expect(args).not.toContain('sleep');
   });
 });
 

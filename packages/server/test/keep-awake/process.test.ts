@@ -4,11 +4,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  LINUX_BACKEND,
+  LINUX_INHIBIT_ARGS,
   createKeepAwake,
   keepAwakePath,
   spawnHoldProcess,
   writeKeepAwakeRecord,
   type HeldProcess,
+  type HoldCommand,
+  type HoldSpec,
 } from '../../src/keep-awake/index.js';
 import { expectAllExited, isAlive } from '../acp/process-check.ts';
 
@@ -17,6 +21,13 @@ const TIMEOUT = 30_000;
 const IDLE_CHILD = {
   command: process.execPath,
   args: ['-e', 'setInterval(() => {}, 1000)'],
+};
+
+const linuxHeldCommand = (hold: HoldSpec): HoldCommand => {
+  const [command = '', ...args] = LINUX_BACKEND.command(hold).args.slice(
+    LINUX_INHIBIT_ARGS.length,
+  );
+  return { command, args };
 };
 
 describe.skipIf(process.platform === 'win32')(
@@ -67,6 +78,37 @@ describe.skipIf(process.platform === 'win32')(
       expect(await keepAwake.read()).toMatchObject({ on: false, mode: null });
       await keepAwake.close();
     });
+
+    it.runIf(process.platform === 'linux')(
+      'ends the Linux hold when the server is killed outright',
+      async () => {
+        const server = await hold();
+        const inhibited = await spawnHoldProcess(
+          linuxHeldCommand({ seconds: null, ownerPid: server.pid }),
+        );
+        started.push(inhibited);
+        expect(isAlive(inhibited.pid)).toBe(true);
+
+        process.kill(server.pid, 'SIGKILL');
+
+        await inhibited.exited;
+        await expectAllExited([inhibited.pid]);
+      },
+    );
+
+    it.runIf(process.platform === 'linux')(
+      'ends a timed Linux hold on its own while the server lives',
+      async () => {
+        const server = await hold();
+        const inhibited = await spawnHoldProcess(
+          linuxHeldCommand({ seconds: 1, ownerPid: server.pid }),
+        );
+        started.push(inhibited);
+
+        await inhibited.exited;
+        expect(isAlive(server.pid)).toBe(true);
+      },
+    );
 
     it('leaves a process alone when the recorded pid was reused', async () => {
       const stranger = await hold();
