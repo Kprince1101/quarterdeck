@@ -16,6 +16,47 @@ export {
 } from './adapter.js';
 export type { ClaudeAdapterOptions } from './adapter.js';
 export {
+  CLAUDE_AUTH_MODES,
+  claudeAuthModeSchema,
+  claudeAuthSourceSchema,
+  claudeAuthStatusSchema,
+  claudeKeySourceSchema,
+} from './auth-mode.js';
+export type {
+  ClaudeAuthMode,
+  ClaudeAuthSource,
+  ClaudeAuthStatus,
+  ClaudeKeySource,
+} from './auth-mode.js';
+export {
+  CLAUDE_API_KEY_ENV,
+  CLAUDE_AUTH_ENV,
+  CLAUDE_AUTH_ERROR,
+  CLAUDE_AUTH_FILE,
+  CLAUDE_BASE_URL_ENV,
+  CLAUDE_KEYCHAIN_SERVICE,
+  CLAUDE_VERTEX_FLAG_ENV,
+  CLAUDE_VERTEX_PASS_ENV,
+  CLAUDE_VERTEX_REQUIRED_ENV,
+  ClaudeAuthError,
+  DEFAULT_CLAUDE_AUTH_MODE,
+  claudeAuthEnv,
+  claudeAuthFileSchema,
+  claudeAuthMissingHelp,
+  claudeAuthPath,
+  claudeAuthStatus,
+  keychainFor,
+  readClaudeAuthSetting,
+  readMacKeychain,
+  resolveClaudeAuth,
+} from './auth.js';
+export type {
+  ClaudeAuth,
+  ClaudeAuthOptions,
+  ClaudeAuthSetting,
+  KeychainRead,
+} from './auth.js';
+export {
   CLAUDE_PERMISSION_SETTINGS,
   ClaudePermissionSettingsError,
   claudeSettingsFiles,

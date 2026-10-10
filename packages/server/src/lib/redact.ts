@@ -13,7 +13,7 @@ const SECRET_SHAPES: readonly SecretShape[] = [
   },
   { pattern: /\bgh[pousr]_[A-Za-z0-9]{20,}/g, replace: REDACTED },
   { pattern: /\bgithub_pat_[A-Za-z0-9_]{20,}/g, replace: REDACTED },
-  { pattern: /\bsk-ant-[A-Za-z0-9_-]{10,}/g, replace: REDACTED },
+  { pattern: /\bsk-ant-[A-Za-z0-9_-]*/g, replace: REDACTED },
   { pattern: /\bsk-[A-Za-z0-9_-]{20,}/g, replace: REDACTED },
   { pattern: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g, replace: REDACTED },
   {
@@ -74,3 +74,5 @@ export const redactValue = <T>(
   value: T,
   env: NodeJS.ProcessEnv = process.env,
 ): T => redactDeep(value, secretEnvValues(env)) as T;
+
+export const redactShapes = <T>(value: T): T => redactDeep(value, []) as T;

@@ -67,6 +67,11 @@ export const childEnv = ({
   return { ...env, ...set };
 };
 
+export const sourceEnv = (spec?: ChildEnvSpec): NodeJS.ProcessEnv => {
+  if (spec?.source !== undefined) return spec.source;
+  return process.env;
+};
+
 export const withChildEnv = (
   spec: ChildEnvSpec | undefined,
   extra: ChildEnvSpec,

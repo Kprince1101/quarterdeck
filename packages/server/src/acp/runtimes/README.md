@@ -231,6 +231,20 @@ The project and local files sit in the agent's own worktree, so an agent could g
 
 Sign-in stays with Claude Code. When it is not signed in, `session/new` fails with auth required, and so does `session/prompt` if the login lapses mid-session. `isAuthRequiredError` recognises both. Quarterdeck raises a sign-in card with the command claude-agent-acp advertises as a terminal auth method (`npx --yes @agentclientprotocol/claude-agent-acp@0.85.0 --cli auth login --claudeai`, or `claude auth login` when none is advertised), resumes the session once the person answers (re-sending the prompt in the same session), and never calls `authenticate` on its own (see [../../signin/README.md](../../signin/README.md)).
 
+### Auth modes
+
+How Claude Code signs in is a per-machine setting, never a project's: `QUARTERDECK_CLAUDE_AUTH` in the server's environment, else `~/.quarterdeck/claude.json` (`{ "auth": "<mode>" }`, `claudeAuthPath()`), else `subscription`. Nothing about it is stored in Postgres. `connect` reads it on every launch (`claudeAuthEnv`, under `launch.rules.homeDir` when given) and adds to the child env, by name, only what the mode needs:
+
+| Mode           | Adds                                                                                                                                                                                                                                                                | Fails the launch when                                         |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `subscription` | nothing; the launch is exactly what it was before auth modes                                                                                                                                                                                                        | never                                                         |
+| `api_key`      | `ANTHROPIC_API_KEY`, from the server's env or, on macOS, `security find-generic-password -s quarterdeck-anthropic-api-key -w` (`CLAUDE_KEYCHAIN_SERVICE`)                                                                                                           | neither has a key                                             |
+| `vertex`       | `CLAUDE_CODE_USE_VERTEX=1`, and passes `ANTHROPIC_VERTEX_PROJECT_ID`, `CLOUD_ML_REGION`, `GOOGLE_APPLICATION_CREDENTIALS`, `CLOUDSDK_CONFIG`, `ANTHROPIC_VERTEX_BASE_URL` when set (`CLAUDE_VERTEX_PASS_ENV`); gcloud's application-default credentials do the rest | `ANTHROPIC_VERTEX_PROJECT_ID` or `CLOUD_ML_REGION` is not set |
+
+`ANTHROPIC_BASE_URL` is in `CLAUDE_PASS_ENV`, so a gateway works in every mode. A failed launch rejects with `ClaudeAuthError` (`code: 'claude_auth'`, `mode`, `missing`) before anything starts, and its message says what to set. An unknown mode in the env or the file is a `ClaudeAuthError` too. Its message is run through `redactShapes`, so a key pasted where the mode belongs is not echoed. `createClaudeAdapter({ auth: { readKeychain, platform } })` swaps the Keychain lookup in tests. `claudeAuthStatus()` reports `{ mode, source, missing, keySource, gateway }` without the key, for `quarterdeck doctor` and the dashboard's `auth.read`.
+
+`test/acp/claude-auth.test.ts` launches an env-printing agent through the adapter in each mode and checks the exact env it got. `test/quarterdeck/claude-key-leak.test.ts` runs a ticket end to end in `api_key` mode with agents that paste their key into every channel they have, then checks that no table row and no file under `~/.quarterdeck` holds `sk-ant-`.
+
 ### Live smoke
 
 `test/acp/claude-live.test.ts` drives the real claude-agent-acp. It checks:

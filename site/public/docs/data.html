@@ -39,6 +39,7 @@
       <h2 id="folder">The folder</h2>
       <pre><code>~/.quarterdeck/
   rules.local.&lt;file&gt;           your machine's rules
+  claude.json                    which Claude auth mode this machine uses
   &lt;project&gt;/
     pg/                          the project's Postgres data
     pg.lock                      which process has the project open
@@ -65,6 +66,17 @@
             <td>
               Your machine's <a href="rules.html#layers">rules</a> overrides.
               Configuration, not state: wiping projects leaves them.
+            </td>
+          </tr>
+          <tr>
+            <td><code>~/.quarterdeck/claude.json</code></td>
+            <td>
+              The
+              <a href="rules.html#claude-auth">Claude auth mode</a>
+              (<code>subscription</code>, <code>api_key</code> or
+              <code>vertex</code>), when you set it in a file rather than in
+              <code>QUARTERDECK_CLAUDE_AUTH</code>. It holds the mode only,
+              never a key. Wiping leaves it.
             </td>
           </tr>
           <tr>
@@ -177,6 +189,15 @@
         <li>
           Your runtimes' and <code>gh</code>'s own sign-ins stay where those
           tools keep them. Quarterdeck does not copy or store them.
+        </li>
+        <li>
+          An Anthropic API key for the <code>api_key</code> mode stays in your
+          environment (<code>ANTHROPIC_API_KEY</code>) or the macOS Keychain
+          (<code>quarterdeck-anthropic-api-key</code>). Quarterdeck hands it to
+          the Claude agents it starts and nothing else: it is never written to a
+          project's database, an event, a turn file or the notebook, and
+          anything shaped like <code>sk-ant-</code> is stored as
+          <code>[redacted]</code>. Vertex credentials stay with gcloud.
         </li>
       </ul>
 

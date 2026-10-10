@@ -1,6 +1,7 @@
 import { basename } from 'node:path';
 import { RULE_NAMES, ruleLayerPaths } from '@quarterdeck/rules';
 import { claudeRuntimeDir } from '../acp/runtimes/claude/adapter.js';
+import { claudeAuthPath } from '../acp/runtimes/claude/auth.js';
 import { defaultGeminiDir } from '../acp/runtimes/gemini/lockdown.js';
 import { defaultKiroProcessDir } from '../acp/runtimes/kiro/config.js';
 import { busSocketDir } from '../bus/socket.js';
@@ -86,6 +87,7 @@ export const dataPaths = ({
     entry('Kiro runtime', defaultKiroProcessDir(home), 'directory', 'machine'),
     entry('Gemini runtime', defaultGeminiDir(home), 'directory', 'machine'),
     entry('Claude runtime', claudeRuntimeDir(home), 'directory', 'machine'),
+    entry('Claude auth mode', claudeAuthPath(home), 'file', 'machine'),
   ];
 };
 

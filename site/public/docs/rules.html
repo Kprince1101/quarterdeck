@@ -534,6 +534,75 @@
       </p>
       <pre><code>{ "pass": ["AWS_PROFILE"] }</code></pre>
 
+      <h2 id="claude-auth">Claude auth mode</h2>
+      <p>
+        How Claude Code agents sign in is a setting of the machine, not a rule:
+        it has no repo layer and is never stored in a project's database. Set
+        <code>QUARTERDECK_CLAUDE_AUTH</code> in the environment you start
+        Quarterdeck from, or write <code>~/.quarterdeck/claude.json</code>; the
+        environment wins when both are set. Quarterdeck reads it each time it
+        starts a Claude agent.
+      </p>
+      <pre><code>{ "auth": "api_key" }</code></pre>
+      <table>
+        <thead>
+          <tr>
+            <th>Mode</th>
+            <th>What agents get</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>subscription</code></td>
+            <td>
+              The default. Nothing is added: Claude Code uses its own stored
+              sign-in.
+            </td>
+          </tr>
+          <tr>
+            <td><code>api_key</code></td>
+            <td>
+              <code>ANTHROPIC_API_KEY</code>, from the server's environment or,
+              on macOS when it is not set there, from the Keychain item
+              <code>quarterdeck-anthropic-api-key</code>. With neither, the
+              agent does not start and says so.
+            </td>
+          </tr>
+          <tr>
+            <td><code>vertex</code></td>
+            <td>
+              <code>CLAUDE_CODE_USE_VERTEX=1</code>, plus
+              <code>ANTHROPIC_VERTEX_PROJECT_ID</code>,
+              <code>CLOUD_ML_REGION</code> and, when they are set,
+              <code>GOOGLE_APPLICATION_CREDENTIALS</code>,
+              <code>CLOUDSDK_CONFIG</code> and
+              <code>ANTHROPIC_VERTEX_BASE_URL</code>, passed by name from the
+              server's environment. Credentials come from gcloud's
+              application-default login (<code
+                >gcloud auth application-default login</code
+              >). Without the project id or the region, the agent does not start
+              and says so.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        In every mode <code>ANTHROPIC_BASE_URL</code> passes through when it is
+        set, for a gateway. Only these names are added; the rest of the server's
+        environment stays out as described in <a href="#env">env.json</a>. The
+        key stays in your environment or the Keychain: Quarterdeck never writes
+        it to the database, an event, a turn file or the notebook, and anything
+        shaped like <code>sk-ant-</code> is replaced with
+        <code>[redacted]</code> before it is stored. To keep the key in the
+        Keychain:
+      </p>
+      <pre><code>security add-generic-password -a "$USER" -s quarterdeck-anthropic-api-key -w</code></pre>
+      <p>
+        The dashboard header shows the active mode, read-only, and
+        <code>quarterdeck doctor</code> reports it with whatever its env is
+        missing.
+      </p>
+
       <h2 id="kiro">kiro.json</h2>
       <p>
         <code>baseAgents</code> names a Kiro agent of your own for the

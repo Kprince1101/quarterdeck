@@ -1,4 +1,5 @@
 import type { Forge } from '@quarterdeck/rules/forges';
+import type { AuthReadResult } from '@quarterdeck/server/intents';
 import type { GridLayout } from '@quarterdeck/server/layouts';
 import type { SavedLayout } from '@quarterdeck/server/stream-schema';
 import { DEMO_REPO_PATH } from './demo-reads.js';
@@ -7,6 +8,14 @@ import type { DemoWorld } from './demo-world.js';
 export const DEMO_PROJECT = 'harbor';
 
 export const DEMO_FORGE: Forge = 'github';
+
+export const DEMO_AUTH: AuthReadResult['claude'] = {
+  mode: 'subscription',
+  source: 'default',
+  missing: [],
+  keySource: null,
+  gateway: false,
+};
 
 export const DEMO_LAYOUT: GridLayout = {
   columns: 12,

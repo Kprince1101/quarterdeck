@@ -1,5 +1,6 @@
 import { forgeSchema } from '@quarterdeck/rules/forges';
 import { z } from 'zod';
+import { claudeAuthStatusSchema } from '../acp/runtimes/claude/auth-mode.js';
 import { idSchema, inProject } from './fields.js';
 
 const turnIdSchema = z.int().positive();
@@ -11,6 +12,7 @@ export const READ_INTENTS = {
   'usage.read': inProject({}),
   'forge.read': inProject({}),
   'forge.requests': z.strictObject({}),
+  'auth.read': z.strictObject({}),
 };
 
 export type ReadIntentName = keyof typeof READ_INTENTS;
@@ -85,3 +87,9 @@ export const forgeRequestsResultSchema = z.object({
 });
 
 export type ForgeRequestsResult = z.infer<typeof forgeRequestsResultSchema>;
+
+export const authReadResultSchema = z.object({
+  claude: claudeAuthStatusSchema,
+});
+
+export type AuthReadResult = z.infer<typeof authReadResultSchema>;

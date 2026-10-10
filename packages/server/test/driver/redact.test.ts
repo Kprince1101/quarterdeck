@@ -47,6 +47,11 @@ describe('redactSecrets', () => {
     ],
     ['GitHub fine-grained', `github_pat_${'Ab1_'.repeat(20)}`, REDACTED],
     ['Anthropic', `key=sk-ant-api03-${'z'.repeat(40)}`, `key=${REDACTED}`],
+    [
+      'truncated Anthropic',
+      'Unexpected token \'s\', "sk-ant-api"... is not valid JSON',
+      `Unexpected token 's', "${REDACTED}"... is not valid JSON`,
+    ],
     ['OpenAI', `sk-proj-${'q'.repeat(40)}`, REDACTED],
     ['AWS', `AKIA${'ABCDEFGHIJKLMNOP'}`, REDACTED],
     [

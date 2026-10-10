@@ -97,6 +97,17 @@ npm run quarterdeck -- up</code></pre>
         sign-in uses your claude.ai account. An API key or a non-Anthropic
         backend that Claude Code is already set up for counts as signed in too.
       </p>
+      <p>
+        That is the <code>subscription</code> auth mode, the default. A machine
+        that runs Claude on an API key or through Google Vertex AI instead sets
+        <code>QUARTERDECK_CLAUDE_AUTH</code> to <code>api_key</code> or
+        <code>vertex</code> before <code>quarterdeck up</code> (see
+        <a href="rules.html#claude-auth">Claude auth mode</a>). Doctor reports
+        the mode on its own line, and what is missing:
+      </p>
+      <pre><code>claude auth: api_key (from QUARTERDECK_CLAUDE_AUTH), ANTHROPIC_API_KEY not set
+  Set: export ANTHROPIC_API_KEY=&lt;your key&gt;, then start Quarterdeck from that shell
+  Set: security add-generic-password -a "$USER" -s quarterdeck-anthropic-api-key -w</code></pre>
 
       <h2 id="gemini">2c. Gemini CLI</h2>
       <p>Doctor prints:</p>

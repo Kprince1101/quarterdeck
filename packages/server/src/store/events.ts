@@ -1,3 +1,4 @@
+import { redactShapes } from '../lib/redact.js';
 import type { Db, LiveFeed, Queryable } from './db.js';
 
 export const EVENTS_CHANNEL = 'quarterdeck_events';
@@ -66,7 +67,7 @@ export const publishEvent = async (
       input.agentId ?? null,
       input.ticketId ?? null,
       input.kind,
-      JSON.stringify(input.payload ?? {}),
+      JSON.stringify(redactShapes(input.payload ?? {})),
     ],
   );
   const [event] = rows;

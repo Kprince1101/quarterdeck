@@ -5,7 +5,15 @@ import {
   type StreamMessage,
 } from '@quarterdeck/server/stream-schema';
 import { act } from 'react';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import {
   CLOSE_NORMAL,
   createIntentClient,
@@ -63,9 +71,32 @@ const deliver = (...messages: StreamMessage[]) => {
   });
 };
 
+const AUTH_READ = {
+  intent: 'auth.read',
+  status: 'applied',
+  id: null,
+  result: {
+    claude: {
+      mode: 'api_key',
+      source: 'env',
+      missing: [],
+      keySource: 'env',
+      gateway: false,
+    },
+  },
+};
+
 describe('dashboard shell', () => {
   beforeAll(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(AUTH_READ))),
+    );
+  });
+
+  afterAll(() => {
+    vi.unstubAllGlobals();
   });
 
   afterEach(() => {
@@ -78,6 +109,19 @@ describe('dashboard shell', () => {
     expect(container.querySelector('.qd-mode')).toBeNull();
     expect(container.querySelector('main [data-widget-mount]')).not.toBeNull();
     expect(FakeSocket.opened.map(({ url }) => url)).toEqual([STREAM_URL]);
+    unmount();
+  });
+
+  it('shows the Claude auth mode in the header, read-only', async () => {
+    const { container, unmount } = render(<App stream={stream} />);
+    await vi.waitFor(() => {
+      expect(textOf(container, '.qd-header-end .qd-auth')).toBe(
+        'Claude: API key',
+      );
+    });
+    expect(
+      container.querySelector('.qd-header-end button, .qd-header-end select'),
+    ).toBeNull();
     unmount();
   });
 
