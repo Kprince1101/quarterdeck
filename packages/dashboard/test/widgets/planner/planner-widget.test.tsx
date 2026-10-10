@@ -536,6 +536,36 @@ describe('Planner widget', () => {
     );
   });
 
+  it('copies a message from the transcript', async () => {
+    const writeText = vi
+      .fn<(text: string) => Promise<void>>()
+      .mockResolvedValueOnce()
+      .mockRejectedValueOnce(new Error('denied'));
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const { container } = mountPlanner();
+    deliver(
+      snapshot(),
+      ...arrive(human(1, '1. plan\n2. ship'), reply(2, 'On it.')),
+    );
+    const [mine, theirs] = findAll(container, '.qd-planner-message');
+    if (mine === undefined || theirs === undefined) {
+      throw new Error('expected two messages');
+    }
+    await click(button(mine, 'Copy'));
+    await settle();
+    expect(writeText).toHaveBeenLastCalledWith('1. plan\n2. ship');
+    expect(labels(mine)).toEqual(['Copied']);
+
+    await click(button(theirs, 'Copy'));
+    await settle();
+    expect(writeText).toHaveBeenLastCalledWith('On it.');
+    expect(labels(theirs)).toEqual(['Copy failed']);
+    Reflect.deleteProperty(navigator, 'clipboard');
+  });
+
   it('shows the conversation held in the first project only', () => {
     const { container } = mountPlanner();
     deliver(

@@ -81,10 +81,29 @@
   overflow-wrap: anywhere;
 }
 
+.qd-planner-message-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--qd-space-2);
+}
+
 .qd-planner-author {
   display: block;
   color: var(--qd-faint);
   font-size: var(--qd-text-sm);
+}
+
+.qd-planner .qd-planner-copy {
+  padding: 0 var(--qd-space-2);
+  border-color: transparent;
+  background: none;
+  color: var(--qd-faint);
+}
+
+.qd-planner .qd-planner-copy:hover {
+  border-color: var(--qd-line);
+  color: var(--qd-fg);
 }
 
 .qd-planner-message[data-author='planner'] .qd-planner-author {

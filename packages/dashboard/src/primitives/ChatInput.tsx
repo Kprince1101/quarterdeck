@@ -18,18 +18,22 @@ export const ChatInput = ({
       aria-busy={view.isSending}
       onSubmit={view.handleSubmit}
     >
-      <textarea
-        className="qd-chat-input-field"
-        aria-label={label}
-        aria-invalid={view.hasError}
-        placeholder={view.placeholder}
-        rows={1}
-        value={view.draft}
-        readOnly={view.isSending}
-        disabled={view.isDisabled}
-        onChange={view.handleChange}
-        onKeyDown={view.handleKeyDown}
-      />
+      <div className="qd-chat-input-compose">
+        <textarea
+          ref={view.fieldRef}
+          className="qd-chat-input-field"
+          aria-label={label}
+          aria-invalid={view.hasError}
+          placeholder={view.placeholder}
+          rows={1}
+          value={view.draft}
+          readOnly={view.isSending}
+          disabled={view.isDisabled}
+          onChange={view.handleChange}
+          onKeyDown={view.handleKeyDown}
+          onPaste={view.handlePaste}
+        />
+      </div>
       <button
         type="submit"
         className="qd-chat-input-send"

@@ -10,7 +10,26 @@ import type {
 } from './planner-model.js';
 import './planner.css';
 import { ProposalCard } from './ProposalCard.js';
+import { useCopyMessage } from './use-copy-message.js';
 import { usePlannerWidget } from './use-planner-widget.js';
+
+interface CopyMessageButtonProps {
+  text: string;
+}
+
+const CopyMessageButton = ({ text }: CopyMessageButtonProps) => {
+  const copy = useCopyMessage(text);
+  return (
+    <button
+      type="button"
+      className="qd-planner-copy"
+      aria-live="polite"
+      onClick={copy.handleCopy}
+    >
+      {copy.label}
+    </button>
+  );
+};
 
 interface MessageItemProps {
   message: ChatMessage;
@@ -18,7 +37,10 @@ interface MessageItemProps {
 
 const MessageItem = ({ message }: MessageItemProps) => (
   <div className="qd-planner-message" data-author={message.author}>
-    <span className="qd-planner-author">{message.authorLabel}</span>
+    <div className="qd-planner-message-head">
+      <span className="qd-planner-author">{message.authorLabel}</span>
+      <CopyMessageButton text={message.text} />
+    </div>
     <p>{message.text}</p>
   </div>
 );

@@ -8,15 +8,48 @@ Shared pieces every widget builds on, so a chat box or a tab bar behaves the sam
 <ChatInput label="Message the Planner" onSubmit={view.handleSend} />
 ```
 
-| Key         | Does                                                  |
-| ----------- | ----------------------------------------------------- |
-| Enter       | Sends the trimmed draft. A blank draft sends nothing. |
-| Shift+Enter | Adds a new line.                                      |
-| Enter (IME) | Nothing while an input method is composing.           |
+| Key              | Does                                                                         |
+| ---------------- | ---------------------------------------------------------------------------- |
+| Enter            | Sends the trimmed draft. A blank draft sends nothing.                        |
+| Shift+Enter      | Adds a new line, or the next list item on a list line.                       |
+| Tab / Shift+Tab  | On a list line, indents / outdents it by two spaces. Elsewhere, moves focus. |
+| Cmd/Ctrl+Z       | The browser's own undo, which also undoes list edits and pastes.             |
+| Enter, Tab (IME) | Nothing while an input method is composing.                                  |
 
 Composing means `isComposing` is set, or `keyCode` is 229: Safari sends the Enter that confirms a conversion with `isComposing` false and `keyCode` 229.
 
 The Send button sends the same way. `onSubmit` may return a promise: until it settles the box is read-only (focus stays put) and a second Enter is ignored. On success the box clears; on failure the draft stays and the error shows under the box (`role="alert"`). `disabled` turns the box and the button off. `placeholder` defaults to `CHAT_INPUT_HINT`.
+
+### Lists
+
+A line is a list item when it starts (after any indent) with one of these markers and a space. Shift+Enter at or after the marker starts the next item at the same indent; text after the caret moves into it.
+
+| Line               | Next item       |
+| ------------------ | --------------- |
+| `3. ` / `3) `      | `4. ` / `4) `   |
+| `- `, `* `, `• `   | the same bullet |
+| `- [ ] `, `- [x] ` | `- [ ] `        |
+
+Shift+Enter on an item with nothing after its marker removes the marker and ends the list, as in Slack and GitHub. Shift+Tab on an item with no indent left does nothing to it and moves focus back, so Tab never traps the keyboard. The rules are pure functions in `chat-input-lists.ts` (`continueList`, `indentList`, `listMarker`); `chatKeyEffect` maps a key and the field's text and selection to send, edit, or leave to the browser.
+
+### Edits keep the undo stack
+
+Every edit the box makes itself (a list item, an indent, a paste) goes through `applyEdit`, which selects the range and runs `document.execCommand('insertText')` (or `'delete'`), so it lands on the browser's undo stack like typing does. Where that command is missing it falls back to `setRangeText` and an `input` event, which edits correctly but cannot be undone.
+
+### Size
+
+The box starts one line tall and grows with its content (`useChatInputAutosize` sets its height from `scrollHeight` on every draft change) until the stylesheet's `max-height` (12rem), then scrolls. It shrinks back when the draft clears after a send.
+
+### Paste and copy
+
+A paste always lands as plain text. The clipboard's `text/plain` is used when there is one (line endings normalised to `\n`); otherwise its `text/html` is stripped to text by `htmlToText`, keeping paragraph, block and `<br>` breaks. Copy is the browser's own, in the box and in transcripts; the Planner adds a Copy button to each message.
+
+### Attachments
+
+The box has two extension points for attachments, both unused today:
+
+- `handlePaste` in `useChatInput` only takes a paste that has text (`pastedText` returns `null` otherwise). A paste of only files, such as a screenshot, is left alone, for an attachment handler to take before it.
+- `ChatInput` renders the field inside `.qd-chat-input-compose`, a column next to the Send button, so an attachment tray can sit above or below the field without changing the form's grid.
 
 ## TabBar
 

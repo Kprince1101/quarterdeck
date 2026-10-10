@@ -5,8 +5,14 @@
   gap: var(--qd-space-2);
 }
 
+.qd-chat-input-compose {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qd-space-2);
+  min-width: 0;
+}
+
 .qd-chat-input-field {
-  field-sizing: content;
   min-height: calc(var(--qd-text-md) * 1.4 + var(--qd-space-2) * 2 + 2px);
   max-height: 12rem;
   padding: var(--qd-space-2) var(--qd-space-3);
