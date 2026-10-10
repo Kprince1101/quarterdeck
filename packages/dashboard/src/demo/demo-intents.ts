@@ -14,6 +14,7 @@ import type {
   SavedLayout,
   VoyageRow,
 } from '@quarterdeck/server/stream-schema';
+import type { DemoAttachments } from './demo-attachments.js';
 import { DemoRefusal } from './demo-fetch.js';
 import { DEMO_AUTH, DEMO_FORGE, DEMO_PROJECT } from './demo-seed.js';
 import type { DemoPlanner } from './demo-planner.js';
@@ -35,6 +36,7 @@ export interface DemoIntentContext {
   world: DemoWorld;
   rules: DemoRules;
   planner: DemoPlanner;
+  attachments: DemoAttachments;
   reads: DemoReads;
   startVoyage: (goal: string) => VoyageRow;
   later: (ms: number, work: () => void) => void;
@@ -273,8 +275,9 @@ export const createDemoIntents = (
     'planner.message': (input, reply) => {
       const answer = reply('pending', null);
       const intentId = answer.id ?? '';
+      const attachments = ctx.attachments.save(input.attachments);
       ctx.later(PLANNER_HEAR_MS, () => {
-        const seq = planner.hear(intentId, input.text);
+        const seq = planner.hear(intentId, input.text, attachments);
         ctx.later(PLANNER_REPLY_MS, () => {
           planner.reply(seq, input.text);
         });
@@ -295,7 +298,11 @@ export const createDemoIntents = (
       if (options.length > 0 && !options.includes(input.answer)) {
         refuse(BAD_REQUEST, 'The answer must be one of the card options');
       }
-      world.settleCard(card, input.answer);
+      world.settleCard(
+        card,
+        input.answer,
+        ctx.attachments.save(input.attachments),
+      );
       return reply('applied', { cardId: card.id, status: 'answered' });
     },
     'card.decline': (input, reply) => {

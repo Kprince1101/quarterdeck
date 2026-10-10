@@ -158,6 +158,8 @@ A sign-in card with no `signIn` state, from a gate without a driver, is the comm
 
 The Planner is not tied to a project: one conversation plans for every active project (see [planner](../server/src/planner/README.md#where-a-conversation-lives)). The widget has no project picker. It sends `planner.message` to the first active project the stream holds, which is the tab's own project, and shows that project's conversation. _New conversation_ sends `planner.new` with no project, which ends the conversation everywhere.
 
+The message box takes images as well as text (pasted, dropped or picked; see [ChatInput](src/primitives/README.md#images)), and a message may be images only. They go with `planner.message` as `attachments`. While the Planner has not taken the message, its images show from the browser's own copy; once it has, the transcript shows them from the server (`attachments` on `planner.human`), so they are still there after a reload. Click one to see it full size. A free-text card answer in the Cards widget takes images the same way, and an answered card shows its images under the answer.
+
 Each proposal card shows its project's name, from the `project` on its `ticket.proposed` event, and Approve, Edit and Reject send `ticket.approve`, `ticket.update` and `ticket.reject` to that project. The editor has a Project field: saving with another project sends `planner.move`, and the card follows the `planner.proposal_moved` event to the new ticket. A proposal in a project whose tickets the stream does not hold shows _On the <name> board_ and can be approved or rejected but not edited, since its body is not here; once decided, the card shows the decision.
 
 ## The Driver widget

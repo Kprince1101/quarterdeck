@@ -1,6 +1,12 @@
+import { createAttachmentReader } from './attachments.js';
 import { createIntentClient } from './intents.js';
 import { createRulesReader } from './rules.js';
 
+export {
+  AttachmentReadError,
+  createAttachmentReader,
+  type AttachmentReader,
+} from './attachments.js';
 export {
   IntentError,
   KEEPALIVE_BODY_LIMIT,
@@ -51,6 +57,9 @@ export {
 } from './token.js';
 export { useStream } from './use-stream.js';
 export type {
+  AttachmentRef,
+  AttachmentType,
+  AttachmentUpload,
   IntentInput,
   IntentName,
   IntentReply,
@@ -66,3 +75,5 @@ export type * from '@quarterdeck/server/stream-schema';
 export const intents = createIntentClient();
 
 export const readRules = createRulesReader();
+
+export const readAttachment = createAttachmentReader();

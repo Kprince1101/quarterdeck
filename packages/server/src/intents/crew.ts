@@ -1,5 +1,11 @@
 import { z } from 'zod';
 import {
+  EMPTY_MESSAGE_REFUSAL,
+  attachmentUploadsSchema,
+  hasTextOrAttachments,
+  messageTextSchema,
+} from './attachments.js';
+import {
   idSchema,
   inProject,
   optionalTextSchema,
@@ -37,7 +43,13 @@ export const CREW_INTENTS = {
   'agent.retire': agentTarget,
   'agent.reset': agentTarget,
   'agent.message': inProject({ agentId: idSchema, text: textSchema }),
-  'planner.message': inProject({ text: textSchema }),
+  'planner.message': inProject({
+    text: messageTextSchema,
+    attachments: attachmentUploadsSchema,
+  }).refine(
+    (input) => hasTextOrAttachments(input.text, input.attachments),
+    EMPTY_MESSAGE_REFUSAL,
+  ),
   'planner.new': z.strictObject({}),
   'planner.move': proposalMove,
 };

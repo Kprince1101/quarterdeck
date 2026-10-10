@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { forgeTerms } from '@quarterdeck/rules';
 import {
@@ -11,6 +11,8 @@ import {
   vi,
 } from 'vitest';
 import type { CardHuman } from '../../src/acp/permissions/index.js';
+import { ATTACHED_PATHS_INTRO } from '../../src/attachments/index.js';
+import { attachmentRefsOf, attachmentUrl } from '../../src/intents/index.js';
 import { repromptText } from '../../src/planner/brief.js';
 import {
   plannerBrief,
@@ -32,7 +34,8 @@ import {
   SIGNED_IN_AGAIN_TEXT,
   WAITING_TEXT,
 } from '../acp/fake-agent/index.ts';
-import { startTestApi, type TestApi } from '../api/harness.ts';
+import { bearer, startTestApi, type TestApi } from '../api/harness.ts';
+import { PNG_BYTES, PNG_DATA, png } from '../attachments/fixtures.ts';
 import { callTool, connectClient } from '../bus/fixtures.ts';
 import {
   TIMEOUT,
@@ -129,7 +132,12 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     expect(events[0]).toEqual({
       kind: 'planner.human',
       agentId: agent?.id,
-      payload: { intentId, seq: 1, text: 'build a login page' },
+      payload: {
+        intentId,
+        seq: 1,
+        text: 'build a login page',
+        attachments: [],
+      },
     });
     const reply = events[1]?.payload as { text: string; stopReason: string };
     expect(reply.stopReason).toBe('end_turn');
@@ -148,6 +156,111 @@ describe('Planner', { timeout: TIMEOUT }, () => {
     expect(rows).toEqual([
       { seq: 1, stop_reason: 'end_turn', echoed: true, ended: true },
     ]);
+  });
+
+  const sendImage = async (p: PlannerProject, text: string) => {
+    const res = await p.send('planner.message', {
+      text,
+      attachments: [png()],
+    });
+    expect(res.status).toBe(202);
+    await p.planner().drain();
+    const human = (await p.events()).find(
+      (event) => event.kind === 'planner.human',
+    );
+    const [ref] = attachmentRefsOf(human?.payload['attachments']);
+    if (!ref) throw new Error('the image never reached planner.human');
+    return { intentId: res.body.id, ref };
+  };
+
+  const bytesLeakedIn = async (p: PlannerProject): Promise<string[]> => {
+    const { rows } = await p.store.db.query<{ source: string }>(
+      `select 'intents' as source from intents
+         where project_id = $1 and input::text like '%' || $2 || '%'
+       union all
+       select 'events' from events
+         where project_id = $1 and payload::text like '%' || $2 || '%'
+       union all
+       select 'turns' from turns
+         where prompt like '%' || $2 || '%'`,
+      [p.store.projectId, PNG_DATA.slice(0, 40)],
+    );
+    return rows.map(({ source }) => source);
+  };
+
+  it('sends an attached image to an image-capable agent as an image content block', async () => {
+    const p = await open({ fake: { acceptsImages: true } });
+    await p.start();
+    const { ref } = await sendImage(p, 'what is on this screen?');
+
+    expect(ref).toEqual({
+      id: expect.any(String),
+      mimeType: 'image/png',
+      bytes: PNG_BYTES,
+      path: join(
+        t.api.stores.dataHome,
+        p.project,
+        'attachments',
+        `${ref.id}.png`,
+      ),
+    });
+    expect(await readFile(ref.path)).toEqual(Buffer.from(PNG_DATA, 'base64'));
+    const [reply] = await replies(p);
+    expect(reply?.['text']).toContain(
+      `what is on this screen?\n[image block: image/png, ${PNG_BYTES} bytes]`,
+    );
+    expect(reply?.['text']).not.toContain(ref.path);
+    expect(await bytesLeakedIn(p)).toEqual([]);
+    const { rows } = await p.store.db.query<{ prompt: string }>(
+      'select prompt from turns',
+    );
+    expect(rows[0]?.prompt).toContain(
+      `[image ${ref.id}: image/png, ${PNG_BYTES} bytes]`,
+    );
+
+    const served = await fetch(`${t.api.url}${attachmentUrl(p.project, ref)}`, {
+      headers: bearer(t.api.token),
+    });
+    expect(served.status).toBe(200);
+    expect(served.headers.get('content-type')).toBe('image/png');
+    expect(Buffer.from(await served.arrayBuffer())).toEqual(
+      Buffer.from(PNG_DATA, 'base64'),
+    );
+    const anonymous = await fetch(
+      `${t.api.url}${attachmentUrl(p.project, ref)}`,
+    );
+    expect(anonymous.status).toBe(401);
+  });
+
+  it('gives an agent without image prompts a file path line per image, even for an image-only message', async () => {
+    const p = await open();
+    await p.start();
+    const { ref } = await sendImage(p, '');
+
+    const [reply] = await replies(p);
+    expect(reply?.['text']).toContain(
+      `${ATTACHED_PATHS_INTRO}\n- ${ref.path} (image/png, ${PNG_BYTES} bytes)`,
+    );
+    expect(reply?.['text']).not.toContain('[image block');
+    expect(await readFile(ref.path)).toEqual(Buffer.from(PNG_DATA, 'base64'));
+    expect(await bytesLeakedIn(p)).toEqual([]);
+  });
+
+  it('refuses an image that is not what it claims and keeps nothing', async () => {
+    const p = await open();
+    const res = await p.send('planner.message', {
+      text: 'look',
+      attachments: [{ mimeType: 'image/gif', data: PNG_DATA }],
+    });
+    expect(res).toMatchObject({
+      status: 400,
+      body: { error: 'Image 1 is not a valid image/gif file.' },
+    });
+    const kept = await readdir(
+      join(t.api.stores.dataHome, p.project, 'attachments'),
+    ).catch((): string[] => []);
+    expect(kept.filter((file) => file.endsWith('.gif'))).toEqual([]);
+    expect(await p.events()).toEqual([]);
   });
 
   it('keeps one session for the conversation and tells the Planner what the human decided', async () => {

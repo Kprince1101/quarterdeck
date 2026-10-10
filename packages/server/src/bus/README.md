@@ -73,6 +73,8 @@ It then listens on `CHANGES_CHANNEL` for changes to that card and re-reads it, a
 | `askExpiryMs` passes                                     | `expired`, only if still `open`; records `card.expired` with `{ cardId }` | `{"cardId","status":"expired","answer":null}`           |
 | The call is cancelled or the session's connection closes | stays `open`                                                              | none; the waiting stops and the call ends with an error |
 
+When the person attached images to a free-text answer (see [api](../api/README.md#attachments)), the result also has `"attachments": [{ "path", "mimeType", "bytes" }]`, one per image, with the absolute path of the file under `~/.quarterdeck/<project>/attachments/`, so the agent can open it with its own file tools. The answer text may then be empty. A result with no images has no `attachments` key.
+
 Expiry never overwrites an answer that landed first: the update only touches an `open` card, and the result is read back from the row. A card left `open` by a cancelled call or a server restart can still be answered on the board; passing that answer on is the Driver's job.
 
 While waiting, a caller that sent a `progressToken` gets a `notifications/progress` every `ASK_PROGRESS_MS` (30 s), so MCP clients that reset their request timeout on progress do not give up on a long wait.

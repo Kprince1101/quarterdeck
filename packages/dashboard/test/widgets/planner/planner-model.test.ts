@@ -27,6 +27,8 @@ import {
   SPEC_BODY,
   cleared,
   human,
+  humanWithImages,
+  imageRef,
   moved,
   plannerEvent,
   project,
@@ -44,10 +46,55 @@ const summary = (entries: ConversationEntry[]): string[] =>
     return `${message?.author}: ${message?.text}`;
   });
 
-const waiting = (intentId: string, text = 'hello'): PendingMessage => ({
+const waiting = (
+  intentId: string,
+  text = 'hello',
+  previews: string[] = [],
+): PendingMessage => ({
   projectId: DECK,
   intentId,
   text,
+  previews,
+});
+
+describe('message images', () => {
+  it('reads the stored images of a human message and the previews of a waiting one', () => {
+    const entries = conversation({
+      events: [
+        humanWithImages(1, 'look', [
+          imageRef(),
+          { ...imageRef(), id: 'not-a-uuid' },
+        ]),
+      ],
+      tickets: [],
+      pending: [waiting(INTENT_2, '', ['data:image/png;base64,AA'])],
+      projectId: DECK,
+      homeSlug: 'deck',
+      labels: LABELS,
+    });
+    expect(entries.map(({ message }) => message?.images)).toEqual([
+      [
+        {
+          key: imageRef().id,
+          project: 'deck',
+          ref: imageRef(),
+          src: null,
+        },
+      ],
+      [
+        {
+          key: `pending-${INTENT_2}-0`,
+          project: '',
+          ref: null,
+          src: 'data:image/png;base64,AA',
+        },
+      ],
+    ]);
+    expect(entries.map(({ message }) => message?.hasImages)).toEqual([
+      true,
+      true,
+    ]);
+  });
 });
 
 describe('payloadText', () => {

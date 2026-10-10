@@ -68,6 +68,7 @@ export const card = (n: number, fields: Partial<CardRow> = {}): CardRow => ({
   recommendation: null,
   status: 'open',
   answer: null,
+  attachments: [],
   createdAt: ago(n * MINUTE),
   answeredAt: null,
   expiresAt: new Date(NOW + 60 * MINUTE).toISOString(),

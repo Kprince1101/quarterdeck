@@ -17,6 +17,7 @@ import {
   FAKE_MODES,
   expectedLargeOutput,
   fakeAgentLaunch,
+  fakeImageLine,
   LARGE_OUTPUT_MIN_BYTES,
   parseFakeAgentArgs,
   resolveScenario,
@@ -92,6 +93,7 @@ describe('fake agent arguments', () => {
       leaksApiKey: true,
       terminalAuth: true,
       authPrompt: true,
+      acceptsImages: true,
     };
     expect(parseFakeAgentArgs(toFakeAgentArgs(options))).toEqual(options);
     expect(toFakeAgentArgs(options)).toEqual(Object.values(FAKE_AGENT_FLAGS));
@@ -231,6 +233,40 @@ describe('fake agent protocol', () => {
         mcpServers: [],
       }),
     ).rejects.toMatchObject({ code: METHOD_NOT_FOUND });
+  });
+
+  it('advertises image prompts only when asked, and echoes each image block', async () => {
+    const plain = await initialize(connect().agent);
+    expect(plain.agentCapabilities?.promptCapabilities).toBeUndefined();
+
+    const { agent, updates } = connect({ agent: { acceptsImages: true } });
+    const response = await initialize(agent);
+    expect(response.agentCapabilities?.promptCapabilities).toEqual({
+      image: true,
+    });
+    const { sessionId } = await agent.request('session/new', {
+      cwd: '/fake',
+      mcpServers: [],
+    });
+    await agent.request('session/prompt', {
+      sessionId,
+      prompt: [
+        { type: 'text', text: 'look' },
+        { type: 'image', mimeType: 'image/png', data: 'AAEC' },
+      ],
+    });
+    expect(updates).toEqual([
+      {
+        sessionUpdate: 'agent_message_chunk',
+        content: {
+          type: 'text',
+          text: `look${fakeImageLine({ mimeType: 'image/png', data: 'AAEC' })}`,
+        },
+      },
+    ]);
+    expect(fakeImageLine({ mimeType: 'image/png', data: 'AAEC' })).toBe(
+      '\n[image block: image/png, 3 bytes]',
+    );
   });
 
   it('advertises and serves load and resume when asked', async () => {

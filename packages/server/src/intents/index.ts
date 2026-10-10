@@ -1,3 +1,26 @@
+export {
+  ATTACHMENT_COUNT_REFUSAL,
+  ATTACHMENT_EXTENSIONS,
+  ATTACHMENT_INTENTS,
+  ATTACHMENT_PATH_PREFIX,
+  ATTACHMENT_SIZE_REFUSAL,
+  ATTACHMENT_TYPES,
+  ATTACHMENT_TYPE_REFUSAL,
+  EMPTY_MESSAGE_REFUSAL,
+  MAX_ATTACHMENTS,
+  MAX_ATTACHMENT_BYTES,
+  attachmentFileName,
+  attachmentRefSchema,
+  attachmentRefsOf,
+  attachmentRefsSchema,
+  attachmentUploadSchema,
+  attachmentUrl,
+  base64Bytes,
+  isAttachmentType,
+  type AttachmentRef,
+  type AttachmentType,
+  type AttachmentUpload,
+} from './attachments.js';
 export { BOARD_INTENTS, type BoardIntentName } from './board.js';
 export { CREW_INTENTS, type CrewIntentName } from './crew.js';
 export {

@@ -18,7 +18,7 @@ Shared pieces every widget builds on, so a chat box or a tab bar behaves the sam
 
 Composing means `isComposing` is set, or `keyCode` is 229: Safari sends the Enter that confirms a conversion with `isComposing` false and `keyCode` 229.
 
-The Send button sends the same way. `onSubmit` may return a promise: until it settles the box is read-only (focus stays put) and a second Enter is ignored. On success the box clears; on failure the draft stays and the error shows under the box (`role="alert"`). `disabled` turns the box and the button off. `placeholder` defaults to `CHAT_INPUT_HINT`.
+The Send button sends the same way, with any attached [images](#images). `onSubmit` may return a promise: until it settles the box is read-only (focus stays put) and a second Enter is ignored. On success the box clears; on failure the draft stays and the error shows under the box (`role="alert"`). `disabled` turns the box and the button off. `placeholder` defaults to `CHAT_INPUT_HINT`.
 
 ### Lists
 
@@ -44,12 +44,17 @@ The box starts one line tall and grows with its content (`useChatInputAutosize` 
 
 A paste always lands as plain text. The clipboard's `text/plain` is used when there is one (line endings normalised to `\n`); otherwise its `text/html` is stripped to text by `htmlToText`, keeping paragraph, block and `<br>` breaks. Copy is the browser's own, in the box and in transcripts; the Planner adds a Copy button to each message.
 
-### Attachments
+### Images
 
-The box has two extension points for attachments, both unused today:
+`onSubmit(message, attachments)` gets the trimmed text and the attached images as `{ mimeType, data }` (base64), ready for `planner.message` or `card.answer`. Images come three ways:
 
-- `handlePaste` in `useChatInput` only takes a paste that has text (`pastedText` returns `null` otherwise). A paste of only files, such as a screenshot, is left alone, for an attachment handler to take before it.
-- `ChatInput` renders the field inside `.qd-chat-input-compose`, a column next to the Send button, so an attachment tray can sit above or below the field without changing the form's grid.
+- a paste with files in it, such as a screenshot (the files are attached; any text in the same paste still lands in the box);
+- files dropped anywhere on the form (it shows `data-dragging="true"` while files are over it);
+- the attach button (`+`, labelled `Attach images`), which opens a file picker limited to the four types (`ATTACH_ACCEPT`).
+
+PNG, JPEG, GIF and WebP up to 5 MB each are taken, at most five per message (the same limits the server checks, from `@quarterdeck/server/intents`). `checkFiles` takes what fits and refuses the rest, naming each refused file: the refusal shows under the box like a send error, and clears when an image is removed or the message is sent. Attached images show as thumbnails above the field (`useChatAttachments`), each with a remove button. A message may be images only: Send is enabled when there is text or an image, and stays off while a file is still being read.
+
+`ImageStrip` renders thumbnails (`ImageThumb`: `src`, `alt`, and a remove handler when `canRemove`) and shows the one clicked full size in a dialog that Close or Escape dismisses. Transcripts use it through `AttachmentImages` (`widgets/attachments`), which fetches stored images with the deck's `attachments` reader (`GET /api/attachments/<project>/<id>.<ext>` with the token, as a data URL) and says how many could not be loaded.
 
 ## TabBar
 

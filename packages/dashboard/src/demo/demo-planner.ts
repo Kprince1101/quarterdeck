@@ -1,3 +1,4 @@
+import type { AttachmentRef } from '@quarterdeck/server/intents';
 import type { AgentRow } from '@quarterdeck/server/stream-schema';
 import { specBody } from '@quarterdeck/server/ticket-spec';
 import { DEMO_PLANNER_REPLY } from './demo-plans.js';
@@ -11,13 +12,20 @@ const MAX_TITLE = 80;
 
 export interface DemoPlanner {
   agent: () => AgentRow;
-  hear: (intentId: string, text: string) => number;
+  hear: (
+    intentId: string,
+    text: string,
+    attachments?: readonly AttachmentRef[],
+  ) => number;
   reply: (seq: number, text: string) => void;
   clear: (intentId: string) => void;
 }
 
+const IMAGE_ONLY_TITLE = 'What the attached image shows';
+
 const titleOf = (text: string): string => {
   const line = text.trim().split('\n')[0] ?? text;
+  if (line === '') return IMAGE_ONLY_TITLE;
   if (line.length <= MAX_TITLE) return line;
   return `${line.slice(0, MAX_TITLE - 1)}…`;
 };
@@ -45,7 +53,7 @@ export const createDemoPlanner = (world: DemoWorld): DemoPlanner => {
 
   return {
     agent,
-    hear: (intentId, text) => {
+    hear: (intentId, text, attachments = []) => {
       const planner = world.setAgent(agent(), 'working');
       const seq =
         Math.max(
@@ -57,7 +65,7 @@ export const createDemoPlanner = (world: DemoWorld): DemoPlanner => {
         ) + 1;
       store.emit('planner.human', {
         agentId: planner.id,
-        payload: { intentId, seq, text },
+        payload: { intentId, seq, text, attachments: [...attachments] },
       });
       return seq;
     },

@@ -9,6 +9,7 @@ import {
   type ProposalMove,
 } from '../../planner/move.js';
 import { publishEvent } from '../../store/index.js';
+import { withSavedAttachments } from '../attachments.js';
 import type { IntentHandler, IntentHandlers } from '../context.js';
 import { conflict, notFound } from '../http-error.js';
 import { applyInProject, queueInProject, unrecorded } from '../record.js';
@@ -78,7 +79,16 @@ const moveProposalTo: IntentHandler<'planner.move'> = async (
 };
 
 export const PLANNER_HANDLERS: IntentHandlers<PlannerIntentName> = {
-  'planner.message': (ctx, input, name) => queueInProject(ctx, name, input),
+  'planner.message': (ctx, input, name) =>
+    withSavedAttachments(
+      ctx,
+      input.project,
+      input.attachments,
+      (attachments) => {
+        const recorded = { ...input, attachments };
+        return queueInProject(ctx, name, recorded);
+      },
+    ),
   'planner.new': queueEverywhere,
   'planner.move': moveProposalTo,
 };

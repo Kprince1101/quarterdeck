@@ -19,6 +19,18 @@ const client = await KIRO_ADAPTER.connect(
 
 `launch.env` is a `ChildEnvSpec` (names to pass, values to set), never a whole environment; the process gets only what `childEnv` builds from it. `launch.command` replaces the runtime's command: tests point it at the fake ACP agent, and a user can point it at a custom install. `project` (the project slug) and `agentName` name kiro's `--agent`; other runtimes ignore them. `role` and `rules` (the `homeDir` and `repoDir` the project's rules load from) pick kiro's [base agent](#base-agents); other runtimes ignore them too. `mcpServers` are the MCP servers the agent must always have, the bus first among them. A runtime that reads them from its own config (kiro) writes them there. The others ignore the field, and the caller passes the same servers to `session/new`.
 
+## Images in prompts
+
+An agent says it takes images in a prompt with `agentCapabilities.promptCapabilities.image` in its `initialize` reply (`acceptsImages(client.agent)`). What each runtime reports, checked on 2026-10-10:
+
+| Runtime | `promptCapabilities`                                  | Source                                                                                                                                                                          |
+| ------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| claude  | `{ image: true, embeddedContext: true }`              | claude-agent-acp 0.85.0, `dist/acp-agent.js` `initialize`. An image block with `data` becomes an Anthropic base64 image; one with only an `http` `uri` becomes a URL image.     |
+| gemini  | `{ image: true, audio: true, embeddedContext: true }` | Gemini CLI `packages/cli/src/acp/acpRpcDispatcher.ts` `initialize`.                                                                                                             |
+| kiro    | `{ image: true }`                                     | Kiro CLI's ACP docs (kiro.dev/docs/cli/acp): the `initialize` example and "Supports image content in prompts". `kiro-cli` was not installed on the machine this was checked on. |
+
+All three take images today. Whatever a runtime reports, the client never drops an image silently: `AcpClient.prompt` throws `AcpClientError` with code `image_unsupported` (and sends nothing) when the prompt holds an `image` block and the agent did not set `promptCapabilities.image`. Its message names the agent and says to send the image's file path as text instead. The Planner checks the capability first, so it sends an image block only to an agent that takes one and a path line otherwise (see [planner](../../planner/README.md#images)). The fake agent advertises `{ image: true }` with `acceptsImages` (`--accepts-images`) and echoes each image block it gets as `[image block: <mimeType>, <bytes> bytes]`.
+
 Every adapter is tested with `describeRuntimeConformance(adapter, base?)` from `test/acp/runtime-conformance.ts`. It runs the ACP conformance suite through `adapter.connect` against the fake agent, merging `base` into every launch, and checks every spawned process has exited.
 
 ## kiro

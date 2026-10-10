@@ -8,6 +8,7 @@ import {
 import { createEventHub } from './event-hub.js';
 import type { EventHub } from './event-hub.js';
 import { createPermissionGate } from './permission-gate.js';
+import { assertPromptContent } from './prompt-content.js';
 import { resumeSession, sessionParams } from './resume.js';
 import type {
   AcpClient,
@@ -144,10 +145,12 @@ export const connectAcpClient = async ({
   };
 
   const prompt = async (sessionId: SessionId, input: PromptInput) => {
+    const blocks = toContentBlocks(input);
+    assertPromptContent(agent, blocks);
     permissions.beginTurn(sessionId);
     const response = await connection.agent.request(
       methods.agent.session.prompt,
-      { sessionId, prompt: toContentBlocks(input) },
+      { sessionId, prompt: blocks },
     );
     events.emit({
       type: 'turn_end',

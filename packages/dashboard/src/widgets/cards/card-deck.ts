@@ -5,6 +5,10 @@ import type {
   SignInState,
   TicketRow,
 } from '@quarterdeck/server/stream-schema';
+import {
+  storedImages,
+  type MessageImage,
+} from '../attachments/message-images.js';
 import { relativeTime } from '../events/event-feed.js';
 
 export const ASK_CARD = 'ask';
@@ -12,6 +16,7 @@ export const SIGN_IN_CARD = 'auth.sign_in';
 export const MERGE_CARD = 'ticket.merge';
 
 export const LOOKUP_LABEL = 'Could have looked that up';
+export const ANSWER_IMAGES_LABEL = 'Images in the answer';
 export const LOOKUP_NOTE =
   'You could have looked this up yourself; check before you ask next time.';
 
@@ -132,6 +137,8 @@ export interface CardView {
   status: CardStatus;
   statusLabel: string;
   answer: string | null;
+  images: MessageImage[];
+  hasImages: boolean;
   lookup: boolean;
   askedAt: string;
   askedAge: string;
@@ -217,6 +224,7 @@ export const toCardView = (card: CardRow, related: Related): CardView => {
   const { text, lookup } = splitLookupNote(card.answer);
   const settled = settledAt(card);
   const signIn = cardSignIn(card);
+  const images = storedImages(project?.slug ?? '', card.attachments);
   return {
     id: card.id,
     projectSlug: project?.slug ?? null,
@@ -237,6 +245,8 @@ export const toCardView = (card: CardRow, related: Related): CardView => {
     status: card.status,
     statusLabel: STATUS_LABELS[card.status],
     answer: text,
+    images,
+    hasImages: images.length > 0,
     lookup,
     askedAt: card.createdAt,
     askedAge: relativeTime(card.createdAt, related.now),

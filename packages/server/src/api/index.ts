@@ -15,7 +15,7 @@ export {
   type ProjectHooks,
   type ProjectStores,
 } from './project-stores.js';
-export { MAX_BODY_BYTES } from './request.js';
+export { MAX_ATTACHMENT_BODY_BYTES, MAX_BODY_BYTES } from './request.js';
 export {
   API_HOST,
   DEFAULT_API_PORT,

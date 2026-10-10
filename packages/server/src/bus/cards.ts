@@ -1,4 +1,8 @@
 import {
+  attachmentRefsOf,
+  type AttachmentRef,
+} from '../intents/attachments.js';
+import {
   CHANGES_CHANNEL,
   publishEvent,
   type PublishInput,
@@ -15,10 +19,13 @@ const ACTIVE_TICKET = ['assigned', 'in_progress', 'in_review', 'bounced'];
 
 export type CardOutcomeStatus = 'answered' | 'declined' | 'expired';
 
+export type AttachedImage = Pick<AttachmentRef, 'path' | 'mimeType' | 'bytes'>;
+
 export interface CardOutcome {
   cardId: string;
   status: CardOutcomeStatus;
   answer: string | null;
+  attachments?: AttachedImage[];
 }
 
 export interface AskCard {
@@ -170,14 +177,34 @@ const readOutcome = async (
   const { rows } = await store.db.query<{
     status: CardOutcomeStatus | 'open';
     answer: string | null;
-  }>('select status, answer from cards where id = $1 and project_id = $2', [
-    cardId,
-    store.projectId,
-  ]);
+    attachments: unknown;
+  }>(
+    `select status, answer, attachments from cards
+     where id = $1 and project_id = $2`,
+    [cardId, store.projectId],
+  );
   const [row] = rows;
   if (!row) throw new BusToolError(`card ${cardId} no longer exists`);
   if (row.status === 'open') return undefined;
-  return { cardId, status: row.status, answer: row.answer };
+  return withAttachedImages(
+    { cardId, status: row.status, answer: row.answer },
+    attachmentRefsOf(row.attachments),
+  );
+};
+
+const withAttachedImages = (
+  outcome: CardOutcome,
+  refs: readonly AttachmentRef[],
+): CardOutcome => {
+  if (refs.length === 0) return outcome;
+  return {
+    ...outcome,
+    attachments: refs.map(({ path, mimeType, bytes }) => ({
+      path,
+      mimeType,
+      bytes,
+    })),
+  };
 };
 
 export const expireCard = async (

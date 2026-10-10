@@ -1,4 +1,6 @@
 import { useState, type ChangeEvent } from 'react';
+import type { AttachmentUpload } from '../../api/index.js';
+import { withAttachments } from '../../primitives/index.js';
 import { useDeck } from '../../deck/DeckProvider.js';
 import { getErrorMessage } from '../../lib/errors.js';
 import { withLookupNote, type CardView } from './card-deck.js';
@@ -22,7 +24,10 @@ export interface CardReplyView {
   error: string | null;
   hasError: boolean;
   handleLookupChange: (event: ChangeEvent<HTMLInputElement>) => void;
-  handleSend: (message: string) => Promise<void>;
+  handleSend: (
+    message: string,
+    attachments: AttachmentUpload[],
+  ) => Promise<void>;
   handleDecline: () => void;
 }
 
@@ -37,12 +42,16 @@ export const useCardReply = (card: CardView): CardReplyView => {
   const [isBusy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const answer = async (text: string): Promise<void> => {
-    await intents.card.answer({
-      project: projectOf(card),
-      cardId: card.id,
-      answer: text,
-    });
+  const answer = async (
+    text: string,
+    attachments: AttachmentUpload[] = [],
+  ): Promise<void> => {
+    await intents.card.answer(
+      withAttachments(
+        { project: projectOf(card), cardId: card.id, answer: text },
+        attachments,
+      ),
+    );
   };
 
   const run = async (work: () => Promise<void>): Promise<void> => {
@@ -78,7 +87,8 @@ export const useCardReply = (card: CardView): CardReplyView => {
     handleLookupChange: ({ currentTarget }) => {
       setLookup(currentTarget.checked);
     },
-    handleSend: (message) => answer(withLookupNote(message, lookup)),
+    handleSend: (message, attachments) =>
+      answer(withLookupNote(message, lookup), attachments),
     handleDecline: () => {
       void run(async () => {
         await intents.card.decline({

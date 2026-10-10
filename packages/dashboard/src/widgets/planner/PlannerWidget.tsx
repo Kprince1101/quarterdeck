@@ -2,11 +2,13 @@ import type { JSX } from 'react';
 import type { WorkspaceMode } from '../../api/index.js';
 import { useWorkspaceMode } from '../../deck/DeckProvider.js';
 import { ChatInput } from '../../primitives/index.js';
+import { AttachmentImages } from '../attachments/AttachmentImages.js';
 import { defineWidget } from '../registry.js';
-import type {
-  ChatMessage,
-  ConversationEntry,
-  ProjectChoice,
+import {
+  MESSAGE_IMAGES_LABEL,
+  type ChatMessage,
+  type ConversationEntry,
+  type ProjectChoice,
 } from './planner-model.js';
 import './planner.css';
 import { ProposalCard } from './ProposalCard.js';
@@ -41,6 +43,9 @@ const MessageItem = ({ message }: MessageItemProps) => (
       <span className="qd-planner-author">{message.authorLabel}</span>
       <CopyMessageButton text={message.text} />
     </div>
+    {message.hasImages && (
+      <AttachmentImages label={MESSAGE_IMAGES_LABEL} images={message.images} />
+    )}
     <p>{message.text}</p>
   </div>
 );

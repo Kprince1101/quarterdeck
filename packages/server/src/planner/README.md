@@ -55,6 +55,15 @@ Each message goes through the [pause](../pause/README.md) guard (`pause`) before
 
 When the Planner starts it retires any Planner agent still live from an earlier run, because that agent's process is gone. `close()` cancels a running turn and retires the conversation.
 
+## Images
+
+A `planner.message` may carry images (see [api](../api/README.md#attachments)); the API has already saved each one under `~/.quarterdeck/<project>/attachments/` and recorded only its reference `{ id, mimeType, bytes, path }`. The turn that answers the message sends them in the prompt, after the text (which may be empty):
+
+- when the agent's `initialize` set `agentCapabilities.promptCapabilities.image` (`acceptsImages`), as one ACP `image` content block per image, read from its file;
+- otherwise as a line per image under `ATTACHED_PATHS_INTRO`, `- <path> (<mimeType>, <bytes> bytes)`, so an agent that reads files can still open it (`planPrompt` in `src/attachments`).
+
+The turn's `prompt` row holds the text with a `[image <id>: <mimeType>, <bytes> bytes]` line per image block, or the path lines; never the bytes. The `planner.human` event carries the references as `attachments`, so the Planner widget shows the images again after a reload. What each runtime reports is in [runtimes](../acp/runtimes/README.md#images-in-prompts).
+
 ## Spec tickets
 
 Every ticket body is a spec, so a builder starts with requirements, design and tasks. The brief ends with the ticket format (`TICKET_SPEC_FORMAT`): in order, `## Requirements` (user stories with acceptance criteria in the form WHEN ... THE SYSTEM SHALL ...), `## Design` (where in the repository, the approach, the constraints and decisions), `## Tasks` (a numbered checklist sized for one pull request, or merge request on GitLab), and a last line `Proven: <observable check>`. The brief, the re-prompt and `propose`'s refusal all show it in the project's forge terms. The spec lives only in the ticket body; nothing is written to the project's repository.
@@ -71,7 +80,7 @@ The `planner.move` intent (see [api](../api/README.md)) moves a proposed ticket 
 
 | `kind`                     | `agentId`        | `payload`                                                                                                      |
 | -------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------- |
-| `planner.human`            | the Planner      | `{ intentId, seq, text }`: the message entered the turn                                                        |
+| `planner.human`            | the Planner      | `{ intentId, seq, text, attachments }`: the message entered the turn, with its [image](#images) references     |
 | `planner.reply`            | the Planner      | `{ seq, text, stopReason }`: the agent's reply text                                                            |
 | `planner.failed`           | the Planner/null | `{ intentId, error, seq? }`: a refused message or a failed turn                                                |
 | `planner.cleared`          | the old Planner  | `{ reason, intentId }`: `new`, `failed`, `restart`, `shutdown`, `archived` or `retired`                        |

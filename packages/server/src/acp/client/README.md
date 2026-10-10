@@ -11,7 +11,7 @@ The returned client offers:
 
 - `newSession({ cwd, mcpServers, meta? })`. `meta` is sent as the request's `_meta`, the ACP extension point that runtime adapters use for agent-specific options. When the agent needs sign-in, this rejects with an error that `isAuthRequiredError(err)` recognises. Its auth methods are in `client.agent.authMethods`.
 - `authenticate(methodId)`. The client never calls it on its own; the [sign-in drivers](../runtimes/README.md#signing-in) call it, on a connection of their own, to start a runtime's browser sign-in.
-- `prompt(sessionId, input)`
+- `prompt(sessionId, input)`, where `input` is text or a list of ACP content blocks. A list holding an `image` block for an agent that did not set `agentCapabilities.promptCapabilities.image` is refused before anything is sent: it rejects with an `AcpClientError` whose code is `image_unsupported`, and whose message (`imageRefusal(agent)`) names the agent and says to send the file path as text. `acceptsImages(client.agent)` tells you which to send (see [runtimes](../runtimes/README.md#images-in-prompts)).
 - `cancel(sessionId)`
 - `resumeSession({ sessionId, cwd, mcpServers, meta? })`, which uses `session/resume` when the agent supports it and `session/load` otherwise
 - `setSessionMode(sessionId, modeId)`, which sends `session/set_mode`. Runtime adapters use it to pin a session to the mode in which every tool call asks for permission.

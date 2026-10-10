@@ -44,6 +44,33 @@
   color: var(--qd-muted);
 }
 
+.qd-chat-input[data-dragging='true'] .qd-chat-input-field {
+  border-style: dashed;
+  border-color: var(--qd-accent);
+}
+
+.qd-chat-input-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--qd-space-2);
+}
+
+.qd-chat-input-attach {
+  padding: var(--qd-space-2) var(--qd-space-3);
+  border: 1px solid var(--qd-line);
+  border-radius: var(--qd-radius);
+  background: var(--qd-surface-raised);
+  color: var(--qd-fg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.qd-chat-input-attach:disabled {
+  color: var(--qd-faint);
+  cursor: default;
+}
+
 .qd-chat-input-send {
   padding: var(--qd-space-2) var(--qd-space-3);
   border: 1px solid var(--qd-accent);

@@ -18,6 +18,7 @@ import { pathExists } from '../lib/fs.js';
 import { globalPausePath } from '../pause/state.js';
 import {
   dataDirLockPath,
+  projectAttachmentsDir,
   projectDataDir,
   projectTurnsDir,
   projectWorktreesDir,
@@ -81,6 +82,12 @@ export const dataPaths = ({
     entry(
       'Worktrees',
       projectWorktreesDir(project, home),
+      'directory',
+      'project',
+    ),
+    entry(
+      'Attachments',
+      projectAttachmentsDir(project, home),
       'directory',
       'project',
     ),

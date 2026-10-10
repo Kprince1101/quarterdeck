@@ -3,6 +3,12 @@ import type {
   StreamEvent,
   TicketRow,
 } from '@quarterdeck/server/stream-schema';
+import { attachmentRefsOf } from '@quarterdeck/server/intents';
+import {
+  localImages,
+  storedImages,
+  type MessageImage,
+} from '../attachments/message-images.js';
 import {
   SPEC_SECTIONS,
   parseTicketSpec,
@@ -20,6 +26,8 @@ export const TICKET_PROPOSED = 'ticket.proposed';
 export const PROPOSAL_MOVED = 'planner.proposal_moved';
 
 export const GONE_LABEL = 'No longer on the board';
+
+export const MESSAGE_IMAGES_LABEL = 'Images in the message';
 
 export const elsewhereLabel = (projectLabel: string): string =>
   `On the ${projectLabel} board`;
@@ -58,6 +66,8 @@ export interface ChatMessage {
   author: MessageAuthor;
   authorLabel: string;
   text: string;
+  images: MessageImage[];
+  hasImages: boolean;
 }
 
 export interface Dependency {
@@ -155,14 +165,19 @@ export interface PendingMessage {
   projectId: string;
   intentId: string;
   text: string;
+  previews: string[];
 }
 
 const BOUNDARY_KINDS = new Set([PLANNER_CLEARED, PLANNER_NEW]);
 const SETTLING_KINDS = new Set([PLANNER_HUMAN, PLANNER_FAILED]);
 
+export const payloadValue = (payload: unknown, key: string): unknown => {
+  if (typeof payload !== 'object' || payload === null) return undefined;
+  return (payload as Record<string, unknown>)[key];
+};
+
 export const payloadText = (payload: unknown, key: string): string | null => {
-  if (typeof payload !== 'object' || payload === null) return null;
-  const value = (payload as Record<string, unknown>)[key];
+  const value = payloadValue(payload, key);
   if (typeof value !== 'string') return null;
   return value;
 };
@@ -197,9 +212,16 @@ const message = (
   key: string,
   author: MessageAuthor,
   text: string,
+  images: MessageImage[] = [],
 ): ConversationEntry => ({
   key,
-  message: { author, authorLabel: AUTHOR_LABELS[author], text },
+  message: {
+    author,
+    authorLabel: AUTHOR_LABELS[author],
+    text,
+    images,
+    hasImages: images.length > 0,
+  },
   proposal: null,
 });
 
@@ -322,7 +344,15 @@ const entryOf = (
   const key = `event-${event.id}`;
   const text = (field: string): string =>
     payloadText(event.payload, field) ?? '';
-  if (event.kind === PLANNER_HUMAN) return message(key, 'human', text('text'));
+  if (event.kind === PLANNER_HUMAN) {
+    const refs = attachmentRefsOf(payloadValue(event.payload, 'attachments'));
+    return message(
+      key,
+      'human',
+      text('text'),
+      storedImages(place.homeSlug, refs),
+    );
+  }
   if (event.kind === PLANNER_REPLY) {
     return message(key, 'planner', text('text'));
   }
@@ -389,7 +419,10 @@ export const conversation = ({
     .map((event) => entryOf(event, byId, place))
     .filter((entry) => entry !== null);
   const waiting = waitingMessages(pending, events, projectId).map(
-    ({ intentId, text }) => message(`pending-${intentId}`, 'pending', text),
+    ({ intentId, text, previews }) => {
+      const key = `pending-${intentId}`;
+      return message(key, 'pending', text, localImages(key, previews));
+    },
   );
   return [...entries, ...waiting];
 };

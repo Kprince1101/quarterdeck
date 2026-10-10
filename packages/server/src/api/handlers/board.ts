@@ -1,5 +1,6 @@
 import type { Queryable } from '../../store/index.js';
-import type { BoardIntentName } from '../../intents/index.js';
+import type { AttachmentRef, BoardIntentName } from '../../intents/index.js';
+import { withSavedAttachments } from '../attachments.js';
 import type {
   ApiContext,
   IntentHandler,
@@ -17,8 +18,6 @@ import { requireRepoPath } from '../repo-path.js';
 import { stageRuleWrite } from '../rule-files.js';
 import { IN_PROJECT_OR_GLOBAL, decideNotebook } from './notebook-proposals.js';
 import { TICKET_HANDLERS } from './tickets.js';
-
-type CardIntentName = 'card.answer' | 'card.decline';
 
 const openCard = async (tx: Queryable, projectId: string, cardId: string) => {
   const card = await findRow<{ status: string; options: unknown }>(
@@ -46,28 +45,50 @@ const assertChoice = (options: unknown, answer: string) => {
   }
 };
 
+interface CardSettlement {
+  status: 'answered' | 'declined';
+  answer: string | null;
+  attachments: readonly AttachmentRef[];
+}
+
+const DECLINED: CardSettlement = {
+  status: 'declined',
+  answer: null,
+  attachments: [],
+};
+
 const settleCard = async (
   tx: Queryable,
   cardId: string,
-  status: 'answered' | 'declined',
-  answer: string | null,
+  { status, answer, attachments }: CardSettlement,
 ) => {
   await tx.query(
-    `update cards set status = $2, answer = $3, answered_at = now()
+    `update cards set status = $2, answer = $3, attachments = $4::jsonb,
+       answered_at = now()
      where id = $1`,
-    [cardId, status, answer],
+    [cardId, status, answer, JSON.stringify(attachments)],
   );
   return { cardId, status };
 };
 
-const answerCard: IntentHandler<CardIntentName> = (ctx, input, name) =>
+const declineCard: IntentHandler<'card.decline'> = (ctx, input, name) =>
   applyInProject(ctx, name, input, async (tx, projectId) => {
-    const card = await openCard(tx, projectId, input.cardId);
-    if (!('answer' in input)) {
-      return settleCard(tx, input.cardId, 'declined', null);
-    }
-    assertChoice(card.options, input.answer);
-    return settleCard(tx, input.cardId, 'answered', input.answer);
+    await openCard(tx, projectId, input.cardId);
+    return settleCard(tx, input.cardId, DECLINED);
+  });
+
+const answerCard: IntentHandler<'card.answer'> = (ctx, input, name) =>
+  withSavedAttachments(ctx, input.project, input.attachments, (attachments) => {
+    const recorded = { ...input, attachments };
+    return applyInProject(ctx, name, recorded, async (tx, projectId) => {
+      const card = await openCard(tx, projectId, input.cardId);
+      assertChoice(card.options, input.answer);
+      return settleCard(tx, input.cardId, {
+        status: 'answered',
+        answer: input.answer,
+        attachments,
+      });
+    });
   });
 
 const stageCharter = async (
@@ -112,7 +133,7 @@ const decideCharter: IntentHandler<'charter.decide'> = (ctx, input, name) =>
 
 export const BOARD_HANDLERS: IntentHandlers<BoardIntentName> = {
   'card.answer': answerCard,
-  'card.decline': answerCard,
+  'card.decline': declineCard,
   'notebook.add': (ctx, input, name) =>
     applyInProject(ctx, name, input, async (tx, projectId) => {
       const entry = await findRow<{ id: string }>(

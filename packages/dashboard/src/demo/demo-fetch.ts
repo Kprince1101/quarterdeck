@@ -26,6 +26,7 @@ export class DemoRefusal extends Error {
 export interface DemoRoutes {
   intent: (name: IntentName, input: unknown) => IntentReply;
   rules: (project: string | null) => RulesView;
+  attachment: (pathname: string) => Response | null;
 }
 
 const reply = (status: number, body: unknown): Response =>
@@ -79,6 +80,8 @@ export const demoFetch = (routes: DemoRoutes): typeof fetch => {
           routes.rules(url.searchParams.get(RULES_PROJECT_PARAM)),
         );
       }
+      const attachment = routes.attachment(url.pathname);
+      if (attachment !== null) return attachment;
       return reply(404, { error: `${url.pathname} is not in the demo` });
     } catch (err) {
       return refused(err);

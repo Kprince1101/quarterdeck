@@ -11,6 +11,7 @@ import {
   type IntentStatus,
   type RulesView,
 } from '../intents/index.js';
+import { isAttachmentPath, serveAttachment } from './attachments.js';
 import type { ApiContext } from './context.js';
 import { serveDashboard } from './dashboard.js';
 import { dispatchIntent } from './dispatch.js';
@@ -18,6 +19,7 @@ import { HttpError, badRequest, notFound } from './http-error.js';
 import {
   assertLocalRequest,
   isAuthorized,
+  maxBodyBytes,
   readJsonBody,
   type RequestGuard,
 } from './request.js';
@@ -60,7 +62,9 @@ const routeIntent = async (
       headers: { allow: 'POST' },
     });
   }
-  const parsed = INTENTS[name].safeParse(await readJsonBody(req));
+  const parsed = INTENTS[name].safeParse(
+    await readJsonBody(req, maxBodyBytes(name)),
+  );
   if (!parsed.success) {
     throw badRequest(`Invalid ${name} intent`, toIssues(parsed.error));
   }
@@ -115,8 +119,13 @@ export const handleRequest = async (
       sendUnauthorized(res);
       return;
     }
-    if (pathnameOf(req) === RULES_PATH) {
+    const pathname = pathnameOf(req);
+    if (pathname === RULES_PATH) {
       sendJson(res, 200, await routeRulesView(ctx, req));
+      return;
+    }
+    if (isAttachmentPath(pathname)) {
+      await serveAttachment(ctx, req, res, pathname);
       return;
     }
     const reply = await routeIntent(ctx, req);

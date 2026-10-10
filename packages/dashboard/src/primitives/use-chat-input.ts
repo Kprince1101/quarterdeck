@@ -6,7 +6,9 @@ import {
   type KeyboardEvent,
   type RefObject,
 } from 'react';
+import type { AttachmentUpload } from '@quarterdeck/server/intents';
 import { getErrorMessage } from '../lib/errors.js';
+import { ATTACH_ACCEPT, ATTACH_LABEL, filesOf } from './chat-attachments.js';
 import { applyEdit } from './chat-input-edit.js';
 import { pastedText } from './chat-input-paste.js';
 import {
@@ -16,9 +18,16 @@ import {
   isComposing,
   type ChatKey,
 } from './chat-keys.js';
+import { useAttachPicker, type AttachPicker } from './use-attach-picker.js';
+import { useChatAttachments } from './use-chat-attachments.js';
+import { useChatDrop, type ChatDrop } from './use-chat-drop.js';
 import { useChatInputAutosize } from './use-chat-input-autosize.js';
+import type { ImageThumb } from './use-image-strip.js';
 
-export type ChatSubmit = (message: string) => void | Promise<void>;
+export type ChatSubmit = (
+  message: string,
+  attachments: AttachmentUpload[],
+) => void | Promise<void>;
 
 export interface ChatInputOptions {
   onSubmit: ChatSubmit;
@@ -26,13 +35,19 @@ export interface ChatInputOptions {
   disabled?: boolean | undefined;
 }
 
-export interface ChatInputView {
+export interface ChatInputView extends ChatDrop, AttachPicker {
   fieldRef: RefObject<HTMLTextAreaElement | null>;
   draft: string;
   placeholder: string;
   isSending: boolean;
   isDisabled: boolean;
   isSendDisabled: boolean;
+  isAttachDisabled: boolean;
+  attachLabel: string;
+  attachAccept: string;
+  images: ImageThumb[];
+  hasImages: boolean;
+  imagesLabel: string;
   error: string | null;
   hasError: boolean;
   handleChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
@@ -41,15 +56,17 @@ export interface ChatInputView {
   handleSubmit: (event: FormEvent) => void;
 }
 
+export const ATTACHED_IMAGES_LABEL = 'Attached images';
+
 const chatKeyOf = (event: KeyboardEvent): ChatKey => ({
   key: event.key,
   shiftKey: event.shiftKey,
   isComposing: isComposing(event.nativeEvent),
 });
 
-const pasteText = (event: ClipboardEvent<HTMLTextAreaElement>): void => {
+const pasteText = (event: ClipboardEvent<HTMLTextAreaElement>): boolean => {
   const text = pastedText(event.clipboardData);
-  if (text === null) return;
+  if (text === null) return false;
   event.preventDefault();
   const { selectionStart, selectionEnd } = event.currentTarget;
   applyEdit(event.currentTarget, {
@@ -57,6 +74,7 @@ const pasteText = (event: ClipboardEvent<HTMLTextAreaElement>): void => {
     end: selectionEnd,
     text,
   });
+  return true;
 };
 
 export const useChatInput = ({
@@ -66,32 +84,46 @@ export const useChatInput = ({
 }: ChatInputOptions): ChatInputView => {
   const [draft, setDraft] = useState('');
   const [isSending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
   const fieldRef = useChatInputAutosize(draft);
-  const message = chatMessage(draft);
+  const attachments = useChatAttachments();
   const isBlocked = disabled || isSending;
+  const drop = useChatDrop(attachments.add, isBlocked);
+  const picker = useAttachPicker(attachments.add);
+  const message = chatMessage(draft);
+  const hasContent = message !== null || attachments.hasImages;
+  const error = sendError ?? attachments.refusal;
 
   const send = async (): Promise<void> => {
-    if (message === null || isBlocked) return;
+    if (!hasContent || isBlocked || attachments.isReading) return;
     setSending(true);
-    setError(null);
+    setSendError(null);
     try {
-      await onSubmit(message);
+      await onSubmit(message ?? '', attachments.uploads);
       setDraft('');
+      attachments.clear();
     } catch (err) {
-      setError(getErrorMessage(err));
+      setSendError(getErrorMessage(err));
     } finally {
       setSending(false);
     }
   };
 
   return {
+    ...drop,
+    ...picker,
     fieldRef,
     draft,
     placeholder,
     isSending,
     isDisabled: disabled,
-    isSendDisabled: isBlocked || message === null,
+    isSendDisabled: isBlocked || attachments.isReading || !hasContent,
+    isAttachDisabled: isBlocked,
+    attachLabel: ATTACH_LABEL,
+    attachAccept: ATTACH_ACCEPT,
+    images: attachments.thumbs,
+    hasImages: attachments.hasImages,
+    imagesLabel: ATTACHED_IMAGES_LABEL,
     error,
     hasError: error !== null,
     handleChange: ({ currentTarget }) => {
@@ -108,7 +140,12 @@ export const useChatInput = ({
       }
       void send();
     },
-    handlePaste: pasteText,
+    handlePaste: (event) => {
+      const files = filesOf(event.clipboardData);
+      if (files.length > 0 && !isBlocked) attachments.add(files);
+      if (pasteText(event)) return;
+      if (files.length > 0) event.preventDefault();
+    },
     handleSubmit: (event) => {
       event.preventDefault();
       void send();

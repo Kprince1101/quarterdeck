@@ -4,9 +4,11 @@ import type {
   Workspace,
   WorkspaceMode,
 } from '@quarterdeck/server/stream-schema';
+import { createAttachmentReader } from '../api/attachments.js';
 import { createIntentClient } from '../api/intents.js';
 import { createRulesReader } from '../api/rules.js';
 import type { DeckSources } from '../deck/DeckProvider.js';
+import { createDemoAttachments } from './demo-attachments.js';
 import { DEMO_ORIGIN, demoFetch } from './demo-fetch.js';
 import { createDemoIntents } from './demo-intents.js';
 import { createDemoPlanner } from './demo-planner.js';
@@ -188,10 +190,12 @@ export const createDemoServer = (
     return { wiped: [DEMO_PROJECT], stopped };
   };
 
+  const attachments = createDemoAttachments(store.newId);
   const intent = createDemoIntents({
     world,
     rules,
     planner,
+    attachments,
     reads,
     startVoyage: (goal) => world.startVoyage(goal),
     later,
@@ -200,6 +204,7 @@ export const createDemoServer = (
   const fetch = demoFetch({
     intent,
     rules: (project) => rules.view(project, DEMO_REPO_PATH),
+    attachment: attachments.serve,
   });
 
   return {
@@ -209,6 +214,7 @@ export const createDemoServer = (
       stream: { url: DEMO_STREAM_URL, WebSocket: demoWebSocket(store) },
       intents: createIntentClient({ baseUrl: DEMO_ORIGIN, fetch }),
       rules: createRulesReader({ baseUrl: DEMO_ORIGIN, fetch }),
+      attachments: createAttachmentReader({ baseUrl: DEMO_ORIGIN, fetch }),
     },
     step,
     start: (beatMs = DEMO_BEAT_MS) => {

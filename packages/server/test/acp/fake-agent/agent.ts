@@ -22,6 +22,7 @@ import {
   FAKE_SIGN_IN_PROMPT,
   FAKE_TERMINAL_AUTH_METHOD_ID,
   FAKE_TERMINAL_LOGIN_ARG,
+  fakeImageLine,
 } from './constants.ts';
 import { runCrewTurn } from './crew.ts';
 import { runScenario } from './scenarios.ts';
@@ -69,6 +70,7 @@ const promptText = (prompt: ContentBlock[]): string =>
   prompt
     .flatMap((block) => {
       if (block.type === 'text') return [block.text];
+      if (block.type === 'image') return [fakeImageLine(block)];
       return [];
     })
     .join('');
@@ -77,6 +79,9 @@ const fakeCapabilities = (options: FakeAgentOptions): AgentCapabilities => {
   const capabilities: AgentCapabilities = {
     loadSession: options.supportsLoad ?? false,
   };
+  if (options.acceptsImages) {
+    capabilities.promptCapabilities = { image: true };
+  }
   if (options.supportsResume) {
     capabilities.sessionCapabilities = { resume: {} };
   }

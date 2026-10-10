@@ -10,7 +10,11 @@ import {
   it,
   vi,
 } from 'vitest';
-import { createIntentClient, emptyTables } from '../../../src/api/index.js';
+import {
+  createIntentClient,
+  emptyTables,
+  type AttachmentReader,
+} from '../../../src/api/index.js';
 import { DeckProvider } from '../../../src/deck/DeckProvider.js';
 import {
   LOOKUP_LABEL,
@@ -26,6 +30,13 @@ import {
 } from '../../../src/widgets/cards/use-card-reply.js';
 import { WIDGETS } from '../../../src/widgets/widgets.js';
 import { FAKE_WEBSOCKET, FakeSocket } from '../../api/fake-socket.js';
+import type { DomElement } from '../../primitives/dom.js';
+import {
+  PNG_DATA,
+  dropFiles,
+  imageFile,
+  settleReads,
+} from '../../primitives/files.js';
 import { all, render, textOf, type PageElement } from '../../shell/page.js';
 import {
   buttonNamed,
@@ -107,14 +118,26 @@ const changed = (row: CardRow): StreamMessage => ({
   row,
 });
 
-const mount = (server = fakeServer()) => ({
-  ...server,
-  ...render(
-    <DeckProvider stream={stream} intents={server.intents}>
-      <CardsWidget />
-    </DeckProvider>,
-  ),
-});
+const SERVED_IMAGE = 'data:image/png;base64,c2VydmVk';
+
+const mount = (server = fakeServer()) => {
+  const attachments = vi.fn<AttachmentReader>(() =>
+    Promise.resolve(SERVED_IMAGE),
+  );
+  return {
+    ...server,
+    attachments,
+    ...render(
+      <DeckProvider
+        stream={stream}
+        intents={server.intents}
+        attachments={attachments}
+      >
+        <CardsWidget />
+      </DeckProvider>,
+    ),
+  };
+};
 
 const openCard = (scope: PageElement, n: number): PageElement =>
   find(scope, `[data-card-id="${cardId(n)}"][data-status="open"]`);
@@ -203,6 +226,53 @@ describe('Cards widget', () => {
         body: { project: 'deck', cardId: cardId(1), answer: 'use 4317' },
       },
     ]);
+    unmount();
+  });
+
+  it('answers a free-text card with a dropped image and shows it in the thread', async () => {
+    const { container, sent, attachments, unmount } = mount();
+    deliver(snapshot([askCard(1)]));
+    const ask = openCard(container, 1);
+    await dropFiles(find(ask, 'form') as unknown as DomElement, [
+      imageFile('port.png', 'image/png'),
+    ]);
+    await settleReads();
+    expect(all(ask, '[aria-label="Attached images"] img')).toHaveLength(1);
+    await typeAndSend(ask, '');
+    expect(sent.map(({ body }) => body)).toEqual([
+      {
+        project: 'deck',
+        cardId: cardId(1),
+        answer: '',
+        attachments: [{ mimeType: 'image/png', data: PNG_DATA }],
+      },
+    ]);
+
+    const ref = {
+      id: '00000000-0000-4000-8000-0000000000d1',
+      mimeType: 'image/png' as const,
+      bytes: 68,
+      path: '/home/me/.quarterdeck/deck/attachments/x.png',
+    };
+    deliver(
+      changed(
+        askCard(1, {
+          status: 'answered',
+          answer: '',
+          attachments: [ref],
+          answeredAt: ago(0),
+        }),
+      ),
+    );
+    await clickButton(container, 'Answered (1)');
+    await settleReads();
+    expect(attachments).toHaveBeenCalledExactlyOnceWith('deck', ref);
+    const answered = find(container, `[data-card-id="${cardId(1)}"]`);
+    expect(
+      find(answered, '[aria-label="Images in the answer"] img').getAttribute(
+        'src',
+      ),
+    ).toBe(SERVED_IMAGE);
     unmount();
   });
 

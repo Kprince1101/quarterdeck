@@ -1,6 +1,11 @@
 import type { JSX } from 'react';
+import { AttachmentImages } from '../attachments/AttachmentImages.js';
 import { defineWidget } from '../registry.js';
-import { LOOKUP_LABEL, type CardView } from './card-deck.js';
+import {
+  ANSWER_IMAGES_LABEL,
+  LOOKUP_LABEL,
+  type CardView,
+} from './card-deck.js';
 import { CardFacts, CardHead, CardTicket } from './CardParts.js';
 import { CardReply } from './CardReply.js';
 import { SignInCancel, SignInProgress } from './SignInParts.js';
@@ -38,6 +43,9 @@ const AnsweredCard = ({ card }: CardProps) => (
         <span className="qd-card-answer-text">{card.answer}</span>
       )}
     </p>
+    {card.hasImages && (
+      <AttachmentImages label={ANSWER_IMAGES_LABEL} images={card.images} />
+    )}
     {card.lookup && <p className="qd-card-lookup">{LOOKUP_LABEL}</p>}
   </article>
 );

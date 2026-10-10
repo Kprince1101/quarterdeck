@@ -124,7 +124,7 @@ describe('ChatInput', () => {
     typeInto(field, '  ship it  ');
     const enter = await press(field, 'Enter');
     expect(enter.defaultPrevented).toBe(true);
-    expect(onSubmit).toHaveBeenCalledExactlyOnceWith('ship it');
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith('ship it', []);
     expect(valueOf(field)).toBe('');
   });
 
@@ -138,7 +138,7 @@ describe('ChatInput', () => {
 
     typeInto(field, 'first\nsecond');
     await press(field, 'Enter');
-    expect(onSubmit).toHaveBeenCalledExactlyOnceWith('first\nsecond');
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith('first\nsecond', []);
   });
 
   it('does not send while an IME is composing', async () => {
@@ -179,7 +179,7 @@ describe('ChatInput', () => {
     typeInto(field, 'from the button');
     expect(send.hasAttribute('disabled')).toBe(false);
     await click(send);
-    expect(onSubmit).toHaveBeenCalledExactlyOnceWith('from the button');
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith('from the button', []);
     expect(valueOf(field)).toBe('');
   });
 
@@ -222,7 +222,7 @@ describe('ChatInput', () => {
     expect(field.getAttribute('aria-invalid')).toBe('true');
 
     await press(field, 'Enter');
-    expect(onSubmit).toHaveBeenLastCalledWith('try me');
+    expect(onSubmit).toHaveBeenLastCalledWith('try me', []);
     expect(findAll(container, '[role="alert"]')).toHaveLength(0);
     expect(valueOf(field)).toBe('');
   });
@@ -249,7 +249,7 @@ describe('ChatInput', () => {
 
     typeInto(field, '3. third\n4. fourth');
     await press(field, 'Enter');
-    expect(onSubmit).toHaveBeenCalledExactlyOnceWith('3. third\n4. fourth');
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith('3. third\n4. fourth', []);
   });
 
   it('ends a list when Shift+Enter lands on an empty item', async () => {
@@ -274,7 +274,7 @@ describe('ChatInput', () => {
     expect(valueOf(field)).toBe('- [x] done');
 
     await press(field, 'Enter');
-    expect(onSubmit).toHaveBeenCalledExactlyOnceWith('- [x] done');
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith('- [x] done', []);
   });
 
   it('indents and outdents a list line with Tab and Shift+Tab', async () => {
@@ -360,7 +360,7 @@ describe('ChatInput', () => {
     typeInto(first.field, 'to the planner');
     typeInto(second.field, 'to the driver');
     await press(second.field, 'Enter');
-    expect(driver).toHaveBeenCalledExactlyOnceWith('to the driver');
+    expect(driver).toHaveBeenCalledExactlyOnceWith('to the driver', []);
     expect(planner).not.toHaveBeenCalled();
     expect(valueOf(first.field)).toBe('to the planner');
   });
