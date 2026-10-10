@@ -264,9 +264,10 @@ HARNESS_DATABASE_URL=postgres://… npm run quarterdeck -- import harness --appl
         <code>--apply</code> it writes. Each Harness project becomes a project
         (or matches one you already have by name), each docket item a ticket in
         it, with its dependencies pointing at the new tickets, and each notebook
-        entry an active one, pinned as before. Items that were in flight in
-        Harness come in as <code>open</code> with their pull request and a note
-        saying so; no agent is carried over. Harness's Copilot review and
+        entry an active one, pinned as before; a global Harness entry becomes
+        one global notebook entry, for every project. Items that were in flight
+        in Harness come in as <code>open</code> with their pull request and a
+        note saying so; no agent is carried over. Harness's Copilot review and
         auto-merge settings go into
         <code>~/.quarterdeck/rules.local.lifecycle.json</code>. Reviewers are
         printed for you to set up, not imported. Archived projects are skipped

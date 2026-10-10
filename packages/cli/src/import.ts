@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
-import { ruleLayerPaths } from '@quarterdeck/rules';
+import { loadRule, ruleLayerPaths } from '@quarterdeck/rules';
 import {
   PostgresSessionError,
   QUARTERDECK_COMMAND,
@@ -20,6 +20,7 @@ import {
   HARNESS_SOURCE,
   noteKey,
   planImport,
+  type ExistingGlobalNote,
   type ExistingNote,
   type ExistingProject,
   type ExistingTicket,
@@ -38,6 +39,7 @@ import {
 import { parseIntent } from './intent.js';
 import { CliError, type CliIo, type Command } from './io.js';
 import { jsonText, readJsonLayer } from './json-layer.js';
+import { repoForges } from './project-forges.js';
 
 export const HARNESS_DATABASE_URL = 'HARNESS_DATABASE_URL';
 
@@ -169,20 +171,20 @@ const ticketsOf = async (
   ]);
 };
 
-const notesOf = async (
-  store: Store,
-  slug: string,
-): Promise<[string, ExistingNote][]> => {
-  const { rows } = await store.db.query<ExistingNote & { externalId: string }>(
+interface NoteRow extends ExistingNote {
+  externalId: string;
+  global: boolean;
+}
+
+const notesOf = async (store: Store): Promise<NoteRow[]> => {
+  const { rows } = await store.db.query<NoteRow>(
     `select id, external_id as "externalId", body, pinned,
-       retired_at is not null as retired
-     from notebook where project_id = $1 and external_id is not null`,
+       retired_at is not null as retired, project_id is null as global
+     from notebook
+     where (project_id = $1 or project_id is null) and external_id is not null`,
     [store.projectId],
   );
-  return rows.map(({ externalId, ...note }) => [
-    noteKey(slug, externalId),
-    note,
-  ]);
+  return rows;
 };
 
 const lifecyclePath = (homeDir: string): string => {
@@ -198,19 +200,24 @@ const quarterdeckState = async (
   const projects: ExistingProject[] = [];
   const tickets = new Map<string, ExistingTicket>();
   const notes = new Map<string, ExistingNote>();
+  const globalNotes = new Map<string, ExistingGlobalNote>();
   for (const store of stores) {
     const project = await projectOf(store);
     projects.push(project);
     for (const [id, ticket] of await ticketsOf(store, project.slug))
       tickets.set(id, ticket);
-    for (const [key, note] of await notesOf(store, project.slug))
-      notes.set(key, note);
+    for (const { externalId, global, ...note } of await notesOf(store)) {
+      if (!global) notes.set(noteKey(project.slug, externalId), note);
+      else if (!globalNotes.has(externalId))
+        globalNotes.set(externalId, { ...note, project: project.slug });
+    }
   }
   const path = lifecyclePath(homeDir);
   return {
     projects,
     tickets,
     notes,
+    globalNotes,
     lifecyclePath: path,
     lifecycleLayer: await readJsonLayer(path),
   };
@@ -277,6 +284,19 @@ const projectLines = (plan: ProjectPlan): string[] => {
   ];
 };
 
+const globalNoteLines = (plan: ImportPlan): string[] => {
+  if (plan.globalNotes.length === 0) return [];
+  return [
+    `Global notebook (Harness global entries, each imported once as an entry for every project): ${counted(plan.globalNotes)}`,
+    ...plan.globalNotes.map((note) =>
+      rowLine(`notebook entry ${note.harnessId}`, {
+        ...note,
+        decisions: [`stored with ${note.project}`, ...note.decisions],
+      }),
+    ),
+  ];
+};
+
 const plural = (count: number, one: string, many: string): string => {
   if (count === 1) return `1 ${one}`;
   return `${count} ${many}`;
@@ -298,6 +318,8 @@ const printPlan = (
     `Read from Harness: ${plural(snapshot.projects.length, 'project', 'projects')}, ${plural(snapshot.items.length, 'open docket item', 'open docket items')}, ${plural(snapshot.notes.length, 'active notebook entry', 'active notebook entries')}.`,
   );
   for (const project of plan.projects) io.out(projectLines(project).join('\n'));
+  const globals = globalNoteLines(plan);
+  if (globals.length > 0) io.out(globals.join('\n'));
   for (const line of [...plan.skipped, ...plan.reviewers, ...rulesLine(plan)])
     io.out(line);
 };
@@ -305,8 +327,18 @@ const printPlan = (
 const allTickets = (plan: ImportPlan): TicketPlan[] =>
   plan.projects.flatMap((project) => project.tickets);
 
-const allNotes = (plan: ImportPlan): NotePlan[] =>
-  plan.projects.flatMap((project) => project.notes);
+const allNotes = (plan: ImportPlan): NotePlan[] => [
+  ...plan.projects.flatMap((project) => project.notes),
+  ...plan.globalNotes,
+];
+
+const notebookProjectId = (
+  projectId: string,
+  note: NotePlan,
+): string | null => {
+  if (note.global) return null;
+  return projectId;
+};
 
 const writes = (row: { action: RowAction }): boolean =>
   row.action === 'create' || row.action === 'update';
@@ -368,7 +400,7 @@ const writeNote = async (
        values ($1, $2, $3, $4, $5, $6)`,
       [
         note.id,
-        projectId,
+        notebookProjectId(projectId, note),
         note.body,
         note.pinned,
         note.createdAt,
@@ -378,8 +410,9 @@ const writeNote = async (
     return;
   }
   await tx.query(
-    'update notebook set body = $3, pinned = $4 where id = $1 and project_id = $2',
-    [note.id, projectId, note.body, note.pinned],
+    `update notebook set body = $3, pinned = $4
+     where id = $1 and project_id is not distinct from $2::uuid`,
+    [note.id, notebookProjectId(projectId, note), note.body, note.pinned],
   );
 };
 
@@ -480,6 +513,53 @@ const summary = (plan: ImportPlan): string => {
   return `Imported: ${plural(created, 'project', 'projects')} created, ${count(tickets, 'create')} tickets created and ${count(tickets, 'update')} updated, ${count(notes, 'create')} notebook entries created and ${count(notes, 'update')} updated${rules}.`;
 };
 
+interface ProjectRepo {
+  slug: string;
+  repoPath: string;
+}
+
+const projectRepos = (
+  state: QuarterdeckState,
+  plan: ImportPlan,
+): ProjectRepo[] =>
+  [
+    ...state.projects,
+    ...plan.projects.filter((project) => project.created),
+  ].flatMap(({ slug, repoPath }) => {
+    if (repoPath === null) return [];
+    return [{ slug, repoPath }];
+  });
+
+const gitlabReviewers = async (homeDir: string): Promise<readonly string[]> => {
+  try {
+    return (await loadRule('lifecycle', { homeDir })).mergeGate.aiReviewers
+      .gitlab;
+  } catch {
+    return [];
+  }
+};
+
+const gitlabWarning = async (
+  io: CliIo,
+  state: QuarterdeckState,
+  plan: ImportPlan,
+): Promise<string[]> => {
+  if (plan.rules?.requireAiReview !== true) return [];
+  if ((await gitlabReviewers(io.homeDir)).length > 0) return [];
+  const repos = projectRepos(state, plan);
+  const forges = await repoForges(
+    io,
+    repos.map((repo) => repo.repoPath),
+  );
+  const gitlab = repos
+    .filter((_repo, index) => forges[index]?.kind === 'glab')
+    .map((repo) => repo.slug);
+  if (gitlab.length === 0) return [];
+  return [
+    `Warning: mergeGate.requireAiReview turns on for every project on this machine, and mergeGate.aiReviewers.gitlab lists no bot logins. The merge gate refuses to run for these GitLab projects until you list the AI reviewer's bot logins there in ${plan.rules.path}: ${gitlab.join(', ')}.`,
+  ];
+};
+
 const importHarness = async (args: string[], io: CliIo): Promise<number> => {
   const { values, positionals } = parseArgs({
     args,
@@ -510,16 +590,14 @@ const importHarness = async (args: string[], io: CliIo): Promise<number> => {
     const opened = await openProjects(stores);
     await refuseOpenVoyage(opened);
     const snapshot = await readFrom(url, io.harness ?? defaultConnector);
-    const plan = await planImport(
-      snapshot,
-      await quarterdeckState(opened, io.homeDir),
-      {
-        homeDir: io.homeDir,
-        includeArchived: values['include-archived'] ?? false,
-        isDirectory,
-      },
-    );
+    const state = await quarterdeckState(opened, io.homeDir);
+    const plan = await planImport(snapshot, state, {
+      homeDir: io.homeDir,
+      includeArchived: values['include-archived'] ?? false,
+      isDirectory,
+    });
     printPlan(io, snapshot, plan);
+    for (const line of await gitlabWarning(io, state, plan)) io.out(line);
     if (!values.apply) {
       io.out('Dry run: nothing written. Run again with --apply to import.');
       return 0;

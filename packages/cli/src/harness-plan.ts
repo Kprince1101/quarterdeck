@@ -42,10 +42,15 @@ export interface ExistingNote {
   retired: boolean;
 }
 
+export interface ExistingGlobalNote extends ExistingNote {
+  project: string;
+}
+
 export interface QuarterdeckState {
   projects: ExistingProject[];
   tickets: ReadonlyMap<string, ExistingTicket>;
   notes: ReadonlyMap<string, ExistingNote>;
+  globalNotes: ReadonlyMap<string, ExistingGlobalNote>;
   lifecyclePath: string;
   lifecycleLayer: Record<string, unknown>;
 }
@@ -78,6 +83,7 @@ export interface NotePlan {
   body: string;
   pinned: boolean;
   createdAt: Date;
+  global: boolean;
   action: RowAction;
   decisions: string[];
 }
@@ -103,6 +109,7 @@ export interface RulesPlan {
 
 export interface ImportPlan {
   projects: ProjectPlan[];
+  globalNotes: NotePlan[];
   skipped: string[];
   reviewers: string[];
   rules: RulesPlan | null;
@@ -346,20 +353,18 @@ const planTicket = (
 const planNote = (
   note: HarnessNote,
   project: string,
-  state: QuarterdeckState,
+  existing: ExistingNote | undefined,
   global: boolean,
 ): NotePlan => {
   const decisions: string[] = [];
-  if (global)
-    decisions.push('global in Harness; copied into every imported project');
   if (note.pinned) decisions.push('pinned');
-  const existing = state.notes.get(noteKey(project, note.id));
   const plan = {
     harnessId: note.id,
     project,
     body: note.text,
     pinned: note.pinned,
     createdAt: note.createdAt,
+    global,
     decisions,
   };
   if (existing === undefined)
@@ -432,16 +437,31 @@ const addTickets = (
   }
 };
 
+const planGlobalNote = (
+  note: HarnessNote,
+  home: string | undefined,
+  state: QuarterdeckState,
+): NotePlan | string => {
+  const existing = state.globalNotes.get(note.id);
+  const project = existing?.project ?? home;
+  if (project === undefined)
+    return `Skipped global notebook entry ${note.id}: no project is imported to hold it.`;
+  return planNote(note, project, existing, true);
+};
+
 const addNotes = (
   snapshot: HarnessSnapshot,
   plans: readonly ProjectPlan[],
   state: QuarterdeckState,
   skipped: string[],
-): void => {
+): NotePlan[] => {
+  const [home] = plans.map((plan) => plan.slug).toSorted();
+  const globalNotes: NotePlan[] = [];
   for (const note of snapshot.notes) {
     if (note.project === null) {
-      for (const plan of plans)
-        plan.notes.push(planNote(note, plan.slug, state, true));
+      const plan = planGlobalNote(note, home, state);
+      if (typeof plan === 'string') skipped.push(plan);
+      else globalNotes.push(plan);
       continue;
     }
     const plan = plans.find(
@@ -453,8 +473,10 @@ const addNotes = (
       );
       continue;
     }
-    plan.notes.push(planNote(note, plan.slug, state, false));
+    const existing = state.notes.get(noteKey(plan.slug, note.id));
+    plan.notes.push(planNote(note, plan.slug, existing, false));
   }
+  return globalNotes;
 };
 
 const reviewerLines = (plans: readonly ProjectPlan[]): string[] => {
@@ -540,9 +562,10 @@ export const planImport = async (
   const projects = await planProjects(snapshot, state, options, skipped);
   const byName = new Map(projects.map((plan) => [plan.harness.name, plan]));
   addTickets(snapshot, byName, state, skipped);
-  addNotes(snapshot, projects, state, skipped);
+  const globalNotes = addNotes(snapshot, projects, state, skipped);
   return {
     projects,
+    globalNotes,
     skipped,
     reviewers: reviewerLines(projects),
     rules: planRules(projects, state),

@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
@@ -185,17 +186,35 @@ interface NoteRow {
   body: string;
   pinned: boolean;
   createdAt: Date;
+  global: boolean;
 }
 
 const notesIn = (home: string, project: string) =>
   withStore(home, project, async (store) => {
     const { rows } = await store.db.query<NoteRow>(
-      `select external_id as "externalId", body, pinned, created_at as "createdAt"
-       from notebook where project_id = $1 order by external_id`,
+      `select external_id as "externalId", body, pinned, created_at as "createdAt",
+         project_id is null as global
+       from notebook where (project_id = $1 or project_id is null)
+       order by external_id`,
       [store.projectId],
     );
     return rows;
   });
+
+const globalRows = async (home: string) => {
+  const rows: { project: string; id: string }[] = [];
+  for (const project of await listProjects(home)) {
+    const ids = await withStore(home, project, async (store) => {
+      const { rows: found } = await store.db.query<{ id: string }>(
+        `select external_id as id from notebook
+         where project_id is null order by external_id`,
+      );
+      return found;
+    });
+    rows.push(...ids.map(({ id }) => ({ project, id })));
+  }
+  return rows;
+};
 
 const projectRow = (home: string, project: string) =>
   withStore(home, project, async (store) => {
@@ -286,6 +305,13 @@ describe('quarterdeck import harness', { timeout: TIMEOUT }, () => {
       `dependency on item ${A3} dropped: not imported (completed, or in a skipped project)`,
     );
     expect(text).toContain(
+      'Global notebook (Harness global entries, each imported once as an entry for every project): 1 to create, 0 to update, 0 unchanged, 0 left as they are',
+    );
+    expect(text).toContain(
+      `    notebook entry ${N2}: create; stored with alpha`,
+    );
+    expect(text).not.toContain('Warning:');
+    expect(text).toContain(
       'Skipped project "gamma": archived in Harness (pass --include-archived to import it).',
     );
     expect(text).toContain(
@@ -307,6 +333,26 @@ describe('quarterdeck import harness', { timeout: TIMEOUT }, () => {
     ).rejects.toThrow();
   });
 
+  it('warns when AI review turns on and a GitLab project has no AI reviewer bots', async () => {
+    const alpha = join(box.home, 'repos', 'alpha');
+    execFileSync('git', ['init', '-q', alpha]);
+    execFileSync('git', [
+      '-C',
+      alpha,
+      'remote',
+      'add',
+      'origin',
+      'https://gitlab.com/example/alpha.git',
+    ]);
+    const io = harnessIo(box, harness);
+
+    expect(await run([], io)).toBe(0);
+
+    expect(output(io)).toContain(
+      `Warning: mergeGate.requireAiReview turns on for every project on this machine, and mergeGate.aiReviewers.gitlab lists no bot logins. The merge gate refuses to run for these GitLab projects until you list the AI reviewer's bot logins there in ${join(quarterdeckHome(box.home), 'rules.local.lifecycle.json')}: alpha.`,
+    );
+  });
+
   it('takes --dry-run explicitly, and refuses it with --apply', async () => {
     const io = harnessIo(box, harness);
     expect(await run(['--dry-run'], io)).toBe(0);
@@ -324,7 +370,7 @@ describe('quarterdeck import harness', { timeout: TIMEOUT }, () => {
     expect(await run(['--apply'], io)).toBe(0);
 
     expect(io.lines.at(-1)).toBe(
-      'Imported: 2 projects created, 4 tickets created and 0 updated, 3 notebook entries created and 0 updated; rules written.',
+      'Imported: 2 projects created, 4 tickets created and 0 updated, 2 notebook entries created and 0 updated; rules written.',
     );
     expect(await listProjects(box.home)).toEqual(['alpha', 'beta']);
     expect(await projectRow(box.home, 'alpha')).toEqual({
@@ -379,17 +425,18 @@ describe('quarterdeck import harness', { timeout: TIMEOUT }, () => {
         body: 'Run the widget tests before pushing.',
         pinned: true,
         createdAt: new Date('2026-08-01T00:00:00Z'),
+        global: false,
       },
       {
         externalId: N2,
         body: 'Keep pull requests small.',
         pinned: false,
         createdAt: new Date('2026-08-02T00:00:00Z'),
+        global: true,
       },
     ]);
-    expect(
-      (await notesIn(box.home, 'beta')).map((note) => note.externalId),
-    ).toEqual([N2]);
+    expect(await notesIn(box.home, 'beta')).toEqual([]);
+    expect(await globalRows(box.home)).toEqual([{ project: 'alpha', id: N2 }]);
 
     const kinds = await withStore(box.home, 'alpha', async (store) => {
       const { rows } = await store.db.query<{ kind: string }>(
@@ -457,7 +504,7 @@ describe('quarterdeck import harness', { timeout: TIMEOUT }, () => {
     expect(await run(['--apply'], io)).toBe(0);
 
     expect(io.lines.at(-1)).toBe(
-      'Imported: 0 projects created, 0 tickets created and 1 updated, 0 notebook entries created and 2 updated.',
+      'Imported: 0 projects created, 0 tickets created and 1 updated, 0 notebook entries created and 1 updated.',
     );
     const alpha = await ticketsIn(box.home, 'alpha');
     expect(alpha).toHaveLength(2);
@@ -465,9 +512,13 @@ describe('quarterdeck import harness', { timeout: TIMEOUT }, () => {
       id: first?.id,
       title: 'Build the better widget',
     });
-    expect(
-      (await notesIn(box.home, 'beta')).map((note) => note.pinned),
-    ).toEqual([true]);
+    const global = (await notesIn(box.home, 'alpha')).filter(
+      (note) => note.global,
+    );
+    expect(global.map((note) => [note.externalId, note.pinned])).toEqual([
+      [N2, true],
+    ]);
+    expect(await globalRows(box.home)).toEqual([{ project: 'alpha', id: N2 }]);
   });
 
   it('leaves a ticket Quarterdeck has picked up as it is', async () => {
