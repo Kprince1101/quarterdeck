@@ -1,16 +1,22 @@
 import {
   useState,
   type ChangeEvent,
+  type ClipboardEvent,
   type FormEvent,
   type KeyboardEvent,
+  type RefObject,
 } from 'react';
 import { getErrorMessage } from '../lib/errors.js';
+import { applyEdit } from './chat-input-edit.js';
+import { pastedText } from './chat-input-paste.js';
 import {
   CHAT_INPUT_HINT,
-  chatKeyAction,
+  chatKeyEffect,
   chatMessage,
   isComposing,
+  type ChatKey,
 } from './chat-keys.js';
+import { useChatInputAutosize } from './use-chat-input-autosize.js';
 
 export type ChatSubmit = (message: string) => void | Promise<void>;
 
@@ -21,6 +27,7 @@ export interface ChatInputOptions {
 }
 
 export interface ChatInputView {
+  fieldRef: RefObject<HTMLTextAreaElement | null>;
   draft: string;
   placeholder: string;
   isSending: boolean;
@@ -29,9 +36,28 @@ export interface ChatInputView {
   error: string | null;
   hasError: boolean;
   handleChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
-  handleKeyDown: (event: KeyboardEvent) => void;
+  handleKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
+  handlePaste: (event: ClipboardEvent<HTMLTextAreaElement>) => void;
   handleSubmit: (event: FormEvent) => void;
 }
+
+const chatKeyOf = (event: KeyboardEvent): ChatKey => ({
+  key: event.key,
+  shiftKey: event.shiftKey,
+  isComposing: isComposing(event.nativeEvent),
+});
+
+const pasteText = (event: ClipboardEvent<HTMLTextAreaElement>): void => {
+  const text = pastedText(event.clipboardData);
+  if (text === null) return;
+  event.preventDefault();
+  const { selectionStart, selectionEnd } = event.currentTarget;
+  applyEdit(event.currentTarget, {
+    start: selectionStart,
+    end: selectionEnd,
+    text,
+  });
+};
 
 export const useChatInput = ({
   onSubmit,
@@ -41,6 +67,7 @@ export const useChatInput = ({
   const [draft, setDraft] = useState('');
   const [isSending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fieldRef = useChatInputAutosize(draft);
   const message = chatMessage(draft);
   const isBlocked = disabled || isSending;
 
@@ -59,6 +86,7 @@ export const useChatInput = ({
   };
 
   return {
+    fieldRef,
     draft,
     placeholder,
     isSending,
@@ -70,15 +98,17 @@ export const useChatInput = ({
       setDraft(currentTarget.value);
     },
     handleKeyDown: (event) => {
-      const action = chatKeyAction({
-        key: event.key,
-        shiftKey: event.shiftKey,
-        isComposing: isComposing(event.nativeEvent),
-      });
-      if (action !== 'submit') return;
+      const field = event.currentTarget;
+      const effect = chatKeyEffect(chatKeyOf(event), field);
+      if (effect.kind === 'native') return;
       event.preventDefault();
+      if (effect.kind === 'edit') {
+        applyEdit(field, effect.edit);
+        return;
+      }
       void send();
     },
+    handlePaste: pasteText,
     handleSubmit: (event) => {
       event.preventDefault();
       void send();

@@ -17,6 +17,7 @@ interface DomGlobals {
 
 interface KeyInit {
   shiftKey?: boolean;
+  metaKey?: boolean;
   isComposing?: boolean;
   keyCode?: number;
 }
@@ -66,7 +67,7 @@ export const findAll = (
 ): readonly DomElement[] =>
   Array.from(scope.querySelectorAll(selector)) as DomElement[];
 
-const valueSetter = (field: DomElement): ((value: string) => void) => {
+export const valueSetter = (field: DomElement): ((value: string) => void) => {
   let proto: object | null = Object.getPrototypeOf(field);
   while (proto !== null) {
     const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;

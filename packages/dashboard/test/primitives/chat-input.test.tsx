@@ -15,8 +15,15 @@ import {
   press,
   typeInto,
   valueOf,
+  dom,
+  type DomElement,
   type Mounted,
 } from './dom.js';
+import {
+  installFakeEditor,
+  placeCaret,
+  type FakeEditor,
+} from './fake-editor.js';
 
 interface Deferred {
   promise: Promise<void>;
@@ -37,6 +44,46 @@ const deferred = (): Deferred => {
 };
 
 const mounted: Mounted[] = [];
+const editors: FakeEditor[] = [];
+
+const editor = (): FakeEditor => {
+  const installed = installFakeEditor();
+  editors.push(installed);
+  return installed;
+};
+
+const LINE_HEIGHT = 20;
+const PADDING = 16;
+
+const measureLines = (field: DomElement): void => {
+  Object.defineProperty(field, 'scrollHeight', {
+    configurable: true,
+    get: () => PADDING + LINE_HEIGHT * valueOf(field).split('\n').length,
+  });
+};
+
+const heightFor = (lines: number): string =>
+  `${PADDING + LINE_HEIGHT * lines}px`;
+
+const paste = async (
+  field: DomElement,
+  data: Record<string, string>,
+): Promise<Event> => {
+  const event = new (dom().Event)('paste', {
+    bubbles: true,
+    cancelable: true,
+  }) as unknown as Event;
+  Object.defineProperty(event, 'clipboardData', {
+    value: {
+      types: Object.keys(data),
+      getData: (format: string) => data[format] ?? '',
+    },
+  });
+  await act(async () => {
+    field.dispatchEvent(event as never);
+  });
+  return event;
+};
 
 const mountChat = (onSubmit: ChatSubmit, disabled?: boolean) => {
   const view = mount(
@@ -59,6 +106,7 @@ describe('ChatInput', () => {
 
   afterEach(() => {
     mounted.splice(0).forEach(({ unmount }) => unmount());
+    editors.splice(0).forEach(({ uninstall }) => uninstall());
   });
 
   it('labels the box and says how to send', () => {
@@ -186,6 +234,122 @@ describe('ChatInput', () => {
     expect(send.hasAttribute('disabled')).toBe(true);
     await press(field, 'Enter');
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('continues a list on Shift+Enter through the native undo stack', async () => {
+    const { commands } = editor();
+    const onSubmit = vi.fn<ChatSubmit>();
+    const { field } = mountChat(onSubmit);
+    typeInto(field, '3. third');
+    const shiftEnter = await press(field, 'Enter', { shiftKey: true });
+    expect(shiftEnter.defaultPrevented).toBe(true);
+    expect(commands).toEqual(['insertText']);
+    expect(valueOf(field)).toBe('3. third\n4. ');
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    typeInto(field, '3. third\n4. fourth');
+    await press(field, 'Enter');
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith('3. third\n4. fourth');
+  });
+
+  it('ends a list when Shift+Enter lands on an empty item', async () => {
+    editor();
+    const { field } = mountChat(vi.fn());
+    typeInto(field, '- one\n- ');
+    await press(field, 'Enter', { shiftKey: true });
+    expect(valueOf(field)).toBe('- one\n');
+  });
+
+  it('undo brings back the text from before a list continuation', async () => {
+    const { undo } = editor();
+    const onSubmit = vi.fn<ChatSubmit>();
+    const { field } = mountChat(onSubmit);
+    typeInto(field, '- [x] done');
+    await press(field, 'Enter', { shiftKey: true });
+    expect(valueOf(field)).toBe('- [x] done\n- [ ] ');
+
+    const cmdZ = await press(field, 'z', { metaKey: true });
+    expect(cmdZ.defaultPrevented).toBe(false);
+    undo();
+    expect(valueOf(field)).toBe('- [x] done');
+
+    await press(field, 'Enter');
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith('- [x] done');
+  });
+
+  it('indents and outdents a list line with Tab and Shift+Tab', async () => {
+    editor();
+    const { field } = mountChat(vi.fn());
+    typeInto(field, '- one\n- two');
+    const tab = await press(field, 'Tab');
+    expect(tab.defaultPrevented).toBe(true);
+    expect(valueOf(field)).toBe('- one\n  - two');
+
+    const shiftTab = await press(field, 'Tab', { shiftKey: true });
+    expect(shiftTab.defaultPrevented).toBe(true);
+    expect(valueOf(field)).toBe('- one\n- two');
+
+    placeCaret(field, 2);
+    const atTop = await press(field, 'Tab', { shiftKey: true });
+    expect(atTop.defaultPrevented).toBe(false);
+    expect(valueOf(field)).toBe('- one\n- two');
+  });
+
+  it('leaves Tab off a list line to move focus', async () => {
+    editor();
+    const { field } = mountChat(vi.fn());
+    typeInto(field, 'plain words');
+    const tab = await press(field, 'Tab');
+    expect(tab.defaultPrevented).toBe(false);
+    expect(valueOf(field)).toBe('plain words');
+  });
+
+  it('grows with its content and shrinks back after sending', async () => {
+    const { field } = mountChat(vi.fn());
+    measureLines(field);
+    typeInto(field, 'one line');
+    expect(field.style.height).toBe(heightFor(1));
+
+    typeInto(field, 'one\ntwo\nthree');
+    expect(field.style.height).toBe(heightFor(3));
+
+    await press(field, 'Enter');
+    expect(valueOf(field)).toBe('');
+    expect(field.style.height).toBe(heightFor(1));
+  });
+
+  it('pastes rich HTML as plain text, undoably', async () => {
+    const { undo } = editor();
+    const { field } = mountChat(vi.fn());
+    typeInto(field, 'see: ');
+    const pasted = await paste(field, {
+      'text/html': '<p>first <b>bold</b></p><ul><li>a</li><li>b</li></ul>',
+    });
+    expect(pasted.defaultPrevented).toBe(true);
+    expect(valueOf(field)).toBe('see: first bold\n\na\nb');
+
+    undo();
+    expect(valueOf(field)).toBe('see: ');
+  });
+
+  it('pastes plain text over the selection', async () => {
+    editor();
+    const { field } = mountChat(vi.fn());
+    typeInto(field, 'swap THIS out');
+    placeCaret(field, 5, 9);
+    await paste(field, {
+      'text/plain': 'that\r\nline',
+      'text/html': '<i>x</i>',
+    });
+    expect(valueOf(field)).toBe('swap that\nline out');
+  });
+
+  it('leaves a paste with no text in it to the browser', async () => {
+    editor();
+    const { field } = mountChat(vi.fn());
+    const pasted = await paste(field, { Files: '' });
+    expect(pasted.defaultPrevented).toBe(false);
+    expect(valueOf(field)).toBe('');
   });
 
   it('keeps a separate draft per box', async () => {
