@@ -1,49 +1,47 @@
-import { stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import {
   LOCAL_RULES_DIR,
-  forgeOfHost,
   loadRule,
-  modelsSchema,
-  ruleLayerPaths,
   runtimeSchema,
-  type Models,
   type Runtime,
 } from '@quarterdeck/rules';
 import {
   QUARTERDECK_COMMAND,
+  applySetup,
   confirmationList,
   createProjectStores,
   createWorkspaces,
   detectWorkspace,
-  dispatchIntent,
   ensurePrivateDir,
-  parseRemoteUrl,
+  modelsLayers,
   quarterdeckHome,
-  runCommand,
+  repoRuntimeLayer,
   slugFromFolder,
-  type ProjectStores,
+  usesRuntime,
+  type RuntimeChoice,
   type SignInTool,
   type Workspace,
   type WorkspaceDetection,
   type WorkspaceProject,
   type WorkspaceUpdate,
 } from '@quarterdeck/server';
-import type { IntentPayload } from '@quarterdeck/server/intents';
 import { runDoctorChecks } from './doctor.js';
 import { parseIntent } from './intent.js';
 import { CliError, type CliIo, type Command } from './io.js';
-import { jsonText, readJsonLayer } from './json-layer.js';
 import { setUpProfile } from './profile-setup.js';
+import {
+  forgeCheckFolder,
+  repoForges,
+  sameTool,
+  uniqueForges,
+} from './project-forges.js';
 import { choose, confirm } from './prompt.js';
 import { ensureSignedIn } from './signin.js';
 
 export { slugFromFolder };
 
 const RUNTIMES = runtimeSchema.options;
-const ROLES = Object.keys(modelsSchema.shape) as Array<keyof Models>;
-const GIT_TIMEOUT_MS = 10_000;
 
 export const INIT_USAGE = `Usage: ${QUARTERDECK_COMMAND} init [path] [options]
 
@@ -53,6 +51,7 @@ Quarterdeck then works on its own, or a folder whose git repositories, one
 level down, each become a project; you confirm the list first. Running init
 again with another repository or folder adds to the workspace. Nothing is
 written into a repository unless you agree to a .quarterdeck/ folder there.
+The Setup screen \`up\` opens when there is no workspace yet does the same.
 
   --project <slug>     Slug for a single repository (default: from the folder name)
   --name <name>        Display name for a single repository (default: the folder name)
@@ -74,42 +73,11 @@ interface InitOptions {
   'no-setup'?: boolean | undefined;
 }
 
-interface RuntimeLayer {
-  path: string;
-  inRepo: boolean;
-}
-
-interface RuntimeChoice {
-  runtime: Runtime;
-  layer: RuntimeLayer | undefined;
-}
-
-const fileExists = async (path: string): Promise<boolean> =>
-  stat(path).then(
-    () => true,
-    () => false,
-  );
-
 const parseRuntime = (value: string): Runtime => {
   const parsed = runtimeSchema.safeParse(value);
   if (parsed.success) return parsed.data;
   throw new CliError(`--runtime must be one of ${RUNTIMES.join(', ')}`);
 };
-
-const withRuntime = (
-  layer: Record<string, unknown>,
-  runtime: Runtime,
-): Record<string, unknown> => {
-  const roles = ROLES.map((role) => {
-    const current = layer[role];
-    const kept = typeof current === 'object' && current !== null && current;
-    return [role, { ...kept, runtime }];
-  });
-  return { ...layer, ...Object.fromEntries(roles) };
-};
-
-const usesRuntime = (models: Models, runtime: Runtime): boolean =>
-  ROLES.every((role) => models[role].runtime === runtime);
 
 const pickRuntime = async (
   flag: string | undefined,
@@ -147,20 +115,9 @@ const pickFolder = async (
   );
 };
 
-const modelsLayers = (io: CliIo, repoPath: string) => {
-  const [machine, repo] = ruleLayerPaths('models', {
-    homeDir: io.homeDir,
-    repoDir: repoPath,
-  }).local;
-  if (machine === undefined || repo === undefined) {
-    throw new Error('models has no local rule layers');
-  }
-  return { machine, repo };
-};
-
 const assertNoRepoLayer = async (io: CliIo, repoPath: string) => {
-  const { repo } = modelsLayers(io, repoPath);
-  if (await fileExists(repo)) {
+  const repo = await repoRuntimeLayer(io.homeDir, repoPath);
+  if (repo !== undefined) {
     throw new CliError(
       `${repo} sets this repository's runtime and wins over ~/.quarterdeck. Pass --folder to change it there.`,
     );
@@ -183,7 +140,7 @@ const decideRuntime = async (
   );
   if (usesRuntime(current, runtime)) return { runtime, layer: undefined };
   const inRepo = await pickFolder(options, io, repoPath, runtime);
-  const layers = modelsLayers(io, repoPath);
+  const layers = modelsLayers(io.homeDir, repoPath);
   if (inRepo) return { runtime, layer: { path: layers.repo, inRepo } };
   await assertNoRepoLayer(io, repoPath);
   return { runtime, layer: { path: layers.machine, inRepo } };
@@ -207,82 +164,8 @@ const decideFolderRuntime = async (
     );
   }
   for (const repo of repos) await assertNoRepoLayer(io, repo.repoPath);
-  const { machine } = modelsLayers(io, io.homeDir);
+  const { machine } = modelsLayers(io.homeDir, io.homeDir);
   return { runtime, layer: { path: machine, inRepo: false } };
-};
-
-const ruleWrite = (
-  project: string,
-  layer: RuntimeLayer,
-  content: string,
-): IntentPayload<'rules.write'> => {
-  if (layer.inRepo) {
-    return parseIntent('rules.write', {
-      scope: 'project',
-      project,
-      name: 'models',
-      content,
-    });
-  }
-  return parseIntent('rules.write', {
-    scope: 'machine',
-    name: 'models',
-    content,
-  });
-};
-
-const saveRuntime = async (
-  stores: ProjectStores,
-  io: CliIo,
-  project: string,
-  runtime: Runtime,
-  layer: RuntimeLayer,
-) => {
-  const models = withRuntime(await readJsonLayer(layer.path), runtime);
-  const content = jsonText(models);
-  await dispatchIntent(
-    { stores, homeDir: io.homeDir },
-    'rules.write',
-    ruleWrite(project, layer, content),
-  );
-};
-
-const dataOf = (stores: ProjectStores, project: string): string => {
-  if (stores.location === stores.dataHome) {
-    return join(stores.dataHome, project);
-  }
-  return stores.location;
-};
-
-const createProjects = async (
-  io: CliIo,
-  repos: readonly WorkspaceProject[],
-  choice: RuntimeChoice,
-): Promise<string[]> => {
-  const stores = createProjectStores(quarterdeckHome(io.homeDir));
-  try {
-    const data: string[] = [];
-    for (const repo of repos) {
-      const input = parseIntent('project.create', {
-        project: repo.slug,
-        name: repo.name,
-        repoPath: repo.repoPath,
-      });
-      await dispatchIntent(
-        { stores, homeDir: io.homeDir },
-        'project.create',
-        input,
-      );
-      data.push(dataOf(stores, input.project));
-    }
-    const [first] = repos;
-    if (choice.layer !== undefined && first !== undefined) {
-      await saveRuntime(stores, io, first.slug, choice.runtime, choice.layer);
-    }
-    return data;
-  } finally {
-    await stores.closeAll();
-  }
 };
 
 const isNumber = (part: string): boolean => /^\d+$/.test(part);
@@ -377,48 +260,19 @@ const createdLine = (repo: WorkspaceProject, workspace: Workspace): string => {
   return `Created project ${repo.slug} (${repo.name}) for ${repo.repoPath}`;
 };
 
-const originForge = async (
-  io: CliIo,
-  repoPath: string,
-): Promise<SignInTool | undefined> => {
-  const origin = await runCommand(
-    { command: 'git', args: ['-C', repoPath, 'remote', 'get-url', 'origin'] },
-    { timeoutMs: GIT_TIMEOUT_MS },
-  );
-  if (origin.status !== 'exited' || origin.code !== 0) return undefined;
-  try {
-    const host = parseRemoteUrl(origin.stdout).hostname;
-    const { forges } = await loadRule('forges', { homeDir: io.homeDir });
-    if (forgeOfHost(host, forges) === 'gitlab') return { kind: 'glab', host };
-    return { kind: 'gh' };
-  } catch {
-    return undefined;
-  }
-};
-
-const sameTool = (a: SignInTool, b: SignInTool): boolean =>
-  JSON.stringify(a) === JSON.stringify(b);
-
-const checkFolder = (
-  repos: readonly WorkspaceProject[],
-  forges: readonly (SignInTool | undefined)[],
-): string | undefined => {
-  const gitlab = forges.findIndex((forge) => forge?.kind === 'glab');
-  return repos[Math.max(gitlab, 0)]?.repoPath;
-};
-
 const signInForProjects = async (
   io: CliIo,
   repos: readonly WorkspaceProject[],
   runtime: Runtime,
 ): Promise<void> => {
   if (io.signIn === undefined) return;
-  const forges = await Promise.all(
-    repos.map((repo) => originForge(io, repo.repoPath)),
-  );
-  const needed: SignInTool[] = [{ kind: 'runtime', runtime }];
-  for (const forge of forges) if (forge) needed.push(forge);
-  const cwd = checkFolder(repos, forges) ?? io.cwd;
+  const repoPaths = repos.map((repo) => repo.repoPath);
+  const forges = await repoForges(io, repoPaths);
+  const needed: SignInTool[] = [
+    { kind: 'runtime', runtime },
+    ...uniqueForges(forges),
+  ];
+  const cwd = forgeCheckFolder(repoPaths, forges) ?? io.cwd;
   await ensureSignedIn(io, {
     checks: () => runDoctorChecks({ ...io, cwd }),
     wanted: (tool) => needed.some((want) => sameTool(want, tool)),
@@ -500,12 +354,11 @@ export const runInit: Command = async (args, io) => {
   }
   const choice = await decide(values, io, detection, repos);
   await ensurePrivateDir(home);
-  const data = await createProjects(io, repos, choice);
-  const update = await workspaces.add({
-    root: detection.root,
-    mode: detection.mode,
-    projects: repos,
-  });
+  const stores = createProjectStores(home);
+  const { data, update } = await applySetup(
+    { stores, homeDir: io.homeDir, workspaces },
+    { root: detection.root, mode: detection.mode, repos, choice },
+  ).finally(() => stores.closeAll());
   await signInForProjects(io, repos, choice.runtime);
   report(io, repos, choice, data, update);
   if (!values['no-setup']) {

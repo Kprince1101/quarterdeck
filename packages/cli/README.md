@@ -14,13 +14,26 @@ Starts the server on `127.0.0.1` (port 4317 by default, `0` picks a free one), c
 
 `DATABASE_URL` switches the store to an external Postgres, as it does for the server.
 
-In a terminal, `up` first runs doctor's runtime checks for every runtime `~/.quarterdeck/rules.local.models.json` (or the default) gives a role, and signs in each one that is installed but signed out, as doctor does (see [Signing in](#signing-in)). Then it starts. A sign-in that fails is one line naming why, and `up` carries on: when an agent of that runtime starts, the dashboard shows the [sign-in card](../server/src/signin/README.md). Without a terminal (stdin or stdout not a TTY) `up` checks nothing and the dashboard card does it all.
+With no workspace yet (no `~/.quarterdeck/workspace.json`, or one with no projects), `up` starts anyway, prints one more line under the URL (`No workspace yet: open the URL above and Setup walks you through the folder, the runtime and sign-in.`), and the dashboard opens on the [Setup screen](#setup) instead of the board. It signs nothing in from the terminal then: Setup does it.
+
+In a terminal, with a workspace, `up` first runs doctor's runtime checks for every runtime `~/.quarterdeck/rules.local.models.json` (or the default) gives a role, and signs in each one that is installed but signed out, as doctor does (see [Signing in](#signing-in)). Then it starts. A sign-in that fails is one line naming why, and `up` carries on: when an agent of that runtime starts, the dashboard shows the [sign-in card](../server/src/signin/README.md). Without a terminal (stdin or stdout not a TTY) `up` checks nothing and the dashboard card does it all.
 
 The port also serves the WebSocket stream at `/ws` (`?project=<slug>` picks the project when more than one is open), and each open project gets its bus host, the socket its agents' MCP relay connects to (see [bus](../server/src/bus/README.md)). A socket file left by a crash is removed at start.
 
 Each open project also gets its crew (see [crew](../server/src/crew/README.md)): the Planner answers the Planner widget, Start Voyage births a Driver that assigns approved tickets to builders, the reviewer and merge gate take each reported pull request to a merge under the project's rules, and a settled voyage ends itself. A project created while `up` runs gets its crew at once; a wiped one stops its crew first. A voyage still open from a run that stopped is ended at start with reason `restart` and its tickets reopened, since its agents went with that run. One project's crew failing is recorded as a `crew.failed` event on the dashboard and stops nothing else.
 
 On stop, each project's agents stop first, then its stream and bus host (removing the socket file), then everything above. All of it is [`startQuarterdeck`](../server/src/quarterdeck/README.md).
+
+### Setup
+
+The Setup screen is one page with four steps and a progress line (`Step 2 of 4: Runtime`). Each step is a `setup.*` intent on the same token-protected API, and runs the code `init` and `doctor` run (see [setup](../server/src/setup/README.md)):
+
+1. **Workspace.** Type or paste a folder's full path (`~/` works); `setup.detect` runs init's detection and says `One repository: <name>` or lists the repositories found, each with a box to untick. Browsers give a page no folder path from a picker, so there is no native picker.
+2. **Runtime.** `setup.tools` runs doctor's checks, through `createSetupProbe` in `src/setup-probe.ts`, which `up` hands the server. Only installed runtimes can be picked; each missing one shows doctor's install command. With exactly one installed, it is picked for you.
+3. **Sign in.** The picked runtime and the forge CLI each repository's `origin` needs (`gh`, or `glab` per GitLab host), each with its state. **Sign in to …** runs the same sign-in as [Signing in](#signing-in) on the server, with no terminal, and the step shows its progress (the code, the URL) until it settles; then the checks run again.
+4. **Go.** `setup.save` does what `init` does, through the same `applySetup`: a project for each repository, the runtime in `~/.quarterdeck/rules.local.models.json` when it is not the default, and `workspace.json`. A repository whose own `rules.local.models.json` would win is refused, as `init` refuses it. The board opens with the Planner ready and a **What to do first** panel (describe the work to the Planner, approve, Start Voyage) that goes away once the first voyage starts.
+
+Signing in is not required to go on: anything still signed out is asked for again on the dashboard when an agent needs it. Once a workspace exists, `setup.save` refuses (`409`); add repositories with `init`.
 
 ## init
 
@@ -44,7 +57,7 @@ The runtime is asked for when stdin is a terminal, and otherwise taken from `--r
 
 Interactively, init asks which; without a terminal it refuses to guess and asks for one of the two flags. For a folder of repositories the runtime is saved on the machine (`--folder` is refused there), and a repository whose own `rules.local.models.json` would win is an error naming it. The `.quarterdeck/` folder is the only thing init ever writes into the repository, and only after that yes. An existing layer file keeps its other settings. If the repository already has a `rules.local.models.json`, it wins over the machine layer, so `--no-folder` is refused there.
 
-Every question and check runs before anything is created, so a failed or cancelled init (Ctrl+C at a prompt exits 130) leaves nothing behind.
+Every question and check runs before anything is created, so a failed or cancelled init (Ctrl+C at a prompt exits 130) leaves nothing behind. What it then writes, it writes through `applySetup` from `@quarterdeck/server`, the function the [Setup screen](#setup) saves with.
 
 Once the projects exist, init in a terminal signs in what they need, as doctor does (see [Signing in](#signing-in)): the runtime it chose, and the forge of each added repository's `origin` (`glab` for a GitLab host, `gh` otherwise; nothing for a repository without an origin). Then it prints `Next:` as usual. A sign-in that fails is one line naming why; init still succeeds.
 
@@ -117,7 +130,7 @@ QUARTERDECK_LIVE=1 npx vitest run packages/cli/test/doctor-live.test.ts
 
 ### Signing in
 
-doctor, `up` and `init` share one sign-in path, `src/signin.ts`. A check is a sign-in miss when its only fix is `Sign in`; a tool that is not installed is left to its install command. Each miss is mapped to its tool by the check's name and signed in by that tool's own flow:
+doctor, `up` and `init` share one sign-in path, `src/signin.ts`, and the Setup screen runs the same drivers (`runSignIn`) on the server. A check is a sign-in miss when its only fix is `Sign in`; a tool that is not installed is left to its install command. Each miss is mapped to its tool by the check's name and signed in by that tool's own flow:
 
 | Tool             | How Quarterdeck signs it in                                                                                                                                                         |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

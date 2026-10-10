@@ -8,6 +8,11 @@ import {
   type GlobalLayouts,
 } from '../global-layout/index.js';
 import type { StopHosts } from '../lifecycle/stop.js';
+import type { SetupProbe } from '../setup/probe.js';
+import {
+  createSetupSignIns,
+  type SetupSignInsOptions,
+} from '../setup/sign-ins.js';
 import { quarterdeckHome } from '../store/index.js';
 import type { UpgradeHandler } from '../stream/socket.js';
 import { createWorkspaces, type Workspaces } from '../workspace/index.js';
@@ -44,6 +49,8 @@ export interface ApiServerOptions {
   workspaces?: Workspaces;
   upgrade?: UpgradeHandler;
   openRequests?: Pick<OpenRequestsOptions, 'hosts' | 'refreshMs'>;
+  setupProbe?: SetupProbe | undefined;
+  setupSignIn?: SetupSignInsOptions | undefined;
 }
 
 export interface ApiServer {
@@ -124,6 +131,7 @@ export const startApiServer = async (
   });
   const layouts = options.layouts ?? createGlobalLayouts(home);
   const workspaces = options.workspaces ?? createWorkspaces(home);
+  const setupSignIns = createSetupSignIns(options.setupSignIn);
   const ctx: ApiContext = {
     stores,
     homeDir,
@@ -131,6 +139,8 @@ export const startApiServer = async (
     workspaces,
     openRequests,
     voyages: options.voyages,
+    setupProbe: options.setupProbe,
+    setupSignIns,
   };
   const token = options.token ?? createApiToken();
   let guard = localGuard(0, token);
@@ -148,6 +158,7 @@ export const startApiServer = async (
   const { port } = server.address() as AddressInfo;
   guard = localGuard(port, token, options.allowedOrigins);
   const close = async () => {
+    setupSignIns.close();
     await closeAllAcpClients();
     server.closeAllConnections();
     await new Promise<void>((resolve, reject) => {

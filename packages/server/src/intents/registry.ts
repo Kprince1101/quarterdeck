@@ -4,6 +4,7 @@ import { CREW_INTENTS } from './crew.js';
 import { DATA_INTENTS } from './data.js';
 import { READ_INTENTS } from './read.js';
 import { SERVICES_INTENTS } from './services.js';
+import { SETUP_INTENTS } from './setup.js';
 import { WORKSPACE_INTENTS } from './workspace.js';
 
 export const INTENTS = {
@@ -13,6 +14,7 @@ export const INTENTS = {
   ...DATA_INTENTS,
   ...READ_INTENTS,
   ...SERVICES_INTENTS,
+  ...SETUP_INTENTS,
 };
 
 export type IntentName = keyof typeof INTENTS;

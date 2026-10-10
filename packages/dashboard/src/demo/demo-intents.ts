@@ -57,6 +57,7 @@ const UNRECORDED: ReadonlySet<IntentName> = new Set([
   'forge.requests',
   'auth.read',
   'services.read',
+  'setup.read',
   'rules.write',
   'rules.reset',
   'wipe.project',
@@ -467,6 +468,12 @@ export const createDemoIntents = (
     'services.read': (_input, reply) => reply('applied', services.read()),
     'services.set': (input, reply) =>
       reply('applied', { ...services.set(input) }),
+    'setup.read': (_input, reply) =>
+      reply('applied', { needsSetup: false, signIns: [] }),
+    'setup.detect': notInDemo('Setup'),
+    'setup.tools': notInDemo('Setup'),
+    'setup.sign_in': notInDemo('Setup'),
+    'setup.save': notInDemo('Setup'),
   };
 
   return (name, input) => {

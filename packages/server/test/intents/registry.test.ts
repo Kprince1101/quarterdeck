@@ -26,6 +26,9 @@ const GLOBAL_INTENTS = new Set([
   'voyage.start',
   'voyage.end',
   'voyage.kill',
+  'setup.detect',
+  'setup.sign_in',
+  'setup.save',
 ]);
 
 const importsOf = (source: string): string[] =>
@@ -50,6 +53,7 @@ describe('intent registry', () => {
         'voyage',
         'rules',
         'services',
+        'setup',
         'ticket',
         'turn',
         'usage',
@@ -69,7 +73,7 @@ describe('intent registry', () => {
     expect(ruleNameSchema.options).toEqual(RULE_NAMES);
   });
 
-  it('scopes every intent but machine rules, wipe.all, pause.all, the dashboard layout and the voyage to a project', () => {
+  it('scopes every intent but machine rules, wipe.all, pause.all, the dashboard layout, the voyage and setup to a project', () => {
     const unscoped = INTENT_NAMES.filter((name) =>
       INTENTS[name]
         .safeParse({})

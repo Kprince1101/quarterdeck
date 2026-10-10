@@ -6,6 +6,8 @@ import { startCoordinator, type Coordinator } from '../crew/index.js';
 import type { ForgeHost } from '../gate/index.js';
 import { createGlobalLayouts } from '../global-layout/index.js';
 import type { PlannerAdapters } from '../planner/sessions.js';
+import type { SetupProbe } from '../setup/probe.js';
+import type { SetupSignInsOptions } from '../setup/sign-ins.js';
 import { quarterdeckHome } from '../store/index.js';
 import { routeStreams, type Stream } from '../stream/socket.js';
 import { createWorkspaces } from '../workspace/index.js';
@@ -26,6 +28,8 @@ export interface QuarterdeckOptions {
   adapters?: PlannerAdapters;
   forge?: ForgeHost;
   gatePollMs?: number;
+  setupProbe?: SetupProbe | undefined;
+  setupSignIn?: SetupSignInsOptions | undefined;
 }
 
 export interface Quarterdeck {

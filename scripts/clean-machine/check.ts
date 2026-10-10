@@ -1,8 +1,15 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdir, mkdtemp, readFile, stat } from 'node:fs/promises';
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { spawnAcpClient } from '@quarterdeck/server';
 
 const STARTUP_TIMEOUT_MS = 60_000;
@@ -102,26 +109,98 @@ const checkDashboard = async (url: string): Promise<void> => {
   );
 };
 
-const checkCreate = async (
+interface IntentAnswer {
+  status: number;
+  result: Record<string, unknown>;
+}
+
+const sendIntent = async (
   { url, token }: Running,
+  name: string,
+  body: unknown,
+  headers: Record<string, string> = { authorization: `Bearer ${token}` },
+): Promise<IntentAnswer> => {
+  const res = await fetch(`${url}/api/intents/${name}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+  const reply = (await res.json().catch(() => ({}))) as {
+    result?: Record<string, unknown>;
+  };
+  return { status: res.status, result: reply.result ?? {} };
+};
+
+interface SetupRuntimeEntry {
+  tool: { kind: string; runtime?: string };
+  installed: boolean;
+  signedIn: boolean;
+}
+
+const checkSetup = async (
+  running: Running,
   home: string,
   repoPath: string,
 ): Promise<void> => {
   const tokenFile = join(home, '.quarterdeck', 'api.token');
   check(
-    (await readFile(tokenFile, 'utf8')) === token,
+    (await readFile(tokenFile, 'utf8')) === running.token,
     'up writes the printed token to ~/.quarterdeck/api.token',
   );
-  const create = (headers: Record<string, string>) =>
-    fetch(`${url}/api/intents/project.create`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...headers },
-      body: JSON.stringify({ project: PROJECT, repoPath }),
-    });
-  const refused = await create({});
+  check(
+    running.output().includes('No workspace yet'),
+    'up with nothing configured says Setup is waiting at the URL',
+  );
+  const refused = await sendIntent(running, 'setup.read', {}, {});
   check(refused.status === 401, `no token answers 401 (${refused.status})`);
-  const res = await create({ authorization: `Bearer ${token}` });
-  check(res.status === 200, `project.create answers 200 (${res.status})`);
+  const before = await sendIntent(running, 'setup.read', {});
+  check(before.result['needsSetup'] === true, 'setup.read asks for Setup');
+  const detected = await sendIntent(running, 'setup.detect', {
+    path: repoPath,
+  });
+  check(
+    detected.result['mode'] === 'single',
+    `setup.detect calls ${repoPath} one repository`,
+  );
+  const tools = await sendIntent(running, 'setup.tools', { root: repoPath });
+  const runtimes = (tools.result['runtimes'] ?? []) as SetupRuntimeEntry[];
+  const kiro = runtimes.find(({ tool }) => tool.runtime === 'kiro');
+  check(
+    kiro?.installed === true && kiro.signedIn === true,
+    'setup.tools finds the fake runtime installed and signed in',
+  );
+  const saved = await sendIntent(running, 'setup.save', {
+    root: repoPath,
+    runtime: 'kiro',
+  });
+  check(saved.status === 200, `setup.save answers 200 (${saved.status})`);
+  const after = await sendIntent(running, 'setup.read', {});
+  check(after.result['needsSetup'] === false, 'Setup is done after setup.save');
+  const workspace = await sendIntent(running, 'workspace.read', {});
+  check(
+    JSON.stringify(workspace.result['workspace']).includes(
+      `"slug":"${PROJECT}"`,
+    ),
+    `the workspace holds project ${PROJECT}`,
+  );
+};
+
+const FAKE_KIRO = `#!/bin/sh
+case "$1" in
+  --version) echo "kiro-cli 1.0.0" ;;
+  whoami) echo "clean@machine" ;;
+  acp) exec "${process.execPath}" ${TYPESCRIPT_FLAGS.join(' ')} "${FAKE_AGENT_ENTRY}" ;;
+  *) exit 1 ;;
+esac
+`;
+
+const installFakeKiro = async (home: string): Promise<string> => {
+  const bin = join(home, 'bin');
+  await mkdir(bin, { recursive: true });
+  const path = join(bin, 'kiro-cli');
+  await writeFile(path, FAKE_KIRO);
+  await chmod(path, 0o755);
+  return bin;
 };
 
 const checkFakeAgent = async (cwd: string): Promise<void> => {
@@ -193,9 +272,15 @@ const checkNoRegistryPackage = (): void => {
 const main = async (): Promise<void> => {
   checkNoRegistryPackage();
   const home = await mkdtemp(join(tmpdir(), 'qd-clean-home-'));
-  const repo = join(home, 'repo');
+  const repo = join(home, PROJECT);
   await mkdir(join(repo, '.git'), { recursive: true });
-  const env = { ...process.env, HOME: home, DATABASE_URL: '' };
+  const bin = await installFakeKiro(home);
+  const env = {
+    ...process.env,
+    HOME: home,
+    DATABASE_URL: '',
+    PATH: `${bin}${delimiter}${process.env['PATH'] ?? ''}`,
+  };
   const running = await startUp(env);
   try {
     check(
@@ -203,7 +288,7 @@ const main = async (): Promise<void> => {
       `npm run quarterdeck -- up serves ${running.url}`,
     );
     await checkDashboard(running.url);
-    await checkCreate(running, home, repo);
+    await checkSetup(running, home, repo);
     await checkFakeAgent(repo);
   } finally {
     await stopUp(running);

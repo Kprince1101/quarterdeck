@@ -1,4 +1,6 @@
 import type { GlobalLayouts } from '../global-layout/index.js';
+import type { SetupProbe } from '../setup/probe.js';
+import type { SetupSignIns } from '../setup/sign-ins.js';
 import type { Queryable } from '../store/index.js';
 import type { Workspaces } from '../workspace/index.js';
 import type {
@@ -26,6 +28,8 @@ export interface ApiContext {
   workspaces?: Workspaces | undefined;
   openRequests?: OpenRequests | undefined;
   voyages?: ApiVoyages | undefined;
+  setupProbe?: SetupProbe | undefined;
+  setupSignIns?: SetupSignIns | undefined;
 }
 
 export type IntentHandler<N extends IntentName> = (

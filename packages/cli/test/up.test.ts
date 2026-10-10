@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net';
 import { quarterdeckHome, readApiToken } from '@quarterdeck/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { USAGE, main } from '../src/index.js';
+import { SETUP_LINE } from '../src/up.js';
 import { entries, sandbox, testIo, type Sandbox } from './harness.js';
 
 const TIMEOUT = 30_000;
@@ -38,6 +39,7 @@ describe('quarterdeck up', { timeout: TIMEOUT }, () => {
     const { url, token } = await running(io.lines);
 
     expect(io.lines.slice(1)).toEqual([
+      SETUP_LINE,
       `Data: ${quarterdeckHome(box.home)}`,
       'Press Ctrl+C to stop.',
     ]);
