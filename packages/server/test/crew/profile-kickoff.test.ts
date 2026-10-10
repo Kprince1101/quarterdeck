@@ -2,7 +2,15 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { STEERING_START } from '@quarterdeck/rules';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from 'vitest';
 import {
   crewRules,
   reviewerBrief,
@@ -54,7 +62,7 @@ const choose = (dir: string, profile: string) =>
     profile,
   });
 
-const builderPrompt = (ctx: BuilderContext): string =>
+const builderPrompt = async (ctx: BuilderContext): Promise<string> =>
   buildAssignmentPrompt({
     builder: { name: 'okapi' },
     ticket: {
@@ -70,7 +78,7 @@ const builderPrompt = (ctx: BuilderContext): string =>
     base: ctx.base,
     terms: ctx.terms,
     services: ctx.services,
-    standards: ctx.standards,
+    standards: await ctx.standards?.(),
   });
 
 const legFor = (store: Store, rules: CrewRules, repoPath: string): VoyageLeg =>
@@ -98,7 +106,7 @@ const kickoffPrompts = async (
 ): Promise<{ builder: string; reviewer: string; driver: string }> => {
   const ctx = await builderContext(legFor(store, rules, repoPath), '/qd');
   return {
-    builder: builderPrompt(ctx),
+    builder: await builderPrompt(ctx),
     reviewer: await reviewerBrief(rules),
     driver: await driverBirth(rules),
   };
@@ -107,6 +115,14 @@ const kickoffPrompts = async (
 describe('rules profile at kickoff', () => {
   let box: Box;
   let store: Store;
+
+  beforeAll(async () => {
+    store = await openStore({ project: 'deck', dataDir: IN_MEMORY });
+  });
+
+  afterAll(async () => {
+    await store.close();
+  });
 
   beforeEach(async () => {
     const root = await mkdtemp(resolve(tmpdir(), 'quarterdeck-kickoff-'));
@@ -117,11 +133,9 @@ describe('rules profile at kickoff', () => {
     };
     await mkdir(box.homeDir);
     await mkdir(box.repoDir);
-    store = await openStore({ project: 'deck', dataDir: IN_MEMORY });
   });
 
   afterEach(async () => {
-    await store.close();
     await rm(box.root, { recursive: true, force: true });
   });
 

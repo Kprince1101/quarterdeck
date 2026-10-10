@@ -20,6 +20,7 @@ import {
 import { SERVICES_FILE, refuseRepoServices } from './services.js';
 import {
   RULE_SCHEMAS,
+  type ProfileRule,
   type RuleLevels,
   type RuleName,
   type Rules,
@@ -177,21 +178,41 @@ const PROFILE_LAYER_RULES: ReadonlySet<RuleName> = new Set([
   'lifecycle',
 ]);
 
-const layerSetsProfile = async (path: string | undefined) => {
-  if (path === undefined) return false;
+interface ProfileLayerRead {
+  path: string;
+  layer: unknown;
+}
+
+const readProfileLayer = async (
+  path: string | undefined,
+): Promise<ProfileLayerRead | undefined> => {
+  if (path === undefined) return undefined;
   const text = await readLocal(path);
-  if (text === undefined) return false;
-  const layer = parseLayer(path, text);
-  return isJsonObject(layer) && Object.hasOwn(layer, 'profile');
+  if (text === undefined) return undefined;
+  return { path, layer: parseLayer(path, text) };
 };
 
-const profileChoice = async (
-  options: LoadRulesOptions,
-): Promise<ProfileChoice> => {
-  const [machine, repo] = ruleLayerPaths('profile', options).local;
-  if (await layerSetsProfile(repo)) return 'project';
-  if (await layerSetsProfile(machine)) return 'machine';
+const setsProfile = (read: ProfileLayerRead | undefined): boolean =>
+  read !== undefined &&
+  isJsonObject(read.layer) &&
+  Object.hasOwn(read.layer, 'profile');
+
+const profileChoiceOf = (
+  machine: ProfileLayerRead | undefined,
+  repo: ProfileLayerRead | undefined,
+): ProfileChoice => {
+  if (setsProfile(repo)) return 'project';
+  if (setsProfile(machine)) return 'machine';
   return 'shipped';
+};
+
+const foldProfileLayer = (
+  merged: ProfileRule,
+  read: ProfileLayerRead | undefined,
+): ProfileRule => {
+  if (read === undefined) return merged;
+  const next = mergeLayer(merged, read.layer);
+  return validateLayer('profile', read.path, next) as ProfileRule;
 };
 
 const levelsSetBy = (merged: RuleLevels, below: RuleLevels): RuleLevels =>
@@ -202,15 +223,24 @@ const levelsSetBy = (merged: RuleLevels, below: RuleLevels): RuleLevels =>
 export const activeProfile = async (
   options: LoadRulesOptions = {},
 ): Promise<ActiveProfile> => {
-  const { repoDir: _repoDir, ...machineOptions } = options;
-  const [rule, machine] = await Promise.all([
-    loadRule('profile', options),
-    loadRule('profile', machineOptions),
+  const paths = ruleLayerPaths('profile', options);
+  const [machinePath, repoPath] = paths.local;
+  const [defaultsText, machineRead, repoRead] = await Promise.all([
+    readDefaults(paths.defaults),
+    readProfileLayer(machinePath),
+    readProfileLayer(repoPath),
   ]);
+  const defaults = validateLayer(
+    'profile',
+    paths.defaults,
+    parseLayer(paths.defaults, defaultsText),
+  ) as ProfileRule;
+  const machine = foldProfileLayer(defaults, machineRead);
+  const rule = foldProfileLayer(machine, repoRead);
   const location = await locateProfile(rule.profile, options);
   return {
     ...location,
-    chosenBy: await profileChoice(options),
+    chosenBy: profileChoiceOf(machineRead, repoRead),
     levels: machine.levels,
     repoLevels: levelsSetBy(rule.levels, machine.levels),
   };
