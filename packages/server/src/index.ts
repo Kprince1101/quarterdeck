@@ -22,3 +22,4 @@ export * from './store/index.js';
 export * from './tickets/index.js';
 export * from './api/index.js';
 export * from './stream/index.js';
+export * from './workspace/index.js';

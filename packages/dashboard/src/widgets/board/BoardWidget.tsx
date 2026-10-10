@@ -1,4 +1,6 @@
 import type { JSX } from 'react';
+import type { WorkspaceMode } from '../../api/index.js';
+import { useWorkspaceMode, wordingFor } from '../../deck/DeckProvider.js';
 import { defineWidget } from '../registry.js';
 import type { AgentLiveness, ProjectLiveness } from './board-model.js';
 import { useBoardWidget, type StreamLiveness } from './use-board-widget.js';
@@ -91,17 +93,30 @@ const AgentChip = ({ agent }: { agent: AgentLiveness }) => (
   </li>
 );
 
-const ProjectStrip = ({ project }: { project: ProjectLiveness }) => (
+interface StripProps {
+  project: ProjectLiveness;
+  isLabelled: boolean;
+}
+
+const agentsLabelOf = ({ project, isLabelled }: StripProps): string => {
+  if (isLabelled) return project.agentsLabel;
+  return 'Agents';
+};
+
+const ProjectStrip = ({ project, isLabelled }: StripProps) => (
   <li className="qd-board-project" data-project={project.id}>
     <div className="qd-board-project-head">
-      <h3>{project.name}</h3>
+      {isLabelled && <h3>{project.name}</h3>}
       {project.inVoyage && <span className="qd-board-tag">voyage</span>}
       {project.isPaused && <span className="qd-board-tag">paused</span>}
       {project.isArchived && <span className="qd-board-tag">archived</span>}
     </div>
     {!project.hasAgents && <p className="qd-empty">No live agents.</p>}
     {project.hasAgents && (
-      <ul className="qd-board-agents" aria-label={project.agentsLabel}>
+      <ul
+        className="qd-board-agents"
+        aria-label={agentsLabelOf({ project, isLabelled })}
+      >
         {project.agents.map((agent) => (
           <AgentChip key={agent.id} agent={agent} />
         ))}
@@ -109,6 +124,11 @@ const ProjectStrip = ({ project }: { project: ProjectLiveness }) => (
     )}
   </li>
 );
+
+const NOTHING_SHOWN: Record<WorkspaceMode, string> = {
+  multi: 'Pick a project to watch.',
+  single: 'No repository yet.',
+};
 
 const StreamLine = ({ stream }: { stream: StreamLiveness }) => (
   <p
@@ -122,24 +142,34 @@ const StreamLine = ({ stream }: { stream: StreamLiveness }) => (
 
 export const BoardWidget = (): JSX.Element => {
   const view = useBoardWidget();
+  const mode = useWorkspaceMode();
+  const isMulti = mode === 'multi';
+  const pause = {
+    ...view.pause,
+    outcomeText: wordingFor(mode)(view.pause.outcomeText),
+  };
   return (
     <div className="qd-board">
       <VoyageControl />
       <section className="qd-board-liveness" aria-label="Liveness">
         <StreamLine stream={view.stream} />
         {!view.hasShownProjects && (
-          <p className="qd-empty">Pick a project to watch.</p>
+          <p className="qd-empty">{NOTHING_SHOWN[mode]}</p>
         )}
         {view.hasShownProjects && (
           <ul className="qd-board-projects">
             {view.projects.map((project) => (
-              <ProjectStrip key={project.id} project={project} />
+              <ProjectStrip
+                key={project.id}
+                project={project}
+                isLabelled={isMulti}
+              />
             ))}
           </ul>
         )}
       </section>
-      <PauseControls pause={view.pause} />
-      <ProjectPicker picker={view.picker} />
+      <PauseControls pause={pause} />
+      {isMulti && <ProjectPicker picker={view.picker} />}
     </div>
   );
 };

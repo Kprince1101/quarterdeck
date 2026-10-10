@@ -5,6 +5,7 @@ import {
   type Queryable,
   type Store,
 } from '../store/index.js';
+import type { WorkspaceMode } from '../stream/schema.js';
 import {
   TICKET_PUBLISHED_EVENT,
   dependencyLabel,
@@ -357,20 +358,24 @@ export const markUnblocked = (
     return { ticket, held: false };
   });
 
-export const readyLines = (dependencies: readonly Dependency[]): string =>
+export const readyLines = (
+  dependencies: readonly Dependency[],
+  mode: WorkspaceMode = 'multi',
+): string =>
   dependencies
     .map(
       (dependency) =>
-        `- ${dependencyLabel(dependency)}: ${readyText(dependency)}`,
+        `- ${dependencyLabel(dependency, mode)}: ${readyText(dependency)}`,
     )
     .join('\n');
 
 export const wakePrompt = (
   ticket: Pick<BuilderTicket, 'id' | 'title'>,
   dependencies: readonly Dependency[],
+  mode: WorkspaceMode = 'multi',
 ): string =>
   [
     `Ticket "${ticket.title}" (ticket ${ticket.id}) is no longer blocked. Everything it waited on is ready:`,
-    readyLines(dependencies),
+    readyLines(dependencies, mode),
     'Bump each published dependency to the version listed, then carry on with the ticket.',
   ].join('\n\n');

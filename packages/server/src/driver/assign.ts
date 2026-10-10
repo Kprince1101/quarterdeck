@@ -256,6 +256,7 @@ const handOver = async (
     base: ctx.base,
     terms: ctx.terms,
     services: ctx.services,
+    mode: ctx.mode,
   });
   return {
     ticket: recorded.ticket,

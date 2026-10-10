@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { getErrorMessage } from '../lib/errors.js';
+import type { WorkspaceMode } from '../stream/schema.js';
 import {
   BUILDER_ACTION_INSTRUCTIONS,
   TICKET_ACTION_INSTRUCTIONS,
@@ -84,20 +85,31 @@ export const driverTurnResultSchema = z.object({
 export type DriverAction = z.infer<typeof driverActionSchema>;
 export type DriverTurnResult = z.infer<typeof driverTurnResultSchema>;
 
-export const DRIVER_TURN_INSTRUCTIONS = `End every reply with your turn result: one JSON object in a \`\`\`json fenced block, with nothing after it.
+const TURN_RESULT_SHAPE = `End every reply with your turn result: one JSON object in a \`\`\`json fenced block, with nothing after it.
 
 \`\`\`json
 { "summary": "Assigned QD12 to a new builder; QD9 waits on QD7.", "actions": [] }
 \`\`\`
 
 - \`summary\`: one or two sentences on what you did this turn and why.
-- \`actions\`: what Quarterdeck should do next, in order, or \`[]\` when there is nothing to do. Each action is an object with a \`kind\` and that kind's fields.
+- \`actions\`: what Quarterdeck should do next, in order, or \`[]\` when there is nothing to do. Each action is an object with a \`kind\` and that kind's fields.`;
 
-${BUILDER_ACTION_INSTRUCTIONS}
-
-${TICKET_ACTION_INSTRUCTIONS}`;
-
-export const DRIVER_TURN_FORMAT: TurnFormat<DriverTurnResult> = {
-  schema: driverTurnResultSchema,
-  instructions: DRIVER_TURN_INSTRUCTIONS,
+const ACTION_INSTRUCTIONS: Record<WorkspaceMode, readonly string[]> = {
+  multi: [BUILDER_ACTION_INSTRUCTIONS, TICKET_ACTION_INSTRUCTIONS],
+  single: [BUILDER_ACTION_INSTRUCTIONS],
 };
+
+export const driverTurnInstructions = (mode: WorkspaceMode): string =>
+  [TURN_RESULT_SHAPE, ...ACTION_INSTRUCTIONS[mode]].join('\n\n');
+
+export const DRIVER_TURN_INSTRUCTIONS = driverTurnInstructions('multi');
+
+export const driverTurnFormat = (
+  mode: WorkspaceMode,
+): TurnFormat<DriverTurnResult> => ({
+  schema: driverTurnResultSchema,
+  instructions: driverTurnInstructions(mode),
+});
+
+export const DRIVER_TURN_FORMAT: TurnFormat<DriverTurnResult> =
+  driverTurnFormat('multi');

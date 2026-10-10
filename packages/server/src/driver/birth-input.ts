@@ -2,6 +2,7 @@ import type { ForgeTerms } from '@quarterdeck/rules';
 import type { Agent } from '../agents/index.js';
 import { servicesLines, type PromptServices } from '../services/index.js';
 import type { Queryable, Store } from '../store/index.js';
+import type { WorkspaceMode } from '../stream/schema.js';
 
 export interface NotebookEntry {
   id: string;
@@ -46,6 +47,7 @@ export interface BirthInputParts {
   charter: string;
   notebook: readonly NotebookEntry[];
   projects?: readonly ProjectBrief[];
+  mode?: WorkspaceMode;
   instructions: string;
 }
 
@@ -91,27 +93,39 @@ export const readNotebooks = async <S extends NotebookSource>(
   return { entries: entries.toSorted(pinnedFirst), owners };
 };
 
-export const entryTags = (entry: NotebookEntry): string[] => {
+export const entryTags = (
+  entry: NotebookEntry,
+  mode: WorkspaceMode = 'multi',
+): string[] => {
   const tags: string[] = [];
   if (entry.pinned) tags.push('pinned');
+  if (mode === 'single') return tags;
   if (entry.global) tags.push('every project');
   else if (entry.project) tags.push(entry.project);
   return tags;
 };
 
-const entryHeading = (entry: NotebookEntry, index: number): string => {
+const entryHeading = (
+  entry: NotebookEntry,
+  index: number,
+  mode: WorkspaceMode,
+): string => {
   const heading = `### Entry ${index + 1}`;
-  const tags = entryTags(entry);
+  const tags = entryTags(entry, mode);
   if (tags.length === 0) return heading;
   return `${heading} (${tags.join(', ')})`;
 };
 
-const notebookSection = (notebook: readonly NotebookEntry[]): string => {
+const notebookSection = (
+  notebook: readonly NotebookEntry[],
+  mode: WorkspaceMode,
+): string => {
   if (notebook.length === 0) return 'The notebook is empty.';
   return [
     'What earlier Drivers wrote down for you, pinned entries first.',
     ...notebook.map(
-      (entry, index) => `${entryHeading(entry, index)}\n\n${entry.body.trim()}`,
+      (entry, index) =>
+        `${entryHeading(entry, index, mode)}\n\n${entry.body.trim()}`,
     ),
   ].join('\n\n');
 };
@@ -133,23 +147,29 @@ const listOr = (lines: readonly string[], none: string): string => {
   return lines.join('\n');
 };
 
-const projectSection = (brief: ProjectBrief): string =>
-  [
-    `## ${brief.project}`,
-    `Repository: ${brief.repoPath}. Bus: \`${brief.bus}\`. Forge: ${brief.terms.name} (${brief.terms.long}s, ${brief.terms.short}).`,
-    'Approved tickets waiting for a builder:',
-    listOr(
-      brief.waiting.map((ticket) => `- ${briefTicketLabel(ticket)}`),
-      'None.',
-    ),
-    'Builders:',
-    listOr(brief.builders.map(builderLine), 'None.'),
-    'Services:',
-    servicesLines(brief.services),
-  ].join('\n\n');
+const briefLines = (brief: ProjectBrief): string[] => [
+  `Repository: ${brief.repoPath}. Bus: \`${brief.bus}\`. Forge: ${brief.terms.name} (${brief.terms.long}s, ${brief.terms.short}).`,
+  'Approved tickets waiting for a builder:',
+  listOr(
+    brief.waiting.map((ticket) => `- ${briefTicketLabel(ticket)}`),
+    'None.',
+  ),
+  'Builders:',
+  listOr(brief.builders.map(builderLine), 'None.'),
+  'Services:',
+  servicesLines(brief.services),
+];
 
-const projectsSection = (projects: readonly ProjectBrief[]): string[] => {
+const projectSection = (brief: ProjectBrief): string =>
+  [`## ${brief.project}`, ...briefLines(brief)].join('\n\n');
+
+const projectsSection = (
+  projects: readonly ProjectBrief[],
+  mode: WorkspaceMode,
+): string[] => {
   if (projects.length === 0) return [];
+  if (mode === 'single')
+    return ['# Repository', ...projects.flatMap(briefLines)];
   return [
     '# Projects',
     `This voyage spans ${projects.length} projects. Every ticket and builder belongs to one of them; Quarterdeck finds the project from the ticket or builder you name. Each project has its own bus: use that project's tools for anything about it.`,
@@ -163,7 +183,7 @@ export interface Birth {
 }
 
 const BIRTH_LINE =
-  /^You are (.+), the Driver of (?:this project|every project) for (?:voyage|round) (\d+)\.\n/;
+  /^You are (.+), the Driver of (?:this project|every project|this repository) for (?:voyage|round) (\d+)\.\n/;
 
 export const readBirth = (input: string): Birth | undefined => {
   const match = BIRTH_LINE.exec(input);
@@ -179,20 +199,26 @@ const DRIVER_OF: Record<'one' | 'many', string> = {
   many: 'every project',
 };
 
-const driverOf = (projects: readonly ProjectBrief[] | undefined): string => {
-  if (projects === undefined) return DRIVER_OF.one;
+const driverOf = (parts: BirthInputParts): string => {
+  if (parts.mode === 'single') return 'this repository';
+  if (parts.projects === undefined) return DRIVER_OF.one;
   return DRIVER_OF.many;
 };
 
-export const buildBirthInput = (parts: BirthInputParts): string =>
-  [
-    `You are ${parts.agent.name}, the Driver of ${driverOf(parts.projects)} for voyage ${parts.voyage.number}.`,
-    parts.charter.trim(),
+export const kickoffStandards = (parts: BirthInputParts): string =>
+  parts.charter.trim();
+
+export const buildBirthInput = (parts: BirthInputParts): string => {
+  const mode = parts.mode ?? 'multi';
+  return [
+    `You are ${parts.agent.name}, the Driver of ${driverOf(parts)} for voyage ${parts.voyage.number}.`,
+    kickoffStandards(parts),
     `# Voyage ${parts.voyage.number}`,
     goalSection(parts.voyage.goal),
-    ...projectsSection(parts.projects ?? []),
+    ...projectsSection(parts.projects ?? [], mode),
     '# Notebook',
-    notebookSection(parts.notebook),
+    notebookSection(parts.notebook, mode),
     '# Turn result',
     parts.instructions,
   ].join('\n\n');
+};

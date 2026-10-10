@@ -11,7 +11,7 @@ import { DRIVER_NOTE_KINDS, WAKE_EVENT_KINDS } from './driver-notes.js';
 import { reportToEach } from './failures.js';
 import { startCrewIntents, type CrewIntents } from './intents.js';
 import { createReviewerDesk } from './reviewer.js';
-import { machineRules } from './rules.js';
+import { machineRules, type ModeSource } from './rules.js';
 import { birthSeated, type SeatSite } from './seats.js';
 import { ticketServices, type CrewProject } from './voyage-legs.js';
 import { startCrewVoyages, type CrewVoyages } from './voyages.js';
@@ -21,6 +21,7 @@ export interface CoordinatorOptions {
   homeDir: string;
   openStores: () => readonly Store[];
   adapters?: PlannerAdapters | undefined;
+  mode?: ModeSource | undefined;
   onError?: ((err: unknown) => void) | undefined;
 }
 
@@ -48,7 +49,7 @@ const reportError = (err: unknown): void => {
 export const startCoordinator = (options: CoordinatorOptions): Coordinator => {
   const log = options.onError ?? reportError;
   const adapters = options.adapters ?? PLANNER_ADAPTERS;
-  const rules = machineRules(options.homeDir);
+  const rules = machineRules(options.homeDir, options.mode);
   const joined = new Map<string, Joined>();
   const tasks = new Set<Promise<void>>();
   let closed = false;
@@ -85,6 +86,7 @@ export const startCoordinator = (options: CoordinatorOptions): Coordinator => {
       return ticketServices(crew, ticketId);
     },
     report: (targets) => reportToEach(targets, 'reviewer', log),
+    mode: rules.mode,
     birth: async (sites) => {
       const [models, naming, lifecycle] = await Promise.all([
         rules.load('models'),

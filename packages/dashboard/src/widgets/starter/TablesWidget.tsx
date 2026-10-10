@@ -1,14 +1,16 @@
 import type { JSX } from 'react';
+import { useWording } from '../../deck/DeckProvider.js';
 import { defineWidget } from '../registry.js';
 import { useTablesWidget } from './use-tables-widget.js';
 
 export const TablesWidget = (): JSX.Element => {
   const { counts } = useTablesWidget();
+  const word = useWording();
   return (
     <dl className="qd-table-counts">
       {counts.map(({ table, rows }) => (
         <div key={table}>
-          <dt>{table}</dt>
+          <dt>{word(table)}</dt>
           <dd>{rows}</dd>
         </div>
       ))}

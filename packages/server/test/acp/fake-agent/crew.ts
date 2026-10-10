@@ -22,7 +22,7 @@ export const FAKE_PR_HEAD = 'c0ffee0000000000000000000000000000c0ffee';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const DRIVER_BIRTH =
-  /^You are .+, the Driver of (?:this project|every project) for voyage \d+\./;
+  /^You are .+, the Driver of (?:this project|every project|this repository) for voyage \d+\./;
 const WRAP_UP = /^Voyage \d+ has settled/;
 const ASSIGNMENT = new RegExp(`^# Ticket (${UUID}):`, 'm');
 const REVIEW = new RegExp(`Review ticket (${UUID}):`);

@@ -58,15 +58,17 @@ const TrackerFields = ({ services }: ServicesViewProps) => (
 
 const ServicesActions = ({ services }: ServicesViewProps) => (
   <div className="qd-project-actions">
-    <label className="qd-project-toggle">
-      <input
-        type="checkbox"
-        checked={services.form.publishes}
-        disabled={services.isPending}
-        onChange={services.handlePublishesChange}
-      />
-      <span>Publishes (dependents wait for a release)</span>
-    </label>
+    {services.showsPublishes && (
+      <label className="qd-project-toggle">
+        <input
+          type="checkbox"
+          checked={services.form.publishes}
+          disabled={services.isPending}
+          onChange={services.handlePublishesChange}
+        />
+        <span>Publishes (dependents wait for a release)</span>
+      </label>
+    )}
     <button
       type="button"
       disabled={!services.canSave}

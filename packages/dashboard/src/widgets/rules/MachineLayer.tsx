@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import type { RuleView } from '../../api/index.js';
+import { useWording } from '../../deck/DeckProvider.js';
 import { LayerHeading, RulesAlert } from './RulesParts.js';
 import type { RulesWidgetView } from './use-rules-widget.js';
 
@@ -33,6 +34,10 @@ const Warnings = ({ label, warnings }: WarningsProps) => {
   );
 };
 
+const MachineScope = () => (
+  <>{useWording()('Applies to every project on this machine.')}</>
+);
+
 export const MachineLayer = ({
   view,
   rule,
@@ -40,7 +45,7 @@ export const MachineLayer = ({
   <section className="qd-rules-layer" aria-label="Machine layer">
     <LayerHeading title="Machine layer" path={rule.machine.path} />
     <p className="qd-rules-note">
-      Applies to every project on this machine.
+      <MachineScope />
       {view.showNoFileNote && ' No file yet; saving creates it.'}
     </p>
     <textarea

@@ -33,6 +33,15 @@ import {
 const PROJECT = 'example';
 const SAMPLE = 'sample';
 
+const promptsOf = async (store: Store, role: string): Promise<string[]> => {
+  const { rows } = await store.db.query<{ prompt: string }>(
+    `select t.prompt from turns t join agents a on a.id = t.agent_id
+     where a.project_id = $1 and a.role = $2 order by t.id`,
+    [store.projectId, role],
+  );
+  return rows.map(({ prompt }) => prompt);
+};
+
 describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
   let homeDir = '';
   const cleanup: (() => Promise<void>)[] = [];
@@ -162,6 +171,13 @@ describe('the crew under startQuarterdeck', { timeout: TIMEOUT }, () => {
     expect(runtime.launches.map((launch) => launch.env)).toEqual(
       runtime.launches.map(() => ({ pass: [] })),
     );
+
+    expect((await qd.api.workspaces.read())?.mode).toBe('single');
+    for (const role of ['driver', 'builder', 'reviewer']) {
+      const prompts = await promptsOf(store, role);
+      expect(prompts.length).toBeGreaterThan(0);
+      for (const prompt of prompts) expect(prompt).not.toMatch(/project/i);
+    }
   });
 
   it('cards the human when the Planner asks to propose, and proposes once allowed', async () => {

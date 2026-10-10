@@ -404,6 +404,8 @@ export const createDemoIntents = (
       world.moveTicket(proposed(input.ticketId), 'rejected');
       return reply('applied', { ticketId: input.ticketId, status: 'rejected' });
     },
+    'workspace.read': (_input, reply) =>
+      reply('applied', { workspace: store.workspace() }),
     'project.create': notInDemo('Adding a project'),
     'project.update': notInDemo('Editing a project'),
     'project.archive': (input, reply) => {

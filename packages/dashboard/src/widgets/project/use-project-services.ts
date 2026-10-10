@@ -1,5 +1,5 @@
 import type { Tracker } from '@quarterdeck/rules/schemas';
-import { useDeck } from '../../deck/DeckProvider.js';
+import { useDeck, useWorkspaceMode } from '../../deck/DeckProvider.js';
 import { useIntentRequest } from '../use-intent-request.js';
 import type { ProjectPanel } from './project-model.js';
 import {
@@ -20,6 +20,7 @@ export interface ProjectServicesView extends ServicesFormState {
   isLoaded: boolean;
   forgeSummary: string;
   sourceNote: string;
+  showsPublishes: boolean;
   howOptions: HowOption[];
   reachLabel: string;
   isReachDisabled: boolean;
@@ -39,6 +40,7 @@ export const useProjectServices = (
   panel: ProjectPanel,
 ): ProjectServicesView => {
   const { intents } = useDeck();
+  const mode = useWorkspaceMode();
   const { read, loadError, reload } = useServicesRead(panel.slug);
   const fields = useServicesForm(read);
   const { isPending, error, run } = useIntentRequest();
@@ -53,7 +55,8 @@ export const useProjectServices = (
     ...fields,
     isLoaded: read !== null,
     forgeSummary: (read && forgeSummary(read)) ?? '',
-    sourceNote: (read && sourceNote(read)) ?? '',
+    sourceNote: (read && sourceNote(read, mode)) ?? '',
+    showsPublishes: mode === 'multi',
     howOptions: HOW_OPTIONS,
     reachLabel: REACH_LABELS[fields.form.how],
     isReachDisabled: fields.form.how === '',

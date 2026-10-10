@@ -1,4 +1,6 @@
 import type { JSX } from 'react';
+import type { WorkspaceMode } from '../../api/index.js';
+import { useWorkspaceMode } from '../../deck/DeckProvider.js';
 import { ChatInput } from '../../primitives/index.js';
 import { defineWidget } from '../registry.js';
 import type {
@@ -49,13 +51,19 @@ interface ConversationBodyProps extends ConversationLogProps {
   isEmpty: boolean;
 }
 
+const NO_HOME: Record<WorkspaceMode, string> = {
+  multi: 'No project yet. Create one to plan.',
+  single: 'No repository yet. Add one with init to plan.',
+};
+
 const ConversationBody = ({
   hasProject,
   isEmpty,
   ...log
 }: ConversationBodyProps) => {
+  const mode = useWorkspaceMode();
   if (!hasProject) {
-    return <p className="qd-empty">No project yet. Create one to plan.</p>;
+    return <p className="qd-empty">{NO_HOME[mode]}</p>;
   }
   if (isEmpty) {
     return (

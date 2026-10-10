@@ -1,43 +1,49 @@
 import { forgeWording, type ForgeTerms } from '@quarterdeck/rules';
 import { z } from 'zod';
+import type { WorkspaceMode } from '../stream/schema.js';
+import { DEFAULT_WORKSPACE_MODE } from '../workspace/feed.js';
+import { workspaceWording } from '../workspace/wording.js';
 import { BusToolError, type BusTool } from './tool.js';
 
-const wordSchema = (
-  schema: z.core.$ZodType,
-  terms: ForgeTerms,
-): z.core.$ZodType => {
+type Worder = (text: string) => string;
+
+const wordSchema = (schema: z.core.$ZodType, word: Worder): z.core.$ZodType => {
   if (!(schema instanceof z.ZodType) || schema.description === undefined)
     return schema;
-  return schema.describe(forgeWording(schema.description, terms));
+  return schema.describe(word(schema.description));
 };
 
-const wordedError = (err: unknown, terms: ForgeTerms): unknown => {
+const wordedError = (err: unknown, word: Worder): unknown => {
   if (!(err instanceof BusToolError)) return err;
-  return new BusToolError(forgeWording(err.message, terms), { cause: err });
+  return new BusToolError(word(err.message), { cause: err });
 };
 
 const wordedRun =
-  (tool: BusTool, terms: ForgeTerms): BusTool['run'] =>
+  (tool: BusTool, word: Worder): BusTool['run'] =>
   async (call, args) => {
     try {
       return await tool.run(call, args);
     } catch (err) {
-      throw wordedError(err, terms);
+      throw wordedError(err, word);
     }
   };
 
 export const wordedTools = (
   tools: readonly BusTool[],
   terms: ForgeTerms,
-): BusTool[] =>
-  tools.map((tool) => ({
+  mode: WorkspaceMode = DEFAULT_WORKSPACE_MODE,
+): BusTool[] => {
+  const word: Worder = (text) =>
+    workspaceWording(forgeWording(text, terms), mode);
+  return tools.map((tool) => ({
     ...tool,
-    description: forgeWording(tool.description, terms),
+    description: word(tool.description),
     input: Object.fromEntries(
       Object.entries(tool.input).map(([key, schema]) => [
         key,
-        wordSchema(schema, terms),
+        wordSchema(schema, word),
       ]),
     ),
-    run: wordedRun(tool, terms),
+    run: wordedRun(tool, word),
   }));
+};

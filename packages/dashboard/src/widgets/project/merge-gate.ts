@@ -1,7 +1,8 @@
 import type { ForgeTerms } from '@quarterdeck/rules/forges';
 import { isJsonObject, upgradeLifecycleLayer } from '@quarterdeck/rules/merge';
 import type { MergeGate } from '@quarterdeck/rules/schemas';
-import type { RuleView, RulesView } from '../../api/index.js';
+import type { RuleView, RulesView, WorkspaceMode } from '../../api/index.js';
+import { wordingFor } from '../../deck/wording.js';
 import { getErrorMessage } from '../../lib/errors.js';
 import { EMPTY_JSON_LAYER } from '../rules/constants.js';
 import { checkDraft } from '../rules/rule-layers.js';
@@ -21,17 +22,28 @@ export interface GateToggles {
   error: string | null;
 }
 
-const GATE_LABELS: Record<GateKey, string> = {
-  requireAiReview: 'AI review (all projects)',
-  autoMerge: 'Auto-merge (all projects)',
+const GATE_LABELS: Record<WorkspaceMode, Record<GateKey, string>> = {
+  multi: {
+    requireAiReview: 'AI review (all projects)',
+    autoMerge: 'Auto-merge (all projects)',
+  },
+  single: {
+    requireAiReview: 'AI review',
+    autoMerge: 'Auto-merge',
+  },
 };
 
-const GATE_KEYS = Object.keys(GATE_LABELS) as GateKey[];
+const GATE_KEYS = Object.keys(GATE_LABELS.multi) as GateKey[];
 
 const CONFIRMED_WHEN_ON: ReadonlySet<GateKey> = new Set(['autoMerge']);
 
-export const autoMergeWarning = (terms: ForgeTerms): string =>
-  `Turn on auto-merge for every project on this machine? Approved ${terms.long}s will squash-merge to ${terms.name} with no merge card.`;
+export const autoMergeWarning = (
+  terms: ForgeTerms,
+  mode: WorkspaceMode = 'multi',
+): string =>
+  wordingFor(mode)(
+    `Turn on auto-merge for every project on this machine? Approved ${terms.long}s will squash-merge to ${terms.name} with no merge card.`,
+  );
 
 export const needsConfirm = (key: GateKey, value: boolean): boolean =>
   value && CONFIRMED_WHEN_ON.has(key);
@@ -69,17 +81,20 @@ export const lifecycleRule = (view: RulesView): RuleView => {
   return rule;
 };
 
-export const gateToggles = (rule: RuleView): GateToggles => {
+export const gateToggles = (
+  rule: RuleView,
+  mode: WorkspaceMode = 'multi',
+): GateToggles => {
   try {
     const { machine, effective } = gateValues(rule);
     const toggles = GATE_KEYS.map((key) => {
       const pinnedByRepo = machine[key] !== effective[key];
       return {
         key,
-        label: GATE_LABELS[key],
+        label: GATE_LABELS[mode][key],
         checked: effective[key],
         pinnedByRepo,
-        title: gateTitle(rule, key, pinnedByRepo),
+        title: wordingFor(mode)(gateTitle(rule, key, pinnedByRepo)),
       };
     });
     return { toggles, error: null };

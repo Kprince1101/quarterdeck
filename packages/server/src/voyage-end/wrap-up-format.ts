@@ -5,6 +5,12 @@ import {
   type Voyage,
   type TurnFormat,
 } from '../driver/index.js';
+import type { WorkspaceMode } from '../stream/schema.js';
+import {
+  multiOnly,
+  singleOnly,
+  workspaceWording,
+} from '../workspace/wording.js';
 
 export const MAX_NOTEBOOK_PROPOSALS = 50;
 
@@ -98,7 +104,7 @@ export type WrapUpResult = z.infer<ReturnType<typeof wrapUpResultSchema>>;
 export type NotebookProposal = WrapUpResult['notebook'][number];
 export type CharterProposal = NonNullable<WrapUpResult['charter']>;
 
-export const WRAP_UP_INSTRUCTIONS = `End your reply with your wrap-up result: one JSON object in a \`\`\`json fenced block, with nothing after it.
+const WRAP_UP_TEMPLATE = `End your reply with your wrap-up result: one JSON object in a \`\`\`json fenced block, with nothing after it.
 
 \`\`\`json
 {
@@ -113,51 +119,64 @@ export const WRAP_UP_INSTRUCTIONS = `End your reply with your wrap-up result: on
 \`\`\`
 
 - \`summary\`: one or two sentences on what this voyage did.
-- \`notebook\`: changes to the notebook, or \`[]\`. \`add\` writes a new entry (\`pinned\` keeps it first; on a voyage across several projects, \`"project": "<slug>"\` files it under one project, and leaving it out makes it an entry for every project); \`update\` replaces an entry's text; \`retire\` takes an entry out of the notebook. \`entry\` is an id from the notebook above. At most one change per entry, and at most ${MAX_NOTEBOOK_PROPOSALS} changes.
+${multiOnly(`- \`notebook\`: changes to the notebook, or \`[]\`. \`add\` writes a new entry (\`pinned\` keeps it first; on a voyage across several projects, \`"project": "<slug>"\` files it under one project, and leaving it out makes it an entry for every project); \`update\` replaces an entry's text; \`retire\` takes an entry out of the notebook. \`entry\` is an id from the notebook above. At most one change per entry, and at most ${MAX_NOTEBOOK_PROPOSALS} changes.`)}
+${singleOnly(`- \`notebook\`: changes to the notebook, or \`[]\`. \`add\` writes a new entry (\`pinned\` keeps it first); \`update\` replaces an entry's text; \`retire\` takes an entry out of the notebook. \`entry\` is an id from the notebook above. At most one change per entry, and at most ${MAX_NOTEBOOK_PROPOSALS} changes.`)}
 - \`charter\`: \`null\`, or \`{ "body": "...", "rationale": "..." }\` where \`body\` is the whole charter as you would have it, not a diff.
 
 Every change is a proposal. Nothing changes until the human approves it, and the next Driver is born with what they approve.`;
 
-const entryTitle = (entry: NotebookEntry): string => {
-  const tags = entryTags(entry);
+export const wrapUpInstructions = (mode: WorkspaceMode): string =>
+  workspaceWording(WRAP_UP_TEMPLATE, mode);
+
+export const WRAP_UP_INSTRUCTIONS = wrapUpInstructions('multi');
+
+const entryTitle = (entry: NotebookEntry, mode: WorkspaceMode): string => {
+  const tags = entryTags(entry, mode);
   if (tags.length === 0) return `### ${entry.id}`;
   return `### ${entry.id} (${tags.join(', ')})`;
 };
 
-const entrySection = (entry: NotebookEntry): string =>
-  `${entryTitle(entry)}\n\n${entry.body.trim()}`;
+const entrySection = (entry: NotebookEntry, mode: WorkspaceMode): string =>
+  `${entryTitle(entry, mode)}\n\n${entry.body.trim()}`;
 
-const notebookSection = (notebook: readonly NotebookEntry[]): string => {
+const notebookSection = (
+  notebook: readonly NotebookEntry[],
+  mode: WorkspaceMode,
+): string => {
   if (notebook.length === 0) return 'The notebook is empty.';
-  return notebook.map(entrySection).join('\n\n');
+  return notebook.map((entry) => entrySection(entry, mode)).join('\n\n');
 };
 
 export interface WrapUpPromptParts {
   voyage: Pick<Voyage, 'number'>;
   charter: string;
   notebook: readonly NotebookEntry[];
+  mode?: WorkspaceMode | undefined;
 }
 
-export const buildWrapUpPrompt = (parts: WrapUpPromptParts): string =>
-  [
+export const buildWrapUpPrompt = (parts: WrapUpPromptParts): string => {
+  const mode = parts.mode ?? 'multi';
+  return [
     `Voyage ${parts.voyage.number} has settled: no open tickets, no running agents and no open cards. This is your wrap-up turn; the voyage ends after it.`,
     'Look back over the voyage and propose what the next Driver should be born with: notebook entries to add, update or retire, and any change to the charter.',
     '# Notebook',
     'The active notebook, each entry under its id.',
-    notebookSection(parts.notebook),
+    notebookSection(parts.notebook, mode),
     '# Charter',
     parts.charter.trim(),
     '# Wrap-up result',
-    WRAP_UP_INSTRUCTIONS,
+    wrapUpInstructions(mode),
   ].join('\n\n');
+};
 
 export const wrapUpFormat = (
   notebook: readonly NotebookEntry[],
   projects?: ReadonlySet<string>,
+  mode: WorkspaceMode = 'multi',
 ): TurnFormat<WrapUpResult> => ({
   schema: wrapUpResultSchema(
     new Set(notebook.map((entry) => entry.id)),
     projects,
   ),
-  instructions: WRAP_UP_INSTRUCTIONS,
+  instructions: wrapUpInstructions(mode),
 });

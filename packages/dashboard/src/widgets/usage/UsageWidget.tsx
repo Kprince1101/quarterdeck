@@ -1,4 +1,5 @@
 import type { JSX } from 'react';
+import { useWording } from '../../deck/DeckProvider.js';
 import { defineWidget } from '../registry.js';
 import { NO_CAP, type UsageView } from './usage-model.js';
 import { useUsageWidget } from './use-usage-widget.js';
@@ -25,11 +26,12 @@ interface UsageReadoutProps {
 }
 
 const UsageReadout = ({ view }: UsageReadoutProps) => {
+  const word = useWording();
   if (view === null) return <p className="qd-empty">Reading usage…</p>;
   return (
     <>
       <CapReadout view={view} />
-      <p className="qd-usage-tokens">{view.usedLabel}</p>
+      <p className="qd-usage-tokens">{word(view.usedLabel)}</p>
     </>
   );
 };

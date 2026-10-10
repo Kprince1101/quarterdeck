@@ -77,6 +77,32 @@ describe('bus propose', { timeout: TIMEOUT }, () => {
       ...args,
     });
 
+  it('implies the one repository in a single workspace, and still asks for a project in multi', async () => {
+    const single = await connectClient(
+      store,
+      plannerId,
+      undefined,
+      undefined,
+      undefined,
+      'single',
+    );
+    clients.push(single);
+    const implied = await callTool(single, 'propose', {
+      title: 'No project named',
+      body: FAKE_SPEC_BODY,
+    });
+    expect(implied.isError).toBe(false);
+    const { rows } = await store.db.query('select title from tickets');
+    expect(rows).toEqual([{ title: 'No project named' }]);
+
+    const multi = await callTool(planner, 'propose', {
+      title: 'No project named',
+      body: FAKE_SPEC_BODY,
+    });
+    expect(multi.isError).toBe(true);
+    expect(multi.text).toContain('it names no project');
+  });
+
   it('stores a proposed ticket and records who proposed it', async () => {
     const reply = await propose(planner, { title: '  QD5b Planner  ' });
     expect(reply.isError).toBe(false);

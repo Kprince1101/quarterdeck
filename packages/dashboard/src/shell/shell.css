@@ -33,6 +33,16 @@
   text-transform: uppercase;
 }
 
+.qd-workspace-notice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--qd-space-2);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .qd-header-end {
   margin-left: auto;
   display: flex;

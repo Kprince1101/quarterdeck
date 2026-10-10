@@ -1,9 +1,11 @@
 import { createGlobalLayouts } from '../../global-layout/index.js';
 import type {
+  IntentPayload,
   IntentReply,
   IntentResult,
   WorkspaceIntentName,
 } from '../../intents/index.js';
+import { createWorkspaces, describeRepository } from '../../workspace/index.js';
 import { presetLayout, type GridLayout } from '../../layouts/index.js';
 import type { Queryable } from '../../store/index.js';
 import type { ApiContext, IntentHandlers } from '../context.js';
@@ -14,18 +16,44 @@ import { RULES_HANDLERS } from './rules.js';
 type ProjectIntentName =
   'project.create' | 'project.update' | 'project.archive';
 
+const joinWorkspace = async (
+  ctx: ApiContext,
+  input: IntentPayload<'project.create'>,
+): Promise<IntentResult> => {
+  if (ctx.workspaces === undefined || input.repoPath === undefined) return {};
+  const repo = await describeRepository(input.repoPath);
+  const project = {
+    ...repo,
+    slug: input.project,
+    name: input.name ?? repo.name,
+  };
+  const { workspace, notice } = await ctx.workspaces.add({
+    root: input.repoPath,
+    mode: 'single',
+    projects: [project],
+  });
+  return { workspace: { mode: workspace.mode, notice } };
+};
+
 const PROJECT_HANDLERS: IntentHandlers<ProjectIntentName> = {
   'project.create': async (ctx, input, name) => {
     await assertDirectory(input.repoPath);
     await ctx.stores.create(input.project);
-    return applyInProject(ctx, name, input, async (tx, projectId) => {
-      await tx.query(
-        `update projects set name = coalesce($2, name), repo_path = $3
+    const reply = await applyInProject(
+      ctx,
+      name,
+      input,
+      async (tx, projectId) => {
+        await tx.query(
+          `update projects set name = coalesce($2, name), repo_path = $3
          where id = $1`,
-        [projectId, input.name ?? null, input.repoPath ?? null],
-      );
-      return { projectId };
-    });
+          [projectId, input.name ?? null, input.repoPath ?? null],
+        );
+        return { projectId };
+      },
+    );
+    const joined = await joinWorkspace(ctx, input);
+    return { ...reply, result: { ...reply.result, ...joined } };
   },
   'project.update': async (ctx, input, name) => {
     await assertDirectory(input.repoPath);
@@ -125,8 +153,18 @@ export const WORKSPACE_HANDLERS: IntentHandlers<WorkspaceIntentName> = {
       );
       return { name: input.name };
     }),
-  'wipe.project': async (ctx, input, name) =>
-    unrecorded(name, await ctx.stores.wipe(input.project)),
-  'wipe.all': async (ctx, _input, name) =>
-    unrecorded(name, await ctx.stores.wipeAll()),
+  'wipe.project': async (ctx, input, name) => {
+    const wiped = await ctx.stores.wipe(input.project);
+    await ctx.workspaces?.remove(wiped.wiped);
+    return unrecorded(name, wiped);
+  },
+  'wipe.all': async (ctx, _input, name) => {
+    const wiped = await ctx.stores.wipeAll();
+    await ctx.workspaces?.remove(wiped.wiped);
+    return unrecorded(name, wiped);
+  },
+  'workspace.read': async (ctx, _input, name) => {
+    const workspaces = ctx.workspaces ?? createWorkspaces(ctx.stores.dataHome);
+    return unrecorded(name, { workspace: await workspaces.read() });
+  },
 };

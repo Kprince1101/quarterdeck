@@ -3,6 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
+import type { WorkspaceMode } from '../../src/stream/index.js';
 import {
   createBusServer,
   loadBusTools,
@@ -104,9 +105,10 @@ export const connectClient = async (
   tools?: readonly BusTool[],
   askExpiryMs?: number,
   openStores?: () => readonly Store[],
+  mode?: WorkspaceMode,
 ): Promise<Client> => {
   const server = createBusServer(
-    { store, agentId, askExpiryMs, openStores },
+    { store, agentId, askExpiryMs, openStores, mode },
     tools ?? (await loadBusTools()),
   );
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();

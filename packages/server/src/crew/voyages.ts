@@ -270,6 +270,7 @@ export const startCrewVoyages = (options: CrewVoyagesOptions): CrewVoyages => {
     live.briefs = await Promise.all(live.legs.map(projectBrief));
     live.charter = voyageCharter(charter, live.briefs);
     return openDriverVoyage({
+      mode: await options.rules.mode(),
       store: lead.store,
       client: driver.sessions.driverClient(driver.lead.agent.id),
       bus: lead.bus,
@@ -318,6 +319,7 @@ export const startCrewVoyages = (options: CrewVoyagesOptions): CrewVoyages => {
     });
     const voyageRun = startVoyageRun({
       voyage,
+      mode: await options.rules.mode(),
       charter: live.charter ?? '',
       resolve: (action) => resolveLeg(live.legs, action, home, dependencies),
       report: crewFailureReporter(lead.store, log),
@@ -418,6 +420,7 @@ export const startCrewVoyages = (options: CrewVoyagesOptions): CrewVoyages => {
       voyage,
       charter: live.charter ?? '',
       reason,
+      mode: await options.rules.mode(),
       legs: live.legs.map((leg) => ({
         project: leg.project,
         store: leg.store,
@@ -586,9 +589,10 @@ export const startCrewVoyages = (options: CrewVoyagesOptions): CrewVoyages => {
     store: Store,
     event: StoreEvent,
   ): Promise<NoteContext> => {
-    if (event.kind !== GATE_EVENTS.merged) return {};
+    const mode = await options.rules.mode();
+    if (event.kind !== GATE_EVENTS.merged || mode === 'single') return { mode };
     const services = await loadServices(store, { homeDir: options.homeDir });
-    return { publishes: services.publishes };
+    return { publishes: services.publishes, mode };
   };
 
   const noteEvent = (project: CrewProject, event: StoreEvent): void => {

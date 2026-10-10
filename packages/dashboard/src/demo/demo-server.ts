@@ -1,5 +1,9 @@
 import type { WipeResult } from '@quarterdeck/server/intents';
-import type { VoyageRow } from '@quarterdeck/server/stream-schema';
+import type {
+  VoyageRow,
+  Workspace,
+  WorkspaceMode,
+} from '@quarterdeck/server/stream-schema';
 import { createIntentClient } from '../api/intents.js';
 import { createRulesReader } from '../api/rules.js';
 import type { DeckSources } from '../deck/DeckProvider.js';
@@ -38,7 +42,28 @@ const SEEDED_LIVE_BEATS = 4;
 
 export interface DemoServerOptions {
   now?: () => number;
+  workspace?: WorkspaceMode;
 }
+
+const demoWorkspace = (
+  mode: WorkspaceMode | undefined,
+  now: number,
+): Workspace | null => {
+  if (mode !== 'single') return null;
+  return {
+    root: DEMO_REPO_PATH,
+    mode,
+    projects: [
+      {
+        slug: DEMO_PROJECT,
+        name: 'Harbor',
+        repoPath: DEMO_REPO_PATH,
+        repository: 'github.com/demo/harbor',
+      },
+    ],
+    updatedAt: new Date(now).toISOString(),
+  };
+};
 
 export interface DemoServer {
   store: DemoStore;
@@ -75,6 +100,7 @@ export const createDemoServer = (
   const store = createDemoStore({
     projectId: demoId(0),
     now: () => clock() - lag,
+    workspace: demoWorkspace(options.workspace, clock()),
   });
   const world = createDemoWorld(store);
   const rules = createDemoRules({ lifecycle: DEMO_LIFECYCLE });

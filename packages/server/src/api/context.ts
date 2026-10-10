@@ -1,5 +1,6 @@
 import type { GlobalLayouts } from '../global-layout/index.js';
 import type { Queryable } from '../store/index.js';
+import type { Workspaces } from '../workspace/index.js';
 import type {
   IntentName,
   IntentPayload,
@@ -22,6 +23,7 @@ export interface ApiContext {
   stores: ProjectStores;
   homeDir: string;
   layouts?: GlobalLayouts | undefined;
+  workspaces?: Workspaces | undefined;
   openRequests?: OpenRequests | undefined;
   voyages?: ApiVoyages | undefined;
 }

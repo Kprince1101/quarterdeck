@@ -87,7 +87,7 @@ const ProjectField = ({ view }: ProposalPartProps) => (
 
 const ProposalEditor = ({ view }: ProposalPartProps) => (
   <form className="qd-proposal-editor" onSubmit={view.handleSave}>
-    <ProjectField view={view} />
+    {view.showsProjects && <ProjectField view={view} />}
     <label>
       <span>Title</span>
       <input
@@ -151,7 +151,9 @@ export const ProposalCard = ({
     >
       <header className="qd-proposal-head">
         <h3>{proposal.title}</h3>
-        <span className="qd-proposal-project">{proposal.projectLabel}</span>
+        {view.showsProjects && (
+          <span className="qd-proposal-project">{proposal.projectLabel}</span>
+        )}
         <span className="qd-proposal-status">{view.statusLabel}</span>
       </header>
       {view.hasBody && <p className="qd-proposal-body">{proposal.body}</p>}

@@ -128,7 +128,7 @@ export const startWake = <L extends WakeLeg>(options: WakeOptions<L>): Wake => {
     try {
       const continuation = await continueBuilder(ctx, {
         builderId: holder.id,
-        prompt: wakePrompt(ticket, dependencies),
+        prompt: wakePrompt(ticket, dependencies, ctx.mode),
       });
       options.watch(
         { project: leg.project, builders: ctx },

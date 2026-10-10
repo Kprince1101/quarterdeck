@@ -30,8 +30,9 @@ import {
   VoyageEndedError,
   VoyageNotFoundError,
 } from './errors.js';
+import type { WorkspaceMode } from '../stream/schema.js';
 import {
-  DRIVER_TURN_FORMAT,
+  driverTurnFormat,
   type DriverTurnResult,
   type TurnFormat,
 } from './result.js';
@@ -73,6 +74,7 @@ export interface DriverVoyageOptions {
   pause: PauseGuard;
   seats?: readonly DriverSeat[];
   projects?: readonly ProjectBrief[];
+  mode?: WorkspaceMode;
 }
 
 export type DriverTurnOutcome = TurnOutcome<DriverTurnResult>;
@@ -198,11 +200,12 @@ const seatFlags = async (options: DriverVoyageOptions): Promise<SeatFlag[]> => {
     const flags = await unsurfacedStuckFlags(options.store);
     return flags.map((flag) => ({ ...flag, seat }));
   }
+  const labelled = options.mode !== 'single';
   const found = await Promise.all(
     seats.map(async (seat) =>
       (await unsurfacedStuckFlags(seat.store)).map((flag) => ({
         ...flag,
-        project: seat.project,
+        ...(labelled && { project: seat.project }),
         seat,
       })),
     ),
@@ -266,13 +269,14 @@ const launchVoyage = async (
     );
   const turnAs = <T>(input: string, format: TurnFormat<T>) =>
     heldTurn(pauseLabel('turn', input), () => runTurn(target, input, format));
+  const format = driverTurnFormat(options.mode ?? 'multi');
   const flaggedTurn = (label: string, input: string) =>
     heldTurn(label, async () => {
       const flags = await seatFlags(options);
       const outcome = await runTurn(
         target,
         withStuckFlags(input, flags),
-        DRIVER_TURN_FORMAT,
+        format,
       );
       if (outcome.status !== 'stopped') await markSeatFlags(flags);
       return outcome;
@@ -283,9 +287,10 @@ const launchVoyage = async (
     voyage,
     charter: options.charter,
     notebook,
-    instructions: DRIVER_TURN_FORMAT.instructions,
+    instructions: format.instructions,
   };
   if (options.projects !== undefined) parts.projects = options.projects;
+  if (options.mode !== undefined) parts.mode = options.mode;
   const birthInput = buildBirthInput(parts);
   const birth = flaggedTurn(`birth turn, voyage ${voyage.number}`, birthInput);
   birth.catch(() => undefined);

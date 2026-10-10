@@ -76,7 +76,8 @@ describe('quarterdeck bin', { timeout: TIMEOUT }, () => {
     );
     expect(result.stderr).toBe('');
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain(`Created project deck (deck) for ${repo}`);
+    expect(result.stdout).toContain(`Added deck at ${repo}`);
+    expect(result.stdout).toContain(`Workspace: one repository, ${repo}`);
   });
 
   it('starts with up, prints the URL and stops cleanly on SIGTERM', async () => {

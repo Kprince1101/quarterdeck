@@ -46,6 +46,7 @@
     turns/&lt;agent-id&gt;/&lt;seq&gt;/      one folder per agent turn
     worktrees/&lt;builder&gt;-&lt;ticket&gt;/  a builder's git worktree
   plugins/&lt;name&gt;.mjs             ticket-source plugins you add yourself
+  workspace.json                 your workspace: root folder, single or multi, projects
   pause.json                     only while everything is paused
   sock/&lt;hash&gt;.sock               a project's bus socket, while running
   _deck/                         where the Driver and the reviewer run
@@ -130,6 +131,16 @@
               project now names its tracker in
               <a href="rules.html#services">services.json</a> or the Project
               widget, and agents reach it themselves.
+            </td>
+          </tr>
+          <tr>
+            <td><code>~/.quarterdeck/workspace.json</code></td>
+            <td>
+              The workspace <code>init</code> picked: its root folder, whether
+              it is one repository (single) or a folder of projects (multi), and
+              its projects. The Data widget shows it on its own line. Wiping a
+              project drops it from the list; deleting the file makes the next
+              start write it again from the projects there are.
             </td>
           </tr>
           <tr>

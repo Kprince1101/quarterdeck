@@ -120,11 +120,17 @@ describe('project services in agent prompts', { timeout: TIMEOUT }, () => {
         expect(await eventsOf(store, 'driver.voyage_started')).toHaveLength(1);
       }, WAIT);
     }
-    const births = [
-      ...(await turnPrompts(example, 'driver', null)),
-      ...(await turnPrompts(sample, 'driver', null)),
-    ];
-    const birth = births.find((prompt) => prompt.includes('# Projects')) ?? '';
+    const birthPrompt = async (): Promise<string> => {
+      const births = [
+        ...(await turnPrompts(example, 'driver', null)),
+        ...(await turnPrompts(sample, 'driver', null)),
+      ];
+      return births.find((prompt) => prompt.includes('# Projects')) ?? '';
+    };
+    await vi.waitFor(async () => {
+      expect(await birthPrompt()).not.toBe('');
+    }, WAIT);
+    const birth = await birthPrompt();
     const exampleBlock = projectBlock(birth, 'example');
     const sampleBlock = projectBlock(birth, 'sample');
     expect(exampleBlock).toContain(`Services:\n\n${FORGE_LINE}`);

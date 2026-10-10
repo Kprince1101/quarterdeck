@@ -7,6 +7,7 @@ import type {
   ServiceSource,
   ServicesReadResult,
 } from '@quarterdeck/server/intents';
+import type { WorkspaceMode } from '@quarterdeck/server/stream-schema';
 import { z } from 'zod';
 
 export type HowChoice = '' | TrackerHow;
@@ -105,5 +106,11 @@ export const forgeSummary = (read: ServicesReadResult): string => {
   return `${forge.name} at ${forge.host} (${forge.cli} CLI)`;
 };
 
-export const sourceNote = (read: ServicesReadResult): string =>
-  `Tracker ${SOURCE_NOTES[read.trackerFrom]}, publishes ${SOURCE_NOTES[read.publishesFrom]}. ${read.rulesPath} can set both per project; a value saved here wins.`;
+export const sourceNote = (
+  read: ServicesReadResult,
+  mode: WorkspaceMode = 'multi',
+): string => {
+  if (mode === 'single')
+    return `Tracker ${SOURCE_NOTES[read.trackerFrom]}. ${read.rulesPath} can set it too; a value saved here wins.`;
+  return `Tracker ${SOURCE_NOTES[read.trackerFrom]}, publishes ${SOURCE_NOTES[read.publishesFrom]}. ${read.rulesPath} can set both per project; a value saved here wins.`;
+};

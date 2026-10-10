@@ -4,7 +4,11 @@ import type {
   DataPathScope,
   WipeResult,
 } from '@quarterdeck/server/intents';
-import type { ProjectRow } from '@quarterdeck/server/stream-schema';
+import type {
+  ProjectRow,
+  Workspace,
+  WorkspaceMode,
+} from '@quarterdeck/server/stream-schema';
 
 export interface PathView {
   key: string;
@@ -30,10 +34,25 @@ export interface PageView {
   canNext: boolean;
 }
 
-const SCOPE_LABELS: Record<DataPathScope, string> = {
-  project: 'This project',
-  repo: 'Repository',
-  machine: 'This machine',
+const SCOPE_LABELS: Record<WorkspaceMode, Record<DataPathScope, string>> = {
+  multi: {
+    project: 'This project',
+    repo: 'Repository',
+    machine: 'This machine',
+  },
+  single: {
+    project: 'Quarterdeck data',
+    repo: 'Repository',
+    machine: 'This machine',
+  },
+};
+
+export const workspaceLine = (workspace: Workspace | null): string | null => {
+  if (workspace === null) return null;
+  if (workspace.mode === 'single') return `One repository at ${workspace.root}`;
+  const count = workspace.projects.length;
+  if (count === 1) return `1 project in ${workspace.root} (multi mode)`;
+  return `${count} projects in ${workspace.root} (multi mode)`;
 };
 
 export const projectSlugOf = (projects: readonly ProjectRow[]): string | null =>
@@ -51,12 +70,15 @@ const presenceOf = (exists: boolean): string => {
   return 'not created yet';
 };
 
-export const pathViews = (paths: readonly DataPathEntry[]): PathView[] =>
+export const pathViews = (
+  paths: readonly DataPathEntry[],
+  mode: WorkspaceMode = 'multi',
+): PathView[] =>
   paths.map(({ label, path, scope, exists }) => ({
     key: `${scope}:${path}`,
     label,
     path,
-    scope: SCOPE_LABELS[scope],
+    scope: SCOPE_LABELS[mode][scope],
     presence: presenceOf(exists),
     exists,
   }));

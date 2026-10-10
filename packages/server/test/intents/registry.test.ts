@@ -54,6 +54,7 @@ describe('intent registry', () => {
         'turn',
         'usage',
         'wipe',
+        'workspace',
       ].toSorted(),
     );
   });

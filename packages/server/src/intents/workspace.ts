@@ -81,6 +81,7 @@ export const WORKSPACE_INTENTS = {
     { message: 'confirm must repeat the project slug', path: ['confirm'] },
   ),
   'wipe.all': z.strictObject({ confirm: z.literal(WIPE_ALL_CONFIRMATION) }),
+  'workspace.read': z.strictObject({}),
 };
 
 export type WorkspaceIntentName = keyof typeof WORKSPACE_INTENTS;

@@ -23,10 +23,15 @@ On stop, each project's agents stop first, then its stream and bus host (removin
 ## init
 
 ```sh
-npm run quarterdeck -- init [repo-path] [--project <slug>] [--name <name>] [--runtime kiro|claude|gemini] [--folder | --no-folder]
+npm run quarterdeck -- init [path] [--project <slug>] [--name <name>] [--skip <slug>]... [--runtime kiro|claude|gemini] [--folder | --no-folder]
 ```
 
-Creates `~/.quarterdeck/` (`0700`) and a project (the `project.create` intent) for the git repository at `repo-path`, the current directory by default. The slug comes from the folder name (lowercased, other characters turned into `-`) unless `--project` is given; the display name is the folder name unless `--name` is given. A project that already exists is an error.
+Picks the workspace (see [workspace](../server/src/workspace/README.md)): creates `~/.quarterdeck/` (`0700`), a project (the `project.create` intent) for each repository, and `~/.quarterdeck/workspace.json`. `path` is the current directory by default.
+
+- **A git repository** (it has a `.git`): one project, and the workspace is in `single` mode, so nothing in Quarterdeck mentions projects. The slug comes from the folder name (lowercased, other characters turned into `-`) unless `--project` is given; the display name is the folder name unless `--name` is given. A project that already exists is an error.
+- **A folder of git repositories** (like `~/Developer/Repos`): every child folder with a `.git`, one level down, is listed with its number, slug, `origin` and path, and becomes a project; the workspace is in `multi` mode. Interactively, init asks which to untick (`2 4`, enter keeps them all); scripted, `--skip <slug>` leaves one out, as often as needed. Repositories already in the workspace are listed as already a project and left alone, so running it again adds only the new ones. `--project` and `--name` are refused here. A path that is neither is an error.
+
+A single-repository workspace that gets a second repository, from another `init` or from `project.create` on the dashboard, switches to `multi` and init prints one line saying so: `Workspace switched to multi mode: it now has 2 repositories, and each one is a project.` It never switches silently, and never back.
 
 The runtime is asked for when stdin is a terminal, and otherwise taken from `--runtime` or left at the current default (`models.json`, `kiro` out of the box). Choosing the runtime the project would already get writes nothing. Choosing another one writes `models` for every role, through the `rules.write` intent, to one of two places:
 
@@ -35,7 +40,7 @@ The runtime is asked for when stdin is a terminal, and otherwise taken from `--r
 | `--folder`    | `<repo>/.quarterdeck/rules.local.models.json` | This project only.                             |
 | `--no-folder` | `~/.quarterdeck/rules.local.models.json`      | Every project on this machine without its own. |
 
-Interactively, init asks which; without a terminal it refuses to guess and asks for one of the two flags. The `.quarterdeck/` folder is the only thing init ever writes into the repository, and only after that yes. An existing layer file keeps its other settings. If the repository already has a `rules.local.models.json`, it wins over the machine layer, so `--no-folder` is refused there.
+Interactively, init asks which; without a terminal it refuses to guess and asks for one of the two flags. For a folder of repositories the runtime is saved on the machine (`--folder` is refused there), and a repository whose own `rules.local.models.json` would win is an error naming it. The `.quarterdeck/` folder is the only thing init ever writes into the repository, and only after that yes. An existing layer file keeps its other settings. If the repository already has a `rules.local.models.json`, it wins over the machine layer, so `--no-folder` is refused there.
 
 Every question and check runs before anything is created, so a failed or cancelled init (Ctrl+C at a prompt exits 130) leaves nothing behind.
 

@@ -3,6 +3,7 @@ import { parseArgs } from 'node:util';
 import {
   QUARTERDECK_COMMAND,
   createProjectStores,
+  createWorkspaces,
   dispatchIntent,
   quarterdeckHome,
   type ProjectStores,
@@ -74,12 +75,18 @@ const projectTarget = async (
     warning: `This stops ${project}'s agents and deletes everything Quarterdeck stores for it in ${projectData(stores, project)}.`,
     send: (io) =>
       dispatchIntent(
-        { stores, homeDir: io.homeDir },
+        wipeContext(stores, io),
         'wipe.project',
         parseIntent('wipe.project', { project, confirm: project }),
       ),
   };
 };
+
+const wipeContext = (stores: ProjectStores, io: CliIo) => ({
+  stores,
+  homeDir: io.homeDir,
+  workspaces: createWorkspaces(quarterdeckHome(io.homeDir)),
+});
 
 const allTarget = (
   stores: ProjectStores,
@@ -89,7 +96,7 @@ const allTarget = (
   warning: `This stops every agent and deletes every project in ${stores.location}: ${listOf(projects)}.`,
   send: (io) =>
     dispatchIntent(
-      { stores, homeDir: io.homeDir },
+      wipeContext(stores, io),
       'wipe.all',
       parseIntent('wipe.all', { confirm: WIPE_ALL_CONFIRMATION }),
     ),

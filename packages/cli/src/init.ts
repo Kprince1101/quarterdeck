@@ -1,5 +1,5 @@
 import { readFile, stat } from 'node:fs/promises';
-import { basename, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import {
   LOCAL_RULES_DIR,
@@ -12,36 +12,50 @@ import {
 } from '@quarterdeck/rules';
 import {
   QUARTERDECK_COMMAND,
+  confirmationList,
   createProjectStores,
+  createWorkspaces,
+  detectWorkspace,
   dispatchIntent,
   ensurePrivateDir,
   quarterdeckHome,
+  slugFromFolder,
   type ProjectStores,
+  type Workspace,
+  type WorkspaceDetection,
+  type WorkspaceProject,
+  type WorkspaceUpdate,
 } from '@quarterdeck/server';
 import type { IntentPayload } from '@quarterdeck/server/intents';
 import { parseIntent } from './intent.js';
 import { CliError, type CliIo, type Command } from './io.js';
 import { choose, confirm } from './prompt.js';
 
+export { slugFromFolder };
+
 const RUNTIMES = runtimeSchema.options;
 const ROLES = Object.keys(modelsSchema.shape) as Array<keyof Models>;
-const MAX_SLUG_LENGTH = 63;
 
-export const INIT_USAGE = `Usage: ${QUARTERDECK_COMMAND} init [repo-path] [options]
+export const INIT_USAGE = `Usage: ${QUARTERDECK_COMMAND} init [path] [options]
 
-Creates ~/.quarterdeck and a project for the git repository at repo-path
-(default: the current directory). Nothing is written into the repository
-unless you agree to a .quarterdeck/ folder there.
+Picks the workspace Quarterdeck works in and creates ~/.quarterdeck.
+path (default: the current directory) is either a git repository, which
+Quarterdeck then works on its own, or a folder whose git repositories, one
+level down, each become a project; you confirm the list first. Running init
+again with another repository or folder adds to the workspace. Nothing is
+written into a repository unless you agree to a .quarterdeck/ folder there.
 
-  --project <slug>     Project slug (default: from the folder name)
-  --name <name>        Display name (default: the folder name)
+  --project <slug>     Slug for a single repository (default: from the folder name)
+  --name <name>        Display name for a single repository (default: the folder name)
+  --skip <slug>        In a folder, leave this repository out (repeatable)
   --runtime <runtime>  ${RUNTIMES.join(', ')} (asked when interactive)
-  --folder             Save a non-default runtime in <repo>/.quarterdeck/, for this project
-  --no-folder          Save it in ~/.quarterdeck/ instead, for every project on this machine`;
+  --folder             Save a non-default runtime in <repo>/.quarterdeck/, for that repository only
+  --no-folder          Save it in ~/.quarterdeck/ instead, for every repository on this machine`;
 
 interface InitOptions {
   project?: string | undefined;
   name?: string | undefined;
+  skip?: string[] | undefined;
   runtime?: string | undefined;
   folder?: boolean | undefined;
   'no-folder'?: boolean | undefined;
@@ -57,34 +71,11 @@ interface RuntimeChoice {
   layer: RuntimeLayer | undefined;
 }
 
-export const slugFromFolder = (folder: string): string =>
-  folder
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9_-]+/g, '-')
-    .replace(/^[^a-z0-9]+/, '')
-    .slice(0, MAX_SLUG_LENGTH);
-
-const isDirectory = async (path: string): Promise<boolean> =>
-  stat(path).then(
-    (info) => info.isDirectory(),
-    () => false,
-  );
-
 const fileExists = async (path: string): Promise<boolean> =>
   stat(path).then(
     () => true,
     () => false,
   );
-
-const gitRepo = async (path: string): Promise<string> => {
-  if (!(await isDirectory(path))) {
-    throw new CliError(`${path} is not a directory`);
-  }
-  if (!(await fileExists(join(path, '.git')))) {
-    throw new CliError(`${path} is not a git repository (no .git)`);
-  }
-  return path;
-};
 
 const parseRuntime = (value: string): Runtime => {
   const parsed = runtimeSchema.safeParse(value);
@@ -150,12 +141,12 @@ const pickFolder = async (
   const machine = quarterdeckHome(io.homeDir);
   if (!io.prompter) {
     throw new CliError(
-      `Runtime ${runtime} is not this machine's default. Pass --folder to save it in ${folder}/ for this project, or --no-folder to save it in ${machine}/ for every project.`,
+      `Runtime ${runtime} is not this machine's default. Pass --folder to save it in ${folder}/ for this repository, or --no-folder to save it in ${machine}/ for every repository.`,
     );
   }
   return confirm(
     io.prompter,
-    `Save runtime ${runtime} in ${folder}/, for this project only? If not, it is saved in ${machine}/ for every project on this machine. [y/N] `,
+    `Save runtime ${runtime} in ${folder}/, for this repository only? If not, it is saved in ${machine}/ for every repository on this machine. [y/N] `,
   );
 };
 
@@ -168,6 +159,15 @@ const modelsLayers = (io: CliIo, repoPath: string) => {
     throw new Error('models has no local rule layers');
   }
   return { machine, repo };
+};
+
+const assertNoRepoLayer = async (io: CliIo, repoPath: string) => {
+  const { repo } = modelsLayers(io, repoPath);
+  if (await fileExists(repo)) {
+    throw new CliError(
+      `${repo} sets this repository's runtime and wins over ~/.quarterdeck. Pass --folder to change it there.`,
+    );
+  }
 };
 
 const decideRuntime = async (
@@ -188,12 +188,30 @@ const decideRuntime = async (
   const inRepo = await pickFolder(options, io, repoPath, runtime);
   const layers = modelsLayers(io, repoPath);
   if (inRepo) return { runtime, layer: { path: layers.repo, inRepo } };
-  if (await fileExists(layers.repo)) {
+  await assertNoRepoLayer(io, repoPath);
+  return { runtime, layer: { path: layers.machine, inRepo } };
+};
+
+const decideFolderRuntime = async (
+  options: InitOptions,
+  io: CliIo,
+  repos: readonly WorkspaceProject[],
+): Promise<RuntimeChoice> => {
+  const current = await loadRule('models', { homeDir: io.homeDir });
+  const runtime = await pickRuntime(
+    options.runtime,
+    io,
+    current.driver.runtime,
+  );
+  if (usesRuntime(current, runtime)) return { runtime, layer: undefined };
+  if (options.folder) {
     throw new CliError(
-      `${layers.repo} sets this project's runtime and wins over ~/.quarterdeck. Pass --folder to change it there.`,
+      '--folder saves a runtime for one repository; for a folder of repositories it is saved in ~/.quarterdeck. Leave --folder out.',
     );
   }
-  return { runtime, layer: { path: layers.machine, inRepo } };
+  for (const repo of repos) await assertNoRepoLayer(io, repo.repoPath);
+  const { machine } = modelsLayers(io, io.homeDir);
+  return { runtime, layer: { path: machine, inRepo: false } };
 };
 
 const ruleWrite = (
@@ -232,51 +250,166 @@ const saveRuntime = async (
   );
 };
 
-const createProject = async (
+const dataOf = (stores: ProjectStores, project: string): string => {
+  if (stores.location === stores.dataHome) {
+    return join(stores.dataHome, project);
+  }
+  return stores.location;
+};
+
+const createProjects = async (
   io: CliIo,
-  input: IntentPayload<'project.create'>,
+  repos: readonly WorkspaceProject[],
   choice: RuntimeChoice,
-): Promise<string> => {
+): Promise<string[]> => {
   const stores = createProjectStores(quarterdeckHome(io.homeDir));
   try {
-    await dispatchIntent(
-      { stores, homeDir: io.homeDir },
-      'project.create',
-      input,
-    );
-    if (choice.layer !== undefined) {
-      await saveRuntime(
-        stores,
-        io,
-        input.project,
-        choice.runtime,
-        choice.layer,
+    const data: string[] = [];
+    for (const repo of repos) {
+      const input = parseIntent('project.create', {
+        project: repo.slug,
+        name: repo.name,
+        repoPath: repo.repoPath,
+      });
+      await dispatchIntent(
+        { stores, homeDir: io.homeDir },
+        'project.create',
+        input,
       );
+      data.push(dataOf(stores, input.project));
     }
-    if (stores.location === stores.dataHome) {
-      return join(stores.dataHome, input.project);
+    const [first] = repos;
+    if (choice.layer !== undefined && first !== undefined) {
+      await saveRuntime(stores, io, first.slug, choice.runtime, choice.layer);
     }
-    return stores.location;
+    return data;
   } finally {
     await stores.closeAll();
   }
 };
 
+const isNumber = (part: string): boolean => /^\d+$/.test(part);
+
+const parseUnticked = (
+  answer: string,
+  count: number,
+): Set<number> | undefined => {
+  const parts = answer.split(/[\s,]+/).filter((part) => part !== '');
+  if (!parts.every(isNumber)) return undefined;
+  const numbers = parts.map(Number);
+  if (numbers.some((n) => n < 1 || n > count)) return undefined;
+  return new Set(numbers.map((n) => n - 1));
+};
+
+const untick = async (
+  io: CliIo,
+  repos: readonly WorkspaceProject[],
+): Promise<WorkspaceProject[]> => {
+  if (!io.prompter || repos.length === 0) return [...repos];
+  for (;;) {
+    const answer = await io.prompter.ask(
+      'Untick any by number, separated by spaces (enter keeps them all): ',
+    );
+    const unticked = parseUnticked(answer, repos.length);
+    if (unticked !== undefined) {
+      return repos.filter((_, index) => !unticked.has(index));
+    }
+  }
+};
+
+const singleRepository = (
+  detection: WorkspaceDetection,
+  options: InitOptions,
+): WorkspaceProject[] =>
+  detection.repositories.map((repo) => ({
+    ...repo,
+    slug: options.project ?? repo.slug,
+    name: options.name ?? repo.name,
+  }));
+
+const known = (workspace: Workspace | null, repo: WorkspaceProject) =>
+  workspace?.projects.some(
+    (project) =>
+      project.repoPath === repo.repoPath || project.slug === repo.slug,
+  ) ?? false;
+
+const chooseRepositories = async (
+  io: CliIo,
+  detection: WorkspaceDetection,
+  options: InitOptions,
+  workspace: Workspace | null,
+): Promise<WorkspaceProject[]> => {
+  if (detection.mode === 'single') return singleRepository(detection, options);
+  if (options.project !== undefined || options.name !== undefined) {
+    throw new CliError(
+      `--project and --name name one repository; ${detection.root} holds several. Use --skip to leave some out.`,
+    );
+  }
+  const skipped = new Set(options.skip);
+  const listed = detection.repositories.filter(
+    (repo) => !skipped.has(repo.slug),
+  );
+  const fresh = listed.filter((repo) => !known(workspace, repo));
+  const already = listed.filter((repo) => known(workspace, repo));
+  io.out(`Repositories in ${detection.root}, each one a project:`);
+  for (const line of confirmationList({ ...detection, repositories: fresh })) {
+    io.out(line);
+  }
+  for (const repo of already) {
+    io.out(`  already a project: ${repo.slug}  ${repo.repoPath}`);
+  }
+  return untick(io, fresh);
+};
+
+const projectCount = (count: number): string => {
+  if (count === 1) return '1 project';
+  return `${count} projects`;
+};
+
+const workspaceLine = (workspace: Workspace): string => {
+  if (workspace.mode === 'single') {
+    return `Workspace: one repository, ${workspace.root}`;
+  }
+  return `Workspace: ${projectCount(workspace.projects.length)} in ${workspace.root}`;
+};
+
+const createdLine = (repo: WorkspaceProject, workspace: Workspace): string => {
+  if (workspace.mode === 'single') {
+    return `Added ${repo.name} at ${repo.repoPath}`;
+  }
+  return `Created project ${repo.slug} (${repo.name}) for ${repo.repoPath}`;
+};
+
 const report = (
   io: CliIo,
-  repoPath: string,
-  input: IntentPayload<'project.create'>,
+  repos: readonly WorkspaceProject[],
   choice: RuntimeChoice,
-  data: string,
+  data: readonly string[],
+  update: WorkspaceUpdate,
 ) => {
-  io.out(`Created project ${input.project} (${input.name}) for ${repoPath}`);
+  if (update.notice !== null) io.out(update.notice);
+  for (const repo of repos) io.out(createdLine(repo, update.workspace));
   if (choice.layer === undefined) {
     io.out(`Runtime: ${choice.runtime}`);
   } else {
     io.out(`Runtime: ${choice.runtime}, saved in ${choice.layer.path}`);
   }
-  io.out(`Data: ${data}`);
+  io.out(workspaceLine(update.workspace));
+  for (const path of data) io.out(`Data: ${path}`);
   io.out(`Next: ${QUARTERDECK_COMMAND} up`);
+};
+
+const decide = (
+  options: InitOptions,
+  io: CliIo,
+  detection: WorkspaceDetection,
+  repos: readonly WorkspaceProject[],
+): Promise<RuntimeChoice> => {
+  const [only] = repos;
+  if (detection.mode === 'single' && only !== undefined) {
+    return decideRuntime(options, io, only.repoPath);
+  }
+  return decideFolderRuntime(options, io, repos);
 };
 
 export const runInit: Command = async (args, io) => {
@@ -286,6 +419,7 @@ export const runInit: Command = async (args, io) => {
     options: {
       project: { type: 'string' },
       name: { type: 'string' },
+      skip: { type: 'string', multiple: true },
       runtime: { type: 'string' },
       folder: { type: 'boolean' },
       'no-folder': { type: 'boolean' },
@@ -296,20 +430,33 @@ export const runInit: Command = async (args, io) => {
     io.out(INIT_USAGE);
     return 0;
   }
-  if (positionals.length > 1) throw new CliError('init takes one repo path');
+  if (positionals.length > 1) throw new CliError('init takes one path');
   if (values.folder && values['no-folder']) {
     throw new CliError('Pass --folder or --no-folder, not both');
   }
-  const repoPath = await gitRepo(resolve(io.cwd, positionals[0] ?? '.'));
-  const folderName = basename(repoPath);
-  const input = parseIntent('project.create', {
-    project: values.project ?? slugFromFolder(folderName),
-    name: values.name ?? folderName,
-    repoPath,
+  const detection = await detectWorkspace(
+    resolve(io.cwd, positionals[0] ?? '.'),
+  );
+  const home = quarterdeckHome(io.homeDir);
+  const workspaces = createWorkspaces(home);
+  const repos = await chooseRepositories(
+    io,
+    detection,
+    values,
+    await workspaces.read(),
+  );
+  if (repos.length === 0) throw new CliError('No repositories to add.');
+  for (const repo of repos) {
+    parseIntent('project.create', { project: repo.slug });
+  }
+  const choice = await decide(values, io, detection, repos);
+  await ensurePrivateDir(home);
+  const data = await createProjects(io, repos, choice);
+  const update = await workspaces.add({
+    root: detection.root,
+    mode: detection.mode,
+    projects: repos,
   });
-  const choice = await decideRuntime(values, io, repoPath);
-  await ensurePrivateDir(quarterdeckHome(io.homeDir));
-  const data = await createProject(io, input, choice);
-  report(io, repoPath, input, choice, data);
+  report(io, repos, choice, data, update);
   return 0;
 };

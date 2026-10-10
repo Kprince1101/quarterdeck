@@ -50,7 +50,7 @@ export const activeProjects = async <S extends ProjectStore>(
 ): Promise<OpenProject<S>[]> =>
   (await openProjects(stores)).filter(({ archived }) => !archived);
 
-const repoLine = (repoPath: string | null): string => {
+export const repoLine = (repoPath: string | null): string => {
   if (repoPath === null) return 'no repository path set';
   return repoPath;
 };

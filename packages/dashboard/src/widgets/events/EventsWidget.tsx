@@ -32,14 +32,17 @@ const FilterSelect = ({
 
 interface EventListProps {
   rows: FeedRow[];
+  showsProjects: boolean;
 }
 
-const EventList = ({ rows }: EventListProps) => (
+const EventList = ({ rows, showsProjects }: EventListProps) => (
   <ol className="qd-event-list">
     {rows.map((row) => (
       <li key={row.id} data-event-id={row.id}>
         <code>{row.kind}</code>
-        <span className="qd-event-project">{row.project}</span>
+        {showsProjects && (
+          <span className="qd-event-project">{row.project}</span>
+        )}
         <time dateTime={row.createdAt} title={row.createdAt}>
           {row.age}
         </time>
@@ -50,12 +53,14 @@ const EventList = ({ rows }: EventListProps) => (
 
 interface EventFeedBodyProps {
   rows: FeedRow[];
+  showsProjects: boolean;
   isEmpty: boolean;
   isFilteredOut: boolean;
 }
 
 const EventFeedBody = ({
   rows,
+  showsProjects,
   isEmpty,
   isFilteredOut,
 }: EventFeedBodyProps) => {
@@ -63,7 +68,7 @@ const EventFeedBody = ({
   if (isFilteredOut) {
     return <p className="qd-empty">No events match these filters.</p>;
   }
-  return <EventList rows={rows} />;
+  return <EventList rows={rows} showsProjects={showsProjects} />;
 };
 
 export const EventsWidget = (): JSX.Element => {
@@ -74,18 +79,21 @@ export const EventsWidget = (): JSX.Element => {
     isEmpty,
     isFilteredOut,
     filters,
+    showsProjects,
     handleProjectChange,
     handleKindChange,
   } = useEventsWidget();
   return (
     <div className="qd-events">
       <div className="qd-event-filters">
-        <FilterSelect
-          label="Project"
-          value={filters.project}
-          options={projectOptions}
-          onChange={handleProjectChange}
-        />
+        {showsProjects && (
+          <FilterSelect
+            label="Project"
+            value={filters.project}
+            options={projectOptions}
+            onChange={handleProjectChange}
+          />
+        )}
         <FilterSelect
           label="Kind"
           value={filters.kind}
@@ -95,6 +103,7 @@ export const EventsWidget = (): JSX.Element => {
       </div>
       <EventFeedBody
         rows={rows}
+        showsProjects={showsProjects}
         isEmpty={isEmpty}
         isFilteredOut={isFilteredOut}
       />

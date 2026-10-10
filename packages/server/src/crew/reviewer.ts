@@ -18,6 +18,8 @@ import {
   type SeatSite,
   type SeatedAgent,
 } from './seats.js';
+import type { WorkspaceMode } from '../stream/schema.js';
+import { DEFAULT_WORKSPACE_MODE } from '../workspace/feed.js';
 import { AgentNotLiveError } from './sessions.js';
 
 export interface ReviewerDeskOptions {
@@ -27,6 +29,7 @@ export interface ReviewerDeskOptions {
   brief: (project: string) => Promise<string>;
   services: (project: string, ticketId: string) => Promise<string>;
   report: (targets: readonly FailureTarget[]) => (err: unknown) => void;
+  mode?: (() => Promise<WorkspaceMode>) | undefined;
 }
 
 export interface ReviewerDesk extends ReviewerHost {
@@ -42,8 +45,15 @@ export const reviewerInput = (
 ): string =>
   `${brief.trim()}\n\n# Review\n\n${reviewPrompt(request)}\n\n${services}`;
 
-const projectLine = (seat: Seat, terms: ForgeTerms): string =>
-  `This ${terms.long} belongs to project ${seat.project}: use the tools of the bus \`${projectBusName(seat.project)}\` for it.`;
+export const reviewBusLine = (
+  project: string,
+  terms: ForgeTerms,
+  mode: WorkspaceMode,
+): string => {
+  const bus = `use the tools of the bus \`${projectBusName(project)}\` for it.`;
+  if (mode === 'single') return `For this ${terms.long}, ${bus}`;
+  return `This ${terms.long} belongs to project ${project}: ${bus}`;
+};
 
 const isLiveSeat = async (seat: Seat | undefined): Promise<boolean> => {
   if (seat === undefined) return false;
@@ -135,11 +145,12 @@ export const createReviewerDesk = (
   const requestReview = async (request: ReviewRequest): Promise<void> => {
     const target = reviewTarget(request);
     const { project } = target.seat;
-    const [brief, services] = await Promise.all([
+    const [brief, services, mode] = await Promise.all([
       options.brief(project),
       options.services(project, request.ticket.id),
+      options.mode?.() ?? DEFAULT_WORKSPACE_MODE,
     ]);
-    const input = `${reviewerInput(brief, request, services)}\n\n${projectLine(target.seat, request.terms)}`;
+    const input = `${reviewerInput(brief, request, services)}\n\n${reviewBusLine(project, request.terms, mode)}`;
     const turn = queue
       .catch(() => undefined)
       .then(() => runPrompt(target, input));

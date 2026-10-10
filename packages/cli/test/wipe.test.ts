@@ -1,7 +1,9 @@
 import { join } from 'node:path';
 import {
+  WORKSPACE_FILE,
   createProjectStores,
   quarterdeckHome,
+  readWorkspace,
   recordAgentProcess,
 } from '@quarterdeck/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -27,7 +29,10 @@ const init = async (box: Sandbox, project: string) => {
   expect(await main(['init', box.repo, '--project', project], io)).toBe(0);
 };
 
-const projects = (home: string) => entries(quarterdeckHome(home));
+const projects = async (home: string) =>
+  (await entries(quarterdeckHome(home))).filter(
+    (name) => name !== WORKSPACE_FILE,
+  );
 
 const addAgent = async (
   home: string,
@@ -77,6 +82,8 @@ describe('quarterdeck wipe', { timeout: TIMEOUT }, () => {
       'Wiped deck. Stopped wren (deck) first.',
     ]);
     expect(await projects(box.home)).toEqual(['other']);
+    const workspace = await readWorkspace(quarterdeckHome(box.home));
+    expect(workspace?.projects.map((project) => project.slug)).toEqual([]);
   });
 
   it('wipes nothing when the typed name does not match', async () => {
