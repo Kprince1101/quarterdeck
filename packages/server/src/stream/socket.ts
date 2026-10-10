@@ -13,6 +13,7 @@ import {
   type GlobalLayout,
   type GlobalLayouts,
 } from '../global-layout/index.js';
+import type { KeepAwakeFeed } from '../keep-awake/control.js';
 import { reporter } from '../store/events.js';
 import { quarterdeckHome } from '../store/index.js';
 import type { StoreEvent, Store, TableChange } from '../store/index.js';
@@ -24,6 +25,7 @@ import {
   STREAM_PROJECT_PARAM,
   STREAM_PROTOCOL,
   STREAM_TOKEN_PREFIX,
+  type KeepAwakeState,
   type MachineState,
   type Workspace,
 } from './schema.js';
@@ -51,6 +53,7 @@ export interface StreamOptions {
   home?: string;
   layouts?: GlobalLayouts | undefined;
   workspaces?: Workspaces | undefined;
+  keepAwake?: KeepAwakeFeed | undefined;
   tail?: number;
   turnsPerAgent?: number;
   maxBufferedBytes?: number;
@@ -89,12 +92,14 @@ type Outgoing =
       machine: MachineState;
       layout: GlobalLayout | null;
       workspace: Workspace | null;
+      keepAwake: KeepAwakeState | null;
     }
   | { type: 'event'; event: StoreEvent }
   | ({ type: 'change' } & TableChange)
   | { type: 'machine'; machine: MachineState }
   | { type: 'layout'; layout: GlobalLayout }
-  | { type: 'workspace'; workspace: Workspace };
+  | { type: 'workspace'; workspace: Workspace }
+  | { type: 'keepAwake'; keepAwake: KeepAwakeState };
 
 const jsonValue = (_: string, value: unknown): unknown => {
   if (typeof value === 'bigint') return Number(value);
@@ -178,6 +183,7 @@ export const createStream = (options: StreamOptions): Stream => {
   const home = options.home ?? quarterdeckHome();
   const layouts = options.layouts ?? createGlobalLayouts(home);
   const workspaces = options.workspaces ?? createWorkspaces(home);
+  const keepAwakeFeed = options.keepAwake;
   const tail = options.tail ?? STREAM_TAIL;
   const maxBuffered = options.maxBufferedBytes ?? MAX_BUFFERED_BYTES;
   const allowedOrigins = new Set(options.allowedOrigins);
@@ -249,6 +255,9 @@ export const createStream = (options: StreamOptions): Stream => {
     const sendWorkspace = (workspace: Workspace): void => {
       sendNow({ type: 'workspace', workspace });
     };
+    const sendKeepAwake = (keepAwake: KeepAwakeState): void => {
+      sendNow({ type: 'keepAwake', keepAwake });
+    };
     const sendEvent = async (event: StoreEvent): Promise<void> => {
       if (behind()) return;
       await write({ type: 'event', event });
@@ -279,11 +288,18 @@ export const createStream = (options: StreamOptions): Stream => {
         else pendingWorkspace = next;
       });
       if (!(await keep(() => Promise.resolve(unwatch())))) return;
+      let pendingKeepAwake: KeepAwakeState | undefined;
+      const unhear = keepAwakeFeed?.subscribe((next) => {
+        if (live) sendKeepAwake(next);
+        else pendingKeepAwake = next;
+      });
+      if (!(await keep(() => Promise.resolve(unhear?.())))) return;
       const after = requested ?? (await tailCursor(store, tail));
       const tables = await readSnapshot(store, options.turnsPerAgent);
       const machine = await readMachineState(home);
       const layout = await layouts.read();
       const workspace = await workspaces.read();
+      const keepAwake = (await keepAwakeFeed?.read()) ?? null;
       if (!open) return;
       await write({
         type: 'snapshot',
@@ -292,12 +308,14 @@ export const createStream = (options: StreamOptions): Stream => {
         machine,
         layout,
         workspace,
+        keepAwake,
       });
       if (!open) return;
       live = true;
       pending.splice(0).forEach(sendChange);
       if (isNewer(pendingLayout, layout)) sendLayout(pendingLayout);
       if (isNewer(pendingWorkspace, workspace)) sendWorkspace(pendingWorkspace);
+      if (isNewer(pendingKeepAwake, keepAwake)) sendKeepAwake(pendingKeepAwake);
       const subscription = await store.subscribe(sendEvent, {
         after,
         onError: report,

@@ -2,6 +2,7 @@ import type { ReactNode, JSX } from 'react';
 import type { StreamState, StreamStatus } from '../api/index.js';
 import { useDeck } from '../deck/DeckProvider.js';
 import { ClaudeAuthBadge } from './ClaudeAuthBadge.js';
+import { KeepAwakeControl } from './KeepAwakeControl.js';
 import { useWorkspaceNotice } from './use-workspace-notice.js';
 
 export const STATUS_LABELS: Record<StreamStatus, string> = {
@@ -54,6 +55,7 @@ export const Shell = ({ mode, children }: ShellProps): JSX.Element => {
         {hasMode && <span className="qd-mode">{mode}</span>}
         <WorkspaceNotice notice={stream.workspaceNotice} />
         <div className="qd-header-end">
+          <KeepAwakeControl />
           <ClaudeAuthBadge />
           <StreamStatusBadge stream={stream} />
         </div>

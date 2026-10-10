@@ -15,6 +15,7 @@ import type {
   VoyageRow,
 } from '@quarterdeck/server/stream-schema';
 import { DemoRefusal } from './demo-fetch.js';
+import type { DemoKeepAwake } from './demo-keep-awake.js';
 import { DEMO_AUTH, DEMO_FORGE, DEMO_PROJECT } from './demo-seed.js';
 import type { DemoPlanner } from './demo-planner.js';
 import type { DemoReads } from './demo-reads.js';
@@ -39,6 +40,7 @@ export interface DemoIntentContext {
   startVoyage: (goal: string) => VoyageRow;
   later: (ms: number, work: () => void) => void;
   wipe: () => WipeResult;
+  keepAwake: DemoKeepAwake;
 }
 
 type Handler<N extends IntentName> = (
@@ -62,6 +64,8 @@ const UNRECORDED: ReadonlySet<IntentName> = new Set([
   'rules.reset',
   'wipe.project',
   'wipe.all',
+  'keepAwake.start',
+  'keepAwake.stop',
 ]);
 
 const LAYOUT_WRITES: ReadonlySet<IntentName> = new Set([
@@ -474,6 +478,9 @@ export const createDemoIntents = (
     'setup.tools': notInDemo('Setup'),
     'setup.sign_in': notInDemo('Setup'),
     'setup.save': notInDemo('Setup'),
+    'keepAwake.start': (input, reply) =>
+      reply('applied', ctx.keepAwake.start(input)),
+    'keepAwake.stop': (_input, reply) => reply('applied', ctx.keepAwake.stop()),
   };
 
   return (name, input) => {

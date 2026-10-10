@@ -119,9 +119,21 @@ describe('dashboard shell', () => {
         'Claude: API key',
       );
     });
-    expect(
-      container.querySelector('.qd-header-end button, .qd-header-end select'),
-    ).toBeNull();
+    const controls = (scope: string) =>
+      container.querySelectorAll(`${scope} button, ${scope} select`).length;
+    expect(controls('.qd-header-end')).toBe(
+      controls('.qd-header-end .qd-keep-awake'),
+    );
+    unmount();
+  });
+
+  it('puts the keep-awake control in the header, before the auth badge and stream status', () => {
+    const { container, unmount } = render(<App stream={stream} />);
+    const order = Array.from(
+      container.querySelectorAll('.qd-header-end > *'),
+    ).map((element) => element.getAttribute('class'));
+    expect(order[0]).toBe('qd-keep-awake');
+    expect(order.at(-1)).toBe('qd-status');
     unmount();
   });
 

@@ -9,6 +9,7 @@ import { createRulesReader } from '../api/rules.js';
 import type { DeckSources } from '../deck/DeckProvider.js';
 import { DEMO_ORIGIN, demoFetch } from './demo-fetch.js';
 import { createDemoIntents } from './demo-intents.js';
+import { createDemoKeepAwake } from './demo-keep-awake.js';
 import { createDemoPlanner } from './demo-planner.js';
 import { createDemoReads, DEMO_REPO_PATH } from './demo-reads.js';
 import { createDemoRules, shippedRule } from './demo-rules.js';
@@ -176,6 +177,8 @@ export const createDemoServer = (
   };
   seed();
 
+  const keepAwake = createDemoKeepAwake({ store, later });
+
   const wipe = (): WipeResult => {
     const stopped = store
       .rows('agents')
@@ -183,6 +186,7 @@ export const createDemoServer = (
       .map((agent) => ({ project: DEMO_PROJECT, agent: agent.name }));
     clearTimers();
     store.reset();
+    keepAwake.stop();
     world.turnText.clear();
     seed();
     return { wiped: [DEMO_PROJECT], stopped };
@@ -196,6 +200,7 @@ export const createDemoServer = (
     startVoyage: (goal) => world.startVoyage(goal),
     later,
     wipe,
+    keepAwake,
   });
   const fetch = demoFetch({
     intent,

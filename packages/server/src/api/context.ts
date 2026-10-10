@@ -1,4 +1,5 @@
 import type { GlobalLayouts } from '../global-layout/index.js';
+import type { KeepAwake } from '../keep-awake/control.js';
 import type { SetupProbe } from '../setup/probe.js';
 import type { SetupSignIns } from '../setup/sign-ins.js';
 import type { Queryable } from '../store/index.js';
@@ -30,6 +31,7 @@ export interface ApiContext {
   voyages?: ApiVoyages | undefined;
   setupProbe?: SetupProbe | undefined;
   setupSignIns?: SetupSignIns | undefined;
+  keepAwake?: KeepAwake | undefined;
 }
 
 export type IntentHandler<N extends IntentName> = (

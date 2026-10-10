@@ -362,6 +362,51 @@ describe('demo server', () => {
     expect(server.store.find('voyages', next.id)?.status).toBe('active');
   });
 
+  it('fakes keep-awake: a time limit runs out, and a voyage end stops the other mode', async () => {
+    vi.useFakeTimers();
+    const server = createDemoServer();
+    const { intents, store } = parts(server);
+    const heard: StreamMessage[] = [];
+    store.connect(null, (message) => heard.push(message));
+    expect(heard[0]).toMatchObject({
+      type: 'snapshot',
+      keepAwake: { on: false, available: true },
+    });
+
+    const started = await intents.keepAwake.start({ minutes: 30 });
+    expect(started).toMatchObject({
+      id: null,
+      result: { keepAwake: { on: true, mode: 'duration' } },
+    });
+    expect(Date.parse(store.keepAwake().expiresAt ?? '')).toBe(
+      Date.now() + 30 * 60_000,
+    );
+    vi.advanceTimersByTime(30 * 60_000);
+    expect(store.keepAwake()).toMatchObject({ on: false });
+
+    await intents.keepAwake.start({ untilVoyageEnds: true });
+    expect(store.keepAwake()).toMatchObject({
+      on: true,
+      mode: 'untilVoyageEnds',
+      expiresAt: null,
+    });
+    await intents.voyage.end({ voyage: openVoyage(server).number });
+    expect(store.keepAwake()).toMatchObject({ on: false });
+
+    await intents.keepAwake.start({ minutes: 60 });
+    await intents.keepAwake.stop({});
+    expect(store.keepAwake()).toMatchObject({ on: false });
+    expect(
+      heard
+        .filter((message) => message.type === 'keepAwake')
+        .map((message) => message.keepAwake.on),
+    ).toEqual([true, false, true, false, true, false]);
+    expect(
+      heard.map((message) => streamMessageSchema.safeParse(message).success),
+    ).not.toContain(false);
+    server.stop();
+  });
+
   it('hands an approved Planner ticket to the next voyage', async () => {
     vi.useFakeTimers();
     const server = createDemoServer();

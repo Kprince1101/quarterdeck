@@ -29,6 +29,7 @@ import {
   type CommandResult,
 } from '@quarterdeck/server';
 import { checkClaudeAuth, withClaudeAuthEnv } from './doctor-claude-auth.js';
+import { checkKeepAwake } from './doctor-keep-awake.js';
 import { CliError, type CliIo, type Command } from './io.js';
 import {
   signInFailure,
@@ -48,7 +49,9 @@ for each GitLab host in use: every host mapped to gitlab in
 ~/.quarterdeck/rules.local.forges.json, and this folder's origin host when it
 is on GitLab. Warns when gh is signed in only through GH_TOKEN or
 GITHUB_TOKEN, which agents do not get. Reports the Claude auth mode
-(subscription, api_key or vertex) and whether the env it needs is set. Shows the
+(subscription, api_key or vertex) and whether the env it needs is set. Reports
+whether this computer has the tool the dashboard's keep-awake control needs
+(caffeinate, systemd-inhibit or PowerShell). Shows the
 Kiro base agent each role starts from (the builder's as the project in this
 folder sets it). Exits 1 if any needs attention.`;
 
@@ -569,6 +572,7 @@ export const runDoctor: Command = async (args, io) => {
   const allChecks = async () => [
     ...(await runDoctorChecks(await withClaudeAuthEnv(io))),
     ...(await checkClaudeAuth(io)),
+    await checkKeepAwake(io),
     ...(await checkKiroBases(io)),
     ...(await checkShellRules(io)),
   ];

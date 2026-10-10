@@ -26,6 +26,16 @@ export {
   ruleNameSchema,
 } from './fields.js';
 export {
+  KEEP_AWAKE_INTENTS,
+  KEEP_AWAKE_MINUTES,
+  MAX_KEEP_AWAKE_MINUTES,
+  keepAwakeRequestSchema,
+  keepAwakeResultSchema,
+  type KeepAwakeIntentName,
+  type KeepAwakeRequest,
+  type KeepAwakeResult,
+} from './keep-awake.js';
+export {
   READ_INTENTS,
   authReadResultSchema,
   forgeReadResultSchema,
