@@ -1,9 +1,13 @@
+import { spawnSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 interface PackageManifest {
   name: string;
+  version: string;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
   private?: boolean;
   type?: string;
   license?: string;
@@ -80,6 +84,41 @@ describe('workspace manifests', () => {
     const manifest = readManifest('packages/cli');
     expect(manifest.name).toBe('@quarterdeck/cli');
     expect(manifest.bin).toEqual({ quarterdeck: './dist/bin.js' });
+  });
+
+  it.each(ALL_MANIFESTS)(
+    '%s carries the root version and pins every @quarterdeck package to it',
+    (dir) => {
+      const { version } = readManifest('.');
+      const manifest = readManifest(dir);
+      expect(manifest.version).toBe(version);
+      const internal = Object.entries({
+        ...manifest.dependencies,
+        ...manifest.devDependencies,
+      }).filter(([name]) => name.startsWith('@quarterdeck/'));
+      internal.forEach(([, range]) => expect(range).toBe(version));
+    },
+  );
+
+  it.each(ALL_MANIFESTS)('package-lock.json agrees with %s', (dir) => {
+    const lock = JSON.parse(
+      readFileSync(resolve(ROOT, 'package-lock.json'), 'utf8'),
+    ) as { packages: Record<string, PackageManifest> };
+    const manifest = readManifest(dir);
+    const locked = lock.packages[dir.replace(/^\.$/, '')];
+    expect(locked?.version).toBe(manifest.version);
+    expect(locked?.dependencies).toEqual(manifest.dependencies);
+    expect(locked?.devDependencies).toEqual(manifest.devDependencies);
+  });
+
+  it('version.mjs refuses anything but a version', () => {
+    const run = spawnSync(
+      process.execPath,
+      [resolve(ROOT, 'scripts/version.mjs'), 'v4'],
+      { encoding: 'utf8' },
+    );
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain('Usage: node scripts/version.mjs <version>');
   });
 
   it('root runs the cli from the clone, built on install', () => {

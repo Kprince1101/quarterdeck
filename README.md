@@ -12,7 +12,7 @@ Status: alpha. Built, by itself, from a written spec. [docs/proof.md](docs/proof
 
 Quarterdeck is installed and run locally only: clone it, install it, run it on your own machine. It is not published to npm. The `quarterdeck` package on npm is someone else's, unrelated to this one; do not install it, and do not run Quarterdeck through `npx`, which would download and run that package instead.
 
-With Node 22 and one agent CLI installed:
+**New here? Follow the [team quickstart](docs/team-quickstart.md)**: one page, with a track for Claude Code (subscription or Vertex AI) and one for Kiro on GitLab, from install to a first voyage. In short, with Node 22, git and one agent CLI installed:
 
 ```sh
 git clone https://github.com/<owner>/quarterdeck.git && cd quarterdeck
@@ -20,11 +20,11 @@ npm install
 npm run quarterdeck -- up
 ```
 
-Open the URL `up` prints: the first time, it opens on Setup, which asks for your folder, your runtime and its sign-in, then puts you on the board with the Planner ready. After a `git pull`, run `npm install` again so the build is current.
+Open the URL `up` prints: the first time, it opens on Setup, which asks for your folder, your runtime, your rules profile and their sign-ins, then puts you on the board with the Planner ready. After a `git pull`, run `npm install` again so the build is current.
 
 ## Getting started from a terminal
 
-Setup does all of this from the dashboard. For scripts, or if you prefer the terminal, the same steps are three commands, from the clone:
+Setup does all of this from the dashboard, as the [team quickstart](docs/team-quickstart.md) walks through. For scripts, or if you prefer the terminal, the same steps are three commands, from the clone. When something is wrong, `doctor` is the first thing to run (see [If something is wrong](docs/team-quickstart.md#if-something-is-wrong)):
 
 ```sh
 npm run quarterdeck -- doctor                  # checks kiro-cli, claude, gemini, gh (and glab for GitLab), signs each signed-out one in through its own browser sign-in, and says what to run for anything left
@@ -183,7 +183,7 @@ Each workspace package is written in TypeScript under `src/` and built to `dist/
 
 The root `quarterdeck` script runs `scripts/quarterdeck.mjs`, which starts `packages/cli/dist/bin.js` in the folder `npm run` was typed in (`INIT_CWD`), since npm starts every script in the workspace root.
 
-The `clean-machine` CI job follows [Running it](#running-it) on a machine with nothing else on it. It copies the clone into a `node:22-bookworm-slim` container, runs `npm install` there, and runs `scripts/clean-machine/check.ts`: `npm ls quarterdeck` must find no `quarterdeck` package, `npm run quarterdeck -- up` with no `~/.quarterdeck` must serve the built dashboard and the intents API, Setup must find a fake `kiro-cli` (the in-repo fake agent) installed and signed in and save a one-repository workspace on it, the ACP client must drive the in-repo fake agent through a turn, `up` must print `Stopped.` and let go of its port on `SIGTERM`, and `npm run quarterdeck -- wipe` must delete the project. To run the check in your clone after `npm install`:
+The `clean-machine` CI job follows [Running it](#running-it) on a machine with nothing else on it. In a `node:22-bookworm-slim` container it installs git if the image lacks it, `git clone`s the checkout, runs `npm install` there, and runs `scripts/clean-machine/check.ts` with `HOME` set to an empty folder. `npm ls quarterdeck` must find no `quarterdeck` package. `npm run quarterdeck -- up` with no `~/.quarterdeck` must serve the built dashboard and the intents API. Setup must find a fake `gemini` (the in-repo fake agent with its crew scenario, chosen because Gemini takes the bus in `session/new`) installed and signed in, and save a one-repository workspace on it. Then one voyage runs through the API as a person would run it on the dashboard: the Planner's proposal (its permission card allowed), `ticket.approve`, `voyage.start`, the builder's report, the reviewer's approval, the merge card answered `merge`, the squash merge of the approved head through a fake `gh`, and `voyage.end`, with the one ticket `done`. The ACP client must also drive the fake agent through a turn directly, `up` must print `Stopped.` and let go of its port on `SIGTERM`, and `npm run quarterdeck -- wipe` must delete the project. To run the check in your clone after `npm install`:
 
 ```sh
 node --experimental-strip-types scripts/clean-machine/check.ts

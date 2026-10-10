@@ -10,7 +10,7 @@ The shipped defaults: `charter.md`, `reviewer.md`, `permissions.json`, `naming.j
 
 ## Profiles
 
-`profile.json` names the active rules profile and local rule levels. `profiles/default/` is the only shipped profile: generic, language-neutral, no rule levels and no repo setup. Other profiles live on the machine in `~/.quarterdeck/profiles/<name>/` and are never committed here. A profile's `profile.json` lists the standards docs it reads, by absolute path or relative to its folder; a `charter.md` or `reviewer.md` beside it is added to the shipped one and a `lifecycle.json` beside it layers over the shipped lifecycle. Builders and the reviewer read the active profile's standards and steering block at kickoff (`profileKickoff` in `src/profiles.ts`). See [the team quickstart](../docs/team-quickstart.md) and the [rules docs](../site/public/docs/rules.html#profiles).
+`profile.json` names the active rules profile and local rule levels. `profiles/default/` is the only shipped profile: generic, language-neutral, no rule levels and no repo setup. Other profiles live on the machine in `~/.quarterdeck/profiles/<name>/` and are never committed here. A profile's `profile.json` lists the standards docs it reads, by absolute path or relative to its folder; a `charter.md` or `reviewer.md` beside it is added to the shipped one and a `lifecycle.json` beside it layers over the shipped lifecycle. Builders and the reviewer read the active profile's standards and steering block at kickoff (`profileKickoff` in `src/profiles.ts`). See [rules profiles](../docs/rules-profiles.md) and the [rules docs](../site/public/docs/rules.html#profiles).
 
 ## Kiro base agents
 
