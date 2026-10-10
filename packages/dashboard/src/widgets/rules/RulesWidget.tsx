@@ -4,6 +4,7 @@ import { useWording } from '../../deck/DeckProvider.js';
 import { defineWidget } from '../registry.js';
 import { TIGHTEN_ONLY_NOTICE } from './constants.js';
 import { MachineLayer } from './MachineLayer.js';
+import { ProfilePanel } from './ProfilePanel.js';
 import { RepoLayer } from './RepoLayer.js';
 import { ReviewPanel } from './ReviewPanel.js';
 import { RulesPickers } from './RulesPickers.js';
@@ -42,6 +43,7 @@ export const RulesWidget = (): JSX.Element => {
     <div className="qd-rules">
       <RulesPickers view={view} />
       <RulesAlert message={view.loadError} />
+      <ProfilePanel profile={view.profile} />
       <RulesBody view={view} />
     </div>
   );

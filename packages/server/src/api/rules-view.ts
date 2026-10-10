@@ -3,15 +3,20 @@ import type { IncomingMessage } from 'node:http';
 import {
   RULE_FILES,
   RULE_NAMES,
+  STEERING_FILES,
+  describeProfiles,
   ruleLayerPaths,
+  type LoadRulesOptions,
   type RuleName,
 } from '@quarterdeck/rules';
 import {
   RULES_PROJECT_PARAM,
   projectSlugSchema,
+  type ProfilesView,
   type RuleLayer,
   type RuleView,
   type RulesView,
+  type SteeringFileView,
 } from '../intents/index.js';
 import { hasErrorCode } from '../lib/errors.js';
 import type { ApiContext } from './context.js';
@@ -82,6 +87,47 @@ const projectParam = (req: IncomingMessage): string | null => {
   return project;
 };
 
+const ruleNameOf = (file: string): RuleName => {
+  const name = RULE_NAMES.find((candidate) => RULE_FILES[candidate] === file);
+  if (name === undefined) throw new Error(`${file} is not a rule file`);
+  return name;
+};
+
+const repoLayerPath = (
+  name: RuleName,
+  homeDir: string,
+  repoDir: string | null,
+): string | null => {
+  if (repoDir === null) return null;
+  return ruleLayerPath({ name, homeDir, repoDir });
+};
+
+const steeringFiles = (
+  homeDir: string,
+  repoDir: string | null,
+): SteeringFileView[] =>
+  STEERING_FILES.map(({ file, controls }) => {
+    const name = ruleNameOf(file);
+    return {
+      file,
+      controls,
+      machine: ruleLayerPath({ name, homeDir }),
+      repo: repoLayerPath(name, homeDir, repoDir),
+    };
+  });
+
+const profilesView = async (
+  homeDir: string,
+  repoDir: string | null,
+): Promise<ProfilesView> => {
+  const options: LoadRulesOptions = { homeDir };
+  if (repoDir !== null) options.repoDir = repoDir;
+  return {
+    ...(await describeProfiles(options)),
+    steeringFiles: steeringFiles(homeDir, repoDir),
+  };
+};
+
 export const readRulesView = async (
   ctx: ApiContext,
   project: string | null,
@@ -90,7 +136,8 @@ export const readRulesView = async (
   const rules = await Promise.all(
     RULE_NAMES.map((name) => ruleView(name, ctx.homeDir, repoPath)),
   );
-  return { project, repoPath, rules };
+  const profiles = await profilesView(ctx.homeDir, repoPath);
+  return { project, repoPath, rules, profiles };
 };
 
 export const routeRulesView = async (

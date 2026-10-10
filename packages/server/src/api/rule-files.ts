@@ -11,6 +11,7 @@ import { dirname, join } from 'node:path';
 import {
   RulesError,
   loadRule,
+  locateProfile,
   ruleLayerPaths,
   type LoadRulesOptions,
   type RuleName,
@@ -73,6 +74,14 @@ const relabel = (err: RulesError, stagedPath: string, realPath: string) => {
   return `${realPath}${err.message.slice(stagedPath.length)}`;
 };
 
+const refuseMissingProfile = async (
+  target: RuleLayerTarget,
+  options: LoadRulesOptions,
+) => {
+  const { profile } = await loadRule('profile', options);
+  await locateProfile(profile, { homeDir: target.homeDir });
+};
+
 const validateLayer = async (target: RuleLayerTarget, content: string) => {
   const stagingDir = await mkdtemp(join(tmpdir(), 'quarterdeck-rules-'));
   const options = layerOptions(target, stagingDir);
@@ -80,6 +89,7 @@ const validateLayer = async (target: RuleLayerTarget, content: string) => {
   try {
     await writeAtomically(stagedPath, content);
     await loadRule(target.name, options);
+    if (target.name === 'profile') await refuseMissingProfile(target, options);
   } catch (err) {
     if (err instanceof RulesError) {
       throw badRequest(relabel(err, stagedPath, ruleLayerPath(target)));

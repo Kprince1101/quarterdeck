@@ -16,7 +16,13 @@ export interface AssignmentPromptParts {
   terms: ForgeTerms;
   services: PromptServices;
   mode?: WorkspaceMode | undefined;
+  standards?: string | undefined;
 }
+
+const standardsSection = (standards: string | undefined): string[] => {
+  if (standards === undefined || standards === '') return [];
+  return [standards];
+};
 
 const SPEC_INSTRUCTION =
   "Work the ticket's `## Tasks` list in order, one task at a time. Before you report, prove its `Proven:` line: run or show the check it names.";
@@ -45,6 +51,7 @@ export const buildAssignmentPrompt = (parts: AssignmentPromptParts): string =>
     `Work in ${parts.worktreePath}, your git worktree of ${parts.repoPath}, detached at ${parts.base}. Create a branch there, commit, push and open a ${parts.terms.long}. Never touch ${parts.repoPath} itself.`,
     ...openPullRequest(parts),
     servicesSection(parts.services, parts.ticket.externalRef),
+    ...standardsSection(parts.standards),
     '# When you are done',
     `Call the bus tool \`report\` with ticket \`${parts.ticket.id}\`, the ${parts.terms.long} URL, its head commit and what you tested. If you need a decision only a person can make, call \`ask\`. Use \`status\` for a one-line progress note.`,
   ].join('\n\n');

@@ -105,6 +105,7 @@ Nothing Quarterdeck stores leaves your machine. It has no hosted component, no a
 ~/.quarterdeck/
   rules.local.<file>              your machine's rules
   claude.json                     which Claude auth mode this machine uses (the mode only, never a key)
+  profiles/<name>/                rules profiles you add yourself; rules.local.profile.json picks one
   <project>/
     pg/                           the project's Postgres data (PGlite)
     pg.lock                       which process has the project open
@@ -135,7 +136,7 @@ The dashboard's Data widget lists every table with its rows and every path above
 
 `npm run quarterdeck -- wipe <project>` and `npm run quarterdeck -- wipe --all` do the same from a terminal, with the same typed confirmation (or `--confirm <phrase>` in a script). See `packages/cli/README.md`.
 
-Wiping keeps the rules files and everything else under `~/.quarterdeck/` that is not a project: `claude.json`, `plugins/`, `workspace.json` (less the wiped projects), `pause.json`, `sock/`, `_deck/` and the runtime folders. To remove everything by hand, stop Quarterdeck and delete `~/.quarterdeck/`, then run `git worktree prune` in each repository. See `site/public/docs/data.html`.
+Wiping keeps the rules files and everything else under `~/.quarterdeck/` that is not a project: `claude.json`, `profiles/`, `plugins/`, `workspace.json` (less the wiped projects), `pause.json`, `sock/`, `_deck/` and the runtime folders. To remove everything by hand, stop Quarterdeck and delete `~/.quarterdeck/`, then run `git worktree prune` in each repository. See `site/public/docs/data.html`.
 
 ## Rules
 

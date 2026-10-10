@@ -1,16 +1,28 @@
 import type {
+  ProfilesView,
   RuleLayer,
   RuleView,
   RulesView,
 } from '@quarterdeck/server/intents';
-import { RULE_SCHEMAS, type RuleName } from '@quarterdeck/rules/schemas';
+import {
+  RULE_SCHEMAS,
+  profileManifestSchema,
+  type RuleName,
+} from '@quarterdeck/rules/schemas';
+import { STEERING_FILES } from '@quarterdeck/rules/steering-files';
 
 const SHIPPED_DIR = '../../../../rules';
 
 const SHIPPED = import.meta.glob<string>(
-  ['../../../../rules/*.md', '../../../../rules/*.json'],
+  [
+    '../../../../rules/*.md',
+    '../../../../rules/*.json',
+    '../../../../rules/profiles/default/*',
+  ],
   { query: '?raw', import: 'default', eager: true },
 );
+
+const DEFAULT_PROFILE_DIR = 'profiles/default';
 
 export const DEMO_HOME = '/home/demo';
 export const DEMO_DEFAULTS_DIR = '/demo/quarterdeck/rules';
@@ -24,14 +36,56 @@ export const ruleFile = (name: RuleName): string => {
   return `${name}.json`;
 };
 
-export const shippedRule = (name: RuleName): string => {
-  const content = SHIPPED[`${SHIPPED_DIR}/${ruleFile(name)}`];
-  if (content === undefined) throw new Error(`No shipped ${ruleFile(name)}`);
+const shippedFile = (file: string): string => {
+  const content = SHIPPED[`${SHIPPED_DIR}/${file}`];
+  if (content === undefined) throw new Error(`No shipped ${file}`);
   return content;
 };
 
+export const shippedRule = (name: RuleName): string =>
+  shippedFile(ruleFile(name));
+
 const localPath = (dir: string, name: RuleName): string =>
   `${dir}/.quarterdeck/rules.local.${ruleFile(name)}`;
+
+const repoFile = (repoPath: string | null, file: string): string | null => {
+  if (repoPath === null) return null;
+  return `${repoPath}/.quarterdeck/rules.local.${file}`;
+};
+
+const demoProfiles = (repoPath: string | null): ProfilesView => {
+  const manifest = profileManifestSchema.parse(
+    JSON.parse(shippedFile(`${DEFAULT_PROFILE_DIR}/profile.json`)),
+  );
+  const dir = `${DEMO_DEFAULTS_DIR}/${DEFAULT_PROFILE_DIR}`;
+  return {
+    active: 'default',
+    chosenBy: 'shipped',
+    levels: {},
+    error: null,
+    profiles: [
+      {
+        name: 'default',
+        source: 'shipped',
+        dir,
+        description: manifest.description,
+        files: [
+          `${dir}/profile.json`,
+          ...manifest.standards.map((file) => `${dir}/${file}`),
+        ],
+        levels: manifest.levels,
+        setup: false,
+        error: null,
+      },
+    ],
+    steeringFiles: STEERING_FILES.map(({ file, controls }) => ({
+      file,
+      controls,
+      machine: `${DEMO_HOME}/.quarterdeck/rules.local.${file}`,
+      repo: repoFile(repoPath, file),
+    })),
+  };
+};
 
 export interface DemoRules {
   view: (project: string | null, repoPath: string | null) => RulesView;
@@ -71,6 +125,7 @@ export const createDemoRules = (
         project,
         repoPath: repo,
         rules: RULE_NAMES.map((name) => ruleView(name, repo)),
+        profiles: demoProfiles(repo),
       };
     },
     write: (name, content) => {

@@ -11,7 +11,7 @@ import { DRIVER_NOTE_KINDS, WAKE_EVENT_KINDS } from './driver-notes.js';
 import { reportToEach } from './failures.js';
 import { startCrewIntents, type CrewIntents } from './intents.js';
 import { createReviewerDesk } from './reviewer.js';
-import { machineRules, type ModeSource } from './rules.js';
+import { machineRules, reviewerBrief, type ModeSource } from './rules.js';
 import { birthSeated, type SeatSite } from './seats.js';
 import { ticketServices, type CrewProject } from './voyage-legs.js';
 import { startCrewVoyages, type CrewVoyages } from './voyages.js';
@@ -77,8 +77,7 @@ export const startCoordinator = (options: CoordinatorOptions): Coordinator => {
   const reviewers = createReviewerDesk({
     sites: reviewerSites,
     turnsDir: (project) => projectTurnsDir(project, options.home),
-    brief: (project) =>
-      (joined.get(project)?.crew.rules ?? rules).load('reviewer'),
+    brief: (project) => reviewerBrief(joined.get(project)?.crew.rules ?? rules),
     services: async (project, ticketId) => {
       const crew = joined.get(project)?.crew;
       if (crew === undefined)

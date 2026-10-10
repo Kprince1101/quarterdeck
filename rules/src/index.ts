@@ -7,14 +7,33 @@ export {
   RULE_FILES,
   RULE_NAMES,
   TIGHTEN_ONLY_RULES,
+  activeProfile,
   loadRule,
   loadRules,
   ruleLayerPaths,
   upgradeLayer,
   warnOnce,
+  type ActiveProfile,
   type LoadRulesOptions,
+  type ProfileChoice,
   type RuleLayers,
 } from './load-rules.js';
+export {
+  DEFAULT_PROFILE,
+  PROFILES_DIR,
+  PROFILE_MANIFEST,
+  listProfiles,
+  locateProfile,
+  machineProfilesDir,
+  profilePath,
+  readProfileManifest,
+  shippedProfilesDir,
+  type ProfileLocation,
+  type ProfileRootOptions,
+  type ProfileSource,
+} from './profile-files.js';
+export * from './profiles.js';
+export * from './steering-files.js';
 export { mergeRepoKiro } from './kiro-layer.js';
 export {
   AiReviewConfigError,

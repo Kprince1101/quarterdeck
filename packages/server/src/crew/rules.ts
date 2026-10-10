@@ -1,7 +1,10 @@
 import {
   forgeTerms,
   forgeWording,
+  kickoffSection,
   loadRule,
+  profileKickoff,
+  withKickoff,
   type Forge,
   type LoadRulesOptions,
   type RuleName,
@@ -38,7 +41,11 @@ export interface CrewRules {
   repoPath: () => Promise<string>;
   forge: () => Promise<Forge>;
   services: () => Promise<PromptServices>;
+  kickoff: () => Promise<string>;
 }
+
+export const kickoffFor = async (options: LoadRulesOptions): Promise<string> =>
+  kickoffSection(await profileKickoff(options));
 
 const WORDED_RULES: ReadonlySet<RuleName> = new Set(['charter', 'reviewer']);
 
@@ -83,6 +90,7 @@ export const crewRules = (
     mode,
     forge,
     services: () => promptServices(store, { homeDir, forge: forgeOf }),
+    kickoff: async () => kickoffFor(await options()),
     repoPath: async () => {
       const repoPath = await optionalRepoPath();
       if (repoPath === null) throw new NoRepoPathError();
@@ -91,7 +99,7 @@ export const crewRules = (
   };
 };
 
-export type MachineRules = Pick<CrewRules, 'load' | 'mode'>;
+export type MachineRules = Pick<CrewRules, 'load' | 'mode' | 'kickoff'>;
 
 export const machineRules = (
   homeDir: string,
@@ -99,7 +107,16 @@ export const machineRules = (
 ): MachineRules => ({
   load: async (name) => inMode(name, await loadRule(name, { homeDir }), mode),
   mode,
+  kickoff: () => kickoffFor({ homeDir }),
 });
+
+export const reviewerBrief = async (rules: MachineRules): Promise<string> => {
+  const [reviewer, kickoff] = await Promise.all([
+    rules.load('reviewer'),
+    rules.kickoff(),
+  ]);
+  return withKickoff(reviewer, kickoff);
+};
 
 export const baseRef = async (
   repoPath: string,

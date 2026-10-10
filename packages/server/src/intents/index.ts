@@ -61,12 +61,18 @@ export {
 export {
   RULES_PATH,
   RULES_PROJECT_PARAM,
+  profileSummarySchema,
+  profilesViewSchema,
   ruleViewSchema,
   rulesUrl,
   rulesViewSchema,
+  steeringFileSchema,
+  type ProfileSummaryView,
+  type ProfilesView,
   type RuleLayer,
   type RuleView,
   type RulesView,
+  type SteeringFileView,
 } from './rules-view.js';
 export {
   SERVICES_INTENTS,

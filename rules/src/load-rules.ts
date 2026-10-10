@@ -10,13 +10,23 @@ import {
   upgradeLifecycleLayer,
   type UpgradedLayer,
 } from './lifecycle-layer.js';
-import { mergeLayer } from './merge-layer.js';
+import { isJsonObject, mergeLayer } from './merge-layer.js';
+import { locateProfile, type ProfileLocation } from './profile-files.js';
+import {
+  DEFAULT_RULES_DIR,
+  LOCAL_RULES_DIR,
+  LOCAL_RULES_PREFIX,
+} from './rule-dirs.js';
 import { SERVICES_FILE, refuseRepoServices } from './services.js';
-import { RULE_SCHEMAS, type RuleName, type Rules } from './schemas.js';
+import {
+  RULE_SCHEMAS,
+  type ProfileRule,
+  type RuleLevels,
+  type RuleName,
+  type Rules,
+} from './schemas.js';
 
-export const DEFAULT_RULES_DIR = resolve(import.meta.dirname, '..');
-export const LOCAL_RULES_DIR = '.quarterdeck';
-export const LOCAL_RULES_PREFIX = 'rules.local.';
+export { DEFAULT_RULES_DIR, LOCAL_RULES_DIR, LOCAL_RULES_PREFIX };
 
 export const RULE_FILES: Record<RuleName, string> = {
   charter: 'charter.md',
@@ -29,6 +39,7 @@ export const RULE_FILES: Record<RuleName, string> = {
   kiro: 'kiro.json',
   forges: FORGES_FILE,
   services: SERVICES_FILE,
+  profile: 'profile.json',
 };
 
 export const RULE_NAMES = Object.keys(RULE_FILES) as RuleName[];
@@ -153,6 +164,119 @@ const mergeLocal = (
   return mergeLayer(merged, layer);
 };
 
+export type ProfileChoice = 'shipped' | 'machine' | 'project';
+
+export interface ActiveProfile extends ProfileLocation {
+  chosenBy: ProfileChoice;
+  levels: RuleLevels;
+  repoLevels: RuleLevels;
+}
+
+const PROFILE_LAYER_RULES: ReadonlySet<RuleName> = new Set([
+  'charter',
+  'reviewer',
+  'lifecycle',
+]);
+
+interface ProfileLayerRead {
+  path: string;
+  layer: unknown;
+}
+
+const readProfileLayer = async (
+  path: string | undefined,
+): Promise<ProfileLayerRead | undefined> => {
+  if (path === undefined) return undefined;
+  const text = await readLocal(path);
+  if (text === undefined) return undefined;
+  return { path, layer: parseLayer(path, text) };
+};
+
+const setsProfile = (read: ProfileLayerRead | undefined): boolean =>
+  read !== undefined &&
+  isJsonObject(read.layer) &&
+  Object.hasOwn(read.layer, 'profile');
+
+const profileChoiceOf = (
+  machine: ProfileLayerRead | undefined,
+  repo: ProfileLayerRead | undefined,
+): ProfileChoice => {
+  if (setsProfile(repo)) return 'project';
+  if (setsProfile(machine)) return 'machine';
+  return 'shipped';
+};
+
+const foldProfileLayer = (
+  merged: ProfileRule,
+  read: ProfileLayerRead | undefined,
+): ProfileRule => {
+  if (read === undefined) return merged;
+  const next = mergeLayer(merged, read.layer);
+  return validateLayer('profile', read.path, next) as ProfileRule;
+};
+
+const levelsSetBy = (merged: RuleLevels, below: RuleLevels): RuleLevels =>
+  Object.fromEntries(
+    Object.entries(merged).filter(([rule, level]) => below[rule] !== level),
+  );
+
+export const activeProfile = async (
+  options: LoadRulesOptions = {},
+): Promise<ActiveProfile> => {
+  const paths = ruleLayerPaths('profile', options);
+  const [machinePath, repoPath] = paths.local;
+  const [defaultsText, machineRead, repoRead] = await Promise.all([
+    readDefaults(paths.defaults),
+    readProfileLayer(machinePath),
+    readProfileLayer(repoPath),
+  ]);
+  const defaults = validateLayer(
+    'profile',
+    paths.defaults,
+    parseLayer(paths.defaults, defaultsText),
+  ) as ProfileRule;
+  const machine = foldProfileLayer(defaults, machineRead);
+  const rule = foldProfileLayer(machine, repoRead);
+  const location = await locateProfile(rule.profile, options);
+  return {
+    ...location,
+    chosenBy: profileChoiceOf(machineRead, repoRead),
+    levels: machine.levels,
+    repoLevels: levelsSetBy(rule.levels, machine.levels),
+  };
+};
+
+const appendMarkdown = (base: string, layer: string): string =>
+  `${base.trimEnd()}\n\n${layer.trim()}\n`;
+
+const mergeProfileLayer = (
+  name: RuleName,
+  merged: unknown,
+  layer: unknown,
+  path: string,
+  profile: ActiveProfile,
+): unknown => {
+  if (typeof merged === 'string' && typeof layer === 'string')
+    return appendMarkdown(merged, layer);
+  return mergeLocal(name, merged, layer, path, profile.chosenBy === 'project');
+};
+
+const withProfileLayer = async (
+  name: RuleName,
+  merged: unknown,
+  options: LoadRulesOptions,
+): Promise<unknown> => {
+  if (!PROFILE_LAYER_RULES.has(name)) return merged;
+  const profile = await activeProfile(options);
+  const path = resolve(profile.dir, RULE_FILES[name]);
+  const text = await readLocal(path);
+  if (text === undefined) return merged;
+  const { layer, warnings } = upgradeLayer(name, parseLayer(path, text), path);
+  for (const warning of warnings) (options.onWarning ?? warnOnce)(warning);
+  const next = mergeProfileLayer(name, merged, layer, path, profile);
+  return validateLayer(name, path, next);
+};
+
 export const loadRule = async <K extends RuleName>(
   name: K,
   options: LoadRulesOptions = {},
@@ -164,7 +288,11 @@ export const loadRule = async <K extends RuleName>(
     layers.defaults,
     await readDefaults(layers.defaults),
   );
-  let merged = validateLayer(name, layers.defaults, defaults);
+  let merged = await withProfileLayer(
+    name,
+    validateLayer(name, layers.defaults, defaults),
+    layerOptions,
+  );
   const warn = options.onWarning ?? warnOnce;
   for (const path of layers.local) {
     const text = await readLocal(path);

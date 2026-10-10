@@ -63,6 +63,7 @@ describe('rules loader', () => {
       'models.json',
       'naming.json',
       'permissions.json',
+      'profile.json',
       'reviewer.md',
       'services.json',
     ]);

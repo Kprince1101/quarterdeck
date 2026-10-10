@@ -1,0 +1,4 @@
+{
+  "description": "Generic and language-neutral: how a Quarterdeck agent works a ticket, with no style opinions.",
+  "standards": ["standards.md"]
+}
