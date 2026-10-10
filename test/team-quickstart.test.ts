@@ -56,6 +56,12 @@ describe('docs/team-quickstart.md', () => {
     expect(body).toContain('delete that folder');
   });
 
+  it('mentions keep-awake for a voyage left to run', () => {
+    expect(section(QUICKSTART, '## A first voyage')).toContain(
+      '**Keep awake**',
+    );
+  });
+
   it('starts the trouble list with doctor', () => {
     const body = section(QUICKSTART, '## If something is wrong');
     expect(body).toMatch(/^\s*1\. \*\*Run `npm run quarterdeck -- doctor`\*\*/);
@@ -77,6 +83,27 @@ describe('docs/release-notes/v4.0.0.md', () => {
     '## Where your data lives, and how to delete it',
   ])('has %s', (heading) => {
     expect(section(RELEASE_NOTES, heading).trim()).not.toBe('');
+  });
+
+  it.each([
+    '**Setup screen.**',
+    '**Sign in through the runtime itself.**',
+    '**Workspaces and single-repo mode.**',
+    '**Claude on Vertex AI.**',
+    '**Rules profiles.**',
+    '**Keep-awake.**',
+    '**Images in the Planner and in card answers.**',
+    '**The chat input is a regular chatbox.**',
+  ])('lists %s among the changes', (feature) => {
+    expect(section(RELEASE_NOTES, '## What changed since October 3')).toContain(
+      `- ${feature}`,
+    );
+  });
+
+  it('names the attachments folder where data lives', () => {
+    expect(
+      section(RELEASE_NOTES, '## Where your data lives, and how to delete it'),
+    ).toContain('~/.quarterdeck/<project>/attachments/');
   });
 
   it('points at the quickstart', () => {

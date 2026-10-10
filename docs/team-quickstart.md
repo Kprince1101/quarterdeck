@@ -114,7 +114,7 @@ See [A first voyage](#a-first-voyage) below.
 
 The board opens with a **What to do first** panel:
 
-1. **Describe the work** in the **Planner** widget, in a sentence or two: "Add a health check endpoint that returns the build version."
+1. **Describe the work** in the **Planner** widget, in a sentence or two: "Add a health check endpoint that returns the build version." To show it something, paste a screenshot or drop an image into the box (PNG, JPEG, GIF or WebP, up to 5 MB each).
 2. The Planner asks to propose tickets: a card appears in **Cards**. Allow it. Its proposals appear on the **Board**, each a short spec with requirements, design, tasks and how it will be proven. **Approve** the ones you want (edit or reject the rest).
 3. Press **Start Voyage**. The Driver assigns each approved ticket to a builder, which works in its own git worktree, never in your checkout.
 4. **Answer cards as they come.** Out of the box, agents may read and search freely, and everything else (editing a file, running a command) asks you first. When you trust a command, allow it for good: in the **Rules** widget, open `permissions.json` and add `{ "kind": "execute", "pattern": "npm test", "decision": "allow" }` to its `rules`. It saves to `~/.quarterdeck/rules.local.permissions.json`, and the list you save replaces the shipped one whole, so keep the shipped rules in it.
@@ -122,9 +122,11 @@ The board opens with a **What to do first** panel:
 
 The **Agents**, **Events** and **Pull and merge requests** widgets show what each agent is doing. Start small: one ticket on a branch you do not mind.
 
+**Leaving it to run?** First pick a time (30 minutes to 8 hours, or Until voyage ends) next to **Keep awake** in the dashboard header, and press it. It stops your computer from going to sleep, so agents keep working; the screen can still turn off and lock. On a laptop, stay on power: closing the lid on battery still sleeps.
+
 ## Your data and security
 
-Quarterdeck runs only on your machine and sends nothing anywhere: no account, no hosted service, no telemetry. It holds no API keys: Claude Code, Kiro, gh and glab keep their own sign-ins where they always do, and on Vertex the agents use your gcloud credentials. What your agents send to their model and what they push goes through those tools, signed in as you. The dashboard listens on `127.0.0.1` only and needs the token from the URL, which is new on every start. Anything shaped like a secret (Anthropic and GitHub keys and tokens, cloud access keys, private keys, bearer tokens, passwords in URLs) is replaced with `[redacted]` before Quarterdeck stores it. Everything it stores is in one folder, `~/.quarterdeck/`: to remove it all, stop `up`, delete that folder, and run `git worktree prune` in each repository you used. The dashboard's **Data** widget lists every file and table, and wipes one project or all of them.
+Quarterdeck runs only on your machine and sends nothing anywhere: no account, no hosted service, no telemetry. It holds no API keys: Claude Code, Kiro, gh and glab keep their own sign-ins where they always do, and on Vertex the agents use your gcloud credentials. What your agents send to their model and what they push goes through those tools, signed in as you. The dashboard listens on `127.0.0.1` only and needs the token from the URL, which is new on every start. Anything shaped like a secret (Anthropic and GitHub keys and tokens, cloud access keys, private keys, bearer tokens, passwords in URLs) is replaced with `[redacted]` before Quarterdeck stores it. Everything it stores is in one folder, `~/.quarterdeck/`, including the images you attach: to remove it all, stop `up`, delete that folder, and run `git worktree prune` in each repository you used. The dashboard's **Data** widget lists every file and table, and wipes one project or all of them.
 
 ## If something is wrong
 
