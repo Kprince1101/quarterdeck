@@ -9,7 +9,7 @@ PGlite lives inside the Quarterdeck process and takes one process per data dir, 
 1. `startBusHost({ store, home? })` listens on a Unix socket (a named pipe on Windows) at `busSocketPath(store.projectId, { home })`.
 2. `host.launch(agentId, name?)` returns the ACP `McpServerStdio` to pass in `newSession({ mcpServers })`: `node relay.js` with `QUARTERDECK_BUS_SOCKET` and a one-time `QUARTERDECK_BUS_TOKEN`, named `name` (default `bus`). It throws `AgentNotFoundError` for an agent of another project or a `retired` one. An agent that works in several projects, the voyage's Driver or the reviewer, gets one server per project, each launched for its seat in that project and named `bus-<project>` (`projectBusName`); see [crew](../crew/README.md#seats).
 3. The runtime spawns the relay. It connects, sends the token line, waits for `ok`, then pipes stdin and stdout through the socket. An unknown or spent token gets `denied`, and the relay exits 1 with `the bus refused this session (denied)` on stderr.
-4. Each accepted connection gets its own MCP server bound to `{ store, agentId }`, so a tool always knows which agent called it and which project it may touch.
+4. Each accepted connection gets its own MCP server bound to `{ store, agentId }`, so a tool always knows which agent called it and which project it may touch. Every tool's arguments go through `redactShapes` before the tool runs, so a key an agent pastes into `status`, `ask`, `report` or `propose` reaches no row as itself.
 
 `host.revoke(agentId)` drops the agent's pending token and closes its connections; call it when the agent ends or retires. `host.close()` closes every connection and removes the socket.
 

@@ -1,6 +1,7 @@
 import type { ReactNode, JSX } from 'react';
 import type { StreamState, StreamStatus } from '../api/index.js';
 import { useDeck } from '../deck/DeckProvider.js';
+import { ClaudeAuthBadge } from './ClaudeAuthBadge.js';
 
 export const STATUS_LABELS: Record<StreamStatus, string> = {
   connecting: 'Connecting',
@@ -38,6 +39,7 @@ export const Shell = ({ mode, children }: ShellProps): JSX.Element => {
         <h1 className="qd-brand">Quarterdeck</h1>
         {hasMode && <span className="qd-mode">{mode}</span>}
         <div className="qd-header-end">
+          <ClaudeAuthBadge />
           <StreamStatusBadge stream={stream} />
         </div>
       </header>

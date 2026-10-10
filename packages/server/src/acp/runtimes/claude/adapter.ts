@@ -8,8 +8,9 @@ import type {
 } from '../../client/types.js';
 import { launchAcpClient } from '../../launch/launch.js';
 import type { AgentLaunch, LaunchOptions } from '../../launch/launch.js';
-import { childEnv, withChildEnv } from '../../env.js';
+import { childEnv, sourceEnv, withChildEnv } from '../../env.js';
 import { launchSite, withPassEnv } from '../adapter.js';
+import { claudeAuthEnv, type ClaudeAuthOptions } from './auth.js';
 import type {
   RuntimeAdapter,
   RuntimeAdapterSpec,
@@ -117,11 +118,27 @@ const lockPermissions = (client: AcpClient): AcpClient => ({
 export interface ClaudeAdapterOptions {
   processDir?: string;
   refuseRepoAllowRules?: boolean;
+  auth?: Omit<ClaudeAuthOptions, 'env'>;
 }
+
+const withAuthEnv = async (
+  launch: RuntimeLaunch,
+  auth: Omit<ClaudeAuthOptions, 'env'>,
+): Promise<RuntimeLaunch> => {
+  const homeDir = launch.rules?.homeDir;
+  const env = await claudeAuthEnv({
+    ...(homeDir !== undefined && { homeDir }),
+    ...auth,
+    env: sourceEnv(launch.env),
+  });
+  if (env.pass === undefined && env.set === undefined) return launch;
+  return { ...launch, env: withChildEnv(launch.env, env) };
+};
 
 export const createClaudeAdapter = ({
   processDir = claudeRuntimeDir(),
   refuseRepoAllowRules = true,
+  auth = {},
 }: ClaudeAdapterOptions = {}): RuntimeAdapter => {
   const spec: RuntimeAdapterSpec = {
     runtime: 'claude',
@@ -166,9 +183,10 @@ export const createClaudeAdapter = ({
   };
 
   const connect = async (
-    launch: RuntimeLaunch,
+    requested: RuntimeLaunch,
     options: LaunchOptions,
   ): Promise<AcpClient> => {
+    const launch = await withAuthEnv(requested, auth);
     await refuseUnlockedSettings(launch);
     await ensurePrivateDir(processDir);
     const client = await launchAcpClient(agentLaunch(launch), {

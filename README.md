@@ -97,6 +97,7 @@ Nothing Quarterdeck stores leaves your machine. It has no hosted component, no a
 ```text
 ~/.quarterdeck/
   rules.local.<file>              your machine's rules
+  claude.json                     which Claude auth mode this machine uses (the mode only, never a key)
   <project>/
     pg/                           the project's Postgres data (PGlite)
     pg.lock                       which process has the project open
@@ -117,7 +118,7 @@ Outside that folder:
 - `~/.kiro/agents/quarterdeck-<project>-<agent>.json`: the agent config Kiro needs to start an agent, removed when the agent's process exits.
 - With `DATABASE_URL` set, every project's rows live in that database instead of `~/.quarterdeck/<project>/pg/`. Turn files and worktrees stay in `~/.quarterdeck/<project>/`.
 
-Your runtimes' and `gh`'s sign-ins stay where those tools keep them; Quarterdeck does not copy them.
+Your runtimes' and `gh`'s sign-ins stay where those tools keep them; Quarterdeck does not copy them. On a machine that runs Claude on an API key (`QUARTERDECK_CLAUDE_AUTH=api_key`), the key stays in `ANTHROPIC_API_KEY` or the macOS Keychain item `quarterdeck-anthropic-api-key`: it is handed to the Claude agents Quarterdeck starts and never written to a database row, an event, a turn file or the notebook, and anything shaped like `sk-ant-` is stored as `[redacted]`. See [Claude auth mode](site/public/docs/rules.html#claude-auth).
 
 The dashboard's Data widget lists every table with its rows and every path above with whether it exists. It also wipes:
 
@@ -126,7 +127,7 @@ The dashboard's Data widget lists every table with its rows and every path above
 
 `npm run quarterdeck -- wipe <project>` and `npm run quarterdeck -- wipe --all` do the same from a terminal, with the same typed confirmation (or `--confirm <phrase>` in a script). See `packages/cli/README.md`.
 
-Wiping keeps the rules files and everything else under `~/.quarterdeck/` that is not a project: `plugins/`, `pause.json`, `sock/`, `_deck/` and the runtime folders. To remove everything by hand, stop Quarterdeck and delete `~/.quarterdeck/`, then run `git worktree prune` in each repository. See `site/public/docs/data.html`.
+Wiping keeps the rules files and everything else under `~/.quarterdeck/` that is not a project: `claude.json`, `plugins/`, `pause.json`, `sock/`, `_deck/` and the runtime folders. To remove everything by hand, stop Quarterdeck and delete `~/.quarterdeck/`, then run `git worktree prune` in each repository. See `site/public/docs/data.html`.
 
 ## Rules
 

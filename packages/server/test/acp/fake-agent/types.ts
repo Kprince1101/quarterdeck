@@ -30,7 +30,8 @@ export type FakeAgentFlag =
   | 'plannerSkipsDesignTwice'
   | 'plannerSpreads'
   | 'plannerNamesUnknown'
-  | 'onGitlab';
+  | 'onGitlab'
+  | 'leaksApiKey';
 
 export interface FakeAgentOptions extends Partial<
   Record<FakeAgentFlag, boolean>

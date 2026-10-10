@@ -440,8 +440,9 @@ esac`,
       'claude: 2.1.30, signed in (claude.ai)',
       'gemini: 0.9.0, signed in (GEMINI_API_KEY)',
       'gh: 2.81.0, signed in (example-org on github.com)',
+      'claude auth: subscription (the default), uses the Claude Code sign-in',
       '',
-      '1 of 4 need attention. Run the commands above, then npm run quarterdeck -- doctor again.',
+      '1 of 5 need attention. Run the commands above, then npm run quarterdeck -- doctor again.',
     ]);
     expect(io.errors).toEqual([]);
   });

@@ -37,6 +37,10 @@ describe('dashboard build', () => {
   it('boots the built bundle into #root and opens the stream at /ws', async () => {
     const script = assets(html).find((path) => path.endsWith('.js'));
     vi.stubGlobal('WebSocket', FAKE_WEBSOCKET);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 503 })),
+    );
     history.replaceState(null, '', `/#token=${TOKEN}`);
     const { body } = page();
     body.innerHTML = '<div id="root"></div>';

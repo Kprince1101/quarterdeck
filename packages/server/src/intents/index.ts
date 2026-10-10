@@ -27,12 +27,14 @@ export {
 } from './fields.js';
 export {
   READ_INTENTS,
+  authReadResultSchema,
   forgeReadResultSchema,
   forgeRequestsResultSchema,
   openRequestSchema,
   projectRequestsSchema,
   turnReadResultSchema,
   usageReadResultSchema,
+  type AuthReadResult,
   type ForgeReadResult,
   type ForgeRequestsResult,
   type OpenRequest,

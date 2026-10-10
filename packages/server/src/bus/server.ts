@@ -4,6 +4,7 @@ import type {
   ServerNotification,
   ServerRequest,
 } from '@modelcontextprotocol/sdk/types.js';
+import { redactShapes } from '../lib/redact.js';
 import type { BusCall, BusContext, BusTool } from './tool.js';
 
 export const BUS_SERVER_NAME = 'bus';
@@ -46,7 +47,9 @@ export const createBusServer = (
           progress: progressOf(extra),
         };
         return {
-          content: [{ type: 'text', text: await tool.run(call, args) }],
+          content: [
+            { type: 'text', text: await tool.run(call, redactShapes(args)) },
+          ],
         };
       },
     );

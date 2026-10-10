@@ -28,6 +28,7 @@ import {
   type ChildEnvSpec,
   type CommandResult,
 } from '@quarterdeck/server';
+import { checkClaudeAuth, withClaudeAuthEnv } from './doctor-claude-auth.js';
 import { CliError, type CliIo, type Command } from './io.js';
 
 export const DOCTOR_PROBE_TIMEOUT_MS = 15_000;
@@ -39,7 +40,8 @@ prints the command to run for each one that is not. Checks glab the same way
 for each GitLab host in use: every host mapped to gitlab in
 ~/.quarterdeck/rules.local.forges.json, and this folder's origin host when it
 is on GitLab. Warns when gh is signed in only through GH_TOKEN or
-GITHUB_TOKEN, which agents do not get. Shows the
+GITHUB_TOKEN, which agents do not get. Reports the Claude auth mode
+(subscription, api_key or vertex) and whether the env it needs is set. Shows the
 Kiro base agent each role starts from (the builder's as the project in this
 folder sets it). Exits 1 if any needs attention.`;
 
@@ -66,7 +68,7 @@ const GH_INSTALL_DOCS =
   'see https://github.com/cli/cli#installation for your system';
 
 interface Fix {
-  label: 'Install' | 'Download' | 'Sign in';
+  label: 'Install' | 'Download' | 'Sign in' | 'Set';
   command: string;
 }
 
@@ -550,7 +552,8 @@ export const runDoctor: Command = async (args, io) => {
   }
   if (positionals.length > 0) throw new CliError('doctor takes no arguments');
   const checks = [
-    ...(await runDoctorChecks(io)),
+    ...(await runDoctorChecks(await withClaudeAuthEnv(io))),
+    ...(await checkClaudeAuth(io)),
     ...(await checkKiroBases(io)),
     ...(await checkShellRules(io)),
   ];

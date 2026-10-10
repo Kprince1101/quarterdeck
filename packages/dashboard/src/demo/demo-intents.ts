@@ -15,7 +15,7 @@ import type {
   VoyageRow,
 } from '@quarterdeck/server/stream-schema';
 import { DemoRefusal } from './demo-fetch.js';
-import { DEMO_FORGE, DEMO_PROJECT } from './demo-seed.js';
+import { DEMO_AUTH, DEMO_FORGE, DEMO_PROJECT } from './demo-seed.js';
 import type { DemoPlanner } from './demo-planner.js';
 import type { DemoReads } from './demo-reads.js';
 import { createDemoRequests } from './demo-requests.js';
@@ -55,6 +55,7 @@ const UNRECORDED: ReadonlySet<IntentName> = new Set([
   'usage.read',
   'forge.read',
   'forge.requests',
+  'auth.read',
   'services.read',
   'rules.write',
   'rules.reset',
@@ -460,6 +461,7 @@ export const createDemoIntents = (
       reply('applied', { forge: DEMO_FORGE, terms: forgeTerms(DEMO_FORGE) }),
     'forge.requests': (_input, reply) =>
       reply('applied', { projects: openRequests() }),
+    'auth.read': (_input, reply) => reply('applied', { claude: DEMO_AUTH }),
     'services.read': (_input, reply) => reply('applied', services.read()),
     'services.set': (input, reply) =>
       reply('applied', { ...services.set(input) }),

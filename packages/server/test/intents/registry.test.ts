@@ -37,6 +37,7 @@ describe('intent registry', () => {
     expect([...areas].toSorted()).toEqual(
       [
         'agent',
+        'auth',
         'card',
         'charter',
         'data',

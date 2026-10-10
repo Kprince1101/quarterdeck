@@ -53,8 +53,9 @@ kiro-cli: 1.20.1, not signed in
 claude: 2.1.30, signed in (user@example.com)
 gemini: 0.9.0, signed in (Google account)
 gh: 2.81.0, signed in (example-org on github.com)
+claude auth: subscription (the default), uses the Claude Code sign-in
 
-1 of 4 need attention. Run the commands above, then npm run quarterdeck -- doctor again.
+1 of 5 need attention. Run the commands above, then npm run quarterdeck -- doctor again.
 ```
 
 | Tool       | Installed                                                                                                                          | Signed in                                                                                                                           | Install                                                                                              | Sign in                                                                              |
@@ -68,6 +69,14 @@ When a GitLab host is in use, doctor checks `glab` too, once per host: every hos
 
 ```
 glab on git.example.org: 1.46.1, signed in (example-user on git.example.org)
+```
+
+The `claude auth` line reports this machine's [Claude auth mode](../server/src/acp/runtimes/README.md#auth-modes) (`subscription`, `api_key` or `vertex`), where it was set (`QUARTERDECK_CLAUDE_AUTH`, `~/.quarterdeck/claude.json` or the default), and whether the env the mode needs is there: for `api_key`, `ANTHROPIC_API_KEY` from the environment or, on macOS, the Keychain item `quarterdeck-anthropic-api-key`; for `vertex`, `ANTHROPIC_VERTEX_PROJECT_ID`, `CLOUD_ML_REGION` and gcloud's application-default credentials. Anything missing is a `Set` (or `Sign in`) fix and counts toward the exit code. The `claude` probe runs with the env the mode gives agents, so a key found only in the Keychain counts as signed in. The key itself is never printed. `checkClaudeAuth` lives in `src/doctor-claude-auth.ts`.
+
+```
+claude auth: api_key (from QUARTERDECK_CLAUDE_AUTH), ANTHROPIC_API_KEY not set
+  Set: export ANTHROPIC_API_KEY=<your key>, then start Quarterdeck from that shell
+  Set: security add-generic-password -a "$USER" -s quarterdeck-anthropic-api-key -w
 ```
 
 When `kiro.json` names a Kiro base agent for any role, doctor adds a line per role with the base it resolves to, `none`, or the error naming the missing or broken file. The builder's comes from the repo layer of the folder doctor runs in. These lines are informational and do not change the exit code. See [Base agents](../server/src/acp/runtimes/README.md#base-agents).

@@ -32,6 +32,7 @@ src/App.tsx                  DeckProvider > Shell > DeckLayout; `mode` labels th
 src/demo/                    demo mode: a fake server in the page, built by site/
 src/deck/DeckProvider.tsx    DeckProvider and useDeck(): one stream per tab, plus the intent client
 src/shell/Shell.tsx          Shell (header + workspace), Panel, StreamStatusBadge
+src/shell/ClaudeAuthBadge.tsx  the header's read-only Claude auth mode, from auth.read
 src/widgets/registry.ts      defineWidget, WidgetDefinition, createRegistry
 src/widgets/widgets.ts       WIDGETS: every src/widgets/**/*Widget.tsx, found at build time
 src/widgets/WidgetMount.tsx  WidgetMount: the grid over WIDGETS

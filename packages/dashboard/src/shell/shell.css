@@ -69,6 +69,20 @@
   background: var(--qd-danger);
 }
 
+.qd-auth {
+  padding: 0 var(--qd-space-2);
+  border: 1px solid var(--qd-faint);
+  border-radius: var(--qd-radius);
+  color: var(--qd-muted);
+  font-size: var(--qd-text-sm);
+}
+
+.qd-auth[data-state='incomplete'],
+.qd-auth[data-state='unreadable'] {
+  border-color: var(--qd-warn);
+  color: var(--qd-warn);
+}
+
 .qd-token-missing {
   display: grid;
   place-content: center;

@@ -36,7 +36,7 @@ Each adapter declares the variables its runtime needs to sign in, as `adapter.pa
 | `gemini` | `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_CLOUD_LOCATION`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_GENAI_USE_GCA`, `GOOGLE_GENAI_USE_VERTEXAI` (`GEMINI_PASS_ENV`) |
 | `kiro`   | none: `kiro-cli login` keeps its sign-in in Kiro's own store (`KIRO_PASS_ENV`)                                                                                                                 |
 
-Claude Code on Bedrock or Vertex, for example, needs more (`CLAUDE_CODE_USE_BEDROCK`, `AWS_PROFILE`, ...); add those through the rule below.
+On top of `CLAUDE_PASS_ENV`, the claude adapter's [auth mode](runtimes/README.md#auth-modes) adds names for its own launches only: `vertex` passes `ANTHROPIC_VERTEX_PROJECT_ID`, `CLOUD_ML_REGION`, `GOOGLE_APPLICATION_CREDENTIALS`, `CLOUDSDK_CONFIG` and `ANTHROPIC_VERTEX_BASE_URL` (`CLAUDE_VERTEX_PASS_ENV`) and sets `CLAUDE_CODE_USE_VERTEX=1`; `api_key` sets `ANTHROPIC_API_KEY`. `subscription`, the default, adds nothing. Claude Code on Bedrock, for example, needs more (`CLAUDE_CODE_USE_BEDROCK`, `AWS_PROFILE`, ...); add those through the rule below.
 
 ### The env rule
 

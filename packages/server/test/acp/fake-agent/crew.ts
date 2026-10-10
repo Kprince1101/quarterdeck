@@ -295,6 +295,19 @@ const publishesIn = (text: string) =>
     version: FAKE_VERSION,
   }));
 
+const leaked = (options: FakeAgentOptions): string => {
+  if (!options.leaksApiKey) return '';
+  return ` ${process.env['ANTHROPIC_API_KEY'] ?? ''}`;
+};
+
+const leakStatus = async (
+  turn: FakeTurn,
+  options: FakeAgentOptions,
+): Promise<void> => {
+  if (!options.leaksApiKey) return;
+  await callBus(turn, 'status', { text: `Working${leaked(options)}` });
+};
+
 const HANDLERS: Record<
   CrewRole,
   (turn: FakeTurn, options: FakeAgentOptions) => Promise<StopReason>
@@ -304,20 +317,27 @@ const HANDLERS: Record<
     return say(
       turn,
       fenced({
-        summary: 'Born.',
+        summary: `Born.${leaked(options)}`,
         actions: assignAll(ticketsOn(turn.text, WAITING_LINE)),
       }),
     );
   },
   planner: (turn, options) => propose(turn, options, false),
   'planner-reprompt': (turn, options) => propose(turn, options, true),
-  'wrap-up': (turn) =>
-    say(turn, fenced({ summary: 'Voyage done.', notebook: [], charter: null })),
-  driver: (turn) =>
+  'wrap-up': (turn, options) =>
     say(
       turn,
       fenced({
-        summary: 'Assigned what was approved.',
+        summary: `Voyage done.${leaked(options)}`,
+        notebook: [],
+        charter: null,
+      }),
+    ),
+  driver: (turn, options) =>
+    say(
+      turn,
+      fenced({
+        summary: `Assigned what was approved.${leaked(options)}`,
         actions: [
           ...assignAll(ticketsOn(turn.text, APPROVED_LINE)),
           ...blocksIn(turn.text),
@@ -331,20 +351,23 @@ const HANDLERS: Record<
       return say(turn, 'This needs a library change first.');
     if (!(await pushAllowed(turn, options)))
       return say(turn, 'Quarterdeck refused my push.');
+    await leakStatus(turn, options);
+    const change = reportedChange(options);
     const reply = await callBus(turn, 'report', {
       ticket: firstId(ASSIGNMENT, turn.text),
-      ...reportedChange(options),
+      ...change,
+      notes: `${change.notes}${leaked(options)}`,
       head: FAKE_PR_HEAD,
     });
-    return say(turn, reply);
+    return say(turn, `${reply}${leaked(options)}`);
   },
-  reviewer: async (turn) => {
+  reviewer: async (turn, options) => {
     const reply = await callBus(turn, 'verdict', {
       ticket: firstId(REVIEW, turn.text),
       decision: 'approve',
-      notes: 'It does what the ticket asks.',
+      notes: `It does what the ticket asks.${leaked(options)}`,
     });
-    return say(turn, reply);
+    return say(turn, `${reply}${leaked(options)}`);
   },
 };
 
