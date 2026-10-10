@@ -31,7 +31,7 @@ const GLAB_CHECK = /^glab on (\S+)$/;
 
 const SIGN_IN_LABEL = 'Sign in';
 
-const toolOfName = (name: string): SignInTool | undefined => {
+export const signInToolOfName = (name: string): SignInTool | undefined => {
   const runtime = RUNTIME_CHECKS[name];
   if (runtime !== undefined) return { kind: 'runtime', runtime };
   if (name === 'gh') return { kind: 'gh' };
@@ -43,7 +43,7 @@ const toolOfName = (name: string): SignInTool | undefined => {
 export const signInToolOf = (check: SignInCheck): SignInTool | undefined => {
   const [fix, ...rest] = check.fixes;
   if (fix?.label !== SIGN_IN_LABEL || rest.length > 0) return undefined;
-  return toolOfName(check.name);
+  return signInToolOfName(check.name);
 };
 
 export const terminalProgress = (

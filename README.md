@@ -12,20 +12,19 @@ Status: alpha. Built, by itself, from a written spec. [docs/proof.md](docs/proof
 
 Quarterdeck is installed and run locally only: clone it, install it, run it on your own machine. It is not published to npm. The `quarterdeck` package on npm is someone else's, unrelated to this one; do not install it, and do not run Quarterdeck through `npx`, which would download and run that package instead.
 
-With Node 22:
+With Node 22 and one agent CLI installed:
 
 ```sh
-git clone https://github.com/<owner>/quarterdeck.git
-cd quarterdeck
-npm install                      # installs dependencies and builds every package
-npm run quarterdeck -- up        # starts the server and prints the dashboard URL
+git clone https://github.com/<owner>/quarterdeck.git && cd quarterdeck
+npm install
+npm run quarterdeck -- up
 ```
 
-Open the dashboard at the URL `up` prints. After a `git pull`, run `npm install` again so the build is current.
+Open the URL `up` prints: the first time, it opens on Setup, which asks for your folder, your runtime and its sign-in, then puts you on the board with the Planner ready. After a `git pull`, run `npm install` again so the build is current.
 
-## Getting started
+## Getting started from a terminal
 
-One agent CLI installed. Then, from the clone:
+Setup does all of this from the dashboard. For scripts, or if you prefer the terminal, the same steps are three commands, from the clone:
 
 ```sh
 npm run quarterdeck -- doctor                  # checks kiro-cli, claude, gemini, gh (and glab for GitLab), signs each signed-out one in through its own browser sign-in, and says what to run for anything left
@@ -182,7 +181,7 @@ Each workspace package is written in TypeScript under `src/` and built to `dist/
 
 The root `quarterdeck` script runs `scripts/quarterdeck.mjs`, which starts `packages/cli/dist/bin.js` in the folder `npm run` was typed in (`INIT_CWD`), since npm starts every script in the workspace root.
 
-The `clean-machine` CI job follows [Running it](#running-it) on a machine with nothing else on it. It copies the clone into a `node:22-bookworm-slim` container, runs `npm install` there, and runs `scripts/clean-machine/check.ts`: `npm ls quarterdeck` must find no `quarterdeck` package, `npm run quarterdeck -- up` must serve the built dashboard and the intents API, the ACP client must drive the in-repo fake agent through a turn, `up` must print `Stopped.` and let go of its port on `SIGTERM`, and `npm run quarterdeck -- wipe` must delete the project. To run the check in your clone after `npm install`:
+The `clean-machine` CI job follows [Running it](#running-it) on a machine with nothing else on it. It copies the clone into a `node:22-bookworm-slim` container, runs `npm install` there, and runs `scripts/clean-machine/check.ts`: `npm ls quarterdeck` must find no `quarterdeck` package, `npm run quarterdeck -- up` with no `~/.quarterdeck` must serve the built dashboard and the intents API, Setup must find a fake `kiro-cli` (the in-repo fake agent) installed and signed in and save a one-repository workspace on it, the ACP client must drive the in-repo fake agent through a turn, `up` must print `Stopped.` and let go of its port on `SIGTERM`, and `npm run quarterdeck -- wipe` must delete the project. To run the check in your clone after `npm install`:
 
 ```sh
 node --experimental-strip-types scripts/clean-machine/check.ts

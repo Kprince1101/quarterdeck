@@ -3,6 +3,7 @@ import { loadRule } from '@quarterdeck/rules';
 import {
   DEFAULT_API_PORT,
   QUARTERDECK_COMMAND,
+  createWorkspaces,
   ensurePrivateDir,
   quarterdeckHome,
   startQuarterdeck,
@@ -11,9 +12,13 @@ import {
 import { resolveDashboardDir } from './dashboard.js';
 import { runDoctorChecks } from './doctor.js';
 import { CliError, type CliIo, type Command } from './io.js';
+import { createSetupProbe } from './setup-probe.js';
 import { ensureSignedIn } from './signin.js';
 
 const MAX_PORT = 65_535;
+
+export const SETUP_LINE =
+  'No workspace yet: open the URL above and Setup walks you through the folder, the runtime and sign-in.';
 
 export const UP_USAGE = `Usage: ${QUARTERDECK_COMMAND} up [--port <port>]
 
@@ -36,6 +41,11 @@ const parsePort = (value: string | undefined): number => {
   return port;
 };
 
+const hasWorkspace = async (io: CliIo): Promise<boolean> => {
+  const workspace = await createWorkspaces(quarterdeckHome(io.homeDir)).read();
+  return (workspace?.projects.length ?? 0) > 0;
+};
+
 const signInRuntimesInUse = async (io: CliIo): Promise<void> => {
   if (io.signIn === undefined) return;
   const models = await loadRule('models', { homeDir: io.homeDir });
@@ -55,6 +65,7 @@ const listen = async (port: number, io: CliIo): Promise<Quarterdeck> => {
       port,
       homeDir: io.homeDir,
       dashboardDir: resolveDashboardDir(),
+      setupProbe: createSetupProbe(io),
     });
   } catch (err) {
     if (!isPortTaken(err)) throw err;
@@ -78,9 +89,11 @@ export const runUp: Command = async (args, io) => {
   }
   const port = parsePort(values.port);
   await ensurePrivateDir(quarterdeckHome(io.homeDir));
-  await signInRuntimesInUse(io);
+  const configured = await hasWorkspace(io);
+  if (configured) await signInRuntimesInUse(io);
   const api = await listen(port, io);
   io.out(`Quarterdeck is running at ${api.url}/#token=${api.token}`);
+  if (!configured) io.out(SETUP_LINE);
   io.out(`Data: ${api.location}`);
   io.out('Press Ctrl+C to stop.');
   await io.untilStopped();

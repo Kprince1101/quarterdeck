@@ -85,6 +85,25 @@ export {
   type ServicesReadResult,
 } from './services.js';
 export {
+  MAX_SETUP_PATH_LENGTH,
+  SETUP_INTENTS,
+  setupDetectResultSchema,
+  setupReadResultSchema,
+  setupSaveResultSchema,
+  setupSignInSchema,
+  setupToolSchema,
+  setupToolsResultSchema,
+  signInToolSchema,
+  type SetupDetectResult,
+  type SetupIntentName,
+  type SetupReadResult,
+  type SetupSaveResult,
+  type SetupSignIn,
+  type SetupSignInTool,
+  type SetupTool,
+  type SetupToolsResult,
+} from './setup.js';
+export {
   WIPE_ALL_CONFIRMATION,
   WORKSPACE_INTENTS,
   wipeResultSchema,
