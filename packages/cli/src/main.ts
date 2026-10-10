@@ -1,6 +1,7 @@
 import { RulesError } from '@quarterdeck/rules';
 import { HttpError, QUARTERDECK_COMMAND } from '@quarterdeck/server';
 import { runDoctor } from './doctor.js';
+import { runImport } from './import.js';
 import { runInit } from './init.js';
 import { CliError, type CliIo, type Command } from './io.js';
 import { runProfile } from './profile.js';
@@ -19,6 +20,7 @@ Commands:
   replay <voyage> [n]  Replay a voyage's Driver turns 1 to n, writing nothing
   wipe <project>      Stop a project's agents and delete its data (--all for every project)
   profile <command>   List, add or choose rules profiles, or set a repo up for one
+  import harness      Import Harness's projects, open docket and notebook (--apply to write)
 
 Run ${QUARTERDECK_COMMAND} <command> --help for a command's options.`;
 
@@ -29,6 +31,7 @@ const COMMANDS: Record<string, Command> = {
   replay: runReplay,
   wipe: runWipe,
   profile: runProfile,
+  import: runImport,
 };
 
 const HELP = new Set(['help', '--help', '-h']);

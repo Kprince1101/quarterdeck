@@ -76,5 +76,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Store, API and stream suites on PGlite and Postgres
-        run: npx vitest run packages/server/test/store packages/server/test/api packages/server/test/stream
+      - name: Store, API, stream and Harness import suites on PGlite and Postgres
+        run: npx vitest run packages/server/test/store packages/server/test/api packages/server/test/stream packages/cli/test/import-harness.test.ts

@@ -60,10 +60,13 @@ export {
   quarterdeckHome,
 } from './paths.js';
 export {
+  PostgresSessionError,
+  connectPostgresSession,
   connectPostgres,
   createPostgresPool,
   redactUrl,
   type PostgresPool,
+  type PostgresSession,
 } from './postgres.js';
 export { MIN_SERVER_VERSION_NUM, assertServerVersion } from './version.js';
 export {
