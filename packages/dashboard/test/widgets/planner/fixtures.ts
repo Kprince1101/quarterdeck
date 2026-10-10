@@ -48,6 +48,25 @@ export const plannerEvent = (
 export const human = (id: number, text: string, intentId = INTENT_1) =>
   plannerEvent(id, 'planner.human', { payload: { intentId, seq: '1', text } });
 
+export const IMAGE_1 = '00000000-0000-4000-8000-0000000000d1';
+
+export const imageRef = (id = IMAGE_1) => ({
+  id,
+  mimeType: 'image/png' as const,
+  bytes: 68,
+  path: `/home/me/.quarterdeck/deck/attachments/${id}.png`,
+});
+
+export const humanWithImages = (
+  id: number,
+  text: string,
+  refs: ReturnType<typeof imageRef>[] = [imageRef()],
+  intentId = INTENT_1,
+) =>
+  plannerEvent(id, 'planner.human', {
+    payload: { intentId, seq: '1', text, attachments: refs },
+  });
+
 export const reply = (id: number, text: string) =>
   plannerEvent(id, 'planner.reply', { payload: { text, stopReason: 'end' } });
 

@@ -6,7 +6,11 @@ import type {
 } from '@quarterdeck/server/stream-schema';
 import { act } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { createIntentClient, emptyTables } from '../../../src/api/index.js';
+import {
+  createIntentClient,
+  emptyTables,
+  type AttachmentReader,
+} from '../../../src/api/index.js';
 import { DeckProvider } from '../../../src/deck/DeckProvider.js';
 import PLANNER_WIDGET, {
   PlannerWidget,
@@ -25,10 +29,18 @@ import {
   type DomElement,
   type Mounted,
 } from '../../primitives/dom.js';
+import {
+  PNG_DATA,
+  imageFile,
+  pasteFiles,
+  settleReads,
+} from '../../primitives/files.js';
 import type { PageElement } from '../../shell/page.js';
 import {
   DOCS,
   INTENT_1,
+  humanWithImages,
+  imageRef,
   PROJECTS,
   SHIP,
   SITE,
@@ -71,15 +83,24 @@ const fakeServer = () => {
 
 const mounted: Mounted[] = [];
 
+const SERVED_IMAGE = 'data:image/png;base64,c2VydmVk';
+
 const mountPlanner = () => {
   const server = fakeServer();
+  const attachments = vi.fn<AttachmentReader>(() =>
+    Promise.resolve(SERVED_IMAGE),
+  );
   const view = mount(
-    <DeckProvider stream={stream} intents={server.client}>
+    <DeckProvider
+      stream={stream}
+      intents={server.client}
+      attachments={attachments}
+    >
       <PlannerWidget />
     </DeckProvider>,
   );
   mounted.push(view);
-  return { ...view, ...server };
+  return { ...view, ...server, attachments };
 };
 
 const deliver = (...messages: StreamMessage[]): void => {
@@ -510,6 +531,66 @@ describe('Planner widget', () => {
     ]);
     deliver(...arrive(human(1, 'plan the docs', INTENT_1)));
     expect(log(container)).toEqual(['You: plan the docs']);
+  });
+
+  it('sends pasted images with planner.message and previews them while waiting', async () => {
+    const { container, sent, attachments } = mountPlanner();
+    deliver(snapshot());
+    const field = find(container, 'textarea');
+    await pasteFiles(field, [imageFile('screen.png', 'image/png')]);
+    await settleReads();
+    typeInto(field, 'why is this red?');
+    await press(field, 'Enter');
+    await settle();
+    expect(sent).toEqual([
+      {
+        intent: 'planner.message',
+        body: {
+          project: 'deck',
+          text: 'why is this red?',
+          attachments: [{ mimeType: 'image/png', data: PNG_DATA }],
+        },
+      },
+    ]);
+    await settleReads();
+    const [waiting] = findAll(container, '.qd-planner-message');
+    expect(
+      findAll(waiting ?? container, 'img').map((img) =>
+        img.getAttribute('src'),
+      ),
+    ).toEqual([`data:image/png;base64,${PNG_DATA}`]);
+    expect(attachments).not.toHaveBeenCalled();
+  });
+
+  it('shows a message image from the server after a reload, full size on click', async () => {
+    const { container, attachments } = mountPlanner();
+    deliver(
+      snapshot(),
+      ...arrive(humanWithImages(1, 'see this'), reply(2, 'I see it.')),
+    );
+    await settleReads();
+    expect(attachments).toHaveBeenCalledExactlyOnceWith('deck', imageRef());
+    expect(log(container)).toEqual(['You: see this', 'Planner: I see it.']);
+    const [mine] = findAll(container, '.qd-planner-message');
+    if (mine === undefined) throw new Error('no message');
+    const strip = find(mine, '[aria-label="Images in the message"]');
+    expect(find(strip, 'img').getAttribute('src')).toBe(SERVED_IMAGE);
+    expect(findAll(strip, '[aria-label^="Remove"]')).toHaveLength(0);
+
+    await click(find(strip, '[aria-label="View Image 1 full size"]'));
+    expect(find(container, '[role="dialog"] img').getAttribute('src')).toBe(
+      SERVED_IMAGE,
+    );
+  });
+
+  it('says so when a message image cannot be loaded', async () => {
+    const { container, attachments } = mountPlanner();
+    attachments.mockRejectedValueOnce(new Error('HTTP 404'));
+    deliver(snapshot(), ...arrive(humanWithImages(1, 'see this')));
+    await settleReads();
+    expect(find(container, '.qd-planner-message .qd-empty').textContent).toBe(
+      '1 image could not be loaded.',
+    );
   });
 
   it('starts a new conversation everywhere with planner.new', async () => {

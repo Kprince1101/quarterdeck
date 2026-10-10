@@ -33,7 +33,8 @@ export type FakeAgentFlag =
   | 'onGitlab'
   | 'leaksApiKey'
   | 'terminalAuth'
-  | 'authPrompt';
+  | 'authPrompt'
+  | 'acceptsImages';
 
 export interface FakeAgentOptions extends Partial<
   Record<FakeAgentFlag, boolean>

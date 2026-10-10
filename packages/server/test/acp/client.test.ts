@@ -23,6 +23,7 @@ import {
   FAKE_INITIAL_MODE_ID,
   FAKE_READY_LINE,
   fakeAgentLaunch,
+  fakeImageLine,
 } from './fake-agent/index.ts';
 import type { FakeAgentOptions } from './fake-agent/index.ts';
 import { expectAllExited, markedProcesses } from './process-check.ts';
@@ -376,6 +377,37 @@ describe('ACP client over stdio', () => {
     await expect(failure).rejects.toBeInstanceOf(AcpClientError);
     await expect(failure).rejects.toMatchObject({ code: 'spawn_failed' });
     expect(spawnedPids(events)).toEqual([]);
+  });
+
+  it('refuses an image block for an agent without image prompts, and sends it to one with them', async () => {
+    const image = {
+      type: 'image',
+      mimeType: 'image/png',
+      data: 'AAEC',
+    } as const;
+    const plain = await start();
+    const plainSession = await openSession(plain.client);
+    const refused = plain.client.prompt(plainSession, [
+      { type: 'text', text: 'look' },
+      image,
+    ]);
+    await expect(refused).rejects.toBeInstanceOf(AcpClientError);
+    await expect(refused).rejects.toMatchObject({
+      code: 'image_unsupported',
+      message: expect.stringContaining(
+        `${FAKE_AGENT_NAME} does not accept images in a prompt`,
+      ),
+    });
+    expect(eventTypes(plain.events)).not.toContain('turn_end');
+
+    const seeing = await start({ agent: { acceptsImages: true } });
+    const sessionId = await openSession(seeing.client);
+    await expect(
+      seeing.client.prompt(sessionId, [{ type: 'text', text: 'look' }, image]),
+    ).resolves.toEqual({ stopReason: 'end_turn' });
+    expect(agentText(seeing.events, sessionId)).toBe(
+      `look${fakeImageLine(image)}`,
+    );
   });
 
   it('rejects the turn and emits exit when the agent dies', async () => {

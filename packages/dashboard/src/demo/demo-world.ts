@@ -87,7 +87,11 @@ export interface DemoWorld {
     options: string[],
     recommendation: string | null,
   ) => CardRow;
-  settleCard: (card: CardRow, answer: string | null) => CardRow;
+  settleCard: (
+    card: CardRow,
+    answer: string | null,
+    attachments?: CardRow['attachments'],
+  ) => CardRow;
   expireCard: (card: CardRow, reason: string) => CardRow;
 }
 
@@ -185,11 +189,16 @@ export const createDemoWorld = (store: DemoStore): DemoWorld => {
     return next ?? card;
   };
 
-  const settleCard: DemoWorld['settleCard'] = (card, answer) => {
+  const settleCard: DemoWorld['settleCard'] = (
+    card,
+    answer,
+    attachments = [],
+  ) => {
     const status = (answer === null && 'declined') || 'answered';
     const next = store.patch('cards', card.id, {
       status,
       answer,
+      attachments,
       answeredAt: store.now(),
     });
     store.emit(`card.${status}`, {
@@ -399,6 +408,7 @@ export const createDemoWorld = (store: DemoStore): DemoWorld => {
         recommendation,
         status: 'open',
         answer: null,
+        attachments: [],
         createdAt: store.now(),
         answeredAt: null,
         expiresAt: null,

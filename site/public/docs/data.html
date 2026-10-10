@@ -46,6 +46,7 @@
     pg.lock                      which process has the project open
     turns/&lt;agent-id&gt;/&lt;seq&gt;/      one folder per agent turn
     worktrees/&lt;builder&gt;-&lt;ticket&gt;/  a builder's git worktree
+    attachments/&lt;id&gt;.&lt;ext&gt;       images attached in the dashboard chat
   plugins/&lt;name&gt;.mjs             ticket-source plugins you add yourself
   workspace.json                 your workspace: root folder, single or multi, projects
   pause.json                     only while everything is paused
@@ -132,6 +133,20 @@
               The git worktree a builder works a ticket in, registered with your
               repository. <code>&lt;ticket&gt;</code> is the first 8 characters
               of the ticket id. Retiring the builder removes it.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code
+                >~/.quarterdeck/&lt;project&gt;/attachments/&lt;id&gt;.&lt;ext&gt;</code
+              >
+            </td>
+            <td>
+              Images you attached to a Planner message or a card answer in the
+              dashboard: PNG, JPEG, GIF or WebP, up to 5 MB each. The
+              conversation and the card keep only each image's id, type, size
+              and path, so the transcript still shows it after a reload. Wiping
+              the project deletes them.
             </td>
           </tr>
           <tr>
@@ -228,18 +243,18 @@
         Set <code>DATABASE_URL</code> before <code>quarterdeck up</code> and
         every project is stored in that database instead, one set of tables with
         rows kept apart by project. Nothing is written to
-        <code>~/.quarterdeck/&lt;project&gt;/pg/</code>; turn files and
-        worktrees still are.
+        <code>~/.quarterdeck/&lt;project&gt;/pg/</code>; turn files, worktrees
+        and attachments still are.
       </p>
 
       <h2 id="delete">Deleting it</h2>
       <p>
         Stop Quarterdeck first. Then delete
         <code>~/.quarterdeck/&lt;project&gt;/</code> to remove one project (its
-        state, its turn files and its worktrees, unsaved work included), or
-        <code>~/.quarterdeck/</code> to remove everything. After deleting
-        worktrees, run <code>git worktree prune</code> in your repository to
-        drop their registrations.
+        state, its turn files, its attachments and its worktrees, unsaved work
+        included), or <code>~/.quarterdeck/</code> to remove everything. After
+        deleting worktrees, run <code>git worktree prune</code> in your
+        repository to drop their registrations.
       </p>
       <pre><code>rm -rf ~/.quarterdeck/my-app
 git -C path/to/your/repo worktree prune</code></pre>

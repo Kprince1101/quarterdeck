@@ -41,6 +41,12 @@ export const FAKE_SCENARIOS: readonly FakeScenario[] = [
 
 export const SIGNED_IN_AGAIN_TEXT = 'signed in again';
 
+export const fakeImageLine = (image: {
+  mimeType: string;
+  data: string;
+}): string =>
+  `\n[image block: ${image.mimeType}, ${Buffer.from(image.data, 'base64').length} bytes]`;
+
 export const FAKE_DEFAULT_MODE_ID = 'default';
 export const FAKE_INITIAL_MODE_ID = 'accept_edits';
 export const FAKE_MODES: SessionMode[] = [

@@ -52,6 +52,7 @@ export {
 export {
   assertProjectSlug,
   dataDirLockPath,
+  projectAttachmentsDir,
   projectDataDir,
   projectDir,
   projectTurnsDir,

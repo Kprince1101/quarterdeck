@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { attachmentRefsSchema } from '../intents/attachments.js';
 
 export const STREAM_PATH = '/ws';
 
@@ -122,6 +123,7 @@ export const cardRowSchema = z.object({
   signIn: signInStateSchema.nullable().optional(),
   status: z.enum(['open', 'answered', 'declined', 'expired']),
   answer: z.string().nullable(),
+  attachments: attachmentRefsSchema,
   createdAt: timestampSchema,
   answeredAt: timestampSchema.nullable(),
   expiresAt: timestampSchema.nullable(),

@@ -1,5 +1,11 @@
 import { z } from 'zod';
 import {
+  EMPTY_MESSAGE_REFUSAL,
+  attachmentUploadsSchema,
+  hasTextOrAttachments,
+  messageTextSchema,
+} from './attachments.js';
+import {
   changesSomething,
   hasUniqueValues,
   idSchema,
@@ -19,7 +25,14 @@ const dependsOnSchema = z
 const TICKET_FIELDS = ['title', 'body', 'dependsOn'] as const;
 
 export const BOARD_INTENTS = {
-  'card.answer': inProject({ cardId: idSchema, answer: textSchema }),
+  'card.answer': inProject({
+    cardId: idSchema,
+    answer: messageTextSchema,
+    attachments: attachmentUploadsSchema,
+  }).refine(
+    (input) => hasTextOrAttachments(input.answer, input.attachments),
+    EMPTY_MESSAGE_REFUSAL,
+  ),
   'card.decline': inProject({ cardId: idSchema }),
   'notebook.add': inProject({
     body: textSchema,

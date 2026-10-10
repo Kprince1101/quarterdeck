@@ -2,6 +2,7 @@ import { request } from 'node:http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   API_HOST,
+  MAX_ATTACHMENT_BODY_BYTES,
   MAX_BODY_BYTES,
   type ApiServer,
 } from '../../src/api/index.js';
@@ -13,6 +14,7 @@ const rawPost = (
   { port, token }: ApiServer,
   headers: Record<string, string>,
   body = '{}',
+  intent = 'planner.message',
 ): Promise<number | undefined> =>
   new Promise((resolve, reject) => {
     const req = request(
@@ -20,7 +22,7 @@ const rawPost = (
         host: API_HOST,
         port,
         method: 'POST',
-        path: '/api/intents/planner.message',
+        path: `/api/intents/${intent}`,
         headers: {
           'content-type': 'application/json',
           ...bearer(token),
@@ -112,11 +114,55 @@ describe('intent API guard', { timeout: TIMEOUT }, () => {
   });
 
   it('refuses bodies over the size limit', async () => {
-    const declared = await rawPost(t.api, {
-      host: `127.0.0.1:${t.api.port}`,
-      'content-length': String(MAX_BODY_BYTES + 1),
-    });
+    const declared = await rawPost(
+      t.api,
+      {
+        host: `127.0.0.1:${t.api.port}`,
+        'content-length': String(MAX_BODY_BYTES + 1),
+      },
+      '{}',
+      'pause.set',
+    );
     expect(declared).toBe(413);
+  });
+
+  it('lets the intents that carry images send up to five 5 MB images', async () => {
+    expect(MAX_ATTACHMENT_BODY_BYTES).toBeGreaterThan(
+      5 * Math.ceil((5 * 1024 * 1024) / 3) * 4,
+    );
+    for (const intent of ['planner.message', 'card.answer']) {
+      const declared = await rawPost(
+        t.api,
+        {
+          host: `127.0.0.1:${t.api.port}`,
+          'content-length': String(MAX_ATTACHMENT_BODY_BYTES + 1),
+        },
+        '{}',
+        intent,
+      );
+      expect(declared).toBe(413);
+    }
+    const big = await t.send('planner.message', {
+      project: 'ghost',
+      text: 'x'.repeat(MAX_BODY_BYTES),
+    });
+    expect(big.status).toBe(400);
+  });
+
+  it('serves attachments only by a well-formed name', async () => {
+    const read = (path: string) =>
+      fetch(`${t.api.url}/api/attachments/${path}`, {
+        headers: bearer(t.api.token),
+      });
+    expect((await read('deck/../../api.token')).status).toBe(404);
+    expect((await read('deck/not-an-id.png')).status).toBe(404);
+    expect((await read(`deck/${crypto.randomUUID()}.svg`)).status).toBe(404);
+    expect((await read(`deck/${crypto.randomUUID()}.png`)).status).toBe(404);
+    const posted = await fetch(
+      `${t.api.url}/api/attachments/deck/${crypto.randomUUID()}.png`,
+      { method: 'POST', headers: bearer(t.api.token) },
+    );
+    expect(posted.status).toBe(405);
   });
 
   it('returns zod issues for an invalid intent', async () => {

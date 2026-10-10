@@ -2,7 +2,10 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { awaitCard } from '../../src/bus/index.js';
+import type { AttachmentRef } from '../../src/intents/index.js';
 import type { Store } from '../../src/store/index.js';
+import { PNG_BYTES, PNG_DATA, png } from '../attachments/fixtures.ts';
 import { TIMEOUT, intentRow, startTestApi, type TestApi } from './harness.js';
 
 const project = 'board';
@@ -108,6 +111,84 @@ describe('board intents', { timeout: TIMEOUT }, () => {
         status: 'declined',
         answer: null,
       });
+    });
+
+    it('takes images with a free-text answer and hands the agent their paths', async () => {
+      const cardId = await insertCard([]);
+      const res = await t.send('card.answer', {
+        project,
+        cardId,
+        attachments: [png()],
+      });
+      expect(res.status).toBe(200);
+      const { rows } = await store.db.query<{
+        answer: string;
+        attachments: AttachmentRef[];
+        input: string;
+      }>(
+        `select c.answer, c.attachments, i.input::text as input
+         from cards c, intents i where c.id = $1 and i.id = $2`,
+        [cardId, res.body.id],
+      );
+      const [row] = rows;
+      const [ref] = row?.attachments ?? [];
+      expect(row?.answer).toBe('');
+      expect(ref).toEqual({
+        id: expect.any(String),
+        mimeType: 'image/png',
+        bytes: PNG_BYTES,
+        path: join(
+          t.api.stores.dataHome,
+          project,
+          'attachments',
+          `${ref?.id}.png`,
+        ),
+      });
+      expect(row?.input).not.toContain(PNG_DATA.slice(0, 40));
+      expect(await readFile(ref?.path ?? '')).toEqual(
+        Buffer.from(PNG_DATA, 'base64'),
+      );
+      const outcome = await awaitCard(store, cardId ?? '', {
+        expiryMs: TIMEOUT,
+        signal: new AbortController().signal,
+      });
+      expect(outcome).toEqual({
+        cardId,
+        status: 'answered',
+        answer: '',
+        attachments: [
+          { path: ref?.path, mimeType: 'image/png', bytes: PNG_BYTES },
+        ],
+      });
+    });
+
+    it('refuses an answer with neither text nor an image, and a sixth image', async () => {
+      const cardId = await insertCard([]);
+      const empty = await t.send('card.answer', { project, cardId });
+      expect(empty.status).toBe(400);
+      const many = await t.send('card.answer', {
+        project,
+        cardId,
+        attachments: Array.from({ length: 6 }, png),
+      });
+      expect(many.status).toBe(400);
+      expect(await cardState(cardId)).toEqual({ status: 'open', answer: null });
+    });
+
+    it('drops the saved image when the card was already settled', async () => {
+      const cardId = await insertCard([]);
+      await t.send('card.decline', { project, cardId });
+      const late = await t.send('card.answer', {
+        project,
+        cardId,
+        attachments: [png()],
+      });
+      expect(late.status).toBe(409);
+      const { rows } = await store.db.query<{ attachments: unknown[] }>(
+        'select attachments from cards where id = $1',
+        [cardId],
+      );
+      expect(rows[0]?.attachments).toEqual([]);
     });
 
     it('answers 404 for a card in no project of ours', async () => {

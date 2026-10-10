@@ -20,6 +20,7 @@ describe('dataPaths', () => {
       join(DATA, 'deck', 'pg.lock'),
       join(DATA, 'deck', 'turns'),
       join(DATA, 'deck', 'worktrees'),
+      join(DATA, 'deck', 'attachments'),
     ]);
     const repo = paths.filter((path) => path.scope === 'repo');
     const machine = paths.filter((path) => path.scope === 'machine');
@@ -63,6 +64,11 @@ describe('dataPaths', () => {
       {
         label: 'Worktrees',
         path: join(DATA, 'deck', 'worktrees'),
+        kind: 'directory',
+      },
+      {
+        label: 'Attachments',
+        path: join(DATA, 'deck', 'attachments'),
         kind: 'directory',
       },
     ]);

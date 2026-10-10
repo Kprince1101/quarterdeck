@@ -21,6 +21,7 @@ export const FAKE_AGENT_FLAGS: Record<FakeAgentFlag, string> = {
   leaksApiKey: '--leaks-api-key',
   terminalAuth: '--terminal-auth',
   authPrompt: '--auth-prompt',
+  acceptsImages: '--accepts-images',
 };
 
 const FLAG_ENTRIES = Object.entries(FAKE_AGENT_FLAGS) as [

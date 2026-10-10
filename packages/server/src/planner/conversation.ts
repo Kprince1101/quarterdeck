@@ -5,7 +5,9 @@ import {
   loadRule,
   type ForgeTerms,
 } from '@quarterdeck/rules';
+import { acceptsImages, type PromptInput } from '../acp/client/index.js';
 import type { CardHuman } from '../acp/permissions/index.js';
+import { planPrompt } from '../attachments/index.js';
 import {
   createAgentLifecycle,
   gitWorktrees,
@@ -169,7 +171,12 @@ const humanOpening =
     return publishEvent(tx, ctx.store.projectId, {
       kind: PLANNER_HUMAN_EVENT,
       agentId: agent.id,
-      payload: { intentId: intent.id, seq, text: intent.text },
+      payload: {
+        intentId: intent.id,
+        seq,
+        text: intent.text,
+        attachments: intent.attachments,
+      },
     });
   };
 
@@ -202,11 +209,17 @@ const finishTurn = (
     });
   });
 
+interface PromptTurn {
+  turnId: number;
+  prompt: PromptInput;
+  ending: AbortSignal;
+}
+
 const sendPrompt = async (
   ctx: PlannerContext,
   conversation: Conversation,
   intent: PlannerIntent,
-  turn: { turnId: number; prompt: string; ending: AbortSignal },
+  turn: PromptTurn,
 ): Promise<StopReason> => {
   const { turnId, prompt, ending } = turn;
   const session = openSession(conversation);
@@ -264,16 +277,21 @@ export const runTurn = async (
   intent: PlannerIntent,
   prompt: string,
 ): Promise<void> => {
-  openSession(conversation);
+  const session = openSession(conversation);
   const ending = ctx.signInSignal();
+  const plan = await planPrompt(
+    prompt,
+    intent.attachments,
+    acceptsImages(session.client.agent),
+  );
   const { turnId, since } = await beginTurn(
     ctx,
     conversation,
-    prompt,
+    plan.record,
     humanOpening(ctx, conversation, intent),
   );
   conversation.turns += 1;
-  let turn = { turnId, prompt, ending };
+  let turn: PromptTurn = { turnId, prompt: plan.input, ending };
   for (let reprompts = 0; ; reprompts += 1) {
     const stopReason = await sendPrompt(ctx, conversation, intent, turn);
     if (STOPPING.has(stopReason) || ending.aborted) return;

@@ -2,6 +2,10 @@ import {
   PROPOSAL_REFUSED_EVENT,
   PROPOSED_EVENT,
 } from '../bus/tools/propose.js';
+import {
+  attachmentRefsOf,
+  type AttachmentRef,
+} from '../intents/attachments.js';
 import { redactSecrets } from '../lib/redact.js';
 import type { Queryable } from '../store/index.js';
 import type { ProposalDecision } from './brief.js';
@@ -20,6 +24,14 @@ export interface PlannerIntent {
   id: string;
   kind: string;
   text: string | null;
+  attachments: AttachmentRef[];
+}
+
+interface PlannerIntentRow {
+  id: string;
+  kind: string;
+  text: string | null;
+  attachments: unknown;
 }
 
 export interface ProjectSite {
@@ -46,13 +58,17 @@ export const pendingPlannerIntents = async (
   db: Queryable,
   projectId: string,
 ): Promise<PlannerIntent[]> => {
-  const { rows } = await db.query<PlannerIntent>(
-    `select id, kind, input ->> 'text' as text from intents
+  const { rows } = await db.query<PlannerIntentRow>(
+    `select id, kind, input ->> 'text' as text, input -> 'attachments' as attachments
+     from intents
      where project_id = $1 and status = 'pending' and kind = any($2::text[])
      order by created_at, id`,
     [projectId, PLANNER_INTENT_KINDS],
   );
-  return rows;
+  return rows.map((row) => ({
+    ...row,
+    attachments: attachmentRefsOf(row.attachments),
+  }));
 };
 
 export const settleIntents = async (

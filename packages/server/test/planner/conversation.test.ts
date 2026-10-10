@@ -121,7 +121,12 @@ describe('a Planner turn and a cancel', { timeout: TIMEOUT }, () => {
     runTurn(
       context(),
       conversation(),
-      { id: crypto.randomUUID(), kind: 'planner.message', text: 'greet' },
+      {
+        id: crypto.randomUUID(),
+        kind: 'planner.message',
+        text: 'greet',
+        attachments: [],
+      },
       'greet',
     );
 

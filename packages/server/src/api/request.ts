@@ -1,8 +1,16 @@
 import type { IncomingMessage } from 'node:http';
+import {
+  ATTACHMENT_INTENTS,
+  MAX_ATTACHMENTS,
+  MAX_ATTACHMENT_BYTES,
+} from '../intents/attachments.js';
 import { HttpError, badRequest } from './http-error.js';
 import { bearerToken, verifyApiToken } from './token.js';
 
 export const MAX_BODY_BYTES = 1024 * 1024;
+
+export const MAX_ATTACHMENT_BODY_BYTES =
+  MAX_BODY_BYTES + MAX_ATTACHMENTS * Math.ceil(MAX_ATTACHMENT_BYTES / 3) * 4;
 
 const JSON_TYPE = 'application/json';
 
@@ -43,6 +51,11 @@ export const isAuthorized = (
   guard: RequestGuard,
 ): boolean => verifyApiToken(guard.token, bearerToken(req.headers));
 
+export const maxBodyBytes = (intent: string): number => {
+  if (ATTACHMENT_INTENTS.includes(intent)) return MAX_ATTACHMENT_BODY_BYTES;
+  return MAX_BODY_BYTES;
+};
+
 const assertJsonType = (req: IncomingMessage) => {
   const [mediaType = ''] = (req.headers['content-type'] ?? '').split(';');
   if (mediaType.trim().toLowerCase() !== JSON_TYPE) {
@@ -50,29 +63,35 @@ const assertJsonType = (req: IncomingMessage) => {
   }
 };
 
-const tooLarge = () =>
-  new HttpError(413, `Body is larger than ${MAX_BODY_BYTES} bytes`, {
+const tooLarge = (limit: number) =>
+  new HttpError(413, `Body is larger than ${limit} bytes`, {
     headers: { connection: 'close' },
   });
 
-const readBody = async (req: IncomingMessage): Promise<string> => {
-  if (Number(req.headers['content-length'] ?? 0) > MAX_BODY_BYTES) {
-    throw tooLarge();
+const readBody = async (
+  req: IncomingMessage,
+  limit: number,
+): Promise<string> => {
+  if (Number(req.headers['content-length'] ?? 0) > limit) {
+    throw tooLarge(limit);
   }
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     const buffer = Buffer.from(chunk as Uint8Array);
     size += buffer.length;
-    if (size > MAX_BODY_BYTES) throw tooLarge();
+    if (size > limit) throw tooLarge(limit);
     chunks.push(buffer);
   }
   return Buffer.concat(chunks).toString('utf8');
 };
 
-export const readJsonBody = async (req: IncomingMessage): Promise<unknown> => {
+export const readJsonBody = async (
+  req: IncomingMessage,
+  limit: number = MAX_BODY_BYTES,
+): Promise<unknown> => {
   assertJsonType(req);
-  const text = await readBody(req);
+  const text = await readBody(req, limit);
   try {
     return JSON.parse(text) as unknown;
   } catch {

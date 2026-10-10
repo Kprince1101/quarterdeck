@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import {
+  createAttachmentReader,
   createIntentClient,
   createRulesReader,
   takePageToken,
@@ -22,6 +23,7 @@ export const liveSources = (
 ): DeckSources => ({
   intents: createIntentClient({ baseUrl, token }),
   rules: createRulesReader({ baseUrl, token }),
+  attachments: createAttachmentReader({ baseUrl, token }),
   stream: { ...stream, token },
 });
 
