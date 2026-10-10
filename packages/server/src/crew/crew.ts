@@ -24,7 +24,7 @@ import {
 } from './failures.js';
 import { crewLifecycle } from './lifecycle.js';
 import { cardPermissions } from './permission-card.js';
-import { crewRules, type CrewRules } from './rules.js';
+import { crewRules, type CrewRules, type ModeSource } from './rules.js';
 import { createCrewSessions, type CrewSessionHost } from './sessions.js';
 import type { CrewProject } from './voyage-legs.js';
 
@@ -41,6 +41,7 @@ export interface CrewOptions {
   adapters?: PlannerAdapters | undefined;
   forge?: ForgeHost | undefined;
   gatePollMs?: number | undefined;
+  mode?: ModeSource | undefined;
   onError?: ((err: unknown) => void) | undefined;
 }
 
@@ -126,6 +127,7 @@ const startServices = async (parts: CrewParts) => {
       openStores: options.openStores,
       adapters: options.adapters ?? PLANNER_ADAPTERS,
       homeDir: options.homeDir,
+      mode: rules.mode,
       permissionCards: (agent, signal) =>
         cardPermissions({ store, agent, signal }),
       onError: report('planner'),
@@ -158,7 +160,12 @@ const startServices = async (parts: CrewParts) => {
 export const startCrew = async (options: CrewOptions): Promise<Crew> => {
   const { store } = options;
   const report = crewFailureReporter(store, options.onError ?? reportError);
-  const rules = crewRules(store, options.homeDir, injectedForge(options.forge));
+  const rules = crewRules(
+    store,
+    options.homeDir,
+    injectedForge(options.forge),
+    options.mode,
+  );
   const pause = await startPauseGate({
     store,
     home: options.home,

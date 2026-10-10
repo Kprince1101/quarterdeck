@@ -6,6 +6,7 @@ import type {
   StreamEvent,
   StreamMessage,
   StreamTable,
+  Workspace,
 } from '@quarterdeck/server/stream-schema';
 import { emptyTables } from '../api/stream-state.js';
 
@@ -48,6 +49,7 @@ export interface DemoStore {
   setMachine: (machine: MachineState) => void;
   layout: () => SavedLayout | null;
   setLayout: (spec: SavedLayout['spec']) => SavedLayout;
+  workspace: () => Workspace | null;
   reset: () => void;
   connect: (after: number | null, listener: DemoListener) => () => void;
 }
@@ -55,6 +57,7 @@ export interface DemoStore {
 export interface DemoStoreOptions {
   projectId: string;
   now?: () => number;
+  workspace?: Workspace | null;
 }
 
 const ID_PREFIX = '00000000-0000-4000-8000-';
@@ -66,6 +69,7 @@ export const demoId = (n: number): string =>
 export const createDemoStore = ({
   projectId,
   now = Date.now,
+  workspace = null,
 }: DemoStoreOptions): DemoStore => {
   const tables: SnapshotTables = emptyTables();
   const log: StreamEvent[] = [];
@@ -156,6 +160,7 @@ export const createDemoStore = ({
       broadcast({ type: 'machine', machine });
     },
     layout: () => layout,
+    workspace: () => workspace,
     setLayout: (spec) => {
       const saved = { spec, updatedAt: store.now() };
       layout = saved;
@@ -172,6 +177,7 @@ export const createDemoStore = ({
         tables: emptyTables(),
         machine,
         layout,
+        workspace,
       });
     },
     connect: (after, listener) => {
@@ -183,6 +189,7 @@ export const createDemoStore = ({
         tables: structuredClone(tables),
         machine,
         layout,
+        workspace,
       };
       listener(snapshot);
       log

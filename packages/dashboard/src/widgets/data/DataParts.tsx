@@ -8,10 +8,10 @@ interface TableListProps {
 
 export const TableList = ({ tables }: TableListProps): JSX.Element => (
   <ul className="qd-data-tables" aria-label="Tables">
-    {tables.map(({ table, rows, isSelected, onSelect }) => (
+    {tables.map(({ table, label, rows, isSelected, onSelect }) => (
       <li key={table}>
         <button type="button" aria-pressed={isSelected} onClick={onSelect}>
-          <span>{table}</span>
+          <span>{label}</span>
           <span className="qd-data-count">{rows}</span>
         </button>
       </li>

@@ -23,6 +23,9 @@ import {
   type Store,
   type StoreEvent,
 } from '../store/index.js';
+import type { WorkspaceMode } from '../stream/schema.js';
+import { DEFAULT_WORKSPACE_MODE } from '../workspace/feed.js';
+import { workspaceWording } from '../workspace/wording.js';
 import { refusalsText, repromptText } from './brief.js';
 import { collectReply } from './reply.js';
 import {
@@ -59,6 +62,7 @@ export interface PlannerContext {
   homeDir: string;
   openStores: () => readonly Store[];
   signInSignal: () => AbortSignal;
+  mode?: (() => Promise<WorkspaceMode>) | undefined;
 }
 
 export interface Conversation {
@@ -66,6 +70,7 @@ export interface Conversation {
   slug: string;
   charter: string;
   terms: ForgeTerms;
+  mode: WorkspaceMode;
   host: PlannerSessionHost;
   lifecycle: AgentLifecycle;
   turns: number;
@@ -83,7 +88,7 @@ export const startConversation = async (
   site: ConversationSite,
 ): Promise<Conversation> => {
   const rules = { homeDir: ctx.homeDir, repoDir: site.repoPath };
-  const [naming, models, charter, lifecycleRule, env, forge] =
+  const [naming, models, charter, lifecycleRule, env, forge, mode] =
     await Promise.all([
       loadRule('naming', rules),
       loadRule('models', rules),
@@ -91,6 +96,7 @@ export const startConversation = async (
       loadRule('lifecycle', rules),
       loadRule('env', rules),
       repoForge(site.repoPath, { homeDir: ctx.homeDir }),
+      ctx.mode?.() ?? DEFAULT_WORKSPACE_MODE,
     ]);
   const terms = forgeTerms(forge);
   const host = createPlannerSessionHost({
@@ -118,8 +124,9 @@ export const startConversation = async (
   return {
     agent,
     slug: site.slug,
-    charter: forgeWording(charter, terms),
+    charter: forgeWording(workspaceWording(charter, mode), terms),
     terms,
+    mode,
     host,
     lifecycle,
     turns: 0,
@@ -276,7 +283,7 @@ export const runTurn = async (
       await recordMiss(ctx, conversation, ctx.store.db, miss);
       return;
     }
-    const text = repromptText(error, conversation.terms);
+    const text = repromptText(error, conversation.terms, conversation.mode);
     const next = await beginTurn(ctx, conversation, text, (tx) =>
       recordMiss(ctx, conversation, tx, miss),
     );

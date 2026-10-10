@@ -6,12 +6,14 @@ import type { GlobalLayouts } from '../global-layout/index.js';
 import type { PlannerAdapters } from '../planner/sessions.js';
 import type { Store } from '../store/index.js';
 import { createStream, type Stream } from '../stream/socket.js';
+import type { Workspaces } from '../workspace/index.js';
 
 export interface ProjectServicesContext {
   home: string;
   homeDir: string;
   token: string;
   layouts: GlobalLayouts;
+  workspaces: Workspaces;
   allowedOrigins?: readonly string[] | undefined;
   onError?: ((err: unknown) => void) | undefined;
   openStores: () => readonly Store[];
@@ -67,6 +69,7 @@ const startProjectCrew = async (
       adapters: context.adapters,
       forge: context.forge,
       gatePollMs: context.gatePollMs,
+      mode: context.workspaces.mode,
       onError,
     });
   } catch (err) {
@@ -92,6 +95,7 @@ export const startProjectServices = async (
         context.forge?.forge ??
         projectForge(store, { homeDir: context.homeDir }),
       openStores: context.openStores,
+      mode: context.workspaces.mode,
     });
     closers.push(() => bus.close());
     const stream = createStream({
@@ -99,6 +103,7 @@ export const startProjectServices = async (
       token: context.token,
       home: context.home,
       layouts: context.layouts,
+      workspaces: context.workspaces,
       allowedOrigins: context.allowedOrigins,
       onError: context.onError,
     });

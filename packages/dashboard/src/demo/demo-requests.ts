@@ -121,27 +121,32 @@ export const createDemoRequests = (
     fromStatic('https://github.com/demo/harbor/pull/', HARBOR_EXTRA),
   ];
 
-  return (): ProjectRequests[] => [
-    {
-      project: DEMO_PROJECT,
-      name: 'Harbor',
-      forge: DEMO_FORGE,
-      requests: harbor(),
-      error: null,
-      fetchedAt: store.now(),
-    },
-    {
-      project: DEMO_GITLAB_PROJECT,
-      name: 'Lighthouse',
-      forge: 'gitlab',
-      requests: LIGHTHOUSE.map((request) =>
-        fromStatic(
-          'https://gitlab.com/demo/lighthouse/-/merge_requests/',
-          request,
+  const harborRequests = (): ProjectRequests => ({
+    project: DEMO_PROJECT,
+    name: 'Harbor',
+    forge: DEMO_FORGE,
+    requests: harbor(),
+    error: null,
+    fetchedAt: store.now(),
+  });
+
+  return (): ProjectRequests[] => {
+    if (store.workspace()?.mode === 'single') return [harborRequests()];
+    return [
+      harborRequests(),
+      {
+        project: DEMO_GITLAB_PROJECT,
+        name: 'Lighthouse',
+        forge: 'gitlab',
+        requests: LIGHTHOUSE.map((request) =>
+          fromStatic(
+            'https://gitlab.com/demo/lighthouse/-/merge_requests/',
+            request,
+          ),
         ),
-      ),
-      error: null,
-      fetchedAt: store.now(),
-    },
-  ];
+        error: null,
+        fetchedAt: store.now(),
+      },
+    ];
+  };
 };

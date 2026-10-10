@@ -7,6 +7,8 @@ import type { McpServerStdio } from '@agentclientprotocol/sdk';
 import { DEFAULT_FORGE, forgeTerms, type Forge } from '@quarterdeck/rules';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { AgentNotFoundError } from '../agents/agent.js';
+import type { WorkspaceMode } from '../stream/schema.js';
+import { DEFAULT_WORKSPACE_MODE } from '../workspace/feed.js';
 import { ASK_EXPIRY_MS, assertAskExpiry } from './cards.js';
 import { loadBusTools } from './registry.js';
 import { BUS_SERVER_NAME, createBusServer } from './server.js';
@@ -35,6 +37,7 @@ export interface BusHostOptions {
   askExpiryMs?: number;
   forge?: () => Promise<Forge>;
   openStores?: () => readonly BusStore[];
+  mode?: () => Promise<WorkspaceMode>;
 }
 
 export interface BusHost {
@@ -113,9 +116,10 @@ export const startBusHost = async (
     sockets.set(socket, agentId);
     if (rest.length > 0) socket.unshift(rest);
     const forge = (await options.forge?.()) ?? DEFAULT_FORGE;
+    const mode = (await options.mode?.()) ?? DEFAULT_WORKSPACE_MODE;
     const server = createBusServer(
-      { store, agentId, askExpiryMs, openStores: options.openStores },
-      wordedTools(tools, forgeTerms(forge)),
+      { store, agentId, askExpiryMs, openStores: options.openStores, mode },
+      wordedTools(tools, forgeTerms(forge), mode),
     );
     socket.once('close', () => void server.close());
     socket.write('ok\n');

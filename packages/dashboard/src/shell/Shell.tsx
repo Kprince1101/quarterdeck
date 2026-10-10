@@ -2,6 +2,7 @@ import type { ReactNode, JSX } from 'react';
 import type { StreamState, StreamStatus } from '../api/index.js';
 import { useDeck } from '../deck/DeckProvider.js';
 import { ClaudeAuthBadge } from './ClaudeAuthBadge.js';
+import { useWorkspaceNotice } from './use-workspace-notice.js';
 
 export const STATUS_LABELS: Record<StreamStatus, string> = {
   connecting: 'Connecting',
@@ -30,6 +31,19 @@ export interface ShellProps {
   children?: ReactNode;
 }
 
+const WorkspaceNotice = ({ notice }: { notice: string | null }) => {
+  const view = useWorkspaceNotice(notice);
+  if (view.notice === null) return null;
+  return (
+    <span className="qd-workspace-notice" aria-live="polite">
+      {view.notice}
+      <button type="button" onClick={view.handleDismiss}>
+        Dismiss
+      </button>
+    </span>
+  );
+};
+
 export const Shell = ({ mode, children }: ShellProps): JSX.Element => {
   const { stream } = useDeck();
   const hasMode = mode !== undefined;
@@ -38,6 +52,7 @@ export const Shell = ({ mode, children }: ShellProps): JSX.Element => {
       <header className="qd-header">
         <h1 className="qd-brand">Quarterdeck</h1>
         {hasMode && <span className="qd-mode">{mode}</span>}
+        <WorkspaceNotice notice={stream.workspaceNotice} />
         <div className="qd-header-end">
           <ClaudeAuthBadge />
           <StreamStatusBadge stream={stream} />

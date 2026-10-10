@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import type { Store } from '../store/index.js';
+import type { WorkspaceMode } from '../stream/schema.js';
 
 export type BusStore = Pick<Store, 'db' | 'projectId' | 'publish'>;
 
@@ -8,6 +9,7 @@ export interface BusContext {
   agentId: string;
   askExpiryMs?: number | undefined;
   openStores?: (() => readonly BusStore[]) | undefined;
+  mode?: WorkspaceMode | undefined;
 }
 
 export interface BusCall extends BusContext {

@@ -10,6 +10,7 @@ import {
 import type { StopHosts } from '../lifecycle/stop.js';
 import { quarterdeckHome } from '../store/index.js';
 import type { UpgradeHandler } from '../stream/socket.js';
+import { createWorkspaces, type Workspaces } from '../workspace/index.js';
 import type { ApiContext, ApiVoyages } from './context.js';
 import {
   createOpenRequests,
@@ -40,6 +41,7 @@ export interface ApiServerOptions {
   projectHooks?: ProjectHooks;
   voyages?: ApiVoyages;
   layouts?: GlobalLayouts;
+  workspaces?: Workspaces;
   upgrade?: UpgradeHandler;
   openRequests?: Pick<OpenRequestsOptions, 'hosts' | 'refreshMs'>;
 }
@@ -49,6 +51,7 @@ export interface ApiServer {
   port: number;
   stores: ProjectStores;
   layouts: GlobalLayouts;
+  workspaces: Workspaces;
   token: string;
   tokenPath: string;
   close: () => Promise<void>;
@@ -66,6 +69,37 @@ const seedLayout = async (
   try {
     const opened = await stores.opened();
     await layouts.seed(opened.map(({ db }) => db));
+  } catch (err) {
+    onError(err);
+  }
+};
+
+interface ProjectSeedRow {
+  slug: string;
+  name: string;
+  repoPath: string | null;
+}
+
+const seedWorkspace = async (
+  workspaces: Workspaces,
+  stores: ProjectStores,
+  onError: (err: unknown) => void = reportError,
+): Promise<void> => {
+  try {
+    const opened = await stores.opened();
+    const rows = await Promise.all(
+      opened.map(async ({ db, projectId }) => {
+        const { rows } = await db.query<ProjectSeedRow>(
+          `select slug, name, repo_path as "repoPath" from projects
+           where id = $1 and archived_at is null`,
+          [projectId],
+        );
+        return rows;
+      }),
+    );
+    await workspaces.seed(
+      rows.flat().toSorted((a, b) => a.slug.localeCompare(b.slug)),
+    );
   } catch (err) {
     onError(err);
   }
@@ -89,10 +123,12 @@ export const startApiServer = async (
     homeDir,
   });
   const layouts = options.layouts ?? createGlobalLayouts(home);
+  const workspaces = options.workspaces ?? createWorkspaces(home);
   const ctx: ApiContext = {
     stores,
     homeDir,
     layouts,
+    workspaces,
     openRequests,
     voyages: options.voyages,
   };
@@ -138,12 +174,14 @@ export const startApiServer = async (
       throw err;
     }
     await seedLayout(layouts, stores, options.onError);
+    await seedWorkspace(workspaces, stores, options.onError);
   }
   return {
     url: `http://${API_HOST}:${port}`,
     port,
     stores,
     layouts,
+    workspaces,
     token,
     tokenPath,
     close,

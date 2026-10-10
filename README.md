@@ -28,16 +28,23 @@ Open the dashboard at the URL `up` prints. After a `git pull`, run `npm install`
 One agent CLI signed in. Then, from the clone:
 
 ```sh
-npm run quarterdeck -- doctor                     # checks kiro-cli, claude, gemini, gh (and glab for GitLab), and says exactly what to run for each miss
-npm run quarterdeck -- init /path/to/your/repo   # creates ~/.quarterdeck and a project, asks which runtime
-npm run quarterdeck -- up                         # starts the server and prints the dashboard URL
+npm run quarterdeck -- doctor                  # checks kiro-cli, claude, gemini, gh (and glab for GitLab), and says exactly what to run for each miss
+npm run quarterdeck -- init /path/to/folder   # picks your workspace: one repository, or a folder of them; asks which runtime
+npm run quarterdeck -- up                      # starts the server and prints the dashboard URL
 ```
 
 Open the URL exactly as `up` prints it: the `#token=` part is a new token for each start, and the API refuses any request without it, including one from another program on your machine.
 
 `npm run quarterdeck` runs the CLI in the folder you ran it from, so `npm --prefix /path/to/quarterdeck run quarterdeck -- doctor` from your own repository checks that repository's settings too.
 
-Run `init` once for each repository you want worked; one `up` serves every project, and one voyage spans them all (see [How Quarterdeck fits a multi-repo effort](#how-quarterdeck-fits-a-multi-repo-effort)). `init` writes nothing into your repository unless you agree to a `.quarterdeck/` folder for that project's settings. `npm run quarterdeck -- wipe <project>` removes a project and everything it stored; `npm run quarterdeck -- replay <voyage> [n]` re-runs a voyage's Driver turns in a fresh session that writes nothing, which is how you ask "why did it decide that?". See `packages/cli/README.md` for every command and flag.
+### Pick a workspace
+
+You point Quarterdeck at one folder, once. What it finds there decides how it works for you:
+
+- **A git repository** (`init ~/code/my-app`): Quarterdeck is a single-repository tool. The dashboard, the Planner and the Driver talk about that repository and nothing else; there is no project picker, no project column and no cross-project dependency or publishing.
+- **A folder of git repositories** (`init ~/Developer/Repos`): every repository one level down is listed for you to confirm or untick, and each one becomes a project. One `up` serves them all and one voyage can touch several (see [How Quarterdeck fits a multi-repo effort](#how-quarterdeck-fits-a-multi-repo-effort)).
+
+The workspace (its root, its mode and its projects) is kept in `~/.quarterdeck/workspace.json` and shown in the Data widget. Adding a second repository to a single-repository workspace, with another `init` or from the dashboard, switches it to the multi-project way of working and says so in one line. `init <path>` stays the scripted form: without a terminal it takes every repository it finds, less any `--skip <slug>`. `init` writes nothing into your repositories unless you agree to a `.quarterdeck/` folder for one's settings. `npm run quarterdeck -- wipe <project>` removes a project and everything it stored; `npm run quarterdeck -- replay <voyage> [n]` re-runs a voyage's Driver turns in a fresh session that writes nothing, which is how you ask "why did it decide that?". See `packages/cli/README.md` for every command and flag.
 
 ## How a voyage works
 
@@ -78,7 +85,7 @@ On Kiro, a role can start from one of your own Kiro agents and get its MCP serve
 
 Take two libraries and three apps: `ui-kit`, a React component library; `ui-extras`, a library of bespoke components built on `ui-kit`; and `retrofit-a`, `retrofit-b` and `retrofit-c`, three existing apps being moved onto them. A new component has to land in `ui-kit`, be wrapped in `ui-extras`, be published, and then be adopted by all three apps.
 
-1. **Add the five repositories.** Run `npm run quarterdeck -- init <path>` for each, then one `npm run quarterdeck -- up`. If `retrofit-c` lives on a self-hosted GitLab, map its host in `rules.local.forges.json`; its agents then talk merge requests and `glab`.
+1. **Pick the folder that holds the five repositories.** Run `npm run quarterdeck -- init <folder>`, confirm the five it lists, then one `npm run quarterdeck -- up`. If `retrofit-c` lives on a self-hosted GitLab, map its host in `rules.local.forges.json`; its agents then talk merge requests and `glab`.
 2. **Mark the libraries.** In the Project widget, turn on _publishes_ for `ui-kit` and `ui-extras` (or set `"publishes": true` for both in `rules.local.services.json`), and name each project's tracker if it has one. Optionally give `ui-kit`'s builders their own Kiro base agent with `{ "baseAgents": { "builder": "component-builder" } }` in `ui-kit/.quarterdeck/rules.local.kiro.json`.
 3. **Plan once.** Tell the Planner what you want. It proposes a spec ticket per project: the component in `ui-kit`; the wrapper in `ui-extras`, depending on the `ui-kit` ticket; and an adoption ticket in each `retrofit-*` app, depending on the `ui-extras` ticket. Approve them on the board.
 4. **Start one voyage.** One Driver coordinates all five projects and one reviewer reviews every pull or merge request. The Driver assigns the `ui-kit` ticket; the others wait on their dependencies (the Events feed says why), or the Driver starts retrofit prep work and `block`s it on the library ticket.
@@ -104,6 +111,7 @@ Nothing Quarterdeck stores leaves your machine. It has no hosted component, no a
     turns/<agent-id>/<seq>/       one folder per agent turn: input.md, output.md, updates.jsonl, result.json
     worktrees/<builder>-<ticket>/ a builder's git worktree
   plugins/<name>.mjs              ticket-source plugins you add yourself (superseded by project services)
+  workspace.json                  your workspace: its root folder, single or multi, and its projects
   pause.json                      only while everything is paused
   sock/<hash>.sock                a project's bus socket, while running
   _deck/                          where the Driver and the reviewer run, outside every project
@@ -127,7 +135,7 @@ The dashboard's Data widget lists every table with its rows and every path above
 
 `npm run quarterdeck -- wipe <project>` and `npm run quarterdeck -- wipe --all` do the same from a terminal, with the same typed confirmation (or `--confirm <phrase>` in a script). See `packages/cli/README.md`.
 
-Wiping keeps the rules files and everything else under `~/.quarterdeck/` that is not a project: `claude.json`, `plugins/`, `pause.json`, `sock/`, `_deck/` and the runtime folders. To remove everything by hand, stop Quarterdeck and delete `~/.quarterdeck/`, then run `git worktree prune` in each repository. See `site/public/docs/data.html`.
+Wiping keeps the rules files and everything else under `~/.quarterdeck/` that is not a project: `claude.json`, `plugins/`, `workspace.json` (less the wiped projects), `pause.json`, `sock/`, `_deck/` and the runtime folders. To remove everything by hand, stop Quarterdeck and delete `~/.quarterdeck/`, then run `git worktree prune` in each repository. See `site/public/docs/data.html`.
 
 ## Rules
 

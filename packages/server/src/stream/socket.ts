@@ -16,6 +16,7 @@ import {
 import { reporter } from '../store/events.js';
 import { quarterdeckHome } from '../store/index.js';
 import type { StoreEvent, Store, TableChange } from '../store/index.js';
+import { createWorkspaces, type Workspaces } from '../workspace/index.js';
 import { MACHINE_EVENT_KINDS, readMachineState } from './machine.js';
 import {
   STREAM_AFTER_PARAM,
@@ -24,6 +25,7 @@ import {
   STREAM_PROTOCOL,
   STREAM_TOKEN_PREFIX,
   type MachineState,
+  type Workspace,
 } from './schema.js';
 import { readSnapshot, tailCursor, type SnapshotRows } from './snapshot.js';
 
@@ -48,6 +50,7 @@ export interface StreamOptions {
   token: string;
   home?: string;
   layouts?: GlobalLayouts | undefined;
+  workspaces?: Workspaces | undefined;
   tail?: number;
   turnsPerAgent?: number;
   maxBufferedBytes?: number;
@@ -85,11 +88,13 @@ type Outgoing =
       tables: SnapshotRows;
       machine: MachineState;
       layout: GlobalLayout | null;
+      workspace: Workspace | null;
     }
   | { type: 'event'; event: StoreEvent }
   | ({ type: 'change' } & TableChange)
   | { type: 'machine'; machine: MachineState }
-  | { type: 'layout'; layout: GlobalLayout };
+  | { type: 'layout'; layout: GlobalLayout }
+  | { type: 'workspace'; workspace: Workspace };
 
 const jsonValue = (_: string, value: unknown): unknown => {
   if (typeof value === 'bigint') return Number(value);
@@ -99,10 +104,7 @@ const jsonValue = (_: string, value: unknown): unknown => {
 const serialize = (message: Outgoing): string =>
   JSON.stringify(message, jsonValue);
 
-const isNewLayout = (
-  pending: GlobalLayout | undefined,
-  sent: GlobalLayout | null,
-): pending is GlobalLayout =>
+const isNewer = <T>(pending: T | undefined, sent: T | null): pending is T =>
   pending !== undefined && JSON.stringify(pending) !== JSON.stringify(sent);
 
 const reject = (socket: Duplex, status: number, reason: string): void => {
@@ -174,6 +176,7 @@ export const createStream = (options: StreamOptions): Stream => {
   const { store } = options;
   const home = options.home ?? quarterdeckHome();
   const layouts = options.layouts ?? createGlobalLayouts(home);
+  const workspaces = options.workspaces ?? createWorkspaces(home);
   const tail = options.tail ?? STREAM_TAIL;
   const maxBuffered = options.maxBufferedBytes ?? MAX_BUFFERED_BYTES;
   const allowedOrigins = new Set(options.allowedOrigins);
@@ -242,6 +245,9 @@ export const createStream = (options: StreamOptions): Stream => {
     const sendLayout = (layout: GlobalLayout): void => {
       sendNow({ type: 'layout', layout });
     };
+    const sendWorkspace = (workspace: Workspace): void => {
+      sendNow({ type: 'workspace', workspace });
+    };
     const sendEvent = async (event: StoreEvent): Promise<void> => {
       if (behind()) return;
       await write({ type: 'event', event });
@@ -266,16 +272,31 @@ export const createStream = (options: StreamOptions): Stream => {
         else pendingLayout = layout;
       });
       if (!(await keep(() => Promise.resolve(unsubscribe())))) return;
+      let pendingWorkspace: Workspace | undefined;
+      const unwatch = workspaces.subscribe((next) => {
+        if (live) sendWorkspace(next);
+        else pendingWorkspace = next;
+      });
+      if (!(await keep(() => Promise.resolve(unwatch())))) return;
       const after = requested ?? (await tailCursor(store, tail));
       const tables = await readSnapshot(store, options.turnsPerAgent);
       const machine = await readMachineState(home);
       const layout = await layouts.read();
+      const workspace = await workspaces.read();
       if (!open) return;
-      await write({ type: 'snapshot', cursor: after, tables, machine, layout });
+      await write({
+        type: 'snapshot',
+        cursor: after,
+        tables,
+        machine,
+        layout,
+        workspace,
+      });
       if (!open) return;
       live = true;
       pending.splice(0).forEach(sendChange);
-      if (isNewLayout(pendingLayout, layout)) sendLayout(pendingLayout);
+      if (isNewer(pendingLayout, layout)) sendLayout(pendingLayout);
+      if (isNewer(pendingWorkspace, workspace)) sendWorkspace(pendingWorkspace);
       const subscription = await store.subscribe(sendEvent, {
         after,
         onError: report,

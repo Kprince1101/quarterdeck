@@ -1,6 +1,7 @@
 import type { ForgeTerms } from '@quarterdeck/rules';
 import type { Agent } from '../agents/index.js';
 import { servicesSection, type PromptServices } from '../services/index.js';
+import type { WorkspaceMode } from '../stream/schema.js';
 import type { BuilderTicket } from './tickets.js';
 
 export interface AssignmentPromptParts {
@@ -14,6 +15,7 @@ export interface AssignmentPromptParts {
   base: string;
   terms: ForgeTerms;
   services: PromptServices;
+  mode?: WorkspaceMode | undefined;
 }
 
 const SPEC_INSTRUCTION =
@@ -28,9 +30,14 @@ const openPullRequest = (parts: AssignmentPromptParts): string[] => {
   ];
 };
 
+const BUILDER_ON: Record<WorkspaceMode, string> = {
+  multi: 'this project',
+  single: 'this repository',
+};
+
 export const buildAssignmentPrompt = (parts: AssignmentPromptParts): string =>
   [
-    `You are ${parts.builder.name}, a builder on this project.`,
+    `You are ${parts.builder.name}, a builder on ${BUILDER_ON[parts.mode ?? 'multi']}.`,
     `# Ticket ${parts.ticket.id}: ${parts.ticket.title}`,
     parts.ticket.body.trim() || 'The ticket has no body.',
     SPEC_INSTRUCTION,

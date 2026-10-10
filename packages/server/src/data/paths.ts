@@ -20,6 +20,7 @@ import {
   quarterdeckHome,
 } from '../store/paths.js';
 import { ticketPluginsDir } from '../tickets/plugins.js';
+import { workspacePath } from '../workspace/file.js';
 
 export type DataPath = Omit<DataPathEntry, 'exists'>;
 
@@ -82,6 +83,7 @@ export const dataPaths = ({
     ...repoRuleFiles(repoPath),
     ...ruleFiles(homeDir, 'machine'),
     entry('Ticket plugins', ticketPluginsDir(home), 'directory', 'machine'),
+    entry('Workspace', workspacePath(home), 'file', 'machine'),
     entry('Global pause', globalPausePath(home), 'file', 'machine'),
     entry('Bus sockets', busSocketDir(home), 'directory', 'machine'),
     entry('Kiro runtime', defaultKiroProcessDir(home), 'directory', 'machine'),

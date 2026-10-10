@@ -7,7 +7,9 @@ import {
   type StreamEvent,
   type StreamMessage,
   type TurnRow,
+  type Workspace,
 } from '@quarterdeck/server/stream-schema';
+import { switchNotice } from '@quarterdeck/server/workspace-wording';
 
 export type StreamStatus = 'connecting' | 'live' | 'reconnecting' | 'closed';
 
@@ -17,6 +19,8 @@ export interface StreamState {
   tables: SnapshotTables;
   machine: MachineState;
   layout: SavedLayout | null;
+  workspace: Workspace | null;
+  workspaceNotice: string | null;
   events: readonly StreamEvent[];
   error: string | null;
 }
@@ -52,8 +56,19 @@ export const initialStreamState: StreamState = {
   tables: emptyTables(),
   machine: UNPAUSED_MACHINE,
   layout: null,
+  workspace: null,
+  workspaceNotice: null,
   events: [],
   error: null,
+};
+
+const noticeOf = (
+  previous: Workspace | null,
+  next: Workspace,
+  notice: string | null,
+): string | null => {
+  if (previous?.mode !== 'single' || next.mode !== 'multi') return notice;
+  return switchNotice(next.projects.length);
 };
 
 const upsert = (
@@ -122,6 +137,7 @@ export const applyStreamMessage = (
         tables: message.tables,
         machine: message.machine,
         layout: message.layout,
+        workspace: message.workspace ?? null,
         error: null,
       };
     }
@@ -130,6 +146,17 @@ export const applyStreamMessage = (
     }
     case 'layout': {
       return { ...state, layout: message.layout };
+    }
+    case 'workspace': {
+      return {
+        ...state,
+        workspace: message.workspace,
+        workspaceNotice: noticeOf(
+          state.workspace,
+          message.workspace,
+          state.workspaceNotice,
+        ),
+      };
     }
     case 'event': {
       return applyEvent(state, message.event, limits);

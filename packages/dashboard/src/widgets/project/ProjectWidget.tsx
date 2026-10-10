@@ -1,4 +1,6 @@
 import type { JSX } from 'react';
+import type { WorkspaceMode } from '../../api/index.js';
+import { useShowsProjects, useWorkspaceMode } from '../../deck/DeckProvider.js';
 import { defineWidget } from '../registry.js';
 import { ArchiveControl } from './ArchiveControl.js';
 import { CrewSummary } from './CrewSummary.js';
@@ -30,16 +32,25 @@ const ProjectPicker = ({ value, options, onChange }: ProjectPickerProps) => (
   </label>
 );
 
+const EMPTY: Record<WorkspaceMode, string> = {
+  multi: 'No projects yet.',
+  single: 'No repository yet.',
+};
+
 export const ProjectWidget = (): JSX.Element => {
   const { options, chosenId, panel, handleProjectChange } = useProjectWidget();
-  if (panel === null) return <p className="qd-empty">No projects yet.</p>;
+  const mode = useWorkspaceMode();
+  const showsProjects = useShowsProjects();
+  if (panel === null) return <p className="qd-empty">{EMPTY[mode]}</p>;
   return (
     <div className="qd-project">
-      <ProjectPicker
-        value={chosenId}
-        options={options}
-        onChange={handleProjectChange}
-      />
+      {showsProjects && (
+        <ProjectPicker
+          value={chosenId}
+          options={options}
+          onChange={handleProjectChange}
+        />
+      )}
       <div className="qd-project-body" key={panel.id}>
         <ProjectToggles panel={panel} />
         <ServicesSection panel={panel} />
@@ -53,6 +64,7 @@ export const ProjectWidget = (): JSX.Element => {
 export default defineWidget({
   type: 'project',
   title: 'Project',
+  singleTitle: 'Repository',
   component: ProjectWidget,
   size: { w: 4, h: 6 },
   minSize: { w: 3, h: 4 },

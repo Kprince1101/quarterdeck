@@ -1,5 +1,6 @@
 import { loadServices, type ServicesOptions } from '../services/index.js';
 import type { Store } from '../store/index.js';
+import type { WorkspaceMode } from '../stream/schema.js';
 
 export const TICKET_PUBLISHED_EVENT = 'ticket.published';
 
@@ -149,9 +150,14 @@ export const unmetDependencies = (
   dependencies: readonly Dependency[],
 ): Dependency[] => dependencies.filter((dependency) => !dependency.satisfied);
 
-export const dependencyLabel = (dependency: Dependency): string => {
+export const dependencyLabel = (
+  dependency: Dependency,
+  mode: WorkspaceMode = 'multi',
+): string => {
   if (dependency.project === null) return dependency.id;
-  return `${dependency.id} ("${dependency.title ?? ''}", project ${dependency.project})`;
+  const title = dependency.title ?? '';
+  if (mode === 'single') return `${dependency.id} ("${title}")`;
+  return `${dependency.id} ("${title}", project ${dependency.project})`;
 };
 
 export const unmetText = (dependencies: readonly Dependency[]): string =>

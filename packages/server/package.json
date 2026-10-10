@@ -26,6 +26,11 @@
       "types": "./dist/stream/schema.d.ts",
       "default": "./dist/stream/schema.js"
     },
+    "./workspace-wording": {
+      "@quarterdeck/source": "./src/workspace/wording.ts",
+      "types": "./dist/workspace/wording.d.ts",
+      "default": "./dist/workspace/wording.js"
+    },
     "./ticket-spec": {
       "@quarterdeck/source": "./src/planner/spec.ts",
       "types": "./dist/planner/spec.d.ts",

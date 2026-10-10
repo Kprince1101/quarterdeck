@@ -8,6 +8,7 @@ import { createGlobalLayouts } from '../global-layout/index.js';
 import type { PlannerAdapters } from '../planner/sessions.js';
 import { quarterdeckHome } from '../store/index.js';
 import { routeStreams, type Stream } from '../stream/socket.js';
+import { createWorkspaces } from '../workspace/index.js';
 import {
   startProjectServices,
   type ProjectServices,
@@ -44,6 +45,7 @@ export const startQuarterdeck = async (
   const homeDir = options.homeDir ?? homedir();
   const home = quarterdeckHome(homeDir);
   const layouts = createGlobalLayouts(home);
+  const workspaces = createWorkspaces(home);
   const running = new Map<string, RunningProject>();
   const openStores = () => [...running.values()].map(({ store }) => store);
   const coordinator = startCoordinator({
@@ -51,6 +53,7 @@ export const startQuarterdeck = async (
     homeDir,
     openStores,
     adapters: options.adapters,
+    mode: workspaces.mode,
     onError: options.onError,
   });
   const context: ProjectServicesContext = {
@@ -58,6 +61,7 @@ export const startQuarterdeck = async (
     homeDir,
     token: createApiToken(),
     layouts,
+    workspaces,
     allowedOrigins: options.allowedOrigins,
     onError: options.onError,
     openStores,
@@ -96,6 +100,7 @@ export const startQuarterdeck = async (
     projectHooks,
     voyages: coordinator.desk,
     layouts,
+    workspaces,
     upgrade: routeStreams({
       token: context.token,
       allowedOrigins: options.allowedOrigins,

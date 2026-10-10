@@ -245,12 +245,29 @@ export const savedLayoutSchema = z.object({
   updatedAt: timestampSchema,
 });
 
+export const workspaceModeSchema = z.enum(['single', 'multi']);
+
+export const workspaceProjectSchema = z.object({
+  slug: z.string(),
+  name: z.string(),
+  repoPath: z.string(),
+  repository: z.string().nullable(),
+});
+
+export const workspaceSchema = z.object({
+  root: z.string(),
+  mode: workspaceModeSchema,
+  projects: z.array(workspaceProjectSchema),
+  updatedAt: timestampSchema,
+});
+
 export const snapshotMessageSchema = z.object({
   type: z.literal('snapshot'),
   cursor: z.int().nonnegative(),
   tables: snapshotTablesSchema,
   machine: machineStateSchema,
   layout: savedLayoutSchema.nullable(),
+  workspace: workspaceSchema.nullish(),
 });
 
 export const machineMessageSchema = z.object({
@@ -261,6 +278,11 @@ export const machineMessageSchema = z.object({
 export const layoutMessageSchema = z.object({
   type: z.literal('layout'),
   layout: savedLayoutSchema,
+});
+
+export const workspaceMessageSchema = z.object({
+  type: z.literal('workspace'),
+  workspace: workspaceSchema,
 });
 
 export const eventMessageSchema = z.object({
@@ -305,6 +327,7 @@ export const streamMessageSchema = z.discriminatedUnion('type', [
   changeMessageSchema,
   machineMessageSchema,
   layoutMessageSchema,
+  workspaceMessageSchema,
 ]);
 
 export type ProjectRow = z.infer<typeof projectRowSchema>;
@@ -324,6 +347,10 @@ export type MachineState = z.infer<typeof machineStateSchema>;
 export type MachineMessage = z.infer<typeof machineMessageSchema>;
 export type SavedLayout = z.infer<typeof savedLayoutSchema>;
 export type LayoutMessage = z.infer<typeof layoutMessageSchema>;
+export type WorkspaceMode = z.infer<typeof workspaceModeSchema>;
+export type WorkspaceProject = z.infer<typeof workspaceProjectSchema>;
+export type Workspace = z.infer<typeof workspaceSchema>;
+export type WorkspaceMessage = z.infer<typeof workspaceMessageSchema>;
 export type SnapshotMessage = z.infer<typeof snapshotMessageSchema>;
 export type EventMessage = z.infer<typeof eventMessageSchema>;
 export type ChangeMessage = z.infer<typeof changeMessageSchema>;

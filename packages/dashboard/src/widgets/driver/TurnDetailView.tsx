@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import type { TurnReadResult } from '@quarterdeck/server/intents';
 import { replayCommand } from '@quarterdeck/server/replay-command';
+import { useWorkspaceMode } from '../../deck/DeckProvider.js';
 import type { DriverTurn } from './driver-turns.js';
 import { useCopy, type CopyState } from './use-copy.js';
 import { useThroughCommand } from './use-through-command.js';
@@ -35,6 +36,7 @@ interface ThroughCommandProps {
 
 const ThroughCommand = ({ project, voyage, last }: ThroughCommandProps) => {
   const { text, through, handleChange } = useThroughCommand(last);
+  const isMulti = useWorkspaceMode() === 'multi';
   return (
     <div className="qd-driver-replay">
       <label className="qd-driver-through">
@@ -54,7 +56,13 @@ const ThroughCommand = ({ project, voyage, last }: ThroughCommandProps) => {
         </p>
       )}
       {through !== null && (
-        <CopyCommand command={replayCommand({ voyage, through, project })} />
+        <CopyCommand
+          command={replayCommand({
+            voyage,
+            through,
+            ...(isMulti && { project }),
+          })}
+        />
       )}
     </div>
   );

@@ -24,6 +24,8 @@ External Postgres must be 15 or newer (`0001_init` uses `unique nulls not distin
 
 `~/.quarterdeck/pause.json` exists only while everything is paused (`pause.all`; see [pause](../pause/README.md)) and holds `{ "pausedAt": "<iso>" }`. Deleting it lifts the global pause. It is the same on both backends, and wiping projects leaves it alone.
 
+`~/.quarterdeck/workspace.json` is the workspace: `{ "root", "mode": "single" | "multi", "projects": [{ "slug", "name", "repoPath", "repository" }], "updatedAt" }`, written by `quarterdeck init`, by `project.create` through the API, and once at startup from the open projects when it does not exist (see [workspace](../workspace/README.md)). It is not in any database, so it is the same on both backends; wiping a project drops it from `projects` and leaves the rest. Deleting it makes the next start seed it again: one project with a repository is `single`, more are `multi`.
+
 `~/.quarterdeck/layout.json` is the dashboard's layout, one for every project: `{ "spec": <layout>, "updatedAt": "<iso>" }`, written by `layout.save` and `layout.reset` without a project (see [api](../api/README.md#dashboard-layout)). It is not in any database, so it is the same on both backends, and wiping projects leaves it alone. Deleting it puts the dashboard back on its default preset; the next start seeds it again from the newest per-project `dashboard` row, if any is left.
 
 `~/.quarterdeck/sock/<hash>.sock` (or `$TMPDIR/quarterdeck-<uid>/<hash>.sock` when the home path is too long) is a project's bus MCP socket; see [bus](../bus/README.md#socket-path). It holds no data, exists only while the server is up, and is removed on shutdown. This is the same on both backends.

@@ -20,6 +20,7 @@ import {
   type Store,
   type StoreEvent,
 } from '../store/index.js';
+import type { WorkspaceMode } from '../stream/schema.js';
 import { decisionsNote, openingPrompt } from './brief.js';
 import { activeProjects, openProjects } from './projects.js';
 import {
@@ -67,6 +68,7 @@ export interface PlannerOptions {
   pause: PauseGuard;
   adapters?: PlannerAdapters;
   homeDir?: string;
+  mode?: () => Promise<WorkspaceMode>;
   cardHuman?: CardHuman;
   permissionCards?: PermissionCards;
   onError?: (err: unknown) => void;
@@ -142,6 +144,7 @@ export const startPlanner = async (
     homeDir: options.homeDir ?? homedir(),
     openStores: options.openStores,
     signInSignal: () => signIn.signal,
+    mode: options.mode,
   };
   let conversation: Conversation | undefined;
   let running: Promise<void> | undefined;
@@ -194,6 +197,7 @@ export const startPlanner = async (
         await activeProjects(stores),
         text,
         active.terms,
+        active.mode,
       );
     const decided = await decidedProposals(
       store.db,
@@ -208,7 +212,7 @@ export const startPlanner = async (
       ({ ticketId }) => !active.reported.has(ticketId),
     );
     fresh.forEach(({ ticketId }) => active.reported.add(ticketId));
-    return `${decisionsNote(fresh)}${text}`;
+    return `${decisionsNote(fresh, active.mode)}${text}`;
   };
 
   const ensureConversation = async (

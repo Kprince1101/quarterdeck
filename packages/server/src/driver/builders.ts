@@ -10,6 +10,7 @@ import {
 import type { PauseGuard } from '../pause/index.js';
 import type { PromptServices } from '../services/index.js';
 import type { Store } from '../store/index.js';
+import type { WorkspaceMode } from '../stream/schema.js';
 import type { DependencyResolver } from './dependencies.js';
 import { BuilderNotAvailableError, BuilderSessionLostError } from './errors.js';
 import { heldTickets } from './tickets.js';
@@ -40,6 +41,7 @@ export interface BuilderContext {
   pause: PauseGuard;
   voyageId?: string;
   dependencies?: DependencyResolver;
+  mode?: WorkspaceMode;
 }
 
 export interface ClaimedBuilder {

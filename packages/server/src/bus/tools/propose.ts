@@ -14,6 +14,8 @@ import {
   proposalProblems,
 } from '../../planner/spec.js';
 import { publishEvent, type Queryable } from '../../store/index.js';
+import type { WorkspaceMode } from '../../stream/schema.js';
+import { multiOnly, singleOnly } from '../../workspace/wording.js';
 import { BusToolError, defineBusTool, type BusStore } from '../tool.js';
 
 export const PROPOSED_EVENT = 'ticket.proposed';
@@ -223,12 +225,43 @@ const targetOf = (
   return target.store;
 };
 
+const impliedProject = (
+  mode: WorkspaceMode | undefined,
+  proposal: Proposal,
+  projects: readonly OpenProject<BusStore>[],
+): Proposal => {
+  const [only, ...others] = projects;
+  if (mode !== 'single' || proposal.project !== '') return proposal;
+  if (only === undefined || others.length > 0) return proposal;
+  return { ...proposal, project: only.slug };
+};
+
 export default defineBusTool({
   description: [
-    'Planner only. Propose one ticket: the project it belongs to, a title, a body written as a spec (## Requirements, ## Design, ## Tasks, then a final `Proven:` line), and the ids of tickets it depends on, in any open project.',
-    'A proposal that names no active project, or whose body does not follow the spec format, is refused and nothing is stored.',
-    'The ticket is stored as proposed in its project. The human approves, edits or rejects it; only approved tickets reach the Driver.',
-    'Returns the new ticket id, which later proposals in any project can name in dependsOn.',
+    multiOnly(
+      'Planner only. Propose one ticket: the project it belongs to, a title, a body written as a spec (## Requirements, ## Design, ## Tasks, then a final `Proven:` line), and the ids of tickets it depends on, in any open project.',
+    ),
+    singleOnly(
+      'Planner only. Propose one ticket: a title, a body written as a spec (## Requirements, ## Design, ## Tasks, then a final `Proven:` line), and the ids of tickets it depends on.',
+    ),
+    multiOnly(
+      'A proposal that names no active project, or whose body does not follow the spec format, is refused and nothing is stored.',
+    ),
+    singleOnly(
+      'A proposal whose body does not follow the spec format is refused and nothing is stored.',
+    ),
+    multiOnly(
+      'The ticket is stored as proposed in its project. The human approves, edits or rejects it; only approved tickets reach the Driver.',
+    ),
+    singleOnly(
+      'The ticket is stored as proposed. The human approves, edits or rejects it; only approved tickets reach the Driver.',
+    ),
+    multiOnly(
+      'Returns the new ticket id, which later proposals in any project can name in dependsOn.',
+    ),
+    singleOnly(
+      'Returns the new ticket id, which later proposals can name in dependsOn.',
+    ),
     "When the work comes from the project's tracker, pass its id there (a Jira key, a story number) as externalRef; agents see it in their prompts.",
   ].join('\n'),
   input: {
@@ -242,9 +275,10 @@ export default defineBusTool({
       .default([]),
     externalRef: externalRefSchema.optional(),
   },
-  run: async ({ store, agentId, openStores }, proposal) => {
+  run: async ({ store, agentId, openStores, mode }, input) => {
     const stores = [store, ...(openStores?.() ?? [])];
     const projects = await activeProjects(stores);
+    const proposal = impliedProject(mode, input, projects);
     const problems = proposalProblems(
       proposal,
       projects.map(({ slug }) => slug),

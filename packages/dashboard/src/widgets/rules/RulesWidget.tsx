@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import type { RuleView } from '../../api/index.js';
+import { useWording } from '../../deck/DeckProvider.js';
 import { defineWidget } from '../registry.js';
 import { TIGHTEN_ONLY_NOTICE } from './constants.js';
 import { MachineLayer } from './MachineLayer.js';
@@ -17,7 +18,9 @@ interface RulesBodyProps {
 
 const RuleLayers = ({ view, rule }: RulesBodyProps & { rule: RuleView }) => (
   <>
-    <p className="qd-rules-note qd-rules-tighten">{TIGHTEN_ONLY_NOTICE}</p>
+    <p className="qd-rules-note qd-rules-tighten">
+      {useWording()(TIGHTEN_ONLY_NOTICE)}
+    </p>
     <RulesStatus message={view.saved} />
     <MachineLayer view={view} rule={rule} />
     <ReviewPanel view={view} rule={rule} />

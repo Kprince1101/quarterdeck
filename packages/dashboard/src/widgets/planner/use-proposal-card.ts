@@ -6,7 +6,7 @@ import {
   type FormEvent,
   type SetStateAction,
 } from 'react';
-import { useDeck } from '../../deck/DeckProvider.js';
+import { useDeck, useShowsProjects } from '../../deck/DeckProvider.js';
 import { valueOf } from '../../grid/dom.js';
 import { useIntentRequest } from '../use-intent-request.js';
 import {
@@ -40,6 +40,7 @@ export interface ProjectOptionView {
 }
 
 export interface ProposalCardView {
+  showsProjects: boolean;
   draft: ProposalDraft;
   statusLabel: string;
   specParts: SpecPartView[];
@@ -134,6 +135,7 @@ export const useProposalCard = (
   projects: readonly ProjectChoice[],
 ): ProposalCardView => {
   const { intents } = useDeck();
+  const showsProjects = useShowsProjects();
   const request = useIntentRequest();
   const [isEditing, setEditing] = useState(false);
   const [draft, setDraft] = useState<ProposalDraft>(EMPTY_DRAFT);
@@ -164,6 +166,7 @@ export const useProposalCard = (
   };
 
   return {
+    showsProjects,
     draft,
     statusLabel: decided ?? proposal.statusLabel,
     specParts: viewsOf(proposal.spec),

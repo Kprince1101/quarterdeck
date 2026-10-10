@@ -3,6 +3,7 @@ import { WidgetGrid } from '../grid/WidgetGrid.js';
 import type { GridLayout } from '../grid/layout.js';
 import type { LayoutListener } from '../grid/use-grid-sync.js';
 import type { WidgetRegistry } from './registry.js';
+import { useWidgetMount } from './use-widget-mount.js';
 import { WIDGETS } from './widgets.js';
 
 export interface WidgetMountProps {
@@ -17,11 +18,14 @@ export const WidgetMount = ({
   initialLayout,
   syncedLayout,
   onLayoutChange,
-}: WidgetMountProps): JSX.Element => (
-  <WidgetGrid
-    registry={registry}
-    initialLayout={initialLayout}
-    syncedLayout={syncedLayout}
-    onLayoutChange={onLayoutChange}
-  />
-);
+}: WidgetMountProps): JSX.Element => {
+  const shown = useWidgetMount(registry);
+  return (
+    <WidgetGrid
+      registry={shown}
+      initialLayout={initialLayout}
+      syncedLayout={syncedLayout}
+      onLayoutChange={onLayoutChange}
+    />
+  );
+};

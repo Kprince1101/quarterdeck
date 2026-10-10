@@ -4,6 +4,10 @@ The shipped defaults: `charter.md`, `reviewer.md`, `permissions.json`, `naming.j
 
 `examples/` holds layers you can copy into place. They are not loaded unless you copy them.
 
+## The workspace
+
+`~/.quarterdeck/workspace.json` is not a rules file but sits with them in the machine layer: `{ root, mode: "single" | "multi", projects: [...] }`, written by `quarterdeck init` (see [workspace](../packages/server/src/workspace/README.md)). Its mode decides how `charter.md` and `reviewer.md` read. A line ending in `<!-- multi -->` is kept only when the workspace has several projects, and one ending in `<!-- single -->` only when it is one repository; the tag itself never reaches an agent. In a single-repository workspace every other "project" in them reads "repository". A layer of your own can use the same tags, and one without them is worded the same way.
+
 ## Kiro base agents
 
 `kiro.json` names, in `baseAgents`, the Kiro agent the `driver`, `reviewer` and `builder` start from. Each is `null` (no base) by default. The repo layer may set only `baseAgents.builder`, so one project (a component library, say) can give its builders a different agent; anything else there is an error naming the file. A base agent read from the repo's own `.kiro/agents/` gives only its prompt, resources, tools and model, never MCP servers or pre-approved tools, because agents can write to the repo. To give a project's builders more, name an agent in `~/.kiro/agents/`. How a base is found and merged is in [the runtime adapters README](../packages/server/src/acp/runtimes/README.md#base-agents).

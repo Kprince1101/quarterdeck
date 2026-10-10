@@ -1,4 +1,5 @@
 import type { JSX } from 'react';
+import { useShowsProjects } from '../../deck/DeckProvider.js';
 import { RequestError } from '../RequestError.js';
 import {
   useVoyageControl,
@@ -72,25 +73,30 @@ const ProjectKill = ({ project, isPending }: ProjectKillProps) => (
   </li>
 );
 
-const OpenVoyage = ({ control }: ControlProps) => (
-  <>
-    <p className="qd-board-voyage-head">
-      <span className="qd-board-voyage-label">{control.voyageLabel}</span>
-      <span className="qd-board-voyage-goal">{control.voyageGoal}</span>
-    </p>
-    <ul className="qd-board-voyage-projects" aria-label="Voyage projects">
-      {control.projects.map((project) => (
-        <ProjectKill
-          key={project.slug}
-          project={project}
-          isPending={control.isPending}
-        />
-      ))}
-    </ul>
-    {control.showVoyageActions && <VoyageActions control={control} />}
-    {control.isConfirmingKill && <KillConfirm control={control} />}
-  </>
-);
+const OpenVoyage = ({ control }: ControlProps) => {
+  const showsProjects = useShowsProjects();
+  return (
+    <>
+      <p className="qd-board-voyage-head">
+        <span className="qd-board-voyage-label">{control.voyageLabel}</span>
+        <span className="qd-board-voyage-goal">{control.voyageGoal}</span>
+      </p>
+      {showsProjects && (
+        <ul className="qd-board-voyage-projects" aria-label="Voyage projects">
+          {control.projects.map((project) => (
+            <ProjectKill
+              key={project.slug}
+              project={project}
+              isPending={control.isPending}
+            />
+          ))}
+        </ul>
+      )}
+      {control.showVoyageActions && <VoyageActions control={control} />}
+      {control.isConfirmingKill && <KillConfirm control={control} />}
+    </>
+  );
+};
 
 const NewVoyage = ({ control }: ControlProps) => (
   <>

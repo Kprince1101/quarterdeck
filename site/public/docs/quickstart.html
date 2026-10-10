@@ -155,12 +155,31 @@ npm run quarterdeck -- up</code></pre>
   Install: brew install glab
   Sign in: glab auth login --hostname git.example.org</code></pre>
 
-      <h2 id="init">4. Create a project</h2>
-      <pre><code>npm run quarterdeck -- init /path/to/your/repo</code></pre>
+      <h2 id="init">4. Pick a workspace</h2>
+      <pre><code>npm run quarterdeck -- init /path/to/folder</code></pre>
       <p>
-        <code>init</code> creates <code>~/.quarterdeck/</code> and a project for
-        the repository (the current directory if you leave the path out). In a
-        terminal it asks for the runtime:
+        You point Quarterdeck at one folder, once (the current directory if you
+        leave the path out). <code>init</code> creates
+        <code>~/.quarterdeck/</code> and decides from what it finds there:
+      </p>
+      <ul>
+        <li>
+          <strong>A git repository</strong>: Quarterdeck works that one
+          repository, and nothing in it talks about projects.
+        </li>
+        <li>
+          <strong>A folder of git repositories</strong> (like
+          <code>~/Developer/Repos</code>): it lists every repository one level
+          down for you to confirm or untick by number, and each one becomes a
+          project. One voyage can touch several. Scripted, it takes them all
+          less any <code>--skip &lt;slug&gt;</code>.
+        </li>
+      </ul>
+      <p>
+        The workspace is kept in <code>~/.quarterdeck/workspace.json</code>.
+        Adding a second repository to a one-repository workspace switches it to
+        projects, with a one-line notice. In a terminal <code>init</code> then
+        asks for the runtime:
       </p>
       <pre><code>Runtime (kiro, claude, gemini) [kiro]: </code></pre>
       <ul>
@@ -184,16 +203,17 @@ npm run quarterdeck -- up</code></pre>
         say yes. Without a terminal, pass <code>--runtime</code> and one of the
         two flags.
       </p>
-      <pre><code>Created project my-app (my-app) for /home/you/code/my-app
+      <pre><code>Added my-app at /home/you/code/my-app
 Runtime: kiro
+Workspace: one repository, /home/you/code/my-app
 Data: /home/you/.quarterdeck/my-app
 Next: npm run quarterdeck -- up</code></pre>
       <p>
-        The project slug comes from the folder name; <code>--project</code> and
-        <code>--name</code> set the slug and display name yourself. If
-        <code>init</code> fails or you cancel it, nothing is left behind. Run
-        <code>init</code> once for each repository you want worked: one server
-        and one voyage cover them all.
+        The slug comes from the folder name; for a single repository
+        <code>--project</code> and <code>--name</code> set the slug and display
+        name yourself. If <code>init</code> fails or you cancel it, nothing is
+        left behind. One server and one voyage cover every project in the
+        workspace.
       </p>
 
       <h2 id="up">5. Start Quarterdeck</h2>

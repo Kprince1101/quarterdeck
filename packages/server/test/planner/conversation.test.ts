@@ -88,6 +88,7 @@ describe('a Planner turn and a cancel', { timeout: TIMEOUT }, () => {
     slug: 'example',
     charter: '',
     terms: forgeTerms('github'),
+    mode: 'multi',
     host: { current: () => session } as unknown as PlannerSessionHost,
     lifecycle: {} as AgentLifecycle,
     turns: 0,

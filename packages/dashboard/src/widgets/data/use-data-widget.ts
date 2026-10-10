@@ -1,10 +1,16 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { DataPage, TableCount } from '@quarterdeck/server/intents';
-import { useDeck } from '../../deck/DeckProvider.js';
+import type { WorkspaceMode } from '../../api/index.js';
+import {
+  useDeck,
+  useWorkspaceMode,
+  wordingFor,
+} from '../../deck/DeckProvider.js';
 import {
   pageView,
   pathViews,
   projectSlugOf,
+  workspaceLine,
   type PageView,
   type PathView,
 } from './data-view.js';
@@ -14,6 +20,7 @@ import { useTableBrowser } from './use-table-browser.js';
 
 export interface TableView {
   table: string;
+  label: string;
   rows: number;
   isSelected: boolean;
   onSelect: () => void;
@@ -21,6 +28,8 @@ export interface TableView {
 
 export interface DataWidgetView {
   project: string | null;
+  mode: WorkspaceMode;
+  workspace: string | null;
   isLoading: boolean;
   summaryError: string | null;
   tables: TableView[];
@@ -38,9 +47,11 @@ const tableViews = (
   counts: readonly TableCount[],
   selected: string | null,
   select: (table: string) => void,
+  mode: WorkspaceMode,
 ): TableView[] =>
   counts.map(({ table, rows }) => ({
     table,
+    label: wordingFor(mode)(table),
     rows,
     isSelected: table === selected,
     onSelect: () => select(table),
@@ -53,6 +64,7 @@ const optionalPageView = (page: DataPage | null): PageView | null => {
 
 export const useDataWidget = (): DataWidgetView => {
   const { stream } = useDeck();
+  const mode = useWorkspaceMode();
   const project = projectSlugOf(stream.tables.projects);
   const [refreshes, setRefreshes] = useState(0);
   const browser = useTableBrowser();
@@ -61,12 +73,12 @@ export const useDataWidget = (): DataWidgetView => {
   const rows = useDataPage({ project, table, offset, limit }, refreshes);
   const counts = summary.data?.tables ?? NO_COUNTS;
   const tables = useMemo(
-    () => tableViews(counts, table, browser.select),
-    [counts, table, browser.select],
+    () => tableViews(counts, table, browser.select, mode),
+    [counts, table, browser.select, mode],
   );
   const paths = useMemo(
-    () => pathViews(summary.data?.paths ?? []),
-    [summary.data],
+    () => pathViews(summary.data?.paths ?? [], mode),
+    [summary.data, mode],
   );
   const page = useMemo(() => optionalPageView(rows.data), [rows.data]);
   const handleRefresh = useCallback(
@@ -75,6 +87,8 @@ export const useDataWidget = (): DataWidgetView => {
   );
   return {
     project,
+    mode,
+    workspace: workspaceLine(stream.workspace),
     isLoading: summary.isLoading || rows.isLoading,
     summaryError: summary.error,
     tables,

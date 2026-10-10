@@ -24,6 +24,7 @@ import {
   type DriverNote,
   type NoteBuilder,
 } from './driver-notes.js';
+import type { WorkspaceMode } from '../stream/schema.js';
 import type { CrewFailureReporter } from './failures.js';
 
 export const MAX_RETRY_TURNS = 3;
@@ -40,6 +41,7 @@ export interface VoyageRunDriver {
 
 export interface VoyageRunOptions {
   voyage: DriverVoyage;
+  mode?: WorkspaceMode;
   charter: string;
   resolve: (action: TurnAction) => Promise<RunLeg>;
   report: CrewFailureReporter;
@@ -199,7 +201,9 @@ export const startVoyageRun = (options: VoyageRunOptions): VoyageRun => {
     const notes = pending.splice(0);
     if (notes.some((next) => next.wake === 'event')) retries = 0;
     else retries += 1;
-    settle(voyage.turn(composeTurnInput(notes)).then(applyOutcome));
+    settle(
+      voyage.turn(composeTurnInput(notes, options.mode)).then(applyOutcome),
+    );
   };
 
   settle(voyage.birth.then(applyOutcome));

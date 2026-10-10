@@ -7,6 +7,7 @@ import {
 import { GATE_EVENTS } from '../gate/index.js';
 import { getErrorMessage } from '../lib/errors.js';
 import type { Store, StoreEvent } from '../store/index.js';
+import type { WorkspaceMode } from '../stream/schema.js';
 import { TICKET_REOPENED_EVENT } from '../voyage-end/index.js';
 
 export const TICKET_APPROVE_INTENT = 'ticket.approve';
@@ -24,6 +25,7 @@ export type NoteWake = 'event' | 'retry' | 'none';
 export interface DriverNote {
   text: string;
   wake: NoteWake;
+  project?: string;
 }
 
 export interface NoteTicket {
@@ -57,6 +59,7 @@ export const WAKE_EVENT_KINDS: readonly string[] = [
 
 export interface NoteContext {
   publishes?: boolean;
+  mode?: WorkspaceMode;
 }
 
 type Payload = Record<string, unknown>;
@@ -128,24 +131,29 @@ const listOf = (payload: Payload, key: string): Payload[] => {
   );
 };
 
-const dependencyText = (dependency: Payload): string => {
+const dependencyText = (dependency: Payload, context: NoteContext): string => {
   const id = textOf(dependency, 'ticket');
   const project = textOf(dependency, 'project');
   if (project === '') return id;
-  return `${id} ("${textOf(dependency, 'title')}", project ${project})`;
+  const title = textOf(dependency, 'title');
+  if (context.mode === 'single') return `${id} ("${title}")`;
+  return `${id} ("${title}", project ${project})`;
 };
 
-const readyText = (dependency: Payload): string => {
-  const name = textOf(dependency, 'package');
-  if (name === '') return `${dependencyText(dependency)} merged`;
-  return `${dependencyText(dependency)} published as ${name} ${textOf(dependency, 'version')}`;
-};
+const readyText =
+  (context: NoteContext) =>
+  (dependency: Payload): string => {
+    const name = textOf(dependency, 'package');
+    const label = dependencyText(dependency, context);
+    if (name === '') return `${label} merged`;
+    return `${label} published as ${name} ${textOf(dependency, 'version')}`;
+  };
 
-const unmetText = (payload: Payload): string =>
+const unmetText = (payload: Payload, context: NoteContext): string =>
   listOf(payload, 'unmet')
     .map(
       (dependency) =>
-        `${dependencyText(dependency)}: ${textOf(dependency, 'reason')}`,
+        `${dependencyText(dependency, context)}: ${textOf(dependency, 'reason')}`,
     )
     .join('; ');
 
@@ -155,14 +163,16 @@ const noteSuffix = (payload: Payload): string => {
   return ` Note: ${note}`;
 };
 
-const blockedText: NoteText = (ticket, payload) => {
+const blockedText: NoteText = (ticket, payload, context) => {
   if (payload['reason'] !== DEPENDENCIES_REASON)
     return `${ticketLabel(ticket)} is blocked: its builder was killed.`;
-  return `${ticketLabel(ticket)} is blocked, held by ${builderLabel(ticket)}, waiting on ${unmetText(payload)}. Quarterdeck continues the builder once they are satisfied.${noteSuffix(payload)}`;
+  return `${ticketLabel(ticket)} is blocked, held by ${builderLabel(ticket)}, waiting on ${unmetText(payload, context)}. Quarterdeck continues the builder once they are satisfied.${noteSuffix(payload)}`;
 };
 
-const unblockedText: NoteText = (ticket, payload) => {
-  const ready = listOf(payload, 'dependencies').map(readyText).join('; ');
+const unblockedText: NoteText = (ticket, payload, context) => {
+  const ready = listOf(payload, 'dependencies')
+    .map(readyText(context))
+    .join('; ');
   if (payload['held'] === true)
     return `${ticketLabel(ticket)} is unblocked and ${ticket.status} again: ${ready}. Quarterdeck continues ${builderLabel(ticket)} with these versions.`;
   return `${ticketLabel(ticket)} is ready to assign: ${ready}.`;
@@ -186,8 +196,8 @@ const NOTE_TEXTS: Record<string, NoteText> = {
     `The merge gate bounced ${ticketLabel(ticket)}, held by ${builderLabel(ticket)}: ${textOf(payload, 'reason')}`,
   [GATE_EVENTS.merged]: mergedText,
   [TICKET_BLOCKED_EVENT]: blockedText,
-  [TICKET_WAITING_EVENT]: (ticket, payload) =>
-    `${ticketLabel(ticket)} waits on ${unmetText(payload)}; assign it once they are satisfied.`,
+  [TICKET_WAITING_EVENT]: (ticket, payload, context) =>
+    `${ticketLabel(ticket)} waits on ${unmetText(payload, context)}; assign it once they are satisfied.`,
   [TICKET_UNBLOCKED_EVENT]: unblockedText,
 };
 
@@ -305,12 +315,20 @@ export const waitingTicketsNote = (
 
 export const projectNote = (project: string, note: DriverNote): DriverNote => ({
   ...note,
-  text: `[${project}] ${note.text}`,
+  project,
 });
 
-export const composeTurnInput = (notes: readonly DriverNote[]): string =>
+const noteLine = (note: DriverNote, mode: WorkspaceMode): string => {
+  if (mode === 'single' || note.project === undefined) return `- ${note.text}`;
+  return `- [${note.project}] ${note.text}`;
+};
+
+export const composeTurnInput = (
+  notes: readonly DriverNote[],
+  mode: WorkspaceMode = 'multi',
+): string =>
   [
     '# Since your last turn',
-    notes.map((note) => `- ${note.text}`).join('\n'),
+    notes.map((note) => noteLine(note, mode)).join('\n'),
     'Decide what to do next and end with your turn result.',
   ].join('\n\n');

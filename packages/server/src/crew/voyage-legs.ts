@@ -75,11 +75,12 @@ export const builderContext = async (
   home: string,
   dependencies?: DependencyResolver,
 ): Promise<BuilderContext> => {
-  const [models, rules, forge, services] = await Promise.all([
+  const [models, rules, forge, services, mode] = await Promise.all([
     leg.rules.load('models'),
     leg.rules.load('lifecycle'),
     leg.rules.forge(),
     leg.rules.services(),
+    leg.rules.mode(),
   ]);
   const ctx: BuilderContext = {
     store: leg.store,
@@ -96,6 +97,7 @@ export const builderContext = async (
     budget: rules.budget.window,
     pause: leg.pause,
     voyageId: leg.voyageId,
+    mode,
   };
   if (dependencies !== undefined) ctx.dependencies = dependencies;
   return ctx;

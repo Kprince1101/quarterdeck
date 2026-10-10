@@ -1,4 +1,5 @@
 import { WIDGET_TYPE } from '@quarterdeck/server/layouts';
+import type { WorkspaceMode } from '@quarterdeck/server/stream-schema';
 import type { ComponentType } from 'react';
 
 export interface WidgetSize {
@@ -13,6 +14,7 @@ export interface WidgetProps {
 export interface WidgetDefinition {
   type: string;
   title: string;
+  singleTitle?: string;
   component: ComponentType<WidgetProps>;
   size: WidgetSize;
   minSize?: WidgetSize;
@@ -65,6 +67,19 @@ export const createRegistry = (
     registry.set(definition.type, definition);
   });
   return registry;
+};
+
+export const registryFor = (
+  registry: WidgetRegistry,
+  mode: WorkspaceMode,
+): WidgetRegistry => {
+  if (mode === 'multi') return registry;
+  return new Map(
+    [...registry].map(([type, definition]) => [
+      type,
+      { ...definition, title: definition.singleTitle ?? definition.title },
+    ]),
+  );
 };
 
 export const definitionsFrom = (

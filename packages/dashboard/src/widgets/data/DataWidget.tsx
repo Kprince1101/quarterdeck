@@ -1,4 +1,5 @@
 import type { JSX } from 'react';
+import type { WorkspaceMode } from '../../api/index.js';
 import { defineWidget } from '../registry.js';
 import { Pager, PathList, RowsTable, TableList } from './DataParts.js';
 import type { PageView } from './data-view.js';
@@ -47,10 +48,24 @@ const StoredData = ({ view }: { view: DataWidgetView }) => {
   );
 };
 
+const WAITING: Record<WorkspaceMode, string> = {
+  multi: 'Waiting for the project.',
+  single: 'Waiting for the repository.',
+};
+
+const WorkspaceLine = ({ line }: { line: string | null }) => {
+  if (line === null) return null;
+  return (
+    <p className="qd-data-workspace">
+      <span>Workspace</span> {line}
+    </p>
+  );
+};
+
 export const DataWidget = (): JSX.Element => {
   const view = useDataWidget();
   if (view.project === null) {
-    return <p className="qd-empty">Waiting for the project.</p>;
+    return <p className="qd-empty">{WAITING[view.mode]}</p>;
   }
   return (
     <div className="qd-data" aria-busy={view.isLoading}>
@@ -63,8 +78,13 @@ export const DataWidget = (): JSX.Element => {
           Refresh
         </button>
       </div>
+      <WorkspaceLine line={view.workspace} />
       <StoredData view={view} />
-      <WipeSection project={view.project} onWiped={view.handleRefresh} />
+      <WipeSection
+        project={view.project}
+        mode={view.mode}
+        onWiped={view.handleRefresh}
+      />
     </div>
   );
 };

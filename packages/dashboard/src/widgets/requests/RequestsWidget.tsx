@@ -1,8 +1,11 @@
 import type { JSX } from 'react';
+import { useShowsProjects } from '../../deck/DeckProvider.js';
 import { defineWidget } from '../registry.js';
 import {
   NEUTRAL_TITLE,
-  forgeTitle,
+  requestsEmptyText,
+  requestsSectionLabel,
+  requestsTableLabel,
   type ProjectRequestsView,
   type RequestRowView,
   type RequestsView,
@@ -80,14 +83,15 @@ const RequestRow = ({ row }: RequestRowProps) => (
 
 interface ProjectSectionProps {
   project: ProjectRequestsView;
+  isLabelled: boolean;
 }
 
-const RequestTable = ({ project }: ProjectSectionProps) => {
+const RequestTable = ({ project, isLabelled }: ProjectSectionProps) => {
   if (project.rows.length === 0) return null;
   return (
     <table
       className="qd-requests-table"
-      aria-label={`${project.name} ${forgeTitle(project.terms).toLowerCase()}`}
+      aria-label={requestsTableLabel(project, isLabelled)}
     >
       <thead>
         <tr>
@@ -107,23 +111,25 @@ const RequestTable = ({ project }: ProjectSectionProps) => {
   );
 };
 
-const ProjectSection = ({ project }: ProjectSectionProps) => (
+const ProjectSection = ({ project, isLabelled }: ProjectSectionProps) => (
   <section
     className="qd-requests-project"
-    aria-label={project.name}
+    aria-label={requestsSectionLabel(project, isLabelled)}
     data-forge={project.forge}
   >
-    <h4>
-      {project.name}
-      <span className="qd-requests-forge">{project.terms.name}</span>
-    </h4>
+    {isLabelled && (
+      <h4>
+        {project.name}
+        <span className="qd-requests-forge">{project.terms.name}</span>
+      </h4>
+    )}
     {project.error !== null && (
       <p className="qd-requests-project-error" role="alert">
         {project.error}
       </p>
     )}
     {project.empty !== null && <p className="qd-empty">{project.empty}</p>}
-    <RequestTable project={project} />
+    <RequestTable project={project} isLabelled={isLabelled} />
   </section>
 );
 
@@ -132,12 +138,20 @@ interface RequestsListProps {
 }
 
 const RequestsList = ({ view }: RequestsListProps) => {
+  const showsProjects = useShowsProjects();
   if (view === null) return <p className="qd-empty">Reading open requests…</p>;
-  if (view.empty !== null) return <p className="qd-empty">{view.empty}</p>;
+  if (view.empty !== null)
+    return (
+      <p className="qd-empty">{requestsEmptyText(view.empty, showsProjects)}</p>
+    );
   return (
     <>
       {view.projects.map((project) => (
-        <ProjectSection key={project.project} project={project} />
+        <ProjectSection
+          key={project.project}
+          project={project}
+          isLabelled={showsProjects}
+        />
       ))}
     </>
   );

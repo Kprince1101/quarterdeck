@@ -17,6 +17,7 @@ import {
   ticketSpecFormat,
 } from '../../src/planner/index.js';
 import { IN_MEMORY, openStore, type Store } from '../../src/store/index.js';
+import { workspaceWording } from '../../src/workspace/index.js';
 import { callTool, connectClient, insertAgent } from '../bus/fixtures.ts';
 
 const PULL_TERMS = /pull request|\bPRs?\b/i;
@@ -214,10 +215,12 @@ describe('bus tools', () => {
     expect(texts(tools).join('\n')).not.toMatch(PULL_TERMS);
   });
 
-  it('leave the GitHub descriptions as they are', async () => {
+  it('leave the GitHub descriptions as they are, in multi mode', async () => {
     const tools = await loadBusTools();
 
-    expect(texts(wordedTools(tools, GITHUB))).toEqual(texts(tools));
+    expect(texts(wordedTools(tools, GITHUB))).toEqual(
+      texts(tools).map((text) => workspaceWording(text, 'multi')),
+    );
   });
 });
 

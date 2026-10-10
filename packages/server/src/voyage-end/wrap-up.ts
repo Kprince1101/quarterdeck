@@ -11,6 +11,7 @@ import {
   type Queryable,
   type Store,
 } from '../store/index.js';
+import type { WorkspaceMode } from '../stream/schema.js';
 import { readVoyageNumber } from './cleanup.js';
 import {
   buildWrapUpPrompt,
@@ -39,6 +40,7 @@ export interface WrapUpOptions {
   voyage: Pick<DriverVoyage, 'agent' | 'voyage' | 'turnAs'>;
   charter: string;
   legs?: readonly WrapUpLeg[];
+  mode?: WorkspaceMode | undefined;
 }
 
 export type WrapUp =
@@ -315,11 +317,12 @@ const runWrapUpTurn = async (
     voyage: options.voyage.voyage,
     charter: options.charter,
     notebook,
+    mode: options.mode,
   });
   try {
     return await options.voyage.turnAs(
       prompt,
-      wrapUpFormat(notebook, voyageProjects(options)),
+      wrapUpFormat(notebook, voyageProjects(options), options.mode),
     );
   } catch (err) {
     return `the wrap-up turn failed: ${getErrorMessage(err)}`;

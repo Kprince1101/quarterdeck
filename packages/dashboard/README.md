@@ -99,6 +99,10 @@ The grid draws the `Panel` (title, move, duplicate, hide, resize), so the compon
 
 `useDeck()` gives every widget the same `StreamState` (see [`src/api`](src/api/README.md)), the same `IntentClient` and the same `RulesReader`, so a dashboard with ten widgets still opens one socket. `DeckProvider` takes `stream` options, an `intents` client and a `rules` reader, which is how tests and the site's demo mode feed it fake data.
 
+### Single and multi workspaces
+
+`useWorkspaceMode()` is the one place a widget learns whether the [workspace](../server/src/workspace/README.md) is one repository (`single`) or a folder of projects (`multi`). It reads `stream.workspace.mode` and answers `multi` when there is no workspace yet, so nothing changes for a dashboard that never had one. Every widget branches on it rather than guessing from the number of projects, and in `single` mode hides all project chrome: the Project widget's selector (it is titled Repository, from `singleTitle` in its definition) and the Services `publishes` toggle, the Board's project picker, strip names and per-project Kill, the Events project filter and label, project badges on Agents, Cards, Notebook and Planner proposals, the Planner's project field, and the PR/MR widget's per-project headings. `useWording()` (or `wordingFor(mode)`) says repository where multi mode says project, for text that is shared. The Data widget shows the workspace on its own line, and the header shows the one-line notice when the workspace switches from single to multi. `test/workspace/workspace-mode.test.tsx` renders every registered widget on single-mode demo data and checks nothing on screen says project, file contents in the Rules widget aside. `createDemoServer({ workspace: 'single' })` runs the demo as one repository.
+
 ## Demo mode
 
 `src/demo/main.tsx` is a second entry: the same `App`, labelled **Demo** in the header, on a fake server that lives in the page. The site builds it (`site/demo/index.html`, `npm run build --workspace site`) to `site/dist/demo/`. It never opens a socket and never sends a request:

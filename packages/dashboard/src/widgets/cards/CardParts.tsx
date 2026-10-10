@@ -1,4 +1,5 @@
 import type { JSX } from 'react';
+import { useWorkspaceMode } from '../../deck/DeckProvider.js';
 import type { CardView } from './card-deck.js';
 
 interface CardHeadProps {
@@ -7,17 +8,32 @@ interface CardHeadProps {
   age: string;
 }
 
-export const CardHead = ({ card, at, age }: CardHeadProps): JSX.Element => (
-  <header className="qd-card-head">
-    <span className="qd-card-kind" data-kind={card.kind}>
-      {card.label}
-    </span>
+const CardSource = ({ card }: { card: CardView }) => {
+  if (useWorkspaceMode() === 'single') {
+    return (
+      <span className="qd-card-source">
+        {card.from !== null && (
+          <span className="qd-card-from">{card.from}</span>
+        )}
+      </span>
+    );
+  }
+  return (
     <span className="qd-card-source">
       {card.project}
       {card.from !== null && (
         <span className="qd-card-from"> · {card.from}</span>
       )}
     </span>
+  );
+};
+
+export const CardHead = ({ card, at, age }: CardHeadProps): JSX.Element => (
+  <header className="qd-card-head">
+    <span className="qd-card-kind" data-kind={card.kind}>
+      {card.label}
+    </span>
+    <CardSource card={card} />
     <time dateTime={at} title={at}>
       {age}
     </time>

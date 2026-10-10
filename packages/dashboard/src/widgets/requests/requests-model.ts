@@ -74,6 +74,38 @@ const capitalized = (text: string): string =>
 export const forgeTitle = (terms: ForgeTerms): string =>
   `${capitalized(terms.long)}s`;
 
+export const NO_REPOSITORY = 'No repository yet';
+
+export const requestsEmptyText = (
+  empty: string,
+  showsProjects: boolean,
+): string => {
+  if (!showsProjects && empty === NO_PROJECTS) return NO_REPOSITORY;
+  return empty;
+};
+
+interface LabelledProject {
+  name: string;
+  terms: ForgeTerms;
+}
+
+export const requestsTableLabel = (
+  project: LabelledProject,
+  showsProjects: boolean,
+): string => {
+  const title = forgeTitle(project.terms);
+  if (!showsProjects) return title;
+  return `${project.name} ${title.toLowerCase()}`;
+};
+
+export const requestsSectionLabel = (
+  project: LabelledProject,
+  showsProjects: boolean,
+): string => {
+  if (!showsProjects) return project.terms.name;
+  return project.name;
+};
+
 export const columnsFor = (forge: Forge): string[] => [
   forgeTerms(forge).short,
   'Title',
