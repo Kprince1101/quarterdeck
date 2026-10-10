@@ -211,3 +211,48 @@ Wiped deck. Stopped wren (deck) first.
 ```
 
 Wipe opens the project's store itself, so it refuses (exit 1) while `quarterdeck up` or anything else has the project open: stop the server first, or use the dashboard. If a process cannot be confirmed stopped, the server's 409 is printed and the project is kept, archived, so the next start sweeps it.
+
+## import harness
+
+```sh
+HARNESS_DATABASE_URL=postgres://… npm run quarterdeck -- import harness [--dry-run]
+HARNESS_DATABASE_URL=postgres://… npm run quarterdeck -- import harness --apply [--include-archived]
+```
+
+A one-shot move from Harness: its projects, its docket items that are not `completed` and its `active` notebook entries become Quarterdeck projects, tickets and notebook entries. Without `--apply` (or with `--dry-run`) it only prints what it would do and writes nothing.
+
+**Reading Harness.** The connection string is `--database-url` or `HARNESS_DATABASE_URL`; prefer the variable, since a flag shows in the process list. It is never printed, logged or written anywhere: a failure prints the error with the string and its password replaced by `[redacted]`. The connection (`connectPostgresSession` from `@quarterdeck/server`, application name `quarterdeck-import`) first runs `set default_transaction_read_only = on` and checks it took, then reads `harness_projects`, `docket_items` and `harness_notebook` in one `repeatable read read only` transaction, each row as `to_jsonb`, so a column Harness does not have (`depends_on`, say) reads as empty. Harness is never written to.
+
+**Mapping.**
+
+| Harness                                                     | Quarterdeck                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `harness_projects` row                                      | A project, made by the `project.create` intent like the dashboard's. An existing project with the same name (or slug, or repository) is matched, not duplicated. The slug comes from the name (`slugFromFolder`). The first of `repos`, with `~` expanded, is its repository if it is a folder here; the rest are printed, since a project has one repository. `paused` pauses a new project. Archived projects are skipped unless `--include-archived`. |
+| `copilot_review`, `auto_merge`                              | `mergeGate.requireAiReview` and `mergeGate.autoMerge` in the home layer, `~/.quarterdeck/rules.local.lifecycle.json`, never a repo layer. That layer is one for the machine, so the stricter value wins: AI review if any imported project had it, auto-merge only if every one did. A deprecated `requireCopilotReview` key there is replaced.                                                                                                          |
+| `reviewer`                                                  | Not imported as an agent. Printed, so you can set up the global reviewer.                                                                                                                                                                                                                                                                                                                                                                                |
+| `docket_items` row                                          | A ticket in its project with `source` `harness` and `external_id` the Harness id. `proposed` stays `proposed`, `blocked` stays `blocked`, everything else (`approved`, and `in_progress` / `in_review` / `assigned` / `bounced`, which are in flight) is `open`. No agent assignment is imported.                                                                                                                                                        |
+| `description`, `priority`, `pr_url`, `parent_id`, `context` | The description, then a footer: the Harness id, the priority unless `normal`, a note that it was in flight, the pull request (also kept in `pr_url`), the parent's new ticket id, and the context as JSON.                                                                                                                                                                                                                                               |
+| `depends_on`                                                | The new ticket ids, across projects too. A dependency that was not imported (completed, or in a skipped project) is dropped and printed.                                                                                                                                                                                                                                                                                                                 |
+| `harness_notebook` row                                      | An active notebook entry in its project, keeping `pinned` and `created_at`, with `external_id` the Harness id. A global entry is imported once into the global notebook, as `notebook.add { global: true }` stores one: a row with no `project_id`, kept in the store of the first imported project by slug (or wherever an earlier run put it), so a Driver sees it once.                                                                               |
+
+**Running it again** updates what it imported before, matched on the Harness id, and adds nothing twice: a second run with nothing changed in Harness prints `Nothing to change: everything is already imported.` and writes nothing. A ticket is only updated while it is still `proposed`, `open` or `blocked` in Quarterdeck, and a retired notebook entry is left retired; once Quarterdeck has picked something up, it keeps it. Each project's tickets and notebook entries are written in one transaction, which records `tickets.imported` and `notebook.imported` with `{ source: "harness", created, updated }`.
+
+When the import turns `requireAiReview` on and a project's `origin` is on GitLab while `mergeGate.aiReviewers.gitlab` lists no bot logins, the plan prints a warning naming those projects: their merge gate refuses to run (`AiReviewConfigError`) until the logins are listed.
+
+**Refusals.** It opens every project's store, so like wipe it refuses while `quarterdeck up` has a project open. It refuses while any project has a voyage that has not ended, before it reads Harness.
+
+```
+$ npm run quarterdeck -- import harness
+Read from Harness: 2 projects, 3 open docket items, 1 active notebook entry.
+Project ui-kit (new), from Harness project "ui-kit"
+  tickets: 2 to create, 0 to update, 0 unchanged, 0 left as they are
+    ticket 9c1e… "Add the dial": create; approved -> open
+    ticket 4b7d… "Ship the gauge": create; in_review -> open (in flight in Harness; noted in the description); 1 dependency remapped
+  notebook entries: 1 to create, 0 to update, 0 unchanged, 0 left as they are
+    notebook entry 0f2a…: create; pinned
+…
+Rules in /home/you/.quarterdeck/rules.local.lifecycle.json: mergeGate.requireAiReview true (copilot_review on in ui-kit); mergeGate.autoMerge false (auto_merge off in ui-kit); to write.
+Dry run: nothing written. Run again with --apply to import.
+```
+
+`test/import-harness.test.ts` seeds an in-memory PGlite shaped like Harness's tables (two projects and an archived one, open, in-review, blocked and proposed items with a cross-project dependency, and notebook entries) and proves a dry run writes nothing, a real run creates the projects, tickets with remapped dependencies and notebook entries, a second run changes nothing, a run during a voyage is refused, the session is read-only and the connection string is never printed. With `QUARTERDECK_TEST_DATABASE_URL` set it also reads through a real Postgres session and checks a write there fails.

@@ -270,6 +270,42 @@ const lockProject = async (
 export const connectPostgres = async (url: string): Promise<Db> =>
   (await connect(url)).db;
 
+export interface PostgresSession extends Pick<Queryable, 'query'> {
+  close(): Promise<void>;
+}
+
+export class PostgresSessionError extends Error {
+  constructor(cause: unknown) {
+    super('Could not connect to Postgres', { cause });
+    this.name = 'PostgresSessionError';
+  }
+}
+
+export const connectPostgresSession = async (
+  url: string,
+  applicationName: string,
+): Promise<PostgresSession> => {
+  const client = new pg.Client({
+    connectionString: url,
+    application_name: applicationName,
+    types: pgliteTypes(),
+  });
+  client.on('error', () => undefined);
+  try {
+    await client.connect();
+  } catch (err) {
+    await client.end().catch(() => undefined);
+    throw new PostgresSessionError(err);
+  }
+  return {
+    query: async <T>(sql: string, params: unknown[] = []) => {
+      const { rows } = await client.query(sql, params);
+      return { rows: rows as T[] };
+    },
+    close: () => client.end(),
+  };
+};
+
 export const openPostgres = async (
   url: string,
   project: string,

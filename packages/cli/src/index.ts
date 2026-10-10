@@ -22,6 +22,21 @@ export {
   checkKeepAwake,
   type KeepAwakeCheckOptions,
 } from './doctor-keep-awake.js';
+export {
+  READ_ONLY_BEGIN,
+  READ_ONLY_SETUP,
+  readHarness,
+  type HarnessConnector,
+  type HarnessSession,
+  type HarnessSnapshot,
+} from './harness-read.js';
+export {
+  HARNESS_DATABASE_URL,
+  IMPORT_USAGE,
+  NOTEBOOK_IMPORTED_EVENT,
+  redactSecrets,
+  runImport,
+} from './import.js';
 export { INIT_USAGE, runInit, slugFromFolder } from './init.js';
 export { CliError, type CliIo, type Command, type Prompter } from './io.js';
 export { CANCELLED_EXIT_CODE, USAGE, main } from './main.js';

@@ -1,3 +1,4 @@
+import type { HarnessConnector } from './harness-read.js';
 import type { SignInRunner } from './signin.js';
 
 export interface Prompter {
@@ -19,6 +20,7 @@ export interface CliIo {
   untilStopped: () => Promise<void>;
   run?: CommandRunner | undefined;
   signIn?: SignInRunner;
+  harness?: HarnessConnector;
 }
 
 export type Command = (args: string[], io: CliIo) => Promise<number>;

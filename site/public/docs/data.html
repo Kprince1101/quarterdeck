@@ -247,6 +247,40 @@
         and attachments still are.
       </p>
 
+      <h2 id="import-harness">Importing from Harness</h2>
+      <p>
+        If you used Harness before, one command moves its projects, its open
+        docket items and its active notebook entries into Quarterdeck. Stop
+        Quarterdeck and end any voyage first: the import refuses to run while a
+        voyage is open. It reads Harness in one read-only transaction and never
+        writes to it. Give it the connection string in
+        <code>HARNESS_DATABASE_URL</code>; it is never printed, logged or saved.
+      </p>
+      <pre><code>HARNESS_DATABASE_URL=postgres://… npm run quarterdeck -- import harness
+HARNESS_DATABASE_URL=postgres://… npm run quarterdeck -- import harness --apply</code></pre>
+      <p>
+        The first command is a dry run: it prints, per project, what it would
+        create or update and every mapping decision, and writes nothing. With
+        <code>--apply</code> it writes. Each Harness project becomes a project
+        (or matches one you already have by name), each docket item a ticket in
+        it, with its dependencies pointing at the new tickets, and each notebook
+        entry an active one, pinned as before; a global Harness entry becomes
+        one global notebook entry, for every project. Items that were in flight
+        in Harness come in as <code>open</code> with their pull request and a
+        note saying so; no agent is carried over. Harness's Copilot review and
+        auto-merge settings go into
+        <code>~/.quarterdeck/rules.local.lifecycle.json</code>. Reviewers are
+        printed for you to set up, not imported. Archived projects are skipped
+        unless you pass <code>--include-archived</code>.
+      </p>
+      <p>
+        Running it again updates what it brought in before and adds nothing
+        twice. Tickets Quarterdeck has already started on are left as they are.
+        Imported tickets keep the Harness id in <code>external_id</code>, with
+        <code>source</code> <code>harness</code>, and imported notebook entries
+        keep it in their own <code>external_id</code>.
+      </p>
+
       <h2 id="delete">Deleting it</h2>
       <p>
         Stop Quarterdeck first. Then delete

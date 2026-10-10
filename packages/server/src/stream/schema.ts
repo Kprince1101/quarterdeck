@@ -151,6 +151,7 @@ export const notebookRowSchema = z.object({
   pinned: z.boolean(),
   createdAt: timestampSchema,
   retiredAt: timestampSchema.nullable(),
+  externalId: z.string().nullable().optional(),
 });
 
 const proposalStatusSchema = z.enum(['open', 'accepted', 'rejected']);
