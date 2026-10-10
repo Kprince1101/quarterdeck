@@ -78,6 +78,7 @@ claude: 2.1.30, signed in (user@example.com)
 gemini: 0.9.0, signed in (Google account)
 gh: 2.81.0, signed in (example-org on github.com)
 claude auth: subscription (the default), uses the Claude Code sign-in
+keep-awake: caffeinate found; the dashboard can keep this computer from sleeping
 
 All set.
 ```
@@ -89,7 +90,7 @@ gh: 2.81.0, not signed in
   Sign in: gh auth login
   Why: automatic sign-in failed: gh auth login --web exited with 1: error: device flow was denied
 
-1 of 5 need attention. Run the commands above, then npm run quarterdeck -- doctor again.
+1 of 6 need attention. Run the commands above, then npm run quarterdeck -- doctor again.
 ```
 
 | Tool       | Installed                                                                                                                          | Signed in                                                                                                                           | Install                                                                                              | Sign in                                                                              |
@@ -111,6 +112,12 @@ The `claude auth` line reports this machine's [Claude auth mode](../server/src/a
 claude auth: api_key (from QUARTERDECK_CLAUDE_AUTH), ANTHROPIC_API_KEY not set
   Set: export ANTHROPIC_API_KEY=<your key>, then start Quarterdeck from that shell
   Set: security add-generic-password -a "$USER" -s quarterdeck-anthropic-api-key -w
+```
+
+The `keep-awake` line says whether this computer has the tool the dashboard's [keep-awake](../server/src/keep-awake/README.md) control needs: `caffeinate` on macOS, `systemd-inhibit` on Linux, `powershell` on Windows, looked up on `PATH`. Without it, or on any other platform, the line gives the reason and says the control is off; the dashboard shows the same reason on the disabled control. It is informational and does not change the exit code. `checkKeepAwake` lives in `src/doctor-keep-awake.ts`.
+
+```
+keep-awake: systemd-inhibit is not on PATH, so Quarterdeck cannot keep this computer awake. The dashboard's keep-awake control is off.
 ```
 
 When `kiro.json` names a Kiro base agent for any role, doctor adds a line per role with the base it resolves to, `none`, or the error naming the missing or broken file. The builder's comes from the repo layer of the folder doctor runs in. These lines are informational and do not change the exit code. See [Base agents](../server/src/acp/runtimes/README.md#base-agents).

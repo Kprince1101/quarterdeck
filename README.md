@@ -104,6 +104,7 @@ Nothing Quarterdeck stores leaves your machine. It has no hosted component, no a
 ~/.quarterdeck/
   rules.local.<file>              your machine's rules
   claude.json                     which Claude auth mode this machine uses (the mode only, never a key)
+  keep-awake.json                 the pid of the keep-awake child while the dashboard's keep-awake is on
   profiles/<name>/                rules profiles you add yourself; rules.local.profile.json picks one
   <project>/
     pg/                           the project's Postgres data (PGlite)

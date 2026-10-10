@@ -1,4 +1,5 @@
 import type {
+  KeepAwakeState,
   MachineState,
   SavedLayout,
   SnapshotMessage,
@@ -50,6 +51,8 @@ export interface DemoStore {
   layout: () => SavedLayout | null;
   setLayout: (spec: SavedLayout['spec']) => SavedLayout;
   workspace: () => Workspace | null;
+  keepAwake: () => KeepAwakeState;
+  setKeepAwake: (keepAwake: KeepAwakeState) => void;
   reset: () => void;
   connect: (after: number | null, listener: DemoListener) => () => void;
 }
@@ -59,6 +62,14 @@ export interface DemoStoreOptions {
   now?: () => number;
   workspace?: Workspace | null;
 }
+
+export const DEMO_KEEP_AWAKE_OFF: KeepAwakeState = {
+  on: false,
+  mode: null,
+  expiresAt: null,
+  available: true,
+  unavailableReason: null,
+};
 
 const ID_PREFIX = '00000000-0000-4000-8000-';
 const ID_DIGITS = 12;
@@ -79,6 +90,7 @@ export const createDemoStore = ({
   let wipedThrough = 0;
   let machine: MachineState = { pausedAt: null };
   let layout: SavedLayout | null = null;
+  let keepAwake = DEMO_KEEP_AWAKE_OFF;
 
   const broadcast = (message: StreamMessage): void => {
     listeners.forEach((listener) => listener(message));
@@ -161,6 +173,11 @@ export const createDemoStore = ({
     },
     layout: () => layout,
     workspace: () => workspace,
+    keepAwake: () => keepAwake,
+    setKeepAwake: (next) => {
+      keepAwake = next;
+      broadcast({ type: 'keepAwake', keepAwake });
+    },
     setLayout: (spec) => {
       const saved = { spec, updatedAt: store.now() };
       layout = saved;
@@ -178,6 +195,7 @@ export const createDemoStore = ({
         machine,
         layout,
         workspace,
+        keepAwake,
       });
     },
     connect: (after, listener) => {
@@ -190,6 +208,7 @@ export const createDemoStore = ({
         machine,
         layout,
         workspace,
+        keepAwake,
       };
       listener(snapshot);
       log

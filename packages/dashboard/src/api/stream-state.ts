@@ -1,6 +1,7 @@
 import {
   STREAM_TABLES,
   type ChangeMessage,
+  type KeepAwakeState,
   type MachineState,
   type SavedLayout,
   type SnapshotTables,
@@ -21,6 +22,7 @@ export interface StreamState {
   layout: SavedLayout | null;
   workspace: Workspace | null;
   workspaceNotice: string | null;
+  keepAwake: KeepAwakeState | null;
   events: readonly StreamEvent[];
   error: string | null;
 }
@@ -58,6 +60,7 @@ export const initialStreamState: StreamState = {
   layout: null,
   workspace: null,
   workspaceNotice: null,
+  keepAwake: null,
   events: [],
   error: null,
 };
@@ -138,8 +141,12 @@ export const applyStreamMessage = (
         machine: message.machine,
         layout: message.layout,
         workspace: message.workspace ?? null,
+        keepAwake: message.keepAwake ?? null,
         error: null,
       };
+    }
+    case 'keepAwake': {
+      return { ...state, keepAwake: message.keepAwake };
     }
     case 'machine': {
       return { ...state, machine: message.machine };

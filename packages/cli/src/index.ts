@@ -16,6 +16,12 @@ export {
   withClaudeAuthEnv,
   type ClaudeAuthCheckOptions,
 } from './doctor-claude-auth.js';
+export {
+  KEEP_AWAKE_CHECK,
+  KEEP_AWAKE_OFF,
+  checkKeepAwake,
+  type KeepAwakeCheckOptions,
+} from './doctor-keep-awake.js';
 export { INIT_USAGE, runInit, slugFromFolder } from './init.js';
 export { CliError, type CliIo, type Command, type Prompter } from './io.js';
 export { CANCELLED_EXIT_CODE, USAGE, main } from './main.js';

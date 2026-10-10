@@ -5,6 +5,11 @@ import { createApiToken } from '../api/token.js';
 import { startCoordinator, type Coordinator } from '../crew/index.js';
 import type { ForgeHost } from '../gate/index.js';
 import { createGlobalLayouts } from '../global-layout/index.js';
+import {
+  createKeepAwake,
+  type KeepAwake,
+  type KeepAwakeOptions,
+} from '../keep-awake/index.js';
 import type { PlannerAdapters } from '../planner/sessions.js';
 import type { SetupProbe } from '../setup/probe.js';
 import type { SetupSignInsOptions } from '../setup/sign-ins.js';
@@ -30,6 +35,7 @@ export interface QuarterdeckOptions {
   gatePollMs?: number;
   setupProbe?: SetupProbe | undefined;
   setupSignIn?: SetupSignInsOptions | undefined;
+  keepAwake?: Omit<KeepAwakeOptions, 'home' | 'onError'>;
 }
 
 export interface Quarterdeck {
@@ -40,6 +46,7 @@ export interface Quarterdeck {
   api: ApiServer;
   projects: ReadonlyMap<string, ProjectServices>;
   coordinator: Coordinator;
+  keepAwake: KeepAwake;
   close: () => Promise<void>;
 }
 
@@ -50,6 +57,12 @@ export const startQuarterdeck = async (
   const home = quarterdeckHome(homeDir);
   const layouts = createGlobalLayouts(home);
   const workspaces = createWorkspaces(home);
+  const keepAwake = createKeepAwake({
+    ...options.keepAwake,
+    home,
+    onError: options.onError,
+  });
+  await keepAwake.recover();
   const running = new Map<string, RunningProject>();
   const openStores = () => [...running.values()].map(({ store }) => store);
   const coordinator = startCoordinator({
@@ -66,6 +79,7 @@ export const startQuarterdeck = async (
     token: createApiToken(),
     layouts,
     workspaces,
+    keepAwake,
     allowedOrigins: options.allowedOrigins,
     onError: options.onError,
     openStores,
@@ -105,6 +119,7 @@ export const startQuarterdeck = async (
     voyages: coordinator.desk,
     layouts,
     workspaces,
+    keepAwake,
     upgrade: routeStreams({
       token: context.token,
       allowedOrigins: options.allowedOrigins,
@@ -114,6 +129,7 @@ export const startQuarterdeck = async (
 
   const shutdown = async (): Promise<void> => {
     stopping = true;
+    await keepAwake.close();
     await coordinator.close();
     const projects = [...running.values()];
     running.clear();
@@ -130,6 +146,7 @@ export const startQuarterdeck = async (
     api,
     projects: running,
     coordinator,
+    keepAwake,
     close: () => {
       closing ??= shutdown();
       return closing;

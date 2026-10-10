@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   DOCTOR_FIXES,
+  checkKeepAwake,
   main,
   runDoctorChecks,
   type DoctorCheck,
@@ -433,6 +434,8 @@ esac`,
     await fake('gh', ghFake(GH_SIGNED_IN));
     const run = { ...io, env: { PATH: bin, GEMINI_API_KEY: 'key' } };
 
+    const keepAwake = await checkKeepAwake(run);
+
     expect(await main(['doctor'], run)).toBe(1);
     expect(io.lines).toEqual([
       'kiro-cli: 1.20.1, not signed in',
@@ -441,8 +444,9 @@ esac`,
       'gemini: 0.9.0, signed in (GEMINI_API_KEY)',
       'gh: 2.81.0, signed in (example-org on github.com)',
       'claude auth: subscription (the default), uses the Claude Code sign-in',
+      `keep-awake: ${keepAwake.state}`,
       '',
-      '1 of 5 need attention. Run the commands above, then npm run quarterdeck -- doctor again.',
+      '1 of 6 need attention. Run the commands above, then npm run quarterdeck -- doctor again.',
     ]);
     expect(io.errors).toEqual([]);
   });

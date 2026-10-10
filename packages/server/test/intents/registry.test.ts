@@ -29,6 +29,7 @@ const GLOBAL_INTENTS = new Set([
   'setup.detect',
   'setup.sign_in',
   'setup.save',
+  'keepAwake.start',
 ]);
 
 const importsOf = (source: string): string[] =>
@@ -45,6 +46,7 @@ describe('intent registry', () => {
         'charter',
         'data',
         'forge',
+        'keepAwake',
         'layout',
         'notebook',
         'pause',
@@ -73,7 +75,7 @@ describe('intent registry', () => {
     expect(ruleNameSchema.options).toEqual(RULE_NAMES);
   });
 
-  it('scopes every intent but machine rules, wipe.all, pause.all, the dashboard layout, the voyage and setup to a project', () => {
+  it('scopes every intent but machine rules, wipe.all, pause.all, the dashboard layout, the voyage, setup and keep-awake to a project', () => {
     const unscoped = INTENT_NAMES.filter((name) =>
       INTENTS[name]
         .safeParse({})

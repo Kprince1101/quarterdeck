@@ -13,6 +13,7 @@ export * from './data/index.js';
 export * from './driver/index.js';
 export * from './gate/index.js';
 export * from './global-layout/index.js';
+export * from './keep-awake/index.js';
 export * from './lifecycle/index.js';
 export * from './pause/index.js';
 export * from './planner/index.js';

@@ -7,6 +7,7 @@ import {
   createGlobalLayouts,
   type GlobalLayouts,
 } from '../global-layout/index.js';
+import type { KeepAwake } from '../keep-awake/control.js';
 import type { StopHosts } from '../lifecycle/stop.js';
 import type { SetupProbe } from '../setup/probe.js';
 import {
@@ -47,6 +48,7 @@ export interface ApiServerOptions {
   voyages?: ApiVoyages;
   layouts?: GlobalLayouts;
   workspaces?: Workspaces;
+  keepAwake?: KeepAwake;
   upgrade?: UpgradeHandler;
   openRequests?: Pick<OpenRequestsOptions, 'hosts' | 'refreshMs'>;
   setupProbe?: SetupProbe | undefined;
@@ -141,6 +143,7 @@ export const startApiServer = async (
     voyages: options.voyages,
     setupProbe: options.setupProbe,
     setupSignIns,
+    keepAwake: options.keepAwake,
   };
   const token = options.token ?? createApiToken();
   let guard = localGuard(0, token);

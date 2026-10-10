@@ -3,9 +3,11 @@ import { startCrew, type Coordinator, type Crew } from '../crew/index.js';
 import { crewFailedEvent } from '../crew/failures.js';
 import { projectForge, type ForgeHost } from '../gate/index.js';
 import type { GlobalLayouts } from '../global-layout/index.js';
+import type { KeepAwake } from '../keep-awake/index.js';
 import type { PlannerAdapters } from '../planner/sessions.js';
-import type { Store } from '../store/index.js';
+import type { Store, StoreEvent } from '../store/index.js';
 import { createStream, type Stream } from '../stream/socket.js';
+import { VOYAGE_ENDED_EVENT } from '../voyage-end/cleanup.js';
 import type { Workspaces } from '../workspace/index.js';
 
 export interface ProjectServicesContext {
@@ -14,6 +16,7 @@ export interface ProjectServicesContext {
   token: string;
   layouts: GlobalLayouts;
   workspaces: Workspaces;
+  keepAwake: KeepAwake;
   allowedOrigins?: readonly string[] | undefined;
   onError?: ((err: unknown) => void) | undefined;
   openStores: () => readonly Store[];
@@ -79,6 +82,13 @@ const startProjectCrew = async (
   }
 };
 
+const releaseOnVoyageEnd =
+  (keepAwake: KeepAwake, onError: (err: unknown) => void) =>
+  (event: StoreEvent): void => {
+    if (event.kind !== VOYAGE_ENDED_EVENT) return;
+    keepAwake.voyageEnded().catch(onError);
+  };
+
 export const startProjectServices = async (
   context: ProjectServicesContext,
   project: string,
@@ -104,10 +114,16 @@ export const startProjectServices = async (
       home: context.home,
       layouts: context.layouts,
       workspaces: context.workspaces,
+      keepAwake: context.keepAwake,
       allowedOrigins: context.allowedOrigins,
       onError: context.onError,
     });
     closers.push(() => stream.close());
+    const voyageEnds = await store.subscribe(
+      releaseOnVoyageEnd(context.keepAwake, onError),
+      { onError },
+    );
+    closers.push(() => voyageEnds.close());
     const crew = await startProjectCrew(context, project, store, bus);
     if (crew) closers.push(() => crew.close());
     return { project, store, bus, stream, crew, close };
